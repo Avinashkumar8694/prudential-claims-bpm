@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_proc2_def" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd" exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
+  <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_missingDocsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_followupCountItem" structureRef="Integer"/>
+  <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
+  
+  <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
+    <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
+    <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
+    <bpmn2:property id="followupCount" itemSubjectRef="_followupCountItem" name="followupCount"/>
+    <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
+
+    <bpmn2:startEvent id="_P2_START" name="Start NIGO">
+      <bpmn2:outgoing>_F_BOOTSTRAP</bpmn2:outgoing>
+    </bpmn2:startEvent>
+
+    <bpmn2:sequenceFlow id="_F_BOOTSTRAP" sourceRef="_P2_START" targetRef="_P2_BOOTSTRAP"/>
+
+    <!-- Node 0: Bootstrap Environment -->
+    <bpmn2:scriptTask id="_P2_BOOTSTRAP" name="Script_Bootstrap" scriptFormat="http://www.java.com/java">
+      <bpmn2:incoming>_F_BOOTSTRAP</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F1</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[String url = System.getProperty("INTEGRATION_LAYER_URL");
+if (url == null || url.isEmpty()) { url = "http://localhost:3000"; }
+kcontext.setVariable("baseUrl", url);]]></bpmn2:script>
+    </bpmn2:scriptTask>
+
+    <bpmn2:sequenceFlow id="_P2_F1" sourceRef="_P2_BOOTSTRAP" targetRef="_P2_N1"/>
+
+    <!-- Node 1: SendNIGO -->
+    <bpmn2:task id="_P2_N1" drools:taskName="Rest" name="N1: SendNIGO">
+      <bpmn2:incoming>_P2_F1</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F2</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P2_N1_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_Method" name="Method" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P2_N1_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P2_N1_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet/>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N1_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/send"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P2_F2" sourceRef="_P2_N1" targetRef="_P2_N4"/>
+
+    <!-- Node 4: Wait (Receive Task with Timer) -->
+    <bpmn2:receiveTask id="_P2_N4" name="Wait 30 Days" instantiate="false">
+      <bpmn2:incoming>_P2_F2</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F3</bpmn2:outgoing>
+    </bpmn2:receiveTask>
+
+    <bpmn2:boundaryEvent id="_P2_TIMER" name="30 Day Timeout" attachedToRef="_P2_N4" cancelActivity="true">
+      <bpmn2:outgoing>_P2_F_TIMEOUT</bpmn2:outgoing>
+      <bpmn2:timerEventDefinition id="_timerDef2">
+        <bpmn2:timeDuration xsi:type="bpmn2:tFormalExpression">PT720H</bpmn2:timeDuration>
+      </bpmn2:timerEventDefinition>
+    </bpmn2:boundaryEvent>
+
+    <bpmn2:sequenceFlow id="_P2_F_TIMEOUT" sourceRef="_P2_TIMER" targetRef="_P2_XG1"/>
+    
+    <bpmn2:exclusiveGateway id="_P2_XG1" name="Max Retries?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P2_F_TIMEOUT</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_RETRY</bpmn2:outgoing>
+      <bpmn2:outgoing>_P2_F_HALT</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P2_F_RETRY" name="Yes" sourceRef="_P2_XG1" targetRef="_P2_N11"/>
+    <bpmn2:sequenceFlow id="_P2_F_HALT" name="No" sourceRef="_P2_XG1" targetRef="_P2_END"/>
+
+    <bpmn2:task id="_P2_N11" drools:taskName="Rest" name="N11: AutoFollowup">
+      <bpmn2:incoming>_P2_F_RETRY</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_LOOP</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P2_N11_Url" name="Url" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P2_N11_Url</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet/>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N11_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/followup"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+    </bpmn2:task>
+    
+    <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_N4"/>
+
+    <bpmn2:sequenceFlow id="_P2_F3" sourceRef="_P2_N4" targetRef="_P2_END"/>
+    <bpmn2:endEvent id="_P2_END" name="End"/>
+
+  </bpmn2:process>
+
+  <bpmndi:BPMNDiagram id="_P2_DI">
+    <bpmndi:BPMNPlane id="_P2_PLANE" bpmnElement="prudential-claims-submission.pru-nigo-followup">
+      <bpmndi:BPMNShape id="_S_P2_START" bpmnElement="_P2_START"><dc:Bounds x="100" y="100" width="36" height="36"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_BOOTSTRAP" bpmnElement="_P2_BOOTSTRAP"><dc:Bounds x="180" y="70" width="120" height="80"/></bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>
