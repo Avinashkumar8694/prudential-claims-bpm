@@ -23,6 +23,7 @@
   <bpmn2:itemDefinition id="_verificationStatusItem" structureRef="String"/>
 
   <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
+  <bpmn2:message id="_P2_MSG_UPLOAD" itemRef="_reqPayloadItem" name="DocumentUploadedMessage"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
@@ -402,7 +403,7 @@ if (response != null && !response.isEmpty()) {
     </bpmn2:exclusiveGateway>
     <bpmn2:sequenceFlow id="_P2_F_TO_WAIT" sourceRef="_P2_MERGE" targetRef="_P2_N4"/>
     <!-- Node 4: Wait for Document Upload (Receive Task) -->
-    <bpmn2:receiveTask id="_P2_N4" name="Wait for Document Upload" instantiate="false">
+    <bpmn2:receiveTask id="_P2_N4" name="Wait for Document Upload" instantiate="false" messageRef="_P2_MSG_UPLOAD">
       <bpmn2:incoming>_P2_F_TO_WAIT</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_UPLOADED</bpmn2:outgoing>
     </bpmn2:receiveTask>
