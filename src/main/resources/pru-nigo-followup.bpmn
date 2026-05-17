@@ -751,7 +751,9 @@ if (response != null && !response.isEmpty()) {
     <bpmn2:sequenceFlow id="_P2_F_DOCS_YES" name="Yes" sourceRef="_P2_XG_DOCS" targetRef="_P2_END_MERGE">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return allDocsReceived == true;</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_P2_F_DOCS_NO" name="No" sourceRef="_P2_XG_DOCS" targetRef="_P2_N9"/>
+    <bpmn2:sequenceFlow id="_P2_F_DOCS_NO" name="No" sourceRef="_P2_XG_DOCS" targetRef="_P2_N9">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return allDocsReceived == false;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
     <!-- Node 9: User Task (Examiner Partial Review) -->
     <bpmn2:userTask id="_P2_N9" name="N9: ExaminerPartialReview">
       <bpmn2:incoming>_P2_F_DOCS_NO</bpmn2:incoming>
@@ -905,7 +907,9 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:potentialOwner>
     </bpmn2:userTask>
     <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_DONE" sourceRef="_P2_N13" targetRef="_P2_END_DEATH_VER"/>
-    <bpmn2:endEvent id="_P2_END_DEATH_VER" name="End (Death Verification)"/>
+    <bpmn2:endEvent id="_P2_END_DEATH_VER" name="End (Death Verification)">
+      <bpmn2:incoming>_P2_F_DEATH_VER_DONE</bpmn2:incoming>
+    </bpmn2:endEvent>
     <bpmn2:exclusiveGateway id="_P2_END_MERGE" name="End Merge" gatewayDirection="Converging">
       <bpmn2:incoming>_P2_F_DOCS_YES</bpmn2:incoming>
       <bpmn2:incoming>_P2_F_CLOSE_CLAIM</bpmn2:incoming>

@@ -339,7 +339,9 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:extensionElements>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F3_FAIL_END" sourceRef="_P1_N3" targetRef="_P1_END_FAIL"/>
-    <bpmn2:endEvent id="_P1_END_FAIL" name="End (Failed)"/>
+    <bpmn2:endEvent id="_P1_END_FAIL" name="End (Failed)">
+      <bpmn2:incoming>_P1_F3_FAIL_END</bpmn2:incoming>
+    </bpmn2:endEvent>
     <!-- Node 4: Set Policy Status Pend Death -->
     <bpmn2:task id="_P1_N4" drools:taskName="Rest" name="N4: SetPendDeath">
       <bpmn2:ioSpecification id="_P1_N4_io">
@@ -505,8 +507,7 @@ if (response != null && !response.isEmpty()) {
           <bpmn2:dataOutputRefs>_P1_N6_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:incoming>_P1_F_DEATH_YES</bpmn2:incoming>
-      <bpmn2:incoming>_P1_F_NIGO_LOOP</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_TO_N6</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F_DOCS</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N6_assoc_Url">
         <bpmn2:assignment id="_P1_N6_assign_Url">
@@ -2046,7 +2047,9 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_MERGE_PAYMENT</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
     <bpmn2:sequenceFlow id="_P1_F_MERGE_PAYMENT" sourceRef="_P1_PAYMENT_MERGE" targetRef="_P1_END_SUCCESS"/>
-    <bpmn2:endEvent id="_P1_END_SUCCESS" name="End"/>
+    <bpmn2:endEvent id="_P1_END_SUCCESS" name="End">
+      <bpmn2:incoming>_P1_F_MERGE_PAYMENT</bpmn2:incoming>
+    </bpmn2:endEvent>
     <!-- Global Event Sub-Process for Centralized REST Exception Handling -->
     <bpmn2:subProcess id="_P1_ERROR_SUBPROCESS" name="Global API Error Handler" triggeredByEvent="true">
       <bpmn2:startEvent id="_P1_ERROR_START" name="Catch REST API Failure">
