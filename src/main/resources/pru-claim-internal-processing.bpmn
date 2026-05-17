@@ -39,6 +39,8 @@
   <bpmn2:itemDefinition id="_resPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
 
+  <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
+
   <!-- The main Process Definition -->
   <bpmn2:process id="prudential-claims-submission.pru-claim-internal-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-internal-processing" isExecutable="true" processType="Public">
     <!-- Properties / Variables -->
@@ -1096,6 +1098,26 @@ if (failedWorkItem != null) {
       <bpmndi:BPMNEdge id="_E_P1_F_MERGE_PAYMENT" bpmnElement="_P1_F_MERGE_PAYMENT">
         <di:waypoint x="3600.0" y="128.0"/>
         <di:waypoint x="3650.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      
+      <!-- Global Exception Event Subprocess Shapes -->
+      <bpmndi:BPMNShape id="_S_P1_ERROR_SUBPROCESS" bpmnElement="_P1_ERROR_SUBPROCESS" isExpanded="true">
+        <dc:Bounds height="200.0" width="400.0" x="100.0" y="300.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_ERROR_START" bpmnElement="_P1_ERROR_START">
+        <dc:Bounds height="56.0" width="56.0" x="130.0" y="372.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_ERROR_CALL" bpmnElement="_P1_ERROR_CALL">
+        <dc:Bounds height="80.0" width="120.0" x="220.0" y="360.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_ERROR_END" bpmnElement="_P1_ERROR_END">
+        <dc:Bounds height="56.0" width="56.0" x="380.0" y="372.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="_E_P1_ERR_F1" bpmnElement="_P1_ERR_F1">
+        <di:waypoint x="186.0" y="400.0"/><di:waypoint x="220.0" y="400.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_ERR_F2" bpmnElement="_P1_ERR_F2">
+        <di:waypoint x="340.0" y="400.0"/><di:waypoint x="380.0" y="400.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
