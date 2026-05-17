@@ -434,7 +434,10 @@ System.out.println("NIGO: Wait timed out. Incrementing follow-up count to: " + (
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">int count = (int) kcontext.getVariable("followupCount");
 return count &lt; 3;</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_P2_F_HALT" name="Limit Reached" sourceRef="_P2_XG_COUNT" targetRef="_P2_N12"/>
+    <bpmn2:sequenceFlow id="_P2_F_HALT" name="Limit Reached" sourceRef="_P2_XG_COUNT" targetRef="_P2_N12">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[int count = (int) kcontext.getVariable("followupCount");
+return count >= 3;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
     <!-- Node 11: AutoFollowup Service Task -->
     <bpmn2:task id="_P2_N11" drools:taskName="Rest" name="N11: AutoFollowup">
       <bpmn2:ioSpecification id="_P2_N11_io">

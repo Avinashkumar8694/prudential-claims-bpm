@@ -448,12 +448,19 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_DEATH_YES</bpmn2:outgoing>
       <bpmn2:outgoing>_P1_F_DEATH_NO</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-    <bpmn2:sequenceFlow id="_P1_F_DEATH_YES" name="Yes" sourceRef="_P1_XG_DEATH" targetRef="_P1_N6">
+    <bpmn2:sequenceFlow id="_P1_F_DEATH_YES" name="Yes" sourceRef="_P1_XG_DEATH" targetRef="_P1_N6_MERGE">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return "DEATH".equals(claimType);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_P1_F_DEATH_NO" name="No" sourceRef="_P1_XG_DEATH" targetRef="_P1_N9_MERGE">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return !"DEATH".equals(claimType);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
+    <!-- Converging gateway to merge DEATH_YES and NIGO_LOOP paths before N6 -->
+    <bpmn2:exclusiveGateway id="_P1_N6_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_P1_F_DEATH_YES</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_NIGO_LOOP</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_TO_N6</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="_P1_F_TO_N6" sourceRef="_P1_N6_MERGE" targetRef="_P1_N6"/>
     <!-- Node 6: Check Document Completeness -->
     <bpmn2:task id="_P1_N6" drools:taskName="Rest" name="N6: CheckDocCompleteness">
       <bpmn2:ioSpecification id="_P1_N6_io">
@@ -611,7 +618,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:targetRef>caseId</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
-    <bpmn2:sequenceFlow id="_P1_F_NIGO_LOOP" sourceRef="_P1_CALL_NIGO" targetRef="_P1_N6"/>
+    <bpmn2:sequenceFlow id="_P1_F_NIGO_LOOP" sourceRef="_P1_CALL_NIGO" targetRef="_P1_N6_MERGE"/>
     <!-- Docs Verified Merge Gateway -->
     <bpmn2:exclusiveGateway id="_P1_N9_MERGE" gatewayDirection="Converging">
       <bpmn2:incoming>_P1_F_DEATH_NO</bpmn2:incoming>
@@ -2118,8 +2125,11 @@ if (failedWorkItem != null) {
       <bpmndi:BPMNShape id="_S_P1_XG_DEATH" bpmnElement="_P1_XG_DEATH">
         <dc:Bounds height="50.0" width="50.0" x="700.0" y="103.0"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N6_MERGE" bpmnElement="_P1_N6_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="755.0" y="103.0"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P1_N6" bpmnElement="_P1_N6">
-        <dc:Bounds height="80.0" width="120.0" x="800.0" y="88.0"/>
+        <dc:Bounds height="80.0" width="120.0" x="815.0" y="88.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P1_XG_DOCS" bpmnElement="_P1_XG_DOCS">
         <dc:Bounds height="50.0" width="50.0" x="950.0" y="103.0"/>
@@ -2232,7 +2242,7 @@ if (failedWorkItem != null) {
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F_DEATH_YES" bpmnElement="_P1_F_DEATH_YES">
         <di:waypoint x="750.0" y="128.0"/>
-        <di:waypoint x="800.0" y="128.0"/>
+        <di:waypoint x="755.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F_DEATH_NO" bpmnElement="_P1_F_DEATH_NO">
         <di:waypoint x="725.0" y="103.0"/>
@@ -2240,8 +2250,12 @@ if (failedWorkItem != null) {
         <di:waypoint x="1125.0" y="40.0"/>
         <di:waypoint x="1125.0" y="103.0"/>
       </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_TO_N6" bpmnElement="_P1_F_TO_N6">
+        <di:waypoint x="805.0" y="128.0"/>
+        <di:waypoint x="815.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F_DOCS" bpmnElement="_P1_F_DOCS">
-        <di:waypoint x="920.0" y="128.0"/>
+        <di:waypoint x="935.0" y="128.0"/>
         <di:waypoint x="950.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F_DOCS_YES" bpmnElement="_P1_F_DOCS_YES">
@@ -2254,8 +2268,8 @@ if (failedWorkItem != null) {
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F_NIGO_LOOP" bpmnElement="_P1_F_NIGO_LOOP">
         <di:waypoint x="915.0" y="230.0"/>
-        <di:waypoint x="860.0" y="230.0"/>
-        <di:waypoint x="860.0" y="168.0"/>
+        <di:waypoint x="780.0" y="230.0"/>
+        <di:waypoint x="780.0" y="153.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F_MERGE_DOC" bpmnElement="_P1_F_MERGE_DOC">
         <di:waypoint x="1150.0" y="128.0"/>
