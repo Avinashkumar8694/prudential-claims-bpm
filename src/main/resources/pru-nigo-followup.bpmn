@@ -936,19 +936,19 @@ if (failedWorkItem != null) {
         </bpmn2:extensionElements>
         <bpmn2:incoming>_P2_ERR_F1</bpmn2:incoming>
         <bpmn2:outgoing>_P2_ERR_F2</bpmn2:outgoing>
-        <bpmn2:ioSpecification id="_P2_ERR_CALL_io">
-          <bpmn2:dataInput id="_P2_ERR_CALL_failedContext" name="failedContext" structureRef="String"/>
-          <bpmn2:inputSet id="_P2_ERR_CALL_input_set">
-            <bpmn2:dataInputRefs>_P2_ERR_CALL_failedContext</bpmn2:dataInputRefs>
+        <bpmn2:ioSpecification id="_P2_ERROR_CALL_io">
+          <bpmn2:dataInput id="_P2_ERROR_CALL_failedContext" name="failedContext" structureRef="String"/>
+          <bpmn2:inputSet id="_P2_ERROR_CALL_input_set">
+            <bpmn2:dataInputRefs>_P2_ERROR_CALL_failedContext</bpmn2:dataInputRefs>
           </bpmn2:inputSet>
-          <bpmn2:outputSet id="_P2_ERR_CALL_output_set"/>
+          <bpmn2:outputSet id="_P2_ERROR_CALL_output_set"/>
         </bpmn2:ioSpecification>
-        <bpmn2:dataInputAssociation id="_P2_ERR_CALL_assoc">
+        <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_assoc">
           <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
-          <bpmn2:targetRef>_P2_ERR_CALL_failedContext</bpmn2:targetRef>
-          <bpmn2:assignment id="_P2_ERR_CALL_assign">
+          <bpmn2:targetRef>_P2_ERROR_CALL_failedContext</bpmn2:targetRef>
+          <bpmn2:assignment id="_P2_ERROR_CALL_assign">
             <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{resPayload}]]></bpmn2:from>
-            <bpmn2:to>_P2_ERR_CALL_failedContext</bpmn2:to>
+            <bpmn2:to>_P2_ERROR_CALL_failedContext</bpmn2:to>
           </bpmn2:assignment>
         </bpmn2:dataInputAssociation>
       </bpmn2:callActivity>

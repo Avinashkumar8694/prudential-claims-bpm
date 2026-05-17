@@ -577,12 +577,12 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:ioSpecification id="_P1_CALL_NIGO_io">
         <bpmn2:dataInput id="_P1_CALL_NIGO_caseId" name="caseId" structureRef="String"/>
         <bpmn2:dataInput id="_P1_CALL_NIGO_claimType" name="claimType" structureRef="String"/>
-        <bpmn2:dataInput id="_P1_CALL_NIGO_missingDocs" name="missingDocs" structureRef="java.util.List"/>
+        <bpmn2:dataInput id="_P1_CALL_NIGO_missingDocuments" name="missingDocuments" structureRef="java.util.List"/>
         <bpmn2:dataInput id="_P1_CALL_NIGO_applicablePolicies" name="applicablePolicies" structureRef="java.util.List"/>
         <bpmn2:inputSet id="_P1_CALL_NIGO_inputSet">
           <bpmn2:dataInputRefs>_P1_CALL_NIGO_caseId</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_CALL_NIGO_claimType</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_CALL_NIGO_missingDocs</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P1_CALL_NIGO_missingDocuments</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_CALL_NIGO_applicablePolicies</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet id="_P1_CALL_NIGO_outputSet"/>
@@ -603,12 +603,12 @@ if (response != null && !response.isEmpty()) {
           <bpmn2:to>_P1_CALL_NIGO_claimType</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P1_CALL_NIGO_assoc_missingDocs">
+      <bpmn2:dataInputAssociation id="_P1_CALL_NIGO_assoc_missingDocuments">
         <bpmn2:sourceRef>missingDocs</bpmn2:sourceRef>
-        <bpmn2:targetRef>_P1_CALL_NIGO_missingDocs</bpmn2:targetRef>
-        <bpmn2:assignment id="_P1_CALL_NIGO_assign_missingDocs">
+        <bpmn2:targetRef>_P1_CALL_NIGO_missingDocuments</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_CALL_NIGO_assign_missingDocuments">
           <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{missingDocs}]]></bpmn2:from>
-          <bpmn2:to>_P1_CALL_NIGO_missingDocs</bpmn2:to>
+          <bpmn2:to>_P1_CALL_NIGO_missingDocuments</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P1_CALL_NIGO_assoc_applicablePolicies">
@@ -2073,19 +2073,19 @@ if (failedWorkItem != null) {
         </bpmn2:extensionElements>
         <bpmn2:incoming>_P1_ERR_F1</bpmn2:incoming>
         <bpmn2:outgoing>_P1_ERR_F2</bpmn2:outgoing>
-        <bpmn2:ioSpecification id="_P1_ERR_CALL_io">
-          <bpmn2:dataInput id="_P1_ERR_CALL_failedContext" name="failedContext" structureRef="String"/>
-          <bpmn2:inputSet id="_P1_ERR_CALL_input_set">
-            <bpmn2:dataInputRefs>_P1_ERR_CALL_failedContext</bpmn2:dataInputRefs>
+        <bpmn2:ioSpecification id="_P1_ERROR_CALL_io">
+          <bpmn2:dataInput id="_P1_ERROR_CALL_failedContext" name="failedContext" structureRef="String"/>
+          <bpmn2:inputSet id="_P1_ERROR_CALL_input_set">
+            <bpmn2:dataInputRefs>_P1_ERROR_CALL_failedContext</bpmn2:dataInputRefs>
           </bpmn2:inputSet>
-          <bpmn2:outputSet id="_P1_ERR_CALL_output_set"/>
+          <bpmn2:outputSet id="_P1_ERROR_CALL_output_set"/>
         </bpmn2:ioSpecification>
-        <bpmn2:dataInputAssociation id="_P1_ERR_CALL_assoc">
+        <bpmn2:dataInputAssociation id="_P1_ERROR_CALL_assoc">
           <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
-          <bpmn2:targetRef>_P1_ERR_CALL_failedContext</bpmn2:targetRef>
-          <bpmn2:assignment id="_P1_ERR_CALL_assign">
+          <bpmn2:targetRef>_P1_ERROR_CALL_failedContext</bpmn2:targetRef>
+          <bpmn2:assignment id="_P1_ERROR_CALL_assign">
             <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{resPayload}]]></bpmn2:from>
-            <bpmn2:to>_P1_ERR_CALL_failedContext</bpmn2:to>
+            <bpmn2:to>_P1_ERROR_CALL_failedContext</bpmn2:to>
           </bpmn2:assignment>
         </bpmn2:dataInputAssociation>
       </bpmn2:callActivity>
