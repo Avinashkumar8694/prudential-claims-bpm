@@ -23,7 +23,6 @@
   <bpmn2:itemDefinition id="_verificationStatusItem" structureRef="String"/>
 
   <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
-  <bpmn2:message id="_P2_MSG_UPLOAD" itemRef="_reqPayloadItem" name="DocumentUploadedMessage"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
@@ -402,11 +401,25 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_TO_WAIT</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
     <bpmn2:sequenceFlow id="_P2_F_TO_WAIT" sourceRef="_P2_MERGE" targetRef="_P2_N4"/>
-    <!-- Node 4: Wait for Document Upload (Receive Task) -->
-    <bpmn2:receiveTask id="_P2_N4" name="Wait for Document Upload" instantiate="false" messageRef="_P2_MSG_UPLOAD">
+    <!-- Node 4: Wait for Document Upload (User Task) -->
+    <bpmn2:userTask id="_P2_N4" name="Wait for Document Upload" drools:taskName="WaitTask">
       <bpmn2:incoming>_P2_F_TO_WAIT</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_UPLOADED</bpmn2:outgoing>
-    </bpmn2:receiveTask>
+      <bpmn2:ioSpecification id="_P2_N4_io">
+        <bpmn2:dataInput id="_P2_N4_TaskNameInput" name="TaskName" structureRef="String"/>
+        <bpmn2:inputSet id="_P2_N4_inputSet">
+          <bpmn2:dataInputRefs>_P2_N4_TaskNameInput</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet id="_P2_N4_outputSet"/>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation id="_P2_N4_TaskNameAssoc">
+        <bpmn2:targetRef>_P2_N4_TaskNameInput</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N4_TaskNameAssign">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[WaitTask]]></bpmn2:from>
+          <bpmn2:to>_P2_N4_TaskNameInput</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+    </bpmn2:userTask>
     <bpmn2:sequenceFlow id="_P2_F_UPLOADED" sourceRef="_P2_N4" targetRef="_P2_N6"/>
     <!-- Node 5: Boundary Timer Event (30 Days) -->
     <bpmn2:boundaryEvent id="_P2_TIMER" name="30 Day Timeout" attachedToRef="_P2_N4" cancelActivity="true">
