@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_proc2_def" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd" exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_missingDocsItem" structureRef="java.util.List"/>
@@ -18,9 +18,7 @@
   <bpmn2:itemDefinition id="_pendingDocsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_examinerDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
-  
   <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
-  
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
@@ -40,18 +38,15 @@
     <bpmn2:property id="pendingDocs" itemSubjectRef="_pendingDocsItem" name="pendingDocs"/>
     <bpmn2:property id="examinerDecision" itemSubjectRef="_examinerDecisionItem" name="examinerDecision"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
-
     <bpmn2:startEvent id="_P2_START" name="Start NIGO">
       <bpmn2:outgoing>_F_BOOTSTRAP</bpmn2:outgoing>
     </bpmn2:startEvent>
-
     <bpmn2:sequenceFlow id="_F_BOOTSTRAP" sourceRef="_P2_START" targetRef="_P2_BOOTSTRAP"/>
-
     <!-- Node 0: Bootstrap Environment -->
     <bpmn2:scriptTask id="_P2_BOOTSTRAP" name="Script_Bootstrap" scriptFormat="http://www.java.com/java">
       <bpmn2:incoming>_F_BOOTSTRAP</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F1</bpmn2:outgoing>
-      <bpmn2:script><![CDATA[String url = System.getProperty("INTEGRATION_LAYER_URL");
+      <bpmn2:script>String url = System.getProperty("INTEGRATION_LAYER_URL");
 if (url == null || url.isEmpty()) { url = System.getenv("INTEGRATION_LAYER_URL"); }
 if (url == null || url.isEmpty()) {
     try {
@@ -67,73 +62,95 @@ kcontext.setVariable("maxAttempts", 3);
 if (kcontext.getVariable("claimType") == null) {
     kcontext.setVariable("claimType", "DEATH");
 }
-System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " + kcontext.getVariable("claimType"));]]></bpmn2:script>
+System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " + kcontext.getVariable("claimType"));</bpmn2:script>
     </bpmn2:scriptTask>
-
     <bpmn2:sequenceFlow id="_P2_F1" sourceRef="_P2_BOOTSTRAP" targetRef="_P2_N1"/>
-
     <!-- Node 1: Send NIGO Notice -->
     <bpmn2:task id="_P2_N1" drools:taskName="Rest" name="N1: SendNIGO">
-      <bpmn2:incoming>_P2_F1</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F2</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N1_io">
-        <bpmn2:dataInput id="_P2_N1_Url" name="Url" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N1_Method" name="Method" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N1_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_AcceptCharset" name="AcceptCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_AcceptHeader" name="AcceptHeader" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_AuthType" name="AuthType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_AuthUrl" name="AuthUrl" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_ConnectTimeout" name="ConnectTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_Content" name="Content" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N1_ContentData" name="ContentData" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N1_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_ContentTypeCharset" name="ContentTypeCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_HandleResponseErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_Headers" name="Headers" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_Password" name="Password" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_ReadTimeout" name="ReadTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_ResultClass" name="ResultClass" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N1_Result" name="Result" structureRef="String"/>
-        <bpmn2:inputSet id="_P2_N1_input_set">
-          <bpmn2:dataInputRefs>_P2_N1_Url</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N1_Method</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N1_ContentType</bpmn2:dataInputRefs>
+        <bpmn2:inputSet id="_P2_N1_inputSet">
+          <bpmn2:dataInputRefs>_P2_N1_AcceptCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_AcceptHeader</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_AuthType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_AuthUrl</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_ConnectTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_Content</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N1_ContentData</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N1_HandleErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_ContentTypeCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_HandleResponseErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_Headers</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_Password</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_ReadTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_ResultClass</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_Username</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet id="_P2_N1_output_set">
+        <bpmn2:outputSet id="_P2_N1_outputSet">
           <bpmn2:dataOutputRefs>_P2_N1_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="_P2_N1_assoc_url">
+      <bpmn2:incoming>_P2_F1</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F2</bpmn2:outgoing>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_Url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/send"]]></bpmn2:transformation>
         <bpmn2:targetRef>_P2_N1_Url</bpmn2:targetRef>
-        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/send"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N1_assoc_method">
-        <bpmn2:targetRef>_P2_N1_Method</bpmn2:targetRef>
-        <bpmn2:assignment id="_P2_N1_assign_method">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_Method">
+        <bpmn2:assignment id="_P2_N1_assign_Method">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N1_Method</bpmn2:to>
         </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N1_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N1_assoc_ct">
-        <bpmn2:targetRef>_P2_N1_ContentType</bpmn2:targetRef>
-        <bpmn2:assignment id="_P2_N1_assign_ct">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_ContentType">
+        <bpmn2:assignment id="_P2_N1_assign_ContentType">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N1_ContentType</bpmn2:to>
         </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N1_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N1_assoc_he">
-        <bpmn2:targetRef>_P2_N1_HandleErrors</bpmn2:targetRef>
-        <bpmn2:assignment id="_P2_N1_assign_he">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
-          <bpmn2:to>_P2_N1_HandleErrors</bpmn2:to>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_P2_N1_assign_HandleResponseErrors">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N1_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N1_HandleResponseErrors</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N1_assoc_data">
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_ContentData">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N1_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="_P2_N1_assoc_res">
+      <bpmn2:dataOutputAssociation id="_P2_N1_assoc_Result">
         <bpmn2:sourceRef>_P2_N1_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[// Construct JSON Request payload for SendNIGO
-com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
+json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
 json.putPOJO("missingDocuments", kcontext.getVariable("missingDocuments"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
@@ -148,68 +165,96 @@ if (response != null && !response.isEmpty()) {
         </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-
     <bpmn2:sequenceFlow id="_P2_F2" sourceRef="_P2_N1" targetRef="_P2_XG_CLAIMTYPE"/>
-
     <!-- Node 2: Exclusive Gateway (Diverging Claim Type Gate) -->
     <bpmn2:exclusiveGateway id="_P2_XG_CLAIMTYPE" name="Claim Type?" gatewayDirection="Diverging">
       <bpmn2:incoming>_P2_F2</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_DEATH</bpmn2:outgoing>
       <bpmn2:outgoing>_P2_F_TI</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-
     <bpmn2:sequenceFlow id="_P2_F_DEATH" name="Death" sourceRef="_P2_XG_CLAIMTYPE" targetRef="_P2_N2A">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return "DEATH".equals(claimType);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-
     <bpmn2:sequenceFlow id="_P2_F_TI" name="TI" sourceRef="_P2_XG_CLAIMTYPE" targetRef="_P2_N2B">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return !"DEATH".equals(claimType);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-
     <!-- Node 2a: Funding Notice (Death Path) -->
     <bpmn2:task id="_P2_N2A" drools:taskName="Rest" name="N2a: FundingNotice">
-      <bpmn2:incoming>_P2_F_DEATH</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_MERGE_2A</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N2A_io">
-        <bpmn2:dataInput id="_P2_N2A_Url" name="Url" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N2A_Method" name="Method" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N2A_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_AcceptCharset" name="AcceptCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_AcceptHeader" name="AcceptHeader" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_AuthType" name="AuthType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_AuthUrl" name="AuthUrl" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_ConnectTimeout" name="ConnectTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_Content" name="Content" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2A_ContentData" name="ContentData" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N2A_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_ContentTypeCharset" name="ContentTypeCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_HandleResponseErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_Headers" name="Headers" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_Password" name="Password" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_ReadTimeout" name="ReadTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_ResultClass" name="ResultClass" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N2A_Result" name="Result" structureRef="String"/>
-        <bpmn2:inputSet>
-          <bpmn2:dataInputRefs>_P2_N2A_Url</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_Method</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_ContentType</bpmn2:dataInputRefs>
+        <bpmn2:inputSet id="_P2_N2A_inputSet">
+          <bpmn2:dataInputRefs>_P2_N2A_AcceptCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_AcceptHeader</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_AuthType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_AuthUrl</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_ConnectTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_Content</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2A_ContentData</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_HandleErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_ContentTypeCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_HandleResponseErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_Headers</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_Password</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_ReadTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_ResultClass</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_Username</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet>
+        <bpmn2:outputSet id="_P2_N2A_outputSet">
           <bpmn2:dataOutputRefs>_P2_N2A_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:incoming>_P2_F_DEATH</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_MERGE_2A</bpmn2:outgoing>
+      <bpmn2:dataInputAssociation id="_P2_N2A_assoc_Url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/funding-notice"]]></bpmn2:transformation>
         <bpmn2:targetRef>_P2_N2A_Url</bpmn2:targetRef>
-        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/funding-notice"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N2A_assoc_Method">
+        <bpmn2:assignment id="_P2_N2A_assign_Method">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to>_P2_N2A_Method</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2A_Method</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P2_N2A_Method</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N2A_assoc_ContentType">
+        <bpmn2:assignment id="_P2_N2A_assign_ContentType">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_P2_N2A_ContentType</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2A_ContentType</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N2A_ContentType</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
-        <bpmn2:targetRef>_P2_N2A_HandleErrors</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N2A_HandleErrors</bpmn2:to></bpmn2:assignment>
+      <bpmn2:dataInputAssociation id="_P2_N2A_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_P2_N2A_assign_HandleResponseErrors">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N2A_HandleResponseErrors</bpmn2:to>
+        </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N2A_HandleResponseErrors</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N2A_assoc_ContentData">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N2A_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N2A_assoc_Result">
         <bpmn2:sourceRef>_P2_N2A_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
@@ -232,53 +277,84 @@ if (response != null && !response.isEmpty()) {
         </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-
     <bpmn2:sequenceFlow id="_P2_F_MERGE_2A" sourceRef="_P2_N2A" targetRef="_P2_MERGE"/>
-
     <!-- Node 2b: Standard Notice (TI Path) -->
     <bpmn2:task id="_P2_N2B" drools:taskName="Rest" name="N2b: StandardNotice">
-      <bpmn2:incoming>_P2_F_TI</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_MERGE_2B</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N2B_io">
-        <bpmn2:dataInput id="_P2_N2B_Url" name="Url" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N2B_Method" name="Method" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N2B_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_AcceptCharset" name="AcceptCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_AcceptHeader" name="AcceptHeader" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_AuthType" name="AuthType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_AuthUrl" name="AuthUrl" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_ConnectTimeout" name="ConnectTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_Content" name="Content" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2B_ContentData" name="ContentData" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N2B_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_ContentTypeCharset" name="ContentTypeCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_HandleResponseErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_Headers" name="Headers" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_Password" name="Password" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_ReadTimeout" name="ReadTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_ResultClass" name="ResultClass" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N2B_Result" name="Result" structureRef="String"/>
-        <bpmn2:inputSet>
-          <bpmn2:dataInputRefs>_P2_N2B_Url</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_Method</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_ContentType</bpmn2:dataInputRefs>
+        <bpmn2:inputSet id="_P2_N2B_inputSet">
+          <bpmn2:dataInputRefs>_P2_N2B_AcceptCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_AcceptHeader</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_AuthType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_AuthUrl</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_ConnectTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_Content</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2B_ContentData</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_HandleErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_ContentTypeCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_HandleResponseErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_Headers</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_Password</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_ReadTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_ResultClass</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_Username</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet>
+        <bpmn2:outputSet id="_P2_N2B_outputSet">
           <bpmn2:dataOutputRefs>_P2_N2B_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:incoming>_P2_F_TI</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_MERGE_2B</bpmn2:outgoing>
+      <bpmn2:dataInputAssociation id="_P2_N2B_assoc_Url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/standard-notice"]]></bpmn2:transformation>
         <bpmn2:targetRef>_P2_N2B_Url</bpmn2:targetRef>
-        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/standard-notice"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N2B_assoc_Method">
+        <bpmn2:assignment id="_P2_N2B_assign_Method">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to>_P2_N2B_Method</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2B_Method</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P2_N2B_Method</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N2B_assoc_ContentType">
+        <bpmn2:assignment id="_P2_N2B_assign_ContentType">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_P2_N2B_ContentType</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2B_ContentType</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N2B_ContentType</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
-        <bpmn2:targetRef>_P2_N2B_HandleErrors</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N2B_HandleErrors</bpmn2:to></bpmn2:assignment>
+      <bpmn2:dataInputAssociation id="_P2_N2B_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_P2_N2B_assign_HandleResponseErrors">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N2B_HandleResponseErrors</bpmn2:to>
+        </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N2B_HandleResponseErrors</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N2B_assoc_ContentData">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N2B_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N2B_assoc_Result">
         <bpmn2:sourceRef>_P2_N2B_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
@@ -301,18 +377,14 @@ if (response != null && !response.isEmpty()) {
         </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-
     <bpmn2:sequenceFlow id="_P2_F_MERGE_2B" sourceRef="_P2_N2B" targetRef="_P2_MERGE"/>
-
     <!-- Node 3: Converging Exclusive Gateway -->
     <bpmn2:exclusiveGateway id="_P2_MERGE" gatewayDirection="Converging">
       <bpmn2:incoming>_P2_F_MERGE_2A</bpmn2:incoming>
       <bpmn2:incoming>_P2_F_MERGE_2B</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_TO_WAIT</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-
     <bpmn2:sequenceFlow id="_P2_F_TO_WAIT" sourceRef="_P2_MERGE" targetRef="_P2_N4"/>
-
     <!-- Node 4: Wait for Document Upload (Receive Task) -->
     <bpmn2:receiveTask id="_P2_N4" name="Wait for Document Upload" instantiate="false">
       <bpmn2:incoming>_P2_F_TO_WAIT</bpmn2:incoming>
@@ -320,9 +392,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_CONTINUE_CHASE</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_UPLOADED</bpmn2:outgoing>
     </bpmn2:receiveTask>
-
     <bpmn2:sequenceFlow id="_P2_F_UPLOADED" sourceRef="_P2_N4" targetRef="_P2_N6"/>
-
     <!-- Node 5: Boundary Timer Event (30 Days) -->
     <bpmn2:boundaryEvent id="_P2_TIMER" name="30 Day Timeout" attachedToRef="_P2_N4" cancelActivity="true">
       <bpmn2:outgoing>_P2_F_TIMEOUT</bpmn2:outgoing>
@@ -330,87 +400,104 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:timeDuration xsi:type="bpmn2:tFormalExpression">PT720H</bpmn2:timeDuration>
       </bpmn2:timerEventDefinition>
     </bpmn2:boundaryEvent>
-
     <bpmn2:sequenceFlow id="_P2_F_TIMEOUT" sourceRef="_P2_TIMER" targetRef="_P2_INCREMENT"/>
-
     <!-- Increment Follow-up counter on timeout -->
     <bpmn2:scriptTask id="_P2_INCREMENT" name="Script_Increment" scriptFormat="http://www.java.com/java">
       <bpmn2:incoming>_P2_F_TIMEOUT</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_TO_XG</bpmn2:outgoing>
-      <bpmn2:script><![CDATA[int count = (int) kcontext.getVariable("followupCount");
+      <bpmn2:script>int count = (int) kcontext.getVariable("followupCount");
 kcontext.setVariable("followupCount", count + 1);
-System.out.println("NIGO: Wait timed out. Incrementing follow-up count to: " + (count + 1));]]></bpmn2:script>
+System.out.println("NIGO: Wait timed out. Incrementing follow-up count to: " + (count + 1));</bpmn2:script>
     </bpmn2:scriptTask>
-
     <bpmn2:sequenceFlow id="_P2_F_TO_XG" sourceRef="_P2_INCREMENT" targetRef="_P2_XG_COUNT"/>
-    
     <!-- Node 10: Exclusive Gateway (Followup Count Gateway) -->
     <bpmn2:exclusiveGateway id="_P2_XG_COUNT" name="Max Retries?" gatewayDirection="Diverging">
       <bpmn2:incoming>_P2_F_TO_XG</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_RETRY</bpmn2:outgoing>
       <bpmn2:outgoing>_P2_F_HALT</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-
     <bpmn2:sequenceFlow id="_P2_F_RETRY" name="Under Limit" sourceRef="_P2_XG_COUNT" targetRef="_P2_N11">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[int count = (int) kcontext.getVariable("followupCount");
-return count < 3;]]></bpmn2:conditionExpression>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">int count = (int) kcontext.getVariable("followupCount");
+return count &lt; 3;</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    
     <bpmn2:sequenceFlow id="_P2_F_HALT" name="Limit Reached" sourceRef="_P2_XG_COUNT" targetRef="_P2_N12"/>
-
     <!-- Node 11: AutoFollowup Service Task -->
     <bpmn2:task id="_P2_N11" drools:taskName="Rest" name="N11: AutoFollowup">
-      <bpmn2:incoming>_P2_F_RETRY</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_LOOP</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N11_io">
-        <bpmn2:dataInput id="_P2_N11_Url" name="Url" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N11_Method" name="Method" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N11_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_AcceptCharset" name="AcceptCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_AcceptHeader" name="AcceptHeader" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_AuthType" name="AuthType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_AuthUrl" name="AuthUrl" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_ConnectTimeout" name="ConnectTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_Content" name="Content" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N11_ContentData" name="ContentData" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N11_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_ContentTypeCharset" name="ContentTypeCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_HandleResponseErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_Headers" name="Headers" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_Password" name="Password" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_ReadTimeout" name="ReadTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_ResultClass" name="ResultClass" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N11_Result" name="Result" structureRef="String"/>
-        <bpmn2:inputSet id="_P2_N11_input_set">
-          <bpmn2:dataInputRefs>_P2_N11_Url</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N11_Method</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N11_ContentType</bpmn2:dataInputRefs>
+        <bpmn2:inputSet id="_P2_N11_inputSet">
+          <bpmn2:dataInputRefs>_P2_N11_AcceptCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_AcceptHeader</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_AuthType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_AuthUrl</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_ConnectTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_Content</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N11_ContentData</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N11_HandleErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_ContentTypeCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_HandleResponseErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_Headers</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_Password</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_ReadTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_ResultClass</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_Username</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet id="_P2_N11_output_set">
+        <bpmn2:outputSet id="_P2_N11_outputSet">
           <bpmn2:dataOutputRefs>_P2_N11_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="_P2_N11_assoc_url">
+      <bpmn2:incoming>_P2_F_RETRY</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_LOOP</bpmn2:outgoing>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_Url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/auto-followup"]]></bpmn2:transformation>
         <bpmn2:targetRef>_P2_N11_Url</bpmn2:targetRef>
-        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/followup"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N11_assoc_method">
-        <bpmn2:targetRef>_P2_N11_Method</bpmn2:targetRef>
-        <bpmn2:assignment id="_P2_N11_assign_method">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_Method">
+        <bpmn2:assignment id="_P2_N11_assign_Method">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N11_Method</bpmn2:to>
         </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N11_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N11_assoc_ct">
-        <bpmn2:targetRef>_P2_N11_ContentType</bpmn2:targetRef>
-        <bpmn2:assignment id="_P2_N11_assign_ct">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_ContentType">
+        <bpmn2:assignment id="_P2_N11_assign_ContentType">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N11_ContentType</bpmn2:to>
         </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N11_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N11_assoc_he">
-        <bpmn2:targetRef>_P2_N11_HandleErrors</bpmn2:targetRef>
-        <bpmn2:assignment id="_P2_N11_assign_he">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
-          <bpmn2:to>_P2_N11_HandleErrors</bpmn2:to>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_P2_N11_assign_HandleResponseErrors">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N11_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N11_HandleResponseErrors</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P2_N11_assoc_data">
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_ContentData">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N11_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="_P2_N11_assoc_res">
+      <bpmn2:dataOutputAssociation id="_P2_N11_assoc_Result">
         <bpmn2:sourceRef>_P2_N11_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
@@ -419,58 +506,98 @@ return count < 3;]]></bpmn2:conditionExpression>
           <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
-json.putPOJO("followupCount", kcontext.getVariable("followupCount"));
+json.put("followupCount", (Integer)kcontext.getVariable("followupCount"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+    try {
+        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        kcontext.setVariable("followupCount", root.get("followupCount").asInt());
+    } catch(Exception e) {}
+}]]></drools:script>
+        </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-    
     <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_N4"/>
-
     <!-- Node 6: Re-Run IDP Extraction Service Task -->
     <bpmn2:task id="_P2_N6" drools:taskName="Rest" name="N6: ReRunIDPExtraction">
-      <bpmn2:incoming>_P2_F_UPLOADED</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_IDP_DONE</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N6_io">
-        <bpmn2:dataInput id="_P2_N6_Url" name="Url" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N6_Method" name="Method" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N6_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_AcceptCharset" name="AcceptCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_AcceptHeader" name="AcceptHeader" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_AuthType" name="AuthType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_AuthUrl" name="AuthUrl" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_ConnectTimeout" name="ConnectTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_Content" name="Content" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N6_ContentData" name="ContentData" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N6_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_ContentTypeCharset" name="ContentTypeCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_HandleResponseErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_Headers" name="Headers" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_Password" name="Password" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_ReadTimeout" name="ReadTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_ResultClass" name="ResultClass" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N6_Result" name="Result" structureRef="String"/>
-        <bpmn2:inputSet>
-          <bpmn2:dataInputRefs>_P2_N6_Url</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N6_Method</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N6_ContentType</bpmn2:dataInputRefs>
+        <bpmn2:inputSet id="_P2_N6_inputSet">
+          <bpmn2:dataInputRefs>_P2_N6_AcceptCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_AcceptHeader</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_AuthType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_AuthUrl</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_ConnectTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_Content</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N6_ContentData</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N6_HandleErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_ContentTypeCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_HandleResponseErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_Headers</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_Password</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_ReadTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_ResultClass</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_Username</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet>
+        <bpmn2:outputSet id="_P2_N6_outputSet">
           <bpmn2:dataOutputRefs>_P2_N6_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:incoming>_P2_F_UPLOADED</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_IDP_DONE</bpmn2:outgoing>
+      <bpmn2:dataInputAssociation id="_P2_N6_assoc_Url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/rerun-idp"]]></bpmn2:transformation>
         <bpmn2:targetRef>_P2_N6_Url</bpmn2:targetRef>
-        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/idp/extract-and-match"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N6_assoc_Method">
+        <bpmn2:assignment id="_P2_N6_assign_Method">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to>_P2_N6_Method</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N6_Method</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P2_N6_Method</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N6_assoc_ContentType">
+        <bpmn2:assignment id="_P2_N6_assign_ContentType">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_P2_N6_ContentType</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N6_ContentType</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N6_ContentType</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
-        <bpmn2:targetRef>_P2_N6_HandleErrors</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N6_HandleErrors</bpmn2:to></bpmn2:assignment>
+      <bpmn2:dataInputAssociation id="_P2_N6_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_P2_N6_assign_HandleResponseErrors">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N6_HandleResponseErrors</bpmn2:to>
+        </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N6_HandleResponseErrors</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N6_assoc_ContentData">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N6_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N6_assoc_Result">
         <bpmn2:sourceRef>_P2_N6_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
@@ -486,59 +613,90 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
-        kcontext.setVariable("extractedData", root.get("extractedData"));
+        kcontext.setVariable("idpExtractionResult", root.get("extractionResult"));
     } catch(Exception e) {}
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-
     <bpmn2:sequenceFlow id="_P2_F_IDP_DONE" sourceRef="_P2_N6" targetRef="_P2_N7"/>
-
     <!-- Node 7: Update Status Service Task -->
     <bpmn2:task id="_P2_N7" drools:taskName="Rest" name="N7: UpdateClaimStatus">
-      <bpmn2:incoming>_P2_F_IDP_DONE</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_STATUS_DONE</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N7_io">
-        <bpmn2:dataInput id="_P2_N7_Url" name="Url" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N7_Method" name="Method" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N7_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_AcceptCharset" name="AcceptCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_AcceptHeader" name="AcceptHeader" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_AuthType" name="AuthType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_AuthUrl" name="AuthUrl" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_ConnectTimeout" name="ConnectTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_Content" name="Content" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N7_ContentData" name="ContentData" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N7_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_ContentTypeCharset" name="ContentTypeCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_HandleResponseErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_Headers" name="Headers" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_Password" name="Password" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_ReadTimeout" name="ReadTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_ResultClass" name="ResultClass" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N7_Result" name="Result" structureRef="String"/>
-        <bpmn2:inputSet>
-          <bpmn2:dataInputRefs>_P2_N7_Url</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N7_Method</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N7_ContentType</bpmn2:dataInputRefs>
+        <bpmn2:inputSet id="_P2_N7_inputSet">
+          <bpmn2:dataInputRefs>_P2_N7_AcceptCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_AcceptHeader</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_AuthType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_AuthUrl</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_ConnectTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_Content</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N7_ContentData</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N7_HandleErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_ContentTypeCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_HandleResponseErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_Headers</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_Password</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_ReadTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_ResultClass</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_Username</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet>
+        <bpmn2:outputSet id="_P2_N7_outputSet">
           <bpmn2:dataOutputRefs>_P2_N7_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:incoming>_P2_F_IDP_DONE</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_STATUS_DONE</bpmn2:outgoing>
+      <bpmn2:dataInputAssociation id="_P2_N7_assoc_Url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/update-status"]]></bpmn2:transformation>
         <bpmn2:targetRef>_P2_N7_Url</bpmn2:targetRef>
-        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/documents/status"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N7_assoc_Method">
+        <bpmn2:assignment id="_P2_N7_assign_Method">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to>_P2_N7_Method</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N7_Method</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[PUT]]></bpmn2:from><bpmn2:to>_P2_N7_Method</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N7_assoc_ContentType">
+        <bpmn2:assignment id="_P2_N7_assign_ContentType">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_P2_N7_ContentType</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N7_ContentType</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N7_ContentType</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
-        <bpmn2:targetRef>_P2_N7_HandleErrors</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N7_HandleErrors</bpmn2:to></bpmn2:assignment>
+      <bpmn2:dataInputAssociation id="_P2_N7_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_P2_N7_assign_HandleResponseErrors">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N7_HandleResponseErrors</bpmn2:to>
+        </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N7_HandleResponseErrors</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N7_assoc_ContentData">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N7_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N7_assoc_Result">
         <bpmn2:sourceRef>_P2_N7_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
@@ -560,22 +718,17 @@ if (response != null && !response.isEmpty()) {
         </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-
     <bpmn2:sequenceFlow id="_P2_F_STATUS_DONE" sourceRef="_P2_N7" targetRef="_P2_XG_DOCS"/>
-
     <!-- Node 8: Exclusive Gateway (Docs OK?) -->
     <bpmn2:exclusiveGateway id="_P2_XG_DOCS" name="All Docs Received?" gatewayDirection="Diverging">
       <bpmn2:incoming>_P2_F_STATUS_DONE</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_DOCS_YES</bpmn2:outgoing>
       <bpmn2:outgoing>_P2_F_DOCS_NO</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-
-    <bpmn2:sequenceFlow id="_P2_F_DOCS_YES" name="Yes" sourceRef="_P2_XG_DOCS" targetRef="_P2_END_SUCCESS">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return allDocsReceived == true;]]></bpmn2:conditionExpression>
+    <bpmn2:sequenceFlow id="_P2_F_DOCS_YES" name="Yes" sourceRef="_P2_XG_DOCS" targetRef="_P2_END_MERGE">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return allDocsReceived == true;</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-
     <bpmn2:sequenceFlow id="_P2_F_DOCS_NO" name="No" sourceRef="_P2_XG_DOCS" targetRef="_P2_N9"/>
-
     <!-- Node 9: User Task (Examiner Partial Review) -->
     <bpmn2:userTask id="_P2_N9" name="N9: ExaminerPartialReview">
       <bpmn2:incoming>_P2_F_DOCS_NO</bpmn2:incoming>
@@ -583,8 +736,12 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:ioSpecification id="_P2_N9_io">
         <bpmn2:dataInput id="_P2_N9_caseId" name="caseId" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N9_decision" name="examinerDecision" structureRef="String"/>
-        <bpmn2:inputSet><bpmn2:dataInputRefs>_P2_N9_caseId</bpmn2:dataInputRefs></bpmn2:inputSet>
-        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P2_N9_decision</bpmn2:dataOutputRefs></bpmn2:outputSet>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N9_caseId</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>_P2_N9_decision</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation>
         <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
@@ -596,72 +753,100 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
-          <bpmn2:formalExpression><![CDATA[ClaimExaminer]]></bpmn2:formalExpression>
+          <bpmn2:formalExpression>ClaimExaminer</bpmn2:formalExpression>
         </bpmn2:resourceAssignmentExpression>
       </bpmn2:potentialOwner>
     </bpmn2:userTask>
-
     <bpmn2:sequenceFlow id="_P2_F_REVIEW_DONE" sourceRef="_P2_N9" targetRef="_P2_XG_CONTINUE"/>
-
     <!-- Exclusive Gateway: Continue Review? -->
     <bpmn2:exclusiveGateway id="_P2_XG_CONTINUE" name="Continue Chasing?" gatewayDirection="Diverging">
       <bpmn2:incoming>_P2_F_REVIEW_DONE</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_CONTINUE_CHASE</bpmn2:outgoing>
       <bpmn2:outgoing>_P2_F_CLOSE_CLAIM</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-
     <bpmn2:sequenceFlow id="_P2_F_CONTINUE_CHASE" name="Yes" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_N4">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "CONTINUE".equals(examinerDecision);]]></bpmn2:conditionExpression>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return "CONTINUE".equals(examinerDecision);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-
-    <bpmn2:sequenceFlow id="_P2_F_CLOSE_CLAIM" name="No" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_END_SUCCESS">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"CONTINUE".equals(examinerDecision);]]></bpmn2:conditionExpression>
+    <bpmn2:sequenceFlow id="_P2_F_CLOSE_CLAIM" name="No" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_END_MERGE">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return !"CONTINUE".equals(examinerDecision);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-
     <!-- Node 12: Update Death Verification Status Service Task -->
     <bpmn2:task id="_P2_N12" drools:taskName="Rest" name="N12: UpdateDeathVerification">
-      <bpmn2:incoming>_P2_F_HALT</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_DEATH_VER_UPDATED</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N12_io">
-        <bpmn2:dataInput id="_P2_N12_Url" name="Url" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N12_Method" name="Method" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N12_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_AcceptCharset" name="AcceptCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_AcceptHeader" name="AcceptHeader" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_AuthType" name="AuthType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_AuthUrl" name="AuthUrl" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_ConnectTimeout" name="ConnectTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_Content" name="Content" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N12_ContentData" name="ContentData" structureRef="String"/>
-        <bpmn2:dataInput id="_P2_N12_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_ContentTypeCharset" name="ContentTypeCharset" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_HandleResponseErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_Headers" name="Headers" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_Password" name="Password" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_ReadTimeout" name="ReadTimeout" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_ResultClass" name="ResultClass" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N12_Result" name="Result" structureRef="String"/>
-        <bpmn2:inputSet>
-          <bpmn2:dataInputRefs>_P2_N12_Url</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N12_Method</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N12_ContentType</bpmn2:dataInputRefs>
+        <bpmn2:inputSet id="_P2_N12_inputSet">
+          <bpmn2:dataInputRefs>_P2_N12_AcceptCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_AcceptHeader</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_AuthType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_AuthUrl</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_ConnectTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_Content</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N12_ContentData</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N12_HandleErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_ContentTypeCharset</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_HandleResponseErrors</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_Headers</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_Password</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_ReadTimeout</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_ResultClass</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_Username</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet>
+        <bpmn2:outputSet id="_P2_N12_outputSet">
           <bpmn2:dataOutputRefs>_P2_N12_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:incoming>_P2_F_HALT</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_DEATH_VER_UPDATED</bpmn2:outgoing>
+      <bpmn2:dataInputAssociation id="_P2_N12_assoc_Url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/death-verification"]]></bpmn2:transformation>
         <bpmn2:targetRef>_P2_N12_Url</bpmn2:targetRef>
-        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/status"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N12_assoc_Method">
+        <bpmn2:assignment id="_P2_N12_assign_Method">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to>_P2_N12_Method</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N12_Method</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[PUT]]></bpmn2:from><bpmn2:to>_P2_N12_Method</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N12_assoc_ContentType">
+        <bpmn2:assignment id="_P2_N12_assign_ContentType">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_P2_N12_ContentType</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N12_ContentType</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N12_ContentType</bpmn2:to></bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
-        <bpmn2:targetRef>_P2_N12_HandleErrors</bpmn2:targetRef>
-        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N12_HandleErrors</bpmn2:to></bpmn2:assignment>
+      <bpmn2:dataInputAssociation id="_P2_N12_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_P2_N12_assign_HandleResponseErrors">
+          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N12_HandleResponseErrors</bpmn2:to>
+        </bpmn2:assignment>
+        <bpmn2:targetRef>_P2_N12_HandleResponseErrors</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N12_assoc_ContentData">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N12_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N12_assoc_Result">
         <bpmn2:sourceRef>_P2_N12_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
@@ -670,47 +855,52 @@ if (response != null && !response.isEmpty()) {
           <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
-json.put("status", "DEATH_VERIFICATION");
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+    try {
+        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        kcontext.setVariable("verificationStatus", root.get("verificationStatus").asText());
+    } catch(Exception e) {}
+}]]></drools:script>
+        </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-
     <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_UPDATED" sourceRef="_P2_N12" targetRef="_P2_N13"/>
-
     <!-- Node 13: Examiner Death Verification User Task -->
     <bpmn2:userTask id="_P2_N13" name="N13: ExaminerDeathVerif">
       <bpmn2:incoming>_P2_F_DEATH_VER_UPDATED</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_DEATH_VER_DONE</bpmn2:outgoing>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
-          <bpmn2:formalExpression><![CDATA[SeniorInvestigator]]></bpmn2:formalExpression>
+          <bpmn2:formalExpression>SeniorInvestigator</bpmn2:formalExpression>
         </bpmn2:resourceAssignmentExpression>
       </bpmn2:potentialOwner>
     </bpmn2:userTask>
-
     <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_DONE" sourceRef="_P2_N13" targetRef="_P2_END_DEATH_VER"/>
-
     <bpmn2:endEvent id="_P2_END_DEATH_VER" name="End (Death Verification)"/>
-
-    <bpmn2:endEvent id="_P2_END_SUCCESS" name="End (Complete)">
+    <bpmn2:exclusiveGateway id="_P2_END_MERGE" name="End Merge" gatewayDirection="Converging">
       <bpmn2:incoming>_P2_F_DOCS_YES</bpmn2:incoming>
       <bpmn2:incoming>_P2_F_CLOSE_CLAIM</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_TO_END_SUCCESS</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="_P2_F_TO_END_SUCCESS" sourceRef="_P2_END_MERGE" targetRef="_P2_END_SUCCESS"/>
+    <bpmn2:endEvent id="_P2_END_SUCCESS" name="End (Complete)">
+      <bpmn2:incoming>_P2_F_TO_END_SUCCESS</bpmn2:incoming>
     </bpmn2:endEvent>
-
     <!-- Global Event Sub-Process for Centralized REST Exception Handling inside NIGO -->
     <bpmn2:subProcess id="_P2_ERROR_SUBPROCESS" name="Global API Error Handler" triggeredByEvent="true">
       <bpmn2:startEvent id="_P2_ERROR_START" name="Catch REST API Failure">
         <bpmn2:outgoing>_P2_ERR_F1</bpmn2:outgoing>
         <bpmn2:errorEventDefinition id="_P2_ERR_DEF" errorRef="REST_API_FAILURE"/>
       </bpmn2:startEvent>
-      
       <bpmn2:sequenceFlow id="_P2_ERR_F1" sourceRef="_P2_ERROR_START" targetRef="_P2_ERROR_CALL"/>
-      
       <bpmn2:callActivity id="_P2_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false">
         <bpmn2:extensionElements>
           <drools:onEntry-script scriptFormat="http://www.java.com/java">
-            <drools:script><![CDATA[// Extract failed REST node parameters
+            <drools:script>// Extract failed REST node parameters
 org.kie.api.runtime.process.WorkItem failedWorkItem = (org.kie.api.runtime.process.WorkItem) kcontext.getNodeInstance().getVariable("WorkItem");
 if (failedWorkItem != null) {
     String url = (String) failedWorkItem.getParameter("Url");
@@ -719,7 +909,7 @@ if (failedWorkItem != null) {
     kcontext.setVariable("resPayload", ctx);
 } else {
     kcontext.setVariable("resPayload", "{\"url\":\"/api/v1/unknown\", \"payload\":{}}");
-}]]></drools:script>
+}</drools:script>
           </drools:onEntry-script>
         </bpmn2:extensionElements>
         <bpmn2:incoming>_P2_ERR_F1</bpmn2:incoming>
@@ -736,15 +926,12 @@ if (failedWorkItem != null) {
           <bpmn2:targetRef>_P2_ERR_CALL_failedContext</bpmn2:targetRef>
         </bpmn2:dataInputAssociation>
       </bpmn2:callActivity>
-      
       <bpmn2:sequenceFlow id="_P2_ERR_F2" sourceRef="_P2_ERROR_CALL" targetRef="_P2_ERROR_END"/>
-      
       <bpmn2:endEvent id="_P2_ERROR_END" name="End Error Catch">
         <bpmn2:incoming>_P2_ERR_F2</bpmn2:incoming>
       </bpmn2:endEvent>
     </bpmn2:subProcess>
   </bpmn2:process>
-
   <bpmndi:BPMNDiagram id="_P2_DI">
     <bpmndi:BPMNPlane id="_P2_PLANE" bpmnElement="prudential-claims-submission.pru-nigo-followup">
       <bpmndi:BPMNShape id="_S_P2_START" bpmnElement="_P2_START">
@@ -807,49 +994,68 @@ if (failedWorkItem != null) {
       <bpmndi:BPMNShape id="_S_P2_END_DEATH_VER" bpmnElement="_P2_END_DEATH_VER">
         <dc:Bounds height="56.0" width="56.0" x="1280.0" y="372.0"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_END_MERGE" bpmnElement="_P2_END_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="1580.0" y="103.0"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P2_END_SUCCESS" bpmnElement="_P2_END_SUCCESS">
         <dc:Bounds height="56.0" width="56.0" x="1650.0" y="100.0"/>
       </bpmndi:BPMNShape>
-      
       <!-- Edges -->
       <bpmndi:BPMNEdge id="_E_P2_BOOTSTRAP" bpmnElement="_F_BOOTSTRAP">
-        <di:waypoint x="106.0" y="128.0"/><di:waypoint x="140.0" y="128.0"/>
+        <di:waypoint x="106.0" y="128.0"/>
+        <di:waypoint x="140.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F1" bpmnElement="_P2_F1">
-        <di:waypoint x="260.0" y="128.0"/><di:waypoint x="300.0" y="128.0"/>
+        <di:waypoint x="260.0" y="128.0"/>
+        <di:waypoint x="300.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F2" bpmnElement="_P2_F2">
-        <di:waypoint x="420.0" y="128.0"/><di:waypoint x="460.0" y="128.0"/>
+        <di:waypoint x="420.0" y="128.0"/>
+        <di:waypoint x="460.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_DEATH" bpmnElement="_P2_F_DEATH">
-        <di:waypoint x="485.0" y="103.0"/><di:waypoint x="485.0" y="60.0"/><di:waypoint x="550.0" y="60.0"/>
+        <di:waypoint x="485.0" y="103.0"/>
+        <di:waypoint x="485.0" y="60.0"/>
+        <di:waypoint x="550.0" y="60.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_TI" bpmnElement="_P2_F_TI">
-        <di:waypoint x="485.0" y="153.0"/><di:waypoint x="485.0" y="190.0"/><di:waypoint x="550.0" y="190.0"/>
+        <di:waypoint x="485.0" y="153.0"/>
+        <di:waypoint x="485.0" y="190.0"/>
+        <di:waypoint x="550.0" y="190.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_MERGE_2A" bpmnElement="_P2_F_MERGE_2A">
-        <di:waypoint x="670.0" y="60.0"/><di:waypoint x="735.0" y="60.0"/><di:waypoint x="735.0" y="103.0"/>
+        <di:waypoint x="670.0" y="60.0"/>
+        <di:waypoint x="735.0" y="60.0"/>
+        <di:waypoint x="735.0" y="103.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_MERGE_2B" bpmnElement="_P2_F_MERGE_2B">
-        <di:waypoint x="670.0" y="190.0"/><di:waypoint x="735.0" y="190.0"/><di:waypoint x="735.0" y="153.0"/>
+        <di:waypoint x="670.0" y="190.0"/>
+        <di:waypoint x="735.0" y="190.0"/>
+        <di:waypoint x="735.0" y="153.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_TO_WAIT" bpmnElement="_P2_F_TO_WAIT">
-        <di:waypoint x="760.0" y="128.0"/><di:waypoint x="800.0" y="128.0"/>
+        <di:waypoint x="760.0" y="128.0"/>
+        <di:waypoint x="800.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_UPLOADED" bpmnElement="_P2_F_UPLOADED">
-        <di:waypoint x="920.0" y="128.0"/><di:waypoint x="960.0" y="128.0"/>
+        <di:waypoint x="920.0" y="128.0"/>
+        <di:waypoint x="960.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_TIMEOUT" bpmnElement="_P2_F_TIMEOUT">
-        <di:waypoint x="888.0" y="196.0"/><di:waypoint x="888.0" y="240.0"/>
+        <di:waypoint x="888.0" y="196.0"/>
+        <di:waypoint x="888.0" y="240.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_TO_XG" bpmnElement="_P2_F_TO_XG">
-        <di:waypoint x="948.0" y="280.0"/><di:waypoint x="990.0" y="280.0"/>
+        <di:waypoint x="948.0" y="280.0"/>
+        <di:waypoint x="990.0" y="280.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_RETRY" bpmnElement="_P2_F_RETRY">
-        <di:waypoint x="1040.0" y="280.0"/><di:waypoint x="1080.0" y="280.0"/>
+        <di:waypoint x="1040.0" y="280.0"/>
+        <di:waypoint x="1080.0" y="280.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_HALT" bpmnElement="_P2_F_HALT">
-        <di:waypoint x="1015.0" y="305.0"/><di:waypoint x="1015.0" y="360.0"/>
+        <di:waypoint x="1015.0" y="305.0"/>
+        <di:waypoint x="1015.0" y="360.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_LOOP" bpmnElement="_P2_F_LOOP">
         <di:waypoint x="1140.0" y="240.0"/>
@@ -858,19 +1064,29 @@ if (failedWorkItem != null) {
         <di:waypoint x="860.0" y="88.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_IDP_DONE" bpmnElement="_P2_F_IDP_DONE">
-        <di:waypoint x="1080.0" y="128.0"/><di:waypoint x="1120.0" y="128.0"/>
+        <di:waypoint x="1080.0" y="128.0"/>
+        <di:waypoint x="1120.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_STATUS_DONE" bpmnElement="_P2_F_STATUS_DONE">
-        <di:waypoint x="1240.0" y="128.0"/><di:waypoint x="1280.0" y="128.0"/>
+        <di:waypoint x="1240.0" y="128.0"/>
+        <di:waypoint x="1280.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_DOCS_YES" bpmnElement="_P2_F_DOCS_YES">
-        <di:waypoint x="1330.0" y="128.0"/><di:waypoint x="1650.0" y="128.0"/>
+        <di:waypoint x="1330.0" y="128.0"/>
+        <di:waypoint x="1580.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_TO_END_SUCCESS" bpmnElement="_P2_F_TO_END_SUCCESS">
+        <di:waypoint x="1630.0" y="128.0"/>
+        <di:waypoint x="1650.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_DOCS_NO" bpmnElement="_P2_F_DOCS_NO">
-        <di:waypoint x="1305.0" y="153.0"/><di:waypoint x="1305.0" y="220.0"/><di:waypoint x="1360.0" y="220.0"/>
+        <di:waypoint x="1305.0" y="153.0"/>
+        <di:waypoint x="1305.0" y="220.0"/>
+        <di:waypoint x="1360.0" y="220.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_REVIEW_DONE" bpmnElement="_P2_F_REVIEW_DONE">
-        <di:waypoint x="1480.0" y="220.0"/><di:waypoint x="1520.0" y="220.0"/>
+        <di:waypoint x="1480.0" y="220.0"/>
+        <di:waypoint x="1520.0" y="220.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_CONTINUE_CHASE" bpmnElement="_P2_F_CONTINUE_CHASE">
         <di:waypoint x="1545.0" y="195.0"/>
@@ -880,16 +1096,17 @@ if (failedWorkItem != null) {
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_CLOSE_CLAIM" bpmnElement="_P2_F_CLOSE_CLAIM">
         <di:waypoint x="1570.0" y="220.0"/>
-        <di:waypoint x="1678.0" y="220.0"/>
-        <di:waypoint x="1678.0" y="156.0"/>
+        <di:waypoint x="1605.0" y="220.0"/>
+        <di:waypoint x="1605.0" y="153.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_DEATH_VER_UPDATED" bpmnElement="_P2_F_DEATH_VER_UPDATED">
-        <di:waypoint x="1075.0" y="400.0"/><di:waypoint x="1115.0" y="400.0"/>
+        <di:waypoint x="1075.0" y="400.0"/>
+        <di:waypoint x="1115.0" y="400.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_DEATH_VER_DONE" bpmnElement="_P2_F_DEATH_VER_DONE">
-        <di:waypoint x="1235.0" y="400.0"/><di:waypoint x="1280.0" y="400.0"/>
+        <di:waypoint x="1235.0" y="400.0"/>
+        <di:waypoint x="1280.0" y="400.0"/>
       </bpmndi:BPMNEdge>
-      
       <!-- Global Exception Event Subprocess Shapes inside NIGO -->
       <bpmndi:BPMNShape id="_S_P2_ERROR_SUBPROCESS" bpmnElement="_P2_ERROR_SUBPROCESS" isExpanded="true">
         <dc:Bounds height="200.0" width="400.0" x="100.0" y="500.0"/>
@@ -904,10 +1121,12 @@ if (failedWorkItem != null) {
         <dc:Bounds height="56.0" width="56.0" x="380.0" y="572.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="_E_P2_ERR_F1" bpmnElement="_P2_ERR_F1">
-        <di:waypoint x="186.0" y="600.0"/><di:waypoint x="220.0" y="600.0"/>
+        <di:waypoint x="186.0" y="600.0"/>
+        <di:waypoint x="220.0" y="600.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_ERR_F2" bpmnElement="_P2_ERR_F2">
-        <di:waypoint x="340.0" y="600.0"/><di:waypoint x="380.0" y="600.0"/>
+        <di:waypoint x="340.0" y="600.0"/>
+        <di:waypoint x="380.0" y="600.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

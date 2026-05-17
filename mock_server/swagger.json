@@ -1,0 +1,743 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Prudential Claims Integration Layer Mock API",
+    "version": "1.0.0",
+    "description": "Mock REST API specification for Prudential Claims jBPM Orchestration integration testing."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3010",
+      "description": "Local development mock server"
+    }
+  ],
+  "paths": {
+    "/api/v1/claims/validate-data": {
+      "post": {
+        "summary": "1. Validate Data",
+        "description": "Validates claims ingestion data (claims, policies, structures).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "validationPassed": { "type": "boolean" },
+                    "policyFlags": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/log-failure": {
+      "post": {
+        "summary": "2. Log Failure / Audit",
+        "description": "Logs process exceptions or validation failures.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "errors": { "type": "array", "items": { "type": "object" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "auditLogId": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policy/status": {
+      "put": {
+        "summary": "3. Update Policy Status",
+        "description": "Updates target policies to PENDING_DEATH_CLAIM in core system.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "updatedPolicies": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/check-documents": {
+      "post": {
+        "summary": "4. Check Documents",
+        "description": "Validates uploaded documents against checklist requirements.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "allDocsVerified": { "type": "boolean" },
+                    "missingDocs": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/validate-policy": {
+      "post": {
+        "summary": "5. Policy Validation (Mainframe)",
+        "description": "Validates target policy numbers directly on Mainframe.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "validationPassed": { "type": "boolean" },
+                    "policyFlags": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/validate-beneficiary": {
+      "post": {
+        "summary": "6. Beneficiary Validation",
+        "description": "Checks beneficiary registry for minor triggers or compliance holds.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "minorDetected": { "type": "boolean" },
+                    "beneficiaryFlags": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/validate-bank": {
+      "post": {
+        "summary": "7. Bank Account Validation (PVS)",
+        "description": "Validates claimant bank details via PVS portal.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "pvsMatch": { "type": "boolean" },
+                    "bankValidationResult": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/mrx-check": {
+      "post": {
+        "summary": "8. Contestability Check (MRX)",
+        "description": "Executes contestability screening via Medical Record Exchange.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "alerts": { "type": "array", "items": { "type": "string" } },
+                    "mrxCheckResult": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/tax/multi-fund": {
+      "post": {
+        "summary": "9. Multi Fund Tax Check",
+        "description": "Checks tax withholdings on a multi-fund portfolio.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "fundTaxResult": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/tax/single-fund": {
+      "post": {
+        "summary": "10. Single Fund Tax Check",
+        "description": "Checks tax withholdings on standard death claims.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "fundTaxResult": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/tax/apply": {
+      "post": {
+        "summary": "11. Apply Tax Rules",
+        "description": "Locks IRS rules and exceptions status.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "taxExceptions": { "type": "boolean" },
+                    "taxCheckResult": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/calculate": {
+      "post": {
+        "summary": "12. Calculate Benefit",
+        "description": "Performs standard face amount and interest addition.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "payoutAmount": { "type": "number" },
+                    "benefitCalculation": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/misstatement-adjust": {
+      "post": {
+        "summary": "13. Misstatement Adjustments",
+        "description": "Applies M&E premium adjustments based on age/sex misstatement.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "adjustedBenefitCalculation": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/beneficiary-split": {
+      "post": {
+        "summary": "14. Beneficiary Split Execution",
+        "description": "Computes exact payout fractions.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "beneficiarySplit": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/backup-withholding": {
+      "post": {
+        "summary": "15. Backup Withholding Checks",
+        "description": "Subtracts IRS backup withholding rates.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "withholdingResult": { "type": "object" },
+                    "finalPayouts": { "type": "array", "items": { "type": "object" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/finalize": {
+      "post": {
+        "summary": "16. Finalize Payment",
+        "description": "Triggers final transactional bank instructions.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "finalPaymentInstructions": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/ti-knect-payment": {
+      "post": {
+        "summary": "17. TI KNECT Payment (Accelerated Benefits)",
+        "description": "Dispatches accelerated payment routing.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "knectTransactionId": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/nigo/send": {
+      "post": {
+        "summary": "18. Send NIGO Notice",
+        "description": "Dispatches letter detailing missing items.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "noticeSentAt": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/nigo/funding-notice": {
+      "post": {
+        "summary": "19. Generate Funding Notice",
+        "description": "Generates Death Funding Requirements notice PDF.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "documentS3Key": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/nigo/standard-notice": {
+      "post": {
+        "summary": "20. Generate TI Standard Notice",
+        "description": "Generates TI Standard notice PDF.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "documentS3Key": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/nigo/auto-followup": {
+      "post": {
+        "summary": "21. NIGO Auto Followup",
+        "description": "Sends periodic notifications/reminders.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "followupCount": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/nigo/rerun-idp": {
+      "post": {
+        "summary": "22. Rerun IDP Extraction",
+        "description": "OCR matching on newly uploaded documents.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "extractionResult": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/nigo/update-status": {
+      "post": {
+        "summary": "23. Update Claim Status",
+        "description": "Verifies progress of outstanding requirements.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "allDocsReceived": { "type": "boolean" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/nigo/death-verification": {
+      "post": {
+        "summary": "24. Death Verification Status",
+        "description": "Executes public records death check.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "verificationStatus": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/business-central/rest/spaces/{spaceName}/git/clone": {
+      "post": {
+        "summary": "25. Business Central Git Clone",
+        "description": "Mock endpoint for cloning/importing remote Git repositories into Business Central space.",
+        "parameters": [
+          {
+            "name": "spaceName",
+            "in": "path",
+            "required": true,
+            "description": "Target space name (e.g. claims)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "gitURL": { "type": "string", "example": "https://github.com/Avinashkumar8694/prudential-claims-bpm.git" },
+                  "name": { "type": "string", "example": "prudential-claims-bpm" }
+                },
+                "required": ["gitURL", "name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted - Git Clone Job triggered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "APPROVED" },
+                    "jobId": { "type": "string", "example": "job-x9z2k1s5p" },
+                    "spaceName": { "type": "string", "example": "claims" },
+                    "projectName": { "type": "string", "example": "prudential-claims-bpm" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/business-central/rest/jobs/{jobId}": {
+      "get": {
+        "summary": "26. Business Central Job Status",
+        "description": "Checks the status of an asynchronous Business Central job (e.g., repository cloning).",
+        "parameters": [
+          {
+            "name": "jobId",
+            "in": "path",
+            "required": true,
+            "description": "The ID of the job to check",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success - Job details retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "SUCCESS" },
+                    "jobId": { "type": "string", "example": "job-x9z2k1s5p" },
+                    "result": { "type": "string", "example": "Repository operation completed successfully" },
+                    "lastModified": { "type": "integer", "example": 1779016652364 },
+                    "detailedResult": { "type": "string", "nullable": true, "example": null }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/business-central/rest/spaces/{spaceName}/projects/{projectName}": {
+      "delete": {
+        "summary": "27. Business Central Delete Project",
+        "description": "Mock endpoint for completely deleting a project from Business Central space.",
+        "parameters": [
+          {
+            "name": "spaceName",
+            "in": "path",
+            "required": true,
+            "description": "The space name where project resides (e.g. claims)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectName",
+            "in": "path",
+            "required": true,
+            "description": "The name of the project to delete (e.g. prudential-claims-bpm)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success - Project deletion job triggered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "APPROVED" },
+                    "jobId": { "type": "string", "example": "job-del-x9z2k1s5p" },
+                    "spaceName": { "type": "string", "example": "claims" },
+                    "projectName": { "type": "string", "example": "prudential-claims-bpm" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
