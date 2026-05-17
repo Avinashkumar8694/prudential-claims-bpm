@@ -95,8 +95,67 @@ kcontext.setVariable("baseUrl", url);]]></bpmn2:script>
 
   <bpmndi:BPMNDiagram id="_P2_DI">
     <bpmndi:BPMNPlane id="_P2_PLANE" bpmnElement="prudential-claims-submission.pru-nigo-followup">
-      <bpmndi:BPMNShape id="_S_P2_START" bpmnElement="_P2_START"><dc:Bounds x="100" y="100" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P2_BOOTSTRAP" bpmnElement="_P2_BOOTSTRAP"><dc:Bounds x="180" y="70" width="120" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_START" bpmnElement="_P2_START">
+        <dc:Bounds height="56.0" width="56.0" x="100.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_BOOTSTRAP" bpmnElement="_P2_BOOTSTRAP">
+        <dc:Bounds height="102.0" width="154.0" x="200.0" y="77.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N1" bpmnElement="_P2_N1">
+        <dc:Bounds height="102.0" width="154.0" x="400.0" y="77.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N4" bpmnElement="_P2_N4">
+        <dc:Bounds height="102.0" width="154.0" x="600.0" y="77.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_TIMER" bpmnElement="_P2_TIMER">
+        <dc:Bounds height="56.0" width="56.0" x="690.0" y="140.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_XG1" bpmnElement="_P2_XG1">
+        <dc:Bounds height="56.0" width="56.0" x="800.0" y="200.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N11" bpmnElement="_P2_N11">
+        <dc:Bounds height="102.0" width="154.0" x="900.0" y="177.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_END" bpmnElement="_P2_END">
+        <dc:Bounds height="56.0" width="56.0" x="1100.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="_E_P2_BOOTSTRAP" bpmnElement="_F_BOOTSTRAP">
+        <di:waypoint x="156.0" y="128.0"/>
+        <di:waypoint x="200.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F1" bpmnElement="_P2_F1">
+        <di:waypoint x="354.0" y="128.0"/>
+        <di:waypoint x="400.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F2" bpmnElement="_P2_F2">
+        <di:waypoint x="554.0" y="128.0"/>
+        <di:waypoint x="600.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_TIMEOUT" bpmnElement="_P2_F_TIMEOUT">
+        <di:waypoint x="718.0" y="196.0"/>
+        <di:waypoint x="718.0" y="228.0"/>
+        <di:waypoint x="800.0" y="228.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_RETRY" bpmnElement="_P2_F_RETRY">
+        <di:waypoint x="856.0" y="228.0"/>
+        <di:waypoint x="900.0" y="228.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_HALT" bpmnElement="_P2_F_HALT">
+        <di:waypoint x="828.0" y="256.0"/>
+        <di:waypoint x="828.0" y="320.0"/>
+        <di:waypoint x="1128.0" y="320.0"/>
+        <di:waypoint x="1128.0" y="156.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_LOOP" bpmnElement="_P2_F_LOOP">
+        <di:waypoint x="977.0" y="279.0"/>
+        <di:waypoint x="977.0" y="340.0"/>
+        <di:waypoint x="677.0" y="340.0"/>
+        <di:waypoint x="677.0" y="179.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F3" bpmnElement="_P2_F3">
+        <di:waypoint x="754.0" y="128.0"/>
+        <di:waypoint x="1100.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn2:definitions>

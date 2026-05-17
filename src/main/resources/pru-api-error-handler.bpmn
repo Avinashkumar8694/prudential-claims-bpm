@@ -17,17 +17,8 @@
     <bpmn2:property id="resPayload" itemSubjectRef="_resPayloadItem" name="resPayload"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
     
-    <bpmn2:startEvent id="_START_NODE">
+    <bpmn2:startEvent id="_START_NODE" name="Start Error Handler">
       <bpmn2:outgoing>_flow1</bpmn2:outgoing>
-      <bpmn2:dataOutput id="_ErrorOutput" name="Error" itemSubjectRef="_failedContextItem"/>
-      <bpmn2:dataOutputAssociation id="_assoc1">
-        <bpmn2:sourceRef>_ErrorOutput</bpmn2:sourceRef>
-        <bpmn2:targetRef>failedContext</bpmn2:targetRef>
-      </bpmn2:dataOutputAssociation>
-      <bpmn2:outputSet id="_oset1">
-        <bpmn2:dataOutputRefs>_ErrorOutput</bpmn2:dataOutputRefs>
-      </bpmn2:outputSet>
-      <bpmn2:errorEventDefinition id="_errorDef" errorRef="REST_API_FAILURE" drools:erefname="REST_API_FAILURE"/>
     </bpmn2:startEvent>
     
     <bpmn2:sequenceFlow id="_flow1" sourceRef="_START_NODE" targetRef="_PARSE_SCRIPT"/>

@@ -110,11 +110,51 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);]]>
 
   <bpmndi:BPMNDiagram id="_P1_DI">
     <bpmndi:BPMNPlane id="_P1_PLANE" bpmnElement="prudential-claims-submission.pru-claim-internal-processing">
-      <bpmndi:BPMNShape id="_S_P1_START" bpmnElement="_P1_START"><dc:Bounds x="100" y="100" width="36" height="36"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P1_BOOTSTRAP" bpmnElement="_P1_BOOTSTRAP"><dc:Bounds x="180" y="70" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P1_N1" bpmnElement="_P1_N1"><dc:Bounds x="350" y="70" width="120" height="80"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P1_XG1" bpmnElement="_P1_XG1"><dc:Bounds x="500" y="90" width="50" height="50"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P1_N4" bpmnElement="_P1_N4"><dc:Bounds x="600" y="70" width="120" height="80"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_START" bpmnElement="_P1_START">
+        <dc:Bounds height="56.0" width="56.0" x="100.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_BOOTSTRAP" bpmnElement="_P1_BOOTSTRAP">
+        <dc:Bounds height="102.0" width="154.0" x="200.0" y="77.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N1" bpmnElement="_P1_N1">
+        <dc:Bounds height="102.0" width="154.0" x="400.0" y="77.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_XG1" bpmnElement="_P1_XG1">
+        <dc:Bounds height="56.0" width="56.0" x="600.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N4" bpmnElement="_P1_N4">
+        <dc:Bounds height="102.0" width="154.0" x="700.0" y="77.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_END_SUCCESS" bpmnElement="_P1_END_SUCCESS">
+        <dc:Bounds height="56.0" width="56.0" x="900.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_END_FAIL" bpmnElement="_P1_END_FAIL">
+        <dc:Bounds height="56.0" width="56.0" x="600.0" y="250.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="_E_BOOTSTRAP" bpmnElement="_F_BOOTSTRAP">
+        <di:waypoint x="156.0" y="128.0"/>
+        <di:waypoint x="200.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F1" bpmnElement="_P1_F1">
+        <di:waypoint x="354.0" y="128.0"/>
+        <di:waypoint x="400.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F2" bpmnElement="_P1_F2">
+        <di:waypoint x="554.0" y="128.0"/>
+        <di:waypoint x="600.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F3_OK" bpmnElement="_P1_F3_OK">
+        <di:waypoint x="656.0" y="128.0"/>
+        <di:waypoint x="700.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F3_FAIL" bpmnElement="_P1_F3_FAIL">
+        <di:waypoint x="628.0" y="156.0"/>
+        <di:waypoint x="628.0" y="250.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F4" bpmnElement="_P1_F4">
+        <di:waypoint x="854.0" y="128.0"/>
+        <di:waypoint x="900.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn2:definitions>
