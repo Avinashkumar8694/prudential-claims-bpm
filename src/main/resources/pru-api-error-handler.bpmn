@@ -9,6 +9,7 @@
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_retrySuccessItem" structureRef="java.lang.Boolean"/>
   <bpmn2:itemDefinition id="_adminDecisionItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_failedMethodItem" structureRef="String"/>
   <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
   <bpmn2:process id="prudential-claims-submission.pru-api-error-handler" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-api-error-handler" isExecutable="true" processType="Public">
     <bpmn2:property id="failedEndpoint" itemSubjectRef="_failedEndpointItem" name="failedEndpoint"/>
@@ -20,6 +21,7 @@
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
     <bpmn2:property id="retrySuccess" itemSubjectRef="_retrySuccessItem" name="retrySuccess"/>
     <bpmn2:property id="adminDecision" itemSubjectRef="_adminDecisionItem" name="adminDecision"/>
+    <bpmn2:property id="failedMethod" itemSubjectRef="_failedMethodItem" name="failedMethod"/>
     <!-- Nodes -->
     <bpmn2:startEvent id="_START_NODE" name="Start Error Handler">
       <bpmn2:outgoing>_flow1</bpmn2:outgoing>
@@ -75,7 +77,13 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
         <bpmn2:timeDuration xsi:type="bpmn2:tFormalExpression" id="_duration">PT15M</bpmn2:timeDuration>
       </bpmn2:timerEventDefinition>
     </bpmn2:intermediateCatchEvent>
-    <bpmn2:sequenceFlow id="_flow3" sourceRef="_TIMER_NODE" targetRef="_RETRY_REST"/>
+    <bpmn2:sequenceFlow id="_flow3" sourceRef="_TIMER_NODE" targetRef="_RETRY_MERGE"/>
+    <bpmn2:exclusiveGateway id="_RETRY_MERGE" name="Retry Merge" gatewayDirection="Converging">
+      <bpmn2:incoming>_flow3</bpmn2:incoming>
+      <bpmn2:incoming>_flow_admin_retry</bpmn2:incoming>
+      <bpmn2:outgoing>_flow_to_retry</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="_flow_to_retry" sourceRef="_RETRY_MERGE" targetRef="_RETRY_REST"/>
     <!-- Retry the REST API dynamically -->
     <bpmn2:task id="_RETRY_REST" drools:taskName="Rest" name="Rest_RetryAPI">
       <bpmn2:ioSpecification id="_RETRY_REST_io">
@@ -120,8 +128,7 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
           <bpmn2:dataOutputRefs>_RETRY_REST_Result</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:incoming>_flow3</bpmn2:incoming>
-      <bpmn2:incoming>_flow_admin_retry</bpmn2:incoming>
+      <bpmn2:incoming>_flow_to_retry</bpmn2:incoming>
       <bpmn2:outgoing>_flow4</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_RETRY_REST_assoc_Url">
         <bpmn2:sourceRef>failedEndpoint</bpmn2:sourceRef>
@@ -192,7 +199,7 @@ System.out.println("Error Handler: API Retry failed. Attempt: " + (count + 1));<
       <bpmn2:outgoing>_flow_admin_skip</bpmn2:outgoing>
       <bpmn2:outgoing>_flow_admin_terminate</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-    <bpmn2:sequenceFlow id="_flow_admin_retry" name="Force Retry" sourceRef="_ADMIN_DECISION_GATE" targetRef="_RETRY_REST">
+    <bpmn2:sequenceFlow id="_flow_admin_retry" name="Force Retry" sourceRef="_ADMIN_DECISION_GATE" targetRef="_RETRY_MERGE">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return "RETRY".equals(adminDecision);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_flow_admin_skip" name="Skip Node" sourceRef="_ADMIN_DECISION_GATE" targetRef="_END_MERGE">
@@ -231,6 +238,9 @@ System.out.println("Error Handler: API Retry failed. Attempt: " + (count + 1));<
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S3" bpmnElement="_TIMER_NODE">
         <dc:Bounds height="56.0" width="56.0" x="350.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_RETRY_MERGE" bpmnElement="_RETRY_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="353.0" y="20.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S4" bpmnElement="_RETRY_REST">
         <dc:Bounds height="80.0" width="120.0" x="420.0" y="88.0"/>
@@ -273,8 +283,13 @@ System.out.println("Error Handler: API Retry failed. Attempt: " + (count + 1));<
         <di:waypoint x="350.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E3" bpmnElement="_flow3">
-        <di:waypoint x="406.0" y="128.0"/>
-        <di:waypoint x="420.0" y="128.0"/>
+        <di:waypoint x="378.0" y="100.0"/>
+        <di:waypoint x="378.0" y="70.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_FLOW_TO_RETRY" bpmnElement="_flow_to_retry">
+        <di:waypoint x="403.0" y="45.0"/>
+        <di:waypoint x="480.0" y="45.0"/>
+        <di:waypoint x="480.0" y="88.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E4" bpmnElement="_flow4">
         <di:waypoint x="540.0" y="128.0"/>
@@ -313,8 +328,8 @@ System.out.println("Error Handler: API Retry failed. Attempt: " + (count + 1));<
       <bpmndi:BPMNEdge id="_E_ADMIN_RETRY" bpmnElement="_flow_admin_retry">
         <di:waypoint x="985.0" y="235.0"/>
         <di:waypoint x="985.0" y="-30.0"/>
-        <di:waypoint x="480.0" y="-30.0"/>
-        <di:waypoint x="480.0" y="88.0"/>
+        <di:waypoint x="378.0" y="-30.0"/>
+        <di:waypoint x="378.0" y="20.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_ADMIN_SKIP" bpmnElement="_flow_admin_skip">
         <di:waypoint x="985.0" y="285.0"/>

@@ -18,6 +18,10 @@
   <bpmn2:itemDefinition id="_pendingDocsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_examinerDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_applicablePoliciesItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_idpExtractionResultItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_verificationStatusItem" structureRef="String"/>
+
   <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
@@ -30,6 +34,10 @@
     <bpmn2:property id="docUploaded" itemSubjectRef="_docUploadedItem" name="docUploaded"/>
     <bpmn2:property id="continueReview" itemSubjectRef="_continueReviewItem" name="continueReview"/>
     <bpmn2:property id="maxAttempts" itemSubjectRef="_maxAttemptsItem" name="maxAttempts"/>
+    <bpmn2:property id="applicablePolicies" itemSubjectRef="_applicablePoliciesItem" name="applicablePolicies"/>
+    <bpmn2:property id="idpExtractionResult" itemSubjectRef="_idpExtractionResultItem" name="idpExtractionResult"/>
+    <bpmn2:property id="verificationStatus" itemSubjectRef="_verificationStatusItem" name="verificationStatus"/>
+
     <bpmn2:property id="lastReminderDate" itemSubjectRef="_lastReminderDateItem" name="lastReminderDate"/>
     <bpmn2:property id="noticeSentAt" itemSubjectRef="_noticeSentAtItem" name="noticeSentAt"/>
     <bpmn2:property id="noticeS3Key" itemSubjectRef="_noticeS3KeyItem" name="noticeS3Key"/>
@@ -56,7 +64,7 @@ if (url == null || url.isEmpty()) {
 if (url == null || url.isEmpty()) { url = "http://localhost:3000"; }
 kcontext.setVariable("baseUrl", url);
 kcontext.setVariable("followupCount", 0);
-kcontext.setVariable("maxAttempts", 3);
+kcontext.setVariable("maxAttempts", 4);
 
 // Dynamic determination of claimType if not provided
 if (kcontext.getVariable("claimType") == null) {
@@ -382,14 +390,14 @@ if (response != null && !response.isEmpty()) {
     <bpmn2:exclusiveGateway id="_P2_MERGE" gatewayDirection="Converging">
       <bpmn2:incoming>_P2_F_MERGE_2A</bpmn2:incoming>
       <bpmn2:incoming>_P2_F_MERGE_2B</bpmn2:incoming>
+      <bpmn2:incoming>_P2_F_LOOP</bpmn2:incoming>
+      <bpmn2:incoming>_P2_F_CONTINUE_CHASE</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_TO_WAIT</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
     <bpmn2:sequenceFlow id="_P2_F_TO_WAIT" sourceRef="_P2_MERGE" targetRef="_P2_N4"/>
     <!-- Node 4: Wait for Document Upload (Receive Task) -->
     <bpmn2:receiveTask id="_P2_N4" name="Wait for Document Upload" instantiate="false">
       <bpmn2:incoming>_P2_F_TO_WAIT</bpmn2:incoming>
-      <bpmn2:incoming>_P2_F_LOOP</bpmn2:incoming>
-      <bpmn2:incoming>_P2_F_CONTINUE_CHASE</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_UPLOADED</bpmn2:outgoing>
     </bpmn2:receiveTask>
     <bpmn2:sequenceFlow id="_P2_F_UPLOADED" sourceRef="_P2_N4" targetRef="_P2_N6"/>
@@ -520,7 +528,7 @@ if (response != null && !response.isEmpty()) {
         </drools:onExit-script>
       </bpmn2:extensionElements>
     </bpmn2:task>
-    <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_N4"/>
+    <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_MERGE"/>
     <!-- Node 6: Re-Run IDP Extraction Service Task -->
     <bpmn2:task id="_P2_N6" drools:taskName="Rest" name="N6: ReRunIDPExtraction">
       <bpmn2:ioSpecification id="_P2_N6_io">
@@ -764,7 +772,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_CONTINUE_CHASE</bpmn2:outgoing>
       <bpmn2:outgoing>_P2_F_CLOSE_CLAIM</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-    <bpmn2:sequenceFlow id="_P2_F_CONTINUE_CHASE" name="Yes" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_N4">
+    <bpmn2:sequenceFlow id="_P2_F_CONTINUE_CHASE" name="Yes" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_MERGE">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return "CONTINUE".equals(examinerDecision);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_P2_F_CLOSE_CLAIM" name="No" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_END_MERGE">
@@ -1060,8 +1068,8 @@ if (failedWorkItem != null) {
       <bpmndi:BPMNEdge id="_E_P2_F_LOOP" bpmnElement="_P2_F_LOOP">
         <di:waypoint x="1140.0" y="240.0"/>
         <di:waypoint x="1140.0" y="-30.0"/>
-        <di:waypoint x="860.0" y="-30.0"/>
-        <di:waypoint x="860.0" y="88.0"/>
+        <di:waypoint x="735.0" y="-30.0"/>
+        <di:waypoint x="735.0" y="103.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_IDP_DONE" bpmnElement="_P2_F_IDP_DONE">
         <di:waypoint x="1080.0" y="128.0"/>
@@ -1091,8 +1099,8 @@ if (failedWorkItem != null) {
       <bpmndi:BPMNEdge id="_E_P2_F_CONTINUE_CHASE" bpmnElement="_P2_F_CONTINUE_CHASE">
         <di:waypoint x="1545.0" y="195.0"/>
         <di:waypoint x="1545.0" y="-10.0"/>
-        <di:waypoint x="830.0" y="-10.0"/>
-        <di:waypoint x="830.0" y="88.0"/>
+        <di:waypoint x="735.0" y="-10.0"/>
+        <di:waypoint x="735.0" y="103.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_CLOSE_CLAIM" bpmnElement="_P2_F_CLOSE_CLAIM">
         <di:waypoint x="1570.0" y="220.0"/>
