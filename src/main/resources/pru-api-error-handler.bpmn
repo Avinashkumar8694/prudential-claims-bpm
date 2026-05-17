@@ -142,6 +142,20 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
         <bpmn2:sourceRef>failedPayload</bpmn2:sourceRef>
         <bpmn2:targetRef>_RETRY_REST_ContentData</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_RETRY_REST_assoc_ContentType">
+        <bpmn2:assignment id="_RETRY_REST_assign_ContentType">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_RETRY_REST_ContentType</bpmn2:to>
+        </bpmn2:assignment>
+        <bpmn2:targetRef>_RETRY_REST_ContentType</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_RETRY_REST_assoc_HandleResponseErrors">
+        <bpmn2:assignment id="_RETRY_REST_assign_HandleResponseErrors">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_RETRY_REST_HandleResponseErrors</bpmn2:to>
+        </bpmn2:assignment>
+        <bpmn2:targetRef>_RETRY_REST_HandleResponseErrors</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="_RETRY_REST_assoc_Result">
         <bpmn2:sourceRef>_RETRY_REST_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>

@@ -76,6 +76,19 @@ app.use(express.json());
 // Serve interactive Swagger UI documentation at /api-docs
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// Global rewrite middleware to support both prefix-less conceptual routes (from spec diagrams) and versioned production routes
+app.use((req, res, next) => {
+  if (!req.url.startsWith('/api/v1') && !req.url.startsWith('/business-central') && !req.url.startsWith('/api-docs')) {
+    if (req.url === '/claims/tax/fund-check') {
+      req.url = '/api/v1/claims/tax/single-fund';
+    } else {
+      req.url = '/api/v1' + req.url;
+    }
+    console.log(`\x1b[35m[Route Alias]\x1b[0m Rewrote conceptual route to: ${req.url}`);
+  }
+  next();
+});
+
 // Request logger middleware to inspect BPM engine execution
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
@@ -83,6 +96,7 @@ app.use((req, res, next) => {
   console.log('\x1b[33mRequest Payload:\x1b[0m', JSON.stringify(req.body, null, 2));
   next();
 });
+
 
 // --- PROCESS 1: MAIN CLAIMS INTERNAL PROCESSING ENDPOINTS ---
 
