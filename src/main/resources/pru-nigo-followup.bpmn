@@ -120,27 +120,29 @@ System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " +
       <bpmn2:incoming>_P2_F1</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F2</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N1_assoc_Url">
-        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
-        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/send"]]></bpmn2:transformation>
+        <bpmn2:assignment id="_P2_N1_assign_Url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/send]]></bpmn2:from>
+          <bpmn2:to>_P2_N1_Url</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N1_Url</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N1_assoc_Method">
         <bpmn2:assignment id="_P2_N1_assign_Method">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N1_Method</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N1_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N1_assoc_ContentType">
         <bpmn2:assignment id="_P2_N1_assign_ContentType">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N1_ContentType</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N1_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N1_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_P2_N1_assign_HandleResponseErrors">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
           <bpmn2:to>_P2_N1_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N1_HandleResponseErrors</bpmn2:targetRef>
@@ -233,27 +235,29 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_DEATH</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_MERGE_2A</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N2A_assoc_Url">
-        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
-        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/funding-notice"]]></bpmn2:transformation>
+        <bpmn2:assignment id="_P2_N2A_assign_Url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/funding-notice]]></bpmn2:from>
+          <bpmn2:to>_P2_N2A_Url</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2A_Url</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N2A_assoc_Method">
         <bpmn2:assignment id="_P2_N2A_assign_Method">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N2A_Method</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2A_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N2A_assoc_ContentType">
         <bpmn2:assignment id="_P2_N2A_assign_ContentType">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N2A_ContentType</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2A_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N2A_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_P2_N2A_assign_HandleResponseErrors">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
           <bpmn2:to>_P2_N2A_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2A_HandleResponseErrors</bpmn2:targetRef>
@@ -333,27 +337,29 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_TI</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_MERGE_2B</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N2B_assoc_Url">
-        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
-        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/standard-notice"]]></bpmn2:transformation>
+        <bpmn2:assignment id="_P2_N2B_assign_Url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/standard-notice]]></bpmn2:from>
+          <bpmn2:to>_P2_N2B_Url</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2B_Url</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N2B_assoc_Method">
         <bpmn2:assignment id="_P2_N2B_assign_Method">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N2B_Method</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2B_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N2B_assoc_ContentType">
         <bpmn2:assignment id="_P2_N2B_assign_ContentType">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N2B_ContentType</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2B_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N2B_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_P2_N2B_assign_HandleResponseErrors">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
           <bpmn2:to>_P2_N2B_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2B_HandleResponseErrors</bpmn2:targetRef>
@@ -476,27 +482,29 @@ return count &lt; 3;</bpmn2:conditionExpression>
       <bpmn2:incoming>_P2_F_RETRY</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_LOOP</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N11_assoc_Url">
-        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
-        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/auto-followup"]]></bpmn2:transformation>
+        <bpmn2:assignment id="_P2_N11_assign_Url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/auto-followup]]></bpmn2:from>
+          <bpmn2:to>_P2_N11_Url</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N11_Url</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N11_assoc_Method">
         <bpmn2:assignment id="_P2_N11_assign_Method">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N11_Method</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N11_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N11_assoc_ContentType">
         <bpmn2:assignment id="_P2_N11_assign_ContentType">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N11_ContentType</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N11_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N11_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_P2_N11_assign_HandleResponseErrors">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
           <bpmn2:to>_P2_N11_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N11_HandleResponseErrors</bpmn2:targetRef>
@@ -576,27 +584,29 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_UPLOADED</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_IDP_DONE</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N6_assoc_Url">
-        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
-        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/rerun-idp"]]></bpmn2:transformation>
+        <bpmn2:assignment id="_P2_N6_assign_Url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/rerun-idp]]></bpmn2:from>
+          <bpmn2:to>_P2_N6_Url</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N6_Url</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N6_assoc_Method">
         <bpmn2:assignment id="_P2_N6_assign_Method">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N6_Method</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N6_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N6_assoc_ContentType">
         <bpmn2:assignment id="_P2_N6_assign_ContentType">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N6_ContentType</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N6_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N6_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_P2_N6_assign_HandleResponseErrors">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
           <bpmn2:to>_P2_N6_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N6_HandleResponseErrors</bpmn2:targetRef>
@@ -675,27 +685,29 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_IDP_DONE</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_STATUS_DONE</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N7_assoc_Url">
-        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
-        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/update-status"]]></bpmn2:transformation>
+        <bpmn2:assignment id="_P2_N7_assign_Url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/update-status]]></bpmn2:from>
+          <bpmn2:to>_P2_N7_Url</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N7_Url</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N7_assoc_Method">
         <bpmn2:assignment id="_P2_N7_assign_Method">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N7_Method</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N7_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N7_assoc_ContentType">
         <bpmn2:assignment id="_P2_N7_assign_ContentType">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N7_ContentType</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N7_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N7_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_P2_N7_assign_HandleResponseErrors">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
           <bpmn2:to>_P2_N7_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N7_HandleResponseErrors</bpmn2:targetRef>
@@ -825,27 +837,29 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_HALT</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_DEATH_VER_UPDATED</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N12_assoc_Url">
-        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
-        <bpmn2:transformation xsi_type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/death-verification"]]></bpmn2:transformation>
+        <bpmn2:assignment id="_P2_N12_assign_Url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/death-verification]]></bpmn2:from>
+          <bpmn2:to>_P2_N12_Url</bpmn2:to>
+        </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N12_Url</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N12_assoc_Method">
         <bpmn2:assignment id="_P2_N12_assign_Method">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to>_P2_N12_Method</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N12_Method</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N12_assoc_ContentType">
         <bpmn2:assignment id="_P2_N12_assign_ContentType">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
           <bpmn2:to>_P2_N12_ContentType</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N12_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P2_N12_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_P2_N12_assign_HandleResponseErrors">
-          <bpmn2:from xsi_type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
           <bpmn2:to>_P2_N12_HandleResponseErrors</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N12_HandleResponseErrors</bpmn2:targetRef>
