@@ -926,7 +926,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:errorEventDefinition id="_P2_ERR_DEF" errorRef="REST_API_FAILURE"/>
       </bpmn2:startEvent>
       <bpmn2:sequenceFlow id="_P2_ERR_F1" sourceRef="_P2_ERROR_START" targetRef="_P2_ERROR_CALL"/>
-      <bpmn2:callActivity id="_P2_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false">
+      <bpmn2:callActivity id="_P2_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false" drools:waitForCompletion="true">
         <bpmn2:extensionElements>
           <drools:onEntry-script scriptFormat="http://www.java.com/java">
             <drools:script>// Extract failed REST node parameters

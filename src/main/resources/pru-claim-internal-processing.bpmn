@@ -579,7 +579,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return allDocsVerified == false;</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <!-- Node 8: Call Activity (NIGO Subprocess) -->
-    <bpmn2:callActivity id="_P1_CALL_NIGO" name="NIGO Subprocess" calledElement="prudential-claims-submission.pru-nigo-followup">
+    <bpmn2:callActivity id="_P1_CALL_NIGO" name="NIGO Subprocess" calledElement="prudential-claims-submission.pru-nigo-followup" drools:independent="false" drools:waitForCompletion="true">
       <bpmn2:incoming>_P1_F_DOCS_NO</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F_NIGO_LOOP</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P1_CALL_NIGO_io">
@@ -2057,7 +2057,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:errorEventDefinition id="_P1_ERR_DEF" errorRef="REST_API_FAILURE"/>
       </bpmn2:startEvent>
       <bpmn2:sequenceFlow id="_P1_ERR_F1" sourceRef="_P1_ERROR_START" targetRef="_P1_ERROR_CALL"/>
-      <bpmn2:callActivity id="_P1_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false">
+      <bpmn2:callActivity id="_P1_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false" drools:waitForCompletion="true">
         <bpmn2:extensionElements>
           <drools:onEntry-script scriptFormat="http://www.java.com/java">
             <drools:script>// Extract failed REST node parameters
