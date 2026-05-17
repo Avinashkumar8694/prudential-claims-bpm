@@ -4,12 +4,42 @@
   <bpmn2:itemDefinition id="_missingDocsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_followupCountItem" structureRef="Integer"/>
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_reqPayloadItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_resPayloadItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_allDocsReceivedItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_docUploadedItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_continueReviewItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_maxAttemptsItem" structureRef="Integer"/>
+  <bpmn2:itemDefinition id="_lastReminderDateItem" structureRef="java.util.Date"/>
+  <bpmn2:itemDefinition id="_noticeSentAtItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_noticeS3KeyItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_extractedDataItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_confidenceScoresItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_pendingDocsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_examinerDecisionItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
+  
+  <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
   
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
     <bpmn2:property id="followupCount" itemSubjectRef="_followupCountItem" name="followupCount"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
+    <bpmn2:property id="reqPayload" itemSubjectRef="_reqPayloadItem" name="reqPayload"/>
+    <bpmn2:property id="resPayload" itemSubjectRef="_resPayloadItem" name="resPayload"/>
+    <bpmn2:property id="allDocsReceived" itemSubjectRef="_allDocsReceivedItem" name="allDocsReceived"/>
+    <bpmn2:property id="docUploaded" itemSubjectRef="_docUploadedItem" name="docUploaded"/>
+    <bpmn2:property id="continueReview" itemSubjectRef="_continueReviewItem" name="continueReview"/>
+    <bpmn2:property id="maxAttempts" itemSubjectRef="_maxAttemptsItem" name="maxAttempts"/>
+    <bpmn2:property id="lastReminderDate" itemSubjectRef="_lastReminderDateItem" name="lastReminderDate"/>
+    <bpmn2:property id="noticeSentAt" itemSubjectRef="_noticeSentAtItem" name="noticeSentAt"/>
+    <bpmn2:property id="noticeS3Key" itemSubjectRef="_noticeS3KeyItem" name="noticeS3Key"/>
+    <bpmn2:property id="extractedData" itemSubjectRef="_extractedDataItem" name="extractedData"/>
+    <bpmn2:property id="confidenceScores" itemSubjectRef="_confidenceScoresItem" name="confidenceScores"/>
+    <bpmn2:property id="pendingDocs" itemSubjectRef="_pendingDocsItem" name="pendingDocs"/>
+    <bpmn2:property id="examinerDecision" itemSubjectRef="_examinerDecisionItem" name="examinerDecision"/>
+    <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
 
     <bpmn2:startEvent id="_P2_START" name="Start NIGO">
       <bpmn2:outgoing>_F_BOOTSTRAP</bpmn2:outgoing>
@@ -22,37 +52,278 @@
       <bpmn2:incoming>_F_BOOTSTRAP</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F1</bpmn2:outgoing>
       <bpmn2:script><![CDATA[String url = System.getProperty("INTEGRATION_LAYER_URL");
+if (url == null || url.isEmpty()) { url = System.getenv("INTEGRATION_LAYER_URL"); }
+if (url == null || url.isEmpty()) {
+    try {
+        url = (String) kcontext.getKieRuntime().getEnvironment().get("INTEGRATION_LAYER_URL");
+    } catch (Exception e) {}
+}
 if (url == null || url.isEmpty()) { url = "http://localhost:3000"; }
-kcontext.setVariable("baseUrl", url);]]></bpmn2:script>
+kcontext.setVariable("baseUrl", url);
+kcontext.setVariable("followupCount", 0);
+kcontext.setVariable("maxAttempts", 3);
+
+// Dynamic determination of claimType if not provided
+if (kcontext.getVariable("claimType") == null) {
+    kcontext.setVariable("claimType", "DEATH");
+}
+System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " + kcontext.getVariable("claimType"));]]></bpmn2:script>
     </bpmn2:scriptTask>
 
     <bpmn2:sequenceFlow id="_P2_F1" sourceRef="_P2_BOOTSTRAP" targetRef="_P2_N1"/>
 
-    <!-- Node 1: SendNIGO -->
+    <!-- Node 1: Send NIGO Notice -->
     <bpmn2:task id="_P2_N1" drools:taskName="Rest" name="N1: SendNIGO">
       <bpmn2:incoming>_P2_F1</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F2</bpmn2:outgoing>
-      <bpmn2:ioSpecification>
+      <bpmn2:ioSpecification id="_P2_N1_io">
         <bpmn2:dataInput id="_P2_N1_Url" name="Url" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N1_Method" name="Method" structureRef="String"/>
-        <bpmn2:inputSet><bpmn2:dataInputRefs>_P2_N1_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P2_N1_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
-        <bpmn2:outputSet/>
+        <bpmn2:dataInput id="_P2_N1_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_ContentData" name="ContentData" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N1_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N1_Result" name="Result" structureRef="String"/>
+        <bpmn2:inputSet id="_P2_N1_input_set">
+          <bpmn2:dataInputRefs>_P2_N1_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_ContentData</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1_HandleErrors</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet id="_P2_N1_output_set">
+          <bpmn2:dataOutputRefs>_P2_N1_Result</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N1_Url</bpmn2:targetRef>
         <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/send"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_method">
+        <bpmn2:targetRef>_P2_N1_Method</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N1_assign_method">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to>_P2_N1_Method</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_ct">
+        <bpmn2:targetRef>_P2_N1_ContentType</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N1_assign_ct">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_P2_N1_ContentType</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_he">
+        <bpmn2:targetRef>_P2_N1_HandleErrors</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N1_assign_he">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N1_HandleErrors</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N1_assoc_data">
+        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N1_ContentData</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N1_assoc_res">
+        <bpmn2:sourceRef>_P2_N1_Result</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:extensionElements>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[// Construct JSON Request payload for SendNIGO
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("caseId", kcontext.getVariable("caseId"));
+json.putPOJO("missingDocuments", kcontext.getVariable("missingDocuments"));
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+        </drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+    try {
+        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        kcontext.setVariable("noticeSentAt", root.get("noticeSentAt").asText());
+    } catch(Exception e) {}
+}]]></drools:script>
+        </drools:onExit-script>
+      </bpmn2:extensionElements>
     </bpmn2:task>
 
-    <bpmn2:sequenceFlow id="_P2_F2" sourceRef="_P2_N1" targetRef="_P2_N4"/>
+    <bpmn2:sequenceFlow id="_P2_F2" sourceRef="_P2_N1" targetRef="_P2_XG_CLAIMTYPE"/>
 
-    <!-- Node 4: Wait (Receive Task with Timer) -->
-    <bpmn2:receiveTask id="_P2_N4" name="Wait 30 Days" instantiate="false">
+    <!-- Node 2: Exclusive Gateway (Diverging Claim Type Gate) -->
+    <bpmn2:exclusiveGateway id="_P2_XG_CLAIMTYPE" name="Claim Type?" gatewayDirection="Diverging">
       <bpmn2:incoming>_P2_F2</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F3</bpmn2:outgoing>
+      <bpmn2:outgoing>_P2_F_DEATH</bpmn2:outgoing>
+      <bpmn2:outgoing>_P2_F_TI</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P2_F_DEATH" name="Death" sourceRef="_P2_XG_CLAIMTYPE" targetRef="_P2_N2A">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P2_F_TI" name="TI" sourceRef="_P2_XG_CLAIMTYPE" targetRef="_P2_N2B">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 2a: Funding Notice (Death Path) -->
+    <bpmn2:task id="_P2_N2A" drools:taskName="Rest" name="N2a: FundingNotice">
+      <bpmn2:incoming>_P2_F_DEATH</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_MERGE_2A</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P2_N2A_io">
+        <bpmn2:dataInput id="_P2_N2A_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_ContentData" name="ContentData" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2A_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N2A_Result" name="Result" structureRef="String"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N2A_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_ContentData</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2A_HandleErrors</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>_P2_N2A_Result</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N2A_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/funding-notice"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N2A_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P2_N2A_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N2A_ContentType</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N2A_ContentType</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N2A_HandleErrors</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N2A_HandleErrors</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N2A_ContentData</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P2_N2A_Result</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:extensionElements>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.put("caseId", (String)kcontext.getVariable("caseId"));
+json.put("noticeType", "DEATH_FUNDING");
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+        </drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+    try {
+        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        kcontext.setVariable("noticeS3Key", root.get("documentS3Key").asText());
+    } catch(Exception e) {}
+}]]></drools:script>
+        </drools:onExit-script>
+      </bpmn2:extensionElements>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P2_F_MERGE_2A" sourceRef="_P2_N2A" targetRef="_P2_MERGE"/>
+
+    <!-- Node 2b: Standard Notice (TI Path) -->
+    <bpmn2:task id="_P2_N2B" drools:taskName="Rest" name="N2b: StandardNotice">
+      <bpmn2:incoming>_P2_F_TI</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_MERGE_2B</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P2_N2B_io">
+        <bpmn2:dataInput id="_P2_N2B_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_ContentData" name="ContentData" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N2B_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N2B_Result" name="Result" structureRef="String"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N2B_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_ContentData</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N2B_HandleErrors</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>_P2_N2B_Result</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N2B_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/standard-notice"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N2B_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P2_N2B_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N2B_ContentType</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N2B_ContentType</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N2B_HandleErrors</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N2B_HandleErrors</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N2B_ContentData</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P2_N2B_Result</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:extensionElements>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.put("caseId", (String)kcontext.getVariable("caseId"));
+json.put("noticeType", "TI_STANDARD");
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+        </drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+    try {
+        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        kcontext.setVariable("noticeS3Key", root.get("documentS3Key").asText());
+    } catch(Exception e) {}
+}]]></drools:script>
+        </drools:onExit-script>
+      </bpmn2:extensionElements>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P2_F_MERGE_2B" sourceRef="_P2_N2B" targetRef="_P2_MERGE"/>
+
+    <!-- Node 3: Converging Exclusive Gateway -->
+    <bpmn2:exclusiveGateway id="_P2_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_P2_F_MERGE_2A</bpmn2:incoming>
+      <bpmn2:incoming>_P2_F_MERGE_2B</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_TO_WAIT</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P2_F_TO_WAIT" sourceRef="_P2_MERGE" targetRef="_P2_N4"/>
+
+    <!-- Node 4: Wait for Document Upload (Receive Task) -->
+    <bpmn2:receiveTask id="_P2_N4" name="Wait for Document Upload" instantiate="false">
+      <bpmn2:incoming>_P2_F_TO_WAIT</bpmn2:incoming>
+      <bpmn2:incoming>_P2_F_LOOP</bpmn2:incoming>
+      <bpmn2:incoming>_P2_F_CONTINUE_CHASE</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_UPLOADED</bpmn2:outgoing>
     </bpmn2:receiveTask>
 
+    <bpmn2:sequenceFlow id="_P2_F_UPLOADED" sourceRef="_P2_N4" targetRef="_P2_N6"/>
+
+    <!-- Node 5: Boundary Timer Event (30 Days) -->
     <bpmn2:boundaryEvent id="_P2_TIMER" name="30 Day Timeout" attachedToRef="_P2_N4" cancelActivity="true">
       <bpmn2:outgoing>_P2_F_TIMEOUT</bpmn2:outgoing>
       <bpmn2:timerEventDefinition id="_timerDef2">
@@ -60,101 +331,563 @@ kcontext.setVariable("baseUrl", url);]]></bpmn2:script>
       </bpmn2:timerEventDefinition>
     </bpmn2:boundaryEvent>
 
-    <bpmn2:sequenceFlow id="_P2_F_TIMEOUT" sourceRef="_P2_TIMER" targetRef="_P2_XG1"/>
-    
-    <bpmn2:exclusiveGateway id="_P2_XG1" name="Max Retries?" gatewayDirection="Diverging">
+    <bpmn2:sequenceFlow id="_P2_F_TIMEOUT" sourceRef="_P2_TIMER" targetRef="_P2_INCREMENT"/>
+
+    <!-- Increment Follow-up counter on timeout -->
+    <bpmn2:scriptTask id="_P2_INCREMENT" name="Script_Increment" scriptFormat="http://www.java.com/java">
       <bpmn2:incoming>_P2_F_TIMEOUT</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_TO_XG</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[int count = (int) kcontext.getVariable("followupCount");
+kcontext.setVariable("followupCount", count + 1);
+System.out.println("NIGO: Wait timed out. Incrementing follow-up count to: " + (count + 1));]]></bpmn2:script>
+    </bpmn2:scriptTask>
+
+    <bpmn2:sequenceFlow id="_P2_F_TO_XG" sourceRef="_P2_INCREMENT" targetRef="_P2_XG_COUNT"/>
+    
+    <!-- Node 10: Exclusive Gateway (Followup Count Gateway) -->
+    <bpmn2:exclusiveGateway id="_P2_XG_COUNT" name="Max Retries?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P2_F_TO_XG</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_RETRY</bpmn2:outgoing>
       <bpmn2:outgoing>_P2_F_HALT</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
 
-    <bpmn2:sequenceFlow id="_P2_F_RETRY" name="Yes" sourceRef="_P2_XG1" targetRef="_P2_N11"/>
-    <bpmn2:sequenceFlow id="_P2_F_HALT" name="No" sourceRef="_P2_XG1" targetRef="_P2_END"/>
+    <bpmn2:sequenceFlow id="_P2_F_RETRY" name="Under Limit" sourceRef="_P2_XG_COUNT" targetRef="_P2_N11">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[int count = (int) kcontext.getVariable("followupCount");
+return count < 3;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    
+    <bpmn2:sequenceFlow id="_P2_F_HALT" name="Limit Reached" sourceRef="_P2_XG_COUNT" targetRef="_P2_N12"/>
 
+    <!-- Node 11: AutoFollowup Service Task -->
     <bpmn2:task id="_P2_N11" drools:taskName="Rest" name="N11: AutoFollowup">
       <bpmn2:incoming>_P2_F_RETRY</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_LOOP</bpmn2:outgoing>
-      <bpmn2:ioSpecification>
+      <bpmn2:ioSpecification id="_P2_N11_io">
         <bpmn2:dataInput id="_P2_N11_Url" name="Url" structureRef="String"/>
-        <bpmn2:inputSet><bpmn2:dataInputRefs>_P2_N11_Url</bpmn2:dataInputRefs></bpmn2:inputSet>
-        <bpmn2:outputSet/>
+        <bpmn2:dataInput id="_P2_N11_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_ContentData" name="ContentData" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N11_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N11_Result" name="Result" structureRef="String"/>
+        <bpmn2:inputSet id="_P2_N11_input_set">
+          <bpmn2:dataInputRefs>_P2_N11_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_ContentData</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N11_HandleErrors</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet id="_P2_N11_output_set">
+          <bpmn2:dataOutputRefs>_P2_N11_Result</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_url">
         <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N11_Url</bpmn2:targetRef>
         <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/nigo/followup"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_method">
+        <bpmn2:targetRef>_P2_N11_Method</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N11_assign_method">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to>_P2_N11_Method</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_ct">
+        <bpmn2:targetRef>_P2_N11_ContentType</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N11_assign_ct">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to>_P2_N11_ContentType</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_he">
+        <bpmn2:targetRef>_P2_N11_HandleErrors</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N11_assign_he">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to>_P2_N11_HandleErrors</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N11_assoc_data">
+        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N11_ContentData</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N11_assoc_res">
+        <bpmn2:sourceRef>_P2_N11_Result</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:extensionElements>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("caseId", kcontext.getVariable("caseId"));
+json.putPOJO("followupCount", kcontext.getVariable("followupCount"));
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+        </drools:onEntry-script>
+      </bpmn2:extensionElements>
     </bpmn2:task>
     
     <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_N4"/>
 
-    <bpmn2:sequenceFlow id="_P2_F3" sourceRef="_P2_N4" targetRef="_P2_END"/>
-    <bpmn2:endEvent id="_P2_END" name="End"/>
+    <!-- Node 6: Re-Run IDP Extraction Service Task -->
+    <bpmn2:task id="_P2_N6" drools:taskName="Rest" name="N6: ReRunIDPExtraction">
+      <bpmn2:incoming>_P2_F_UPLOADED</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_IDP_DONE</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P2_N6_io">
+        <bpmn2:dataInput id="_P2_N6_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_ContentData" name="ContentData" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N6_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N6_Result" name="Result" structureRef="String"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N6_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_ContentData</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N6_HandleErrors</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>_P2_N6_Result</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N6_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/idp/extract-and-match"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N6_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P2_N6_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N6_ContentType</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N6_ContentType</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N6_HandleErrors</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N6_HandleErrors</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N6_ContentData</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P2_N6_Result</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:extensionElements>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("caseId", kcontext.getVariable("caseId"));
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+        </drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+    try {
+        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        kcontext.setVariable("extractedData", root.get("extractedData"));
+    } catch(Exception e) {}
+}]]></drools:script>
+        </drools:onExit-script>
+      </bpmn2:extensionElements>
+    </bpmn2:task>
 
+    <bpmn2:sequenceFlow id="_P2_F_IDP_DONE" sourceRef="_P2_N6" targetRef="_P2_N7"/>
+
+    <!-- Node 7: Update Status Service Task -->
+    <bpmn2:task id="_P2_N7" drools:taskName="Rest" name="N7: UpdateClaimStatus">
+      <bpmn2:incoming>_P2_F_IDP_DONE</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_STATUS_DONE</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P2_N7_io">
+        <bpmn2:dataInput id="_P2_N7_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_ContentData" name="ContentData" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N7_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N7_Result" name="Result" structureRef="String"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N7_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_ContentData</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N7_HandleErrors</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>_P2_N7_Result</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N7_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/documents/status"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N7_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[PUT]]></bpmn2:from><bpmn2:to>_P2_N7_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N7_ContentType</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N7_ContentType</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N7_HandleErrors</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N7_HandleErrors</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N7_ContentData</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P2_N7_Result</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:extensionElements>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("caseId", kcontext.getVariable("caseId"));
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+        </drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+    try {
+        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+        kcontext.setVariable("allDocsReceived", root.get("allDocsReceived").asBoolean());
+    } catch(Exception e) {}
+}]]></drools:script>
+        </drools:onExit-script>
+      </bpmn2:extensionElements>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P2_F_STATUS_DONE" sourceRef="_P2_N7" targetRef="_P2_XG_DOCS"/>
+
+    <!-- Node 8: Exclusive Gateway (Docs OK?) -->
+    <bpmn2:exclusiveGateway id="_P2_XG_DOCS" name="All Docs Received?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P2_F_STATUS_DONE</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_DOCS_YES</bpmn2:outgoing>
+      <bpmn2:outgoing>_P2_F_DOCS_NO</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P2_F_DOCS_YES" name="Yes" sourceRef="_P2_XG_DOCS" targetRef="_P2_END_SUCCESS">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return allDocsReceived == true;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P2_F_DOCS_NO" name="No" sourceRef="_P2_XG_DOCS" targetRef="_P2_N9"/>
+
+    <!-- Node 9: User Task (Examiner Partial Review) -->
+    <bpmn2:userTask id="_P2_N9" name="N9: ExaminerPartialReview">
+      <bpmn2:incoming>_P2_F_DOCS_NO</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_REVIEW_DONE</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P2_N9_io">
+        <bpmn2:dataInput id="_P2_N9_caseId" name="caseId" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N9_decision" name="examinerDecision" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P2_N9_caseId</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P2_N9_decision</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N9_caseId</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P2_N9_decision</bpmn2:sourceRef>
+        <bpmn2:targetRef>examinerDecision</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression><![CDATA[ClaimExaminer]]></bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+
+    <bpmn2:sequenceFlow id="_P2_F_REVIEW_DONE" sourceRef="_P2_N9" targetRef="_P2_XG_CONTINUE"/>
+
+    <!-- Exclusive Gateway: Continue Review? -->
+    <bpmn2:exclusiveGateway id="_P2_XG_CONTINUE" name="Continue Chasing?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P2_F_REVIEW_DONE</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_CONTINUE_CHASE</bpmn2:outgoing>
+      <bpmn2:outgoing>_P2_F_CLOSE_CLAIM</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P2_F_CONTINUE_CHASE" name="Yes" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_N4">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "CONTINUE".equals(examinerDecision);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P2_F_CLOSE_CLAIM" name="No" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_END_SUCCESS">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"CONTINUE".equals(examinerDecision);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 12: Update Death Verification Status Service Task -->
+    <bpmn2:task id="_P2_N12" drools:taskName="Rest" name="N12: UpdateDeathVerification">
+      <bpmn2:incoming>_P2_F_HALT</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_DEATH_VER_UPDATED</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P2_N12_io">
+        <bpmn2:dataInput id="_P2_N12_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_ContentType" name="ContentType" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_ContentData" name="ContentData" structureRef="String"/>
+        <bpmn2:dataInput id="_P2_N12_HandleErrors" name="HandleResponseErrors" structureRef="String"/>
+        <bpmn2:dataOutput id="_P2_N12_Result" name="Result" structureRef="String"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N12_Url</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_Method</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_ContentType</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_ContentData</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N12_HandleErrors</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>_P2_N12_Result</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N12_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/status"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N12_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[PUT]]></bpmn2:from><bpmn2:to>_P2_N12_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N12_ContentType</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[application/json]]></bpmn2:from><bpmn2:to>_P2_N12_ContentType</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P2_N12_HandleErrors</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from><bpmn2:to>_P2_N12_HandleErrors</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P2_N12_ContentData</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P2_N12_Result</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+      <bpmn2:extensionElements>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java">
+          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("caseId", kcontext.getVariable("caseId"));
+json.put("status", "DEATH_VERIFICATION");
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+        </drools:onEntry-script>
+      </bpmn2:extensionElements>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_UPDATED" sourceRef="_P2_N12" targetRef="_P2_N13"/>
+
+    <!-- Node 13: Examiner Death Verification User Task -->
+    <bpmn2:userTask id="_P2_N13" name="N13: ExaminerDeathVerif">
+      <bpmn2:incoming>_P2_F_DEATH_VER_UPDATED</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_DEATH_VER_DONE</bpmn2:outgoing>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression><![CDATA[SeniorInvestigator]]></bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+
+    <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_DONE" sourceRef="_P2_N13" targetRef="_P2_END_DEATH_VER"/>
+
+    <bpmn2:endEvent id="_P2_END_DEATH_VER" name="End (Death Verification)"/>
+
+    <bpmn2:endEvent id="_P2_END_SUCCESS" name="End (Complete)">
+      <bpmn2:incoming>_P2_F_DOCS_YES</bpmn2:incoming>
+      <bpmn2:incoming>_P2_F_CLOSE_CLAIM</bpmn2:incoming>
+    </bpmn2:endEvent>
+
+    <!-- Global Event Sub-Process for Centralized REST Exception Handling inside NIGO -->
+    <bpmn2:subProcess id="_P2_ERROR_SUBPROCESS" name="Global API Error Handler" triggeredByEvent="true">
+      <bpmn2:startEvent id="_P2_ERROR_START" name="Catch REST API Failure">
+        <bpmn2:outgoing>_P2_ERR_F1</bpmn2:outgoing>
+        <bpmn2:errorEventDefinition id="_P2_ERR_DEF" errorRef="REST_API_FAILURE"/>
+      </bpmn2:startEvent>
+      
+      <bpmn2:sequenceFlow id="_P2_ERR_F1" sourceRef="_P2_ERROR_START" targetRef="_P2_ERROR_CALL"/>
+      
+      <bpmn2:callActivity id="_P2_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false">
+        <bpmn2:extensionElements>
+          <drools:onEntry-script scriptFormat="http://www.java.com/java">
+            <drools:script><![CDATA[// Extract failed REST node parameters
+org.kie.api.runtime.process.WorkItem failedWorkItem = (org.kie.api.runtime.process.WorkItem) kcontext.getNodeInstance().getVariable("WorkItem");
+if (failedWorkItem != null) {
+    String url = (String) failedWorkItem.getParameter("Url");
+    String payload = (String) failedWorkItem.getParameter("ContentData");
+    String ctx = "{\"url\":\"" + url + "\", \"payload\":" + payload + "}";
+    kcontext.setVariable("resPayload", ctx);
+} else {
+    kcontext.setVariable("resPayload", "{\"url\":\"/api/v1/unknown\", \"payload\":{}}");
+}]]></drools:script>
+          </drools:onEntry-script>
+        </bpmn2:extensionElements>
+        <bpmn2:incoming>_P2_ERR_F1</bpmn2:incoming>
+        <bpmn2:outgoing>_P2_ERR_F2</bpmn2:outgoing>
+        <bpmn2:ioSpecification id="_P2_ERR_CALL_io">
+          <bpmn2:dataInput id="_P2_ERR_CALL_failedContext" name="failedContext" structureRef="String"/>
+          <bpmn2:inputSet id="_P2_ERR_CALL_input_set">
+            <bpmn2:dataInputRefs>_P2_ERR_CALL_failedContext</bpmn2:dataInputRefs>
+          </bpmn2:inputSet>
+          <bpmn2:outputSet id="_P2_ERR_CALL_output_set"/>
+        </bpmn2:ioSpecification>
+        <bpmn2:dataInputAssociation id="_P2_ERR_CALL_assoc">
+          <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
+          <bpmn2:targetRef>_P2_ERR_CALL_failedContext</bpmn2:targetRef>
+        </bpmn2:dataInputAssociation>
+      </bpmn2:callActivity>
+      
+      <bpmn2:sequenceFlow id="_P2_ERR_F2" sourceRef="_P2_ERROR_CALL" targetRef="_P2_ERROR_END"/>
+      
+      <bpmn2:endEvent id="_P2_ERROR_END" name="End Error Catch">
+        <bpmn2:incoming>_P2_ERR_F2</bpmn2:incoming>
+      </bpmn2:endEvent>
+    </bpmn2:subProcess>
   </bpmn2:process>
 
   <bpmndi:BPMNDiagram id="_P2_DI">
     <bpmndi:BPMNPlane id="_P2_PLANE" bpmnElement="prudential-claims-submission.pru-nigo-followup">
       <bpmndi:BPMNShape id="_S_P2_START" bpmnElement="_P2_START">
-        <dc:Bounds height="56.0" width="56.0" x="100.0" y="100.0"/>
+        <dc:Bounds height="56.0" width="56.0" x="50.0" y="100.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P2_BOOTSTRAP" bpmnElement="_P2_BOOTSTRAP">
-        <dc:Bounds height="102.0" width="154.0" x="200.0" y="77.0"/>
+        <dc:Bounds height="80.0" width="120.0" x="140.0" y="88.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P2_N1" bpmnElement="_P2_N1">
-        <dc:Bounds height="102.0" width="154.0" x="400.0" y="77.0"/>
+        <dc:Bounds height="80.0" width="120.0" x="300.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_XG_CLAIMTYPE" bpmnElement="_P2_XG_CLAIMTYPE">
+        <dc:Bounds height="50.0" width="50.0" x="460.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N2A" bpmnElement="_P2_N2A">
+        <dc:Bounds height="80.0" width="120.0" x="550.0" y="20.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N2B" bpmnElement="_P2_N2B">
+        <dc:Bounds height="80.0" width="120.0" x="550.0" y="150.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_MERGE" bpmnElement="_P2_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="710.0" y="103.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P2_N4" bpmnElement="_P2_N4">
-        <dc:Bounds height="102.0" width="154.0" x="600.0" y="77.0"/>
+        <dc:Bounds height="80.0" width="120.0" x="800.0" y="88.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P2_TIMER" bpmnElement="_P2_TIMER">
-        <dc:Bounds height="56.0" width="56.0" x="690.0" y="140.0"/>
+        <dc:Bounds height="56.0" width="56.0" x="860.0" y="140.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P2_XG1" bpmnElement="_P2_XG1">
-        <dc:Bounds height="56.0" width="56.0" x="800.0" y="200.0"/>
+      <bpmndi:BPMNShape id="_S_P2_INCREMENT" bpmnElement="_P2_INCREMENT">
+        <dc:Bounds height="80.0" width="120.0" x="828.0" y="240.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_XG_COUNT" bpmnElement="_P2_XG_COUNT">
+        <dc:Bounds height="50.0" width="50.0" x="990.0" y="255.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P2_N11" bpmnElement="_P2_N11">
-        <dc:Bounds height="102.0" width="154.0" x="900.0" y="177.0"/>
+        <dc:Bounds height="80.0" width="120.0" x="1080.0" y="240.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P2_END" bpmnElement="_P2_END">
-        <dc:Bounds height="56.0" width="56.0" x="1100.0" y="100.0"/>
+      <bpmndi:BPMNShape id="_S_P2_N6" bpmnElement="_P2_N6">
+        <dc:Bounds height="80.0" width="120.0" x="960.0" y="88.0"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N7" bpmnElement="_P2_N7">
+        <dc:Bounds height="80.0" width="120.0" x="1120.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_XG_DOCS" bpmnElement="_P2_XG_DOCS">
+        <dc:Bounds height="50.0" width="50.0" x="1280.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N9" bpmnElement="_P2_N9">
+        <dc:Bounds height="80.0" width="120.0" x="1360.0" y="180.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_XG_CONTINUE" bpmnElement="_P2_XG_CONTINUE">
+        <dc:Bounds height="50.0" width="50.0" x="1520.0" y="195.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N12" bpmnElement="_P2_N12">
+        <dc:Bounds height="80.0" width="120.0" x="955.0" y="360.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_N13" bpmnElement="_P2_N13">
+        <dc:Bounds height="80.0" width="120.0" x="1115.0" y="360.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_END_DEATH_VER" bpmnElement="_P2_END_DEATH_VER">
+        <dc:Bounds height="56.0" width="56.0" x="1280.0" y="372.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P2_END_SUCCESS" bpmnElement="_P2_END_SUCCESS">
+        <dc:Bounds height="56.0" width="56.0" x="1650.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- Edges -->
       <bpmndi:BPMNEdge id="_E_P2_BOOTSTRAP" bpmnElement="_F_BOOTSTRAP">
-        <di:waypoint x="156.0" y="128.0"/>
-        <di:waypoint x="200.0" y="128.0"/>
+        <di:waypoint x="106.0" y="128.0"/><di:waypoint x="140.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F1" bpmnElement="_P2_F1">
-        <di:waypoint x="354.0" y="128.0"/>
-        <di:waypoint x="400.0" y="128.0"/>
+        <di:waypoint x="260.0" y="128.0"/><di:waypoint x="300.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F2" bpmnElement="_P2_F2">
-        <di:waypoint x="554.0" y="128.0"/>
-        <di:waypoint x="600.0" y="128.0"/>
+        <di:waypoint x="420.0" y="128.0"/><di:waypoint x="460.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_DEATH" bpmnElement="_P2_F_DEATH">
+        <di:waypoint x="485.0" y="103.0"/><di:waypoint x="485.0" y="60.0"/><di:waypoint x="550.0" y="60.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_TI" bpmnElement="_P2_F_TI">
+        <di:waypoint x="485.0" y="153.0"/><di:waypoint x="485.0" y="190.0"/><di:waypoint x="550.0" y="190.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_MERGE_2A" bpmnElement="_P2_F_MERGE_2A">
+        <di:waypoint x="670.0" y="60.0"/><di:waypoint x="735.0" y="60.0"/><di:waypoint x="735.0" y="103.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_MERGE_2B" bpmnElement="_P2_F_MERGE_2B">
+        <di:waypoint x="670.0" y="190.0"/><di:waypoint x="735.0" y="190.0"/><di:waypoint x="735.0" y="153.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_TO_WAIT" bpmnElement="_P2_F_TO_WAIT">
+        <di:waypoint x="760.0" y="128.0"/><di:waypoint x="800.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_UPLOADED" bpmnElement="_P2_F_UPLOADED">
+        <di:waypoint x="920.0" y="128.0"/><di:waypoint x="960.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_TIMEOUT" bpmnElement="_P2_F_TIMEOUT">
-        <di:waypoint x="718.0" y="196.0"/>
-        <di:waypoint x="718.0" y="228.0"/>
-        <di:waypoint x="800.0" y="228.0"/>
+        <di:waypoint x="888.0" y="196.0"/><di:waypoint x="888.0" y="240.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_TO_XG" bpmnElement="_P2_F_TO_XG">
+        <di:waypoint x="948.0" y="280.0"/><di:waypoint x="990.0" y="280.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_RETRY" bpmnElement="_P2_F_RETRY">
-        <di:waypoint x="856.0" y="228.0"/>
-        <di:waypoint x="900.0" y="228.0"/>
+        <di:waypoint x="1040.0" y="280.0"/><di:waypoint x="1080.0" y="280.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_HALT" bpmnElement="_P2_F_HALT">
-        <di:waypoint x="828.0" y="256.0"/>
-        <di:waypoint x="828.0" y="320.0"/>
-        <di:waypoint x="1128.0" y="320.0"/>
-        <di:waypoint x="1128.0" y="156.0"/>
+        <di:waypoint x="1015.0" y="305.0"/><di:waypoint x="1015.0" y="360.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P2_F_LOOP" bpmnElement="_P2_F_LOOP">
-        <di:waypoint x="977.0" y="279.0"/>
-        <di:waypoint x="977.0" y="340.0"/>
-        <di:waypoint x="677.0" y="340.0"/>
-        <di:waypoint x="677.0" y="179.0"/>
+        <di:waypoint x="1140.0" y="240.0"/>
+        <di:waypoint x="1140.0" y="-30.0"/>
+        <di:waypoint x="860.0" y="-30.0"/>
+        <di:waypoint x="860.0" y="88.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="_E_P2_F3" bpmnElement="_P2_F3">
-        <di:waypoint x="754.0" y="128.0"/>
-        <di:waypoint x="1100.0" y="128.0"/>
+      <bpmndi:BPMNEdge id="_E_P2_F_IDP_DONE" bpmnElement="_P2_F_IDP_DONE">
+        <di:waypoint x="1080.0" y="128.0"/><di:waypoint x="1120.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_STATUS_DONE" bpmnElement="_P2_F_STATUS_DONE">
+        <di:waypoint x="1240.0" y="128.0"/><di:waypoint x="1280.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_DOCS_YES" bpmnElement="_P2_F_DOCS_YES">
+        <di:waypoint x="1330.0" y="128.0"/><di:waypoint x="1650.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_DOCS_NO" bpmnElement="_P2_F_DOCS_NO">
+        <di:waypoint x="1305.0" y="153.0"/><di:waypoint x="1305.0" y="220.0"/><di:waypoint x="1360.0" y="220.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_REVIEW_DONE" bpmnElement="_P2_F_REVIEW_DONE">
+        <di:waypoint x="1480.0" y="220.0"/><di:waypoint x="1520.0" y="220.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_CONTINUE_CHASE" bpmnElement="_P2_F_CONTINUE_CHASE">
+        <di:waypoint x="1545.0" y="195.0"/>
+        <di:waypoint x="1545.0" y="-10.0"/>
+        <di:waypoint x="830.0" y="-10.0"/>
+        <di:waypoint x="830.0" y="88.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_CLOSE_CLAIM" bpmnElement="_P2_F_CLOSE_CLAIM">
+        <di:waypoint x="1570.0" y="220.0"/>
+        <di:waypoint x="1678.0" y="220.0"/>
+        <di:waypoint x="1678.0" y="156.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_DEATH_VER_UPDATED" bpmnElement="_P2_F_DEATH_VER_UPDATED">
+        <di:waypoint x="1075.0" y="400.0"/><di:waypoint x="1115.0" y="400.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P2_F_DEATH_VER_DONE" bpmnElement="_P2_F_DEATH_VER_DONE">
+        <di:waypoint x="1235.0" y="400.0"/><di:waypoint x="1280.0" y="400.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

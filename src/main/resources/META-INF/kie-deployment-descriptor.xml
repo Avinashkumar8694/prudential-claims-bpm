@@ -10,7 +10,14 @@
     <task-event-listeners/>
     <globals/>
     <work-item-handlers/>
-    <environment-entries/>
+    <environment-entries>
+        <environment-entry>
+            <resolver>mvel</resolver>
+            <identifier>"http://localhost:3000"</identifier>
+            <parameters/>
+            <name>INTEGRATION_LAYER_URL</name>
+        </environment-entry>
+    </environment-entries>
     <configurations/>
     <required-roles/>
     <remoteable-classes/>

@@ -1,37 +1,103 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:bpsim="http://www.bpsim.org/schemas/1.0" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_proc1_def" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd" exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
+  <!-- Item Definitions for Process Variables -->
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_applicablePoliciesItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_policyNumberItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_validationPassedItem" structureRef="Boolean"/>
-  <bpmn2:itemDefinition id="_policyFlagsItem" structureRef="java.util.Map"/>
+  <bpmn2:itemDefinition id="_applicablePoliciesItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_policyDataItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_extractedDataItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_uploadedDocumentsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_bankAccountDetailsItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_flagSuicideItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_flagContestableItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_flagForeignDeathItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_flagAIDSItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_dateOfDeathItem" structureRef="java.util.Date"/>
+  <bpmn2:itemDefinition id="_eligibilityResultItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_validationPassedItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_validationErrorsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_allDocsVerifiedItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_missingDocsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_reclassificationTypeItem" structureRef="java.lang.String"/>
+  <bpmn2:itemDefinition id="_bankValidationResultItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_mrxCheckResultItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_allFlagsAndFundsItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_taxCheckResultItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_taxExceptionsItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_interestMethodConfirmedItem" structureRef="java.lang.Boolean"/>
+  <bpmn2:itemDefinition id="_examinerDecisionItem" structureRef="java.lang.String"/>
+  <bpmn2:itemDefinition id="_benefitCalculationItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_adjustedBenefitCalculationItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_beneficiarySplitItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_withholdingResultItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_payoutAmountItem" structureRef="java.lang.Double"/>
+  <bpmn2:itemDefinition id="_pasLockStatusItem" structureRef="java.lang.String"/>
+  <bpmn2:itemDefinition id="_knectTransactionIdItem" structureRef="java.lang.String"/>
+  <bpmn2:itemDefinition id="_finalPaymentInstructionsItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_reqPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_resPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
-  
+
+  <!-- The main Process Definition -->
   <bpmn2:process id="prudential-claims-submission.pru-claim-internal-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-internal-processing" isExecutable="true" processType="Public">
-    <!-- Variables -->
+    <!-- Properties / Variables -->
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
-    <bpmn2:property id="applicablePolicies" itemSubjectRef="_applicablePoliciesItem" name="applicablePolicies"/>
+    <bpmn2:property id="policyNumber" itemSubjectRef="_policyNumberItem" name="policyNumber"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
+    <bpmn2:property id="applicablePolicies" itemSubjectRef="_applicablePoliciesItem" name="applicablePolicies"/>
+    <bpmn2:property id="policyData" itemSubjectRef="_policyDataItem" name="policyData"/>
+    <bpmn2:property id="extractedData" itemSubjectRef="_extractedDataItem" name="extractedData"/>
+    <bpmn2:property id="uploadedDocuments" itemSubjectRef="_uploadedDocumentsItem" name="uploadedDocuments"/>
+    <bpmn2:property id="bankAccountDetails" itemSubjectRef="_bankAccountDetailsItem" name="bankAccountDetails"/>
+    <bpmn2:property id="flagSuicide" itemSubjectRef="_flagSuicideItem" name="flagSuicide"/>
+    <bpmn2:property id="flagContestable" itemSubjectRef="_flagContestableItem" name="flagContestable"/>
+    <bpmn2:property id="flagForeignDeath" itemSubjectRef="_flagForeignDeathItem" name="flagForeignDeath"/>
+    <bpmn2:property id="flagAIDS" itemSubjectRef="_flagAIDSItem" name="flagAIDS"/>
+    <bpmn2:property id="dateOfDeath" itemSubjectRef="_dateOfDeathItem" name="dateOfDeath"/>
+    <bpmn2:property id="eligibilityResult" itemSubjectRef="_eligibilityResultItem" name="eligibilityResult"/>
     <bpmn2:property id="validationPassed" itemSubjectRef="_validationPassedItem" name="validationPassed"/>
-    <bpmn2:property id="policyFlags" itemSubjectRef="_policyFlagsItem" name="policyFlags"/>
+    <bpmn2:property id="validationErrors" itemSubjectRef="_validationErrorsItem" name="validationErrors"/>
+    <bpmn2:property id="allDocsVerified" itemSubjectRef="_allDocsVerifiedItem" name="allDocsVerified"/>
+    <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
+    <bpmn2:property id="reclassificationType" itemSubjectRef="_reclassificationTypeItem" name="reclassificationType"/>
+    <bpmn2:property id="bankValidationResult" itemSubjectRef="_bankValidationResultItem" name="bankValidationResult"/>
+    <bpmn2:property id="mrxCheckResult" itemSubjectRef="_mrxCheckResultItem" name="mrxCheckResult"/>
+    <bpmn2:property id="allFlagsAndFunds" itemSubjectRef="_allFlagsAndFundsItem" name="allFlagsAndFunds"/>
+    <bpmn2:property id="taxCheckResult" itemSubjectRef="_taxCheckResultItem" name="taxCheckResult"/>
+    <bpmn2:property id="taxExceptions" itemSubjectRef="_taxExceptionsItem" name="taxExceptions"/>
+    <bpmn2:property id="interestMethodConfirmed" itemSubjectRef="_interestMethodConfirmedItem" name="interestMethodConfirmed"/>
+    <bpmn2:property id="examinerDecision" itemSubjectRef="_examinerDecisionItem" name="examinerDecision"/>
+    <bpmn2:property id="benefitCalculation" itemSubjectRef="_benefitCalculationItem" name="benefitCalculation"/>
+    <bpmn2:property id="adjustedBenefitCalculation" itemSubjectRef="_adjustedBenefitCalculationItem" name="adjustedBenefitCalculation"/>
+    <bpmn2:property id="beneficiarySplit" itemSubjectRef="_beneficiarySplitItem" name="beneficiarySplit"/>
+    <bpmn2:property id="withholdingResult" itemSubjectRef="_withholdingResultItem" name="withholdingResult"/>
+    <bpmn2:property id="payoutAmount" itemSubjectRef="_payoutAmountItem" name="payoutAmount"/>
+    <bpmn2:property id="pasLockStatus" itemSubjectRef="_pasLockStatusItem" name="pasLockStatus"/>
+    <bpmn2:property id="knectTransactionId" itemSubjectRef="_knectTransactionIdItem" name="knectTransactionId"/>
+    <bpmn2:property id="finalPaymentInstructions" itemSubjectRef="_finalPaymentInstructionsItem" name="finalPaymentInstructions"/>
     <bpmn2:property id="reqPayload" itemSubjectRef="_reqPayloadItem" name="reqPayload"/>
     <bpmn2:property id="resPayload" itemSubjectRef="_resPayloadItem" name="resPayload"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
 
+    <!-- Workflow Nodes -->
     <bpmn2:startEvent id="_P1_START" name="Start">
       <bpmn2:outgoing>_F_BOOTSTRAP</bpmn2:outgoing>
     </bpmn2:startEvent>
 
     <bpmn2:sequenceFlow id="_F_BOOTSTRAP" sourceRef="_P1_START" targetRef="_P1_BOOTSTRAP"/>
 
-    <!-- Node 0: Bootstrap Environment -->
+    <!-- Node 0: Initialize Environment -->
     <bpmn2:scriptTask id="_P1_BOOTSTRAP" name="Script_Bootstrap" scriptFormat="http://www.java.com/java">
       <bpmn2:incoming>_F_BOOTSTRAP</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F1</bpmn2:outgoing>
-      <bpmn2:script><![CDATA[// Initialize Base URL from System Property or default
-String url = System.getProperty("INTEGRATION_LAYER_URL");
+      <bpmn2:script><![CDATA[String url = System.getProperty("INTEGRATION_LAYER_URL");
+if (url == null || url.isEmpty()) { url = System.getenv("INTEGRATION_LAYER_URL"); }
+if (url == null || url.isEmpty()) {
+    try {
+        url = (String) kcontext.getKieRuntime().getEnvironment().get("INTEGRATION_LAYER_URL");
+    } catch (Exception e) {}
+}
 if (url == null || url.isEmpty()) {
     url = "http://localhost:3000";
 }
@@ -41,7 +107,7 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);]]>
 
     <bpmn2:sequenceFlow id="_P1_F1" sourceRef="_P1_BOOTSTRAP" targetRef="_P1_N1"/>
 
-    <!-- Node 1: ValidateData -->
+    <!-- Node 1: Validate Submitted Data -->
     <bpmn2:task id="_P1_N1" drools:taskName="Rest" name="N1: ValidateData">
       <bpmn2:incoming>_P1_F1</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F2</bpmn2:outgoing>
@@ -70,6 +136,7 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);]]>
 
     <bpmn2:sequenceFlow id="_P1_F2" sourceRef="_P1_N1" targetRef="_P1_XG1"/>
 
+    <!-- Gateway: Validation Passed? -->
     <bpmn2:exclusiveGateway id="_P1_XG1" name="Validation Passed?" gatewayDirection="Diverging">
       <bpmn2:incoming>_P1_F2</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F3_OK</bpmn2:outgoing>
@@ -80,13 +147,35 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);]]>
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return validationPassed == true;]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
 
-    <bpmn2:sequenceFlow id="_P1_F3_FAIL" name="No" sourceRef="_P1_XG1" targetRef="_P1_END_FAIL">
+    <bpmn2:sequenceFlow id="_P1_F3_FAIL" name="No" sourceRef="_P1_XG1" targetRef="_P1_N3">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return validationPassed == false;]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
 
+    <!-- Node 3: Log Validation Error & Notify -->
+    <bpmn2:task id="_P1_N3" drools:taskName="Rest" name="N3: LogError">
+      <bpmn2:incoming>_P1_F3_FAIL</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F3_FAIL_END</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N3_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N3_Method" name="Method" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N3_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N3_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet/>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N3_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/audit/log-failure"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N3_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N3_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F3_FAIL_END" sourceRef="_P1_N3" targetRef="_P1_END_FAIL"/>
     <bpmn2:endEvent id="_P1_END_FAIL" name="End (Failed)"/>
 
-    <!-- Node 4: SetPendDeath -->
+    <!-- Node 4: Set Policy Status Pend Death -->
     <bpmn2:task id="_P1_N4" drools:taskName="Rest" name="N4: SetPendDeath">
       <bpmn2:incoming>_P1_F3_OK</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F4</bpmn2:outgoing>
@@ -101,59 +190,912 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);]]>
         <bpmn2:targetRef>_P1_N4_Url</bpmn2:targetRef>
         <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/policy/status"]]></bpmn2:transformation>
       </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N4_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[PUT]]></bpmn2:from><bpmn2:to>_P1_N4_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     
-    <bpmn2:sequenceFlow id="_P1_F4" sourceRef="_P1_N4" targetRef="_P1_END_SUCCESS"/>
-    <bpmn2:endEvent id="_P1_END_SUCCESS" name="End (WIP)"/>
+    <bpmn2:sequenceFlow id="_P1_F4" sourceRef="_P1_N4" targetRef="_P1_XG_DEATH"/>
 
+    <!-- Gateway: Is Death Claim? -->
+    <bpmn2:exclusiveGateway id="_P1_XG_DEATH" name="Is Death Claim?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P1_F4</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_DEATH_YES</bpmn2:outgoing>
+      <bpmn2:outgoing>_P1_F_DEATH_NO</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_DEATH_YES" name="Yes" sourceRef="_P1_XG_DEATH" targetRef="_P1_N6">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P1_F_DEATH_NO" name="No" sourceRef="_P1_XG_DEATH" targetRef="_P1_N9_MERGE">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 6: Check Document Completeness -->
+    <bpmn2:task id="_P1_N6" drools:taskName="Rest" name="N6: CheckDocCompleteness">
+      <bpmn2:incoming>_P1_F_DEATH_YES</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_NIGO_LOOP</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_DOCS</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N6_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N6_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N6_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N6_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N6_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N6_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N6_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/check-documents"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N6_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N6_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N6_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_DOCS" sourceRef="_P1_N6" targetRef="_P1_XG_DOCS"/>
+
+    <!-- Gateway: All Docs Correct & Verified? -->
+    <bpmn2:exclusiveGateway id="_P1_XG_DOCS" name="Docs OK?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P1_F_DOCS</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_DOCS_YES</bpmn2:outgoing>
+      <bpmn2:outgoing>_P1_F_DOCS_NO</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_DOCS_YES" name="Yes" sourceRef="_P1_XG_DOCS" targetRef="_P1_N9_MERGE">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return allDocsVerified == true;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P1_F_DOCS_NO" name="No" sourceRef="_P1_XG_DOCS" targetRef="_P1_CALL_NIGO">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return allDocsVerified == false;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 8: Call Activity (NIGO Subprocess) -->
+    <bpmn2:callActivity id="_P1_CALL_NIGO" name="NIGO Subprocess" calledElement="prudential-claims-submission.pru-nigo-followup">
+      <bpmn2:incoming>_P1_F_DOCS_NO</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_NIGO_LOOP</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_CALL_NIGO_caseId" name="caseId" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_CALL_NIGO_missingDocs" name="missingDocuments" structureRef="java.util.List"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_CALL_NIGO_caseId</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_CALL_NIGO_missingDocs</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet/>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_CALL_NIGO_caseId</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>missingDocuments</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_CALL_NIGO_missingDocs</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
+    </bpmn2:callActivity>
+
+    <bpmn2:sequenceFlow id="_P1_F_NIGO_LOOP" sourceRef="_P1_CALL_NIGO" targetRef="_P1_N6"/>
+
+    <!-- Docs Verified Merge Gateway -->
+    <bpmn2:exclusiveGateway id="_P1_N9_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_P1_F_DEATH_NO</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_DOCS_YES</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MERGE_DOC</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_MERGE_DOC" sourceRef="_P1_N9_MERGE" targetRef="_P1_N9"/>
+
+    <!-- Node 9: Policy Validation -->
+    <bpmn2:task id="_P1_N9" drools:taskName="Rest" name="N9: PolicyValidation">
+      <bpmn2:incoming>_P1_F_MERGE_DOC</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_POLICY</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N9_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N9_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N9_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N9_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N9_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N9_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N9_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/validate-policy"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N9_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N9_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N9_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_POLICY" sourceRef="_P1_N9" targetRef="_P1_N9A"/>
+
+    <!-- Node 9A: Perform Bene Validation -->
+    <bpmn2:task id="_P1_N9A" drools:taskName="Rest" name="N9a: BeneValidation">
+      <bpmn2:incoming>_P1_F_POLICY</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_BENE</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N9A_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N9A_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N9A_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N9A_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N9A_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N9A_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N9A_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/validate-beneficiary"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N9A_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N9A_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N9A_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_BENE" sourceRef="_P1_N9A" targetRef="_P1_N10"/>
+
+    <!-- Node 10: Bank PVS Validation -->
+    <bpmn2:task id="_P1_N10" drools:taskName="Rest" name="N10: BankValidation">
+      <bpmn2:incoming>_P1_F_BENE</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_BANK</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N10_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N10_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N10_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N10_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N10_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N10_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N10_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/validate-bank"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N10_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N10_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N10_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_BANK" sourceRef="_P1_N10" targetRef="_P1_XG_CONTESTABLE"/>
+
+    <!-- Gateway: Contestable? -->
+    <bpmn2:exclusiveGateway id="_P1_XG_CONTESTABLE" name="Contestable?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P1_F_BANK</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_CONTESTABLE_YES</bpmn2:outgoing>
+      <bpmn2:outgoing>_P1_F_CONTESTABLE_NO</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_CONTESTABLE_YES" name="Yes" sourceRef="_P1_XG_CONTESTABLE" targetRef="_P1_N11">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return flagContestable == true;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P1_F_CONTESTABLE_NO" name="No" sourceRef="_P1_XG_CONTESTABLE" targetRef="_P1_CONTESTABLE_MERGE">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return flagContestable == false;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 11: MRX Check -->
+    <bpmn2:task id="_P1_N11" drools:taskName="Rest" name="N11: MRXCheck">
+      <bpmn2:incoming>_P1_F_CONTESTABLE_YES</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MRX</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N11_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N11_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N11_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N11_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N11_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N11_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N11_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/mrx-check"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N11_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N11_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N11_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_MRX" sourceRef="_P1_N11" targetRef="_P1_CONTESTABLE_MERGE"/>
+
+    <!-- Contestable Merge Gateway -->
+    <bpmn2:exclusiveGateway id="_P1_CONTESTABLE_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_P1_F_CONTESTABLE_NO</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_MRX</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MERGE_CONTESTABLE</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_MERGE_CONTESTABLE" sourceRef="_P1_CONTESTABLE_MERGE" targetRef="_P1_XG_TI"/>
+
+    <!-- Gateway: Determine Tax Path (TI vs Death) -->
+    <bpmn2:exclusiveGateway id="_P1_XG_TI" name="Is TI Claim?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P1_F_MERGE_CONTESTABLE</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_TI_YES</bpmn2:outgoing>
+      <bpmn2:outgoing>_P1_F_TI_NO</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_TI_YES" name="Yes" sourceRef="_P1_XG_TI" targetRef="_P1_N13A">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "TI".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P1_F_TI_NO" name="No" sourceRef="_P1_XG_TI" targetRef="_P1_N13B">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return !"TI".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 13a: Flags & Fund Tax - Multi Fund -->
+    <bpmn2:task id="_P1_N13A" drools:taskName="Rest" name="N13a: MultiFundTax">
+      <bpmn2:incoming>_P1_F_TI_YES</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MULTIFUND</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N13A_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N13A_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N13A_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N13A_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N13A_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N13A_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N13A_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/tax/multi-fund"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N13A_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N13A_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N13A_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_MULTIFUND" sourceRef="_P1_N13A" targetRef="_P1_TI_MERGE"/>
+
+    <!-- Node 13b: Flags & Fund Tax - Single Fund -->
+    <bpmn2:task id="_P1_N13B" drools:taskName="Rest" name="N13b: SingleFundTax">
+      <bpmn2:incoming>_P1_F_TI_NO</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_SINGLEFUND</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N13B_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N13B_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N13B_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N13B_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N13B_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N13B_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N13B_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/tax/single-fund"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N13B_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N13B_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N13B_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_SINGLEFUND" sourceRef="_P1_N13B" targetRef="_P1_TI_MERGE"/>
+
+    <!-- TI Merge Gateway -->
+    <bpmn2:exclusiveGateway id="_P1_TI_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_P1_F_MULTIFUND</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_SINGLEFUND</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MERGE_TI</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_MERGE_TI" sourceRef="_P1_TI_MERGE" targetRef="_P1_N14"/>
+
+    <!-- Node 14: Apply Tax Checks -->
+    <bpmn2:task id="_P1_N14" drools:taskName="Rest" name="N14: ApplyTax">
+      <bpmn2:incoming>_P1_F_MERGE_TI</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_APPLYTAX</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N14_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N14_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N14_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N14_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N14_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N14_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N14_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/tax/apply"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N14_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N14_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N14_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_APPLYTAX" sourceRef="_P1_N14" targetRef="_P1_XG_TAX"/>
+
+    <!-- Gateway: Tax Exceptions? -->
+    <bpmn2:exclusiveGateway id="_P1_XG_TAX" name="Tax Exceptions?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P1_F_APPLYTAX</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_TAX_YES</bpmn2:outgoing>
+      <bpmn2:outgoing>_P1_F_TAX_NO</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_TAX_YES" name="Yes" sourceRef="_P1_XG_TAX" targetRef="_P1_N16">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return taxExceptions == true;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P1_F_TAX_NO" name="No" sourceRef="_P1_XG_TAX" targetRef="_P1_TAX_MERGE">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return taxExceptions == false;]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 16: Claim Examiner User Task -->
+    <bpmn2:userTask id="_P1_N16" name="N16: ExaminerReview">
+      <bpmn2:incoming>_P1_F_TAX_YES</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_EXAMINER</bpmn2:outgoing>
+      <bpmn2:potentialOwner>
+        <bpmn2:resourceAssignmentExpression>
+          <bpmn2:formalExpression><![CDATA[ClaimExaminer]]></bpmn2:formalExpression>
+        </bpmn2:resourceAssignmentExpression>
+      </bpmn2:potentialOwner>
+    </bpmn2:userTask>
+
+    <bpmn2:sequenceFlow id="_P1_F_EXAMINER" sourceRef="_P1_N16" targetRef="_P1_TAX_MERGE"/>
+
+    <!-- Tax Merge Gateway -->
+    <bpmn2:exclusiveGateway id="_P1_TAX_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_P1_F_TAX_NO</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_EXAMINER</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MERGE_TAX</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_MERGE_TAX" sourceRef="_P1_TAX_MERGE" targetRef="_P1_N17"/>
+
+    <!-- Node 17: Calculate Benefit & PMI -->
+    <bpmn2:task id="_P1_N17" drools:taskName="Rest" name="N17: CalcBenefit">
+      <bpmn2:incoming>_P1_F_MERGE_TAX</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_CALCBENEFIT</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N17_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N17_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N17_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N17_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N17_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N17_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N17_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/calculate"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N17_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N17_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N17_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_CALCBENEFIT" sourceRef="_P1_N17" targetRef="_P1_N18"/>
+
+    <!-- Node 18: Mis-statement M&E Adjust -->
+    <bpmn2:task id="_P1_N18" drools:taskName="Rest" name="N18: MisstatementAdjust">
+      <bpmn2:incoming>_P1_F_CALCBENEFIT</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MISSTATEMENT</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N18_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N18_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N18_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N18_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N18_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N18_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N18_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/misstatement-adjust"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N18_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N18_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N18_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_MISSTATEMENT" sourceRef="_P1_N18" targetRef="_P1_N19"/>
+
+    <!-- Node 19: Beneficiary Split -->
+    <bpmn2:task id="_P1_N19" drools:taskName="Rest" name="N19: BeneSplit">
+      <bpmn2:incoming>_P1_F_MISSTATEMENT</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_BENESPLIT</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N19_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N19_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N19_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N19_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N19_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N19_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N19_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/beneficiary-split"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N19_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N19_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N19_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_BENESPLIT" sourceRef="_P1_N19" targetRef="_P1_N20"/>
+
+    <!-- Node 20: Backup Withholding CCIS/IRS -->
+    <bpmn2:task id="_P1_N20" drools:taskName="Rest" name="N20: BackupWithholding">
+      <bpmn2:incoming>_P1_F_BENESPLIT</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_WITHHOLDING</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N20_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N20_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N20_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N20_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N20_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N20_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N20_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/backup-withholding"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N20_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N20_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N20_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_WITHHOLDING" sourceRef="_P1_N20" targetRef="_P1_XG_PAYMENT"/>
+
+    <!-- Gateway: Route Final Payment -->
+    <bpmn2:exclusiveGateway id="_P1_XG_PAYMENT" name="Payment Route?" gatewayDirection="Diverging">
+      <bpmn2:incoming>_P1_F_WITHHOLDING</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_PAYMENT_DEATH</bpmn2:outgoing>
+      <bpmn2:outgoing>_P1_F_PAYMENT_TI</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_PAYMENT_DEATH" name="Death" sourceRef="_P1_XG_PAYMENT" targetRef="_P1_N22">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <bpmn2:sequenceFlow id="_P1_F_PAYMENT_TI" name="TI" sourceRef="_P1_XG_PAYMENT" targetRef="_P1_N23">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[return "TI".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+
+    <!-- Node 22: Finalize Payment (Death) -->
+    <bpmn2:task id="_P1_N22" drools:taskName="Rest" name="N22: FinalizePayment">
+      <bpmn2:incoming>_P1_F_PAYMENT_DEATH</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_FINALIZE</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N22_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N22_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N22_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N22_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N22_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N22_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N22_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/finalize"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N22_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N22_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N22_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_FINALIZE" sourceRef="_P1_N22" targetRef="_P1_PAYMENT_MERGE"/>
+
+    <!-- Node 23: TI KNECT Payment -->
+    <bpmn2:task id="_P1_N23" drools:taskName="Rest" name="N23: KNECTPayment">
+      <bpmn2:incoming>_P1_F_PAYMENT_TI</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_KNECT</bpmn2:outgoing>
+      <bpmn2:ioSpecification>
+        <bpmn2:dataInput id="_P1_N23_Url" name="Url" structureRef="String"/>
+        <bpmn2:dataInput id="_P1_N23_Method" name="Method" structureRef="String"/>
+        <bpmn2:dataOutput id="_P1_N23_Res" name="Result" structureRef="String"/>
+        <bpmn2:inputSet><bpmn2:dataInputRefs>_P1_N23_Url</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_P1_N23_Method</bpmn2:dataInputRefs></bpmn2:inputSet>
+        <bpmn2:outputSet><bpmn2:dataOutputRefs>_P1_N23_Res</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:sourceRef>baseUrl</bpmn2:sourceRef>
+        <bpmn2:targetRef>_P1_N23_Url</bpmn2:targetRef>
+        <bpmn2:transformation xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java"><![CDATA[baseUrl + "/api/v1/claims/ti-knect-payment"]]></bpmn2:transformation>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation>
+        <bpmn2:targetRef>_P1_N23_Method</bpmn2:targetRef>
+        <bpmn2:assignment><bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[POST]]></bpmn2:from><bpmn2:to>_P1_N23_Method</bpmn2:to></bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation>
+        <bpmn2:sourceRef>_P1_N23_Res</bpmn2:sourceRef>
+        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
+    </bpmn2:task>
+
+    <bpmn2:sequenceFlow id="_P1_F_KNECT" sourceRef="_P1_N23" targetRef="_P1_PAYMENT_MERGE"/>
+
+    <!-- Payment Merge Gateway -->
+    <bpmn2:exclusiveGateway id="_P1_PAYMENT_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_P1_F_FINALIZE</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_KNECT</bpmn2:incoming>
+      <bpmn2:outgoing>_P1_F_MERGE_PAYMENT</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+
+    <bpmn2:sequenceFlow id="_P1_F_MERGE_PAYMENT" sourceRef="_P1_PAYMENT_MERGE" targetRef="_P1_END_SUCCESS"/>
+
+    <bpmn2:endEvent id="_P1_END_SUCCESS" name="End"/>
+
+    <!-- Global Event Sub-Process for Centralized REST Exception Handling -->
+    <bpmn2:subProcess id="_P1_ERROR_SUBPROCESS" name="Global API Error Handler" triggeredByEvent="true">
+      <bpmn2:startEvent id="_P1_ERROR_START" name="Catch REST API Failure">
+        <bpmn2:outgoing>_P1_ERR_F1</bpmn2:outgoing>
+        <bpmn2:errorEventDefinition id="_P1_ERR_DEF" errorRef="REST_API_FAILURE"/>
+      </bpmn2:startEvent>
+      
+      <bpmn2:sequenceFlow id="_P1_ERR_F1" sourceRef="_P1_ERROR_START" targetRef="_P1_ERROR_CALL"/>
+      
+      <bpmn2:callActivity id="_P1_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false">
+        <bpmn2:extensionElements>
+          <drools:onEntry-script scriptFormat="http://www.java.com/java">
+            <drools:script><![CDATA[// Extract failed REST node parameters
+org.kie.api.runtime.process.WorkItem failedWorkItem = (org.kie.api.runtime.process.WorkItem) kcontext.getNodeInstance().getVariable("WorkItem");
+if (failedWorkItem != null) {
+    String url = (String) failedWorkItem.getParameter("Url");
+    String payload = (String) failedWorkItem.getParameter("ContentData");
+    String ctx = "{\"url\":\"" + url + "\", \"payload\":" + payload + "}";
+    kcontext.setVariable("resPayload", ctx);
+} else {
+    kcontext.setVariable("resPayload", "{\"url\":\"/api/v1/unknown\", \"payload\":{}}");
+}]]></drools:script>
+          </drools:onEntry-script>
+        </bpmn2:extensionElements>
+        <bpmn2:incoming>_P1_ERR_F1</bpmn2:incoming>
+        <bpmn2:outgoing>_P1_ERR_F2</bpmn2:outgoing>
+        <bpmn2:ioSpecification id="_P1_ERR_CALL_io">
+          <bpmn2:dataInput id="_P1_ERR_CALL_failedContext" name="failedContext" structureRef="String"/>
+          <bpmn2:inputSet id="_P1_ERR_CALL_input_set">
+            <bpmn2:dataInputRefs>_P1_ERR_CALL_failedContext</bpmn2:dataInputRefs>
+          </bpmn2:inputSet>
+          <bpmn2:outputSet id="_P1_ERR_CALL_output_set"/>
+        </bpmn2:ioSpecification>
+        <bpmn2:dataInputAssociation id="_P1_ERR_CALL_assoc">
+          <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
+          <bpmn2:targetRef>_P1_ERR_CALL_failedContext</bpmn2:targetRef>
+        </bpmn2:dataInputAssociation>
+      </bpmn2:callActivity>
+      
+      <bpmn2:sequenceFlow id="_P1_ERR_F2" sourceRef="_P1_ERROR_CALL" targetRef="_P1_ERROR_END"/>
+      
+      <bpmn2:endEvent id="_P1_ERROR_END" name="End Error Catch">
+        <bpmn2:incoming>_P1_ERR_F2</bpmn2:incoming>
+      </bpmn2:endEvent>
+    </bpmn2:subProcess>
   </bpmn2:process>
 
+  <!-- Complete visual layout metadata block -->
   <bpmndi:BPMNDiagram id="_P1_DI">
     <bpmndi:BPMNPlane id="_P1_PLANE" bpmnElement="prudential-claims-submission.pru-claim-internal-processing">
+      <!-- Start & Initial Nodes -->
       <bpmndi:BPMNShape id="_S_P1_START" bpmnElement="_P1_START">
-        <dc:Bounds height="56.0" width="56.0" x="100.0" y="100.0"/>
+        <dc:Bounds height="56.0" width="56.0" x="50.0" y="100.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P1_BOOTSTRAP" bpmnElement="_P1_BOOTSTRAP">
-        <dc:Bounds height="102.0" width="154.0" x="200.0" y="77.0"/>
+        <dc:Bounds height="80.0" width="120.0" x="150.0" y="88.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P1_N1" bpmnElement="_P1_N1">
-        <dc:Bounds height="102.0" width="154.0" x="400.0" y="77.0"/>
+        <dc:Bounds height="80.0" width="120.0" x="300.0" y="88.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P1_XG1" bpmnElement="_P1_XG1">
-        <dc:Bounds height="56.0" width="56.0" x="600.0" y="100.0"/>
+        <dc:Bounds height="50.0" width="50.0" x="450.0" y="103.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P1_N4" bpmnElement="_P1_N4">
-        <dc:Bounds height="102.0" width="154.0" x="700.0" y="77.0"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="_S_P1_END_SUCCESS" bpmnElement="_P1_END_SUCCESS">
-        <dc:Bounds height="56.0" width="56.0" x="900.0" y="100.0"/>
+      <bpmndi:BPMNShape id="_S_P1_N3" bpmnElement="_P1_N3">
+        <dc:Bounds height="80.0" width="120.0" x="415.0" y="200.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_P1_END_FAIL" bpmnElement="_P1_END_FAIL">
-        <dc:Bounds height="56.0" width="56.0" x="600.0" y="250.0"/>
+        <dc:Bounds height="56.0" width="56.0" x="447.0" y="320.0"/>
       </bpmndi:BPMNShape>
+      
+      <!-- Middle Nodes -->
+      <bpmndi:BPMNShape id="_S_P1_N4" bpmnElement="_P1_N4">
+        <dc:Bounds height="80.0" width="120.0" x="550.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_XG_DEATH" bpmnElement="_P1_XG_DEATH">
+        <dc:Bounds height="50.0" width="50.0" x="700.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N6" bpmnElement="_P1_N6">
+        <dc:Bounds height="80.0" width="120.0" x="800.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_XG_DOCS" bpmnElement="_P1_XG_DOCS">
+        <dc:Bounds height="50.0" width="50.0" x="950.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_CALL_NIGO" bpmnElement="_P1_CALL_NIGO">
+        <dc:Bounds height="80.0" width="120.0" x="915.0" y="190.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N9_MERGE" bpmnElement="_P1_N9_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="1100.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N9" bpmnElement="_P1_N9">
+        <dc:Bounds height="80.0" width="120.0" x="1200.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N9A" bpmnElement="_P1_N9A">
+        <dc:Bounds height="80.0" width="120.0" x="1350.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N10" bpmnElement="_P1_N10">
+        <dc:Bounds height="80.0" width="120.0" x="1500.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_XG_CONTESTABLE" bpmnElement="_P1_XG_CONTESTABLE">
+        <dc:Bounds height="50.0" width="50.0" x="1650.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N11" bpmnElement="_P1_N11">
+        <dc:Bounds height="80.0" width="120.0" x="1615.0" y="-10.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_CONTESTABLE_MERGE" bpmnElement="_P1_CONTESTABLE_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="1750.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- Tax Path Nodes -->
+      <bpmndi:BPMNShape id="_S_P1_XG_TI" bpmnElement="_P1_XG_TI">
+        <dc:Bounds height="50.0" width="50.0" x="1850.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N13A" bpmnElement="_P1_N13A">
+        <dc:Bounds height="80.0" width="120.0" x="1950.0" y="-10.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N13B" bpmnElement="_P1_N13B">
+        <dc:Bounds height="80.0" width="120.0" x="1950.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_TI_MERGE" bpmnElement="_P1_TI_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="2100.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N14" bpmnElement="_P1_N14">
+        <dc:Bounds height="80.0" width="120.0" x="2200.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_XG_TAX" bpmnElement="_P1_XG_TAX">
+        <dc:Bounds height="50.0" width="50.0" x="2350.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N16" bpmnElement="_P1_N16">
+        <dc:Bounds height="80.0" width="120.0" x="2450.0" y="180.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_TAX_MERGE" bpmnElement="_P1_TAX_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="2600.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      
+      <!-- Payout & Final Nodes -->
+      <bpmndi:BPMNShape id="_S_P1_N17" bpmnElement="_P1_N17">
+        <dc:Bounds height="80.0" width="120.0" x="2700.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N18" bpmnElement="_P1_N18">
+        <dc:Bounds height="80.0" width="120.0" x="2850.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N19" bpmnElement="_P1_N19">
+        <dc:Bounds height="80.0" width="120.0" x="3000.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N20" bpmnElement="_P1_N20">
+        <dc:Bounds height="80.0" width="120.0" x="3150.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_XG_PAYMENT" bpmnElement="_P1_XG_PAYMENT">
+        <dc:Bounds height="50.0" width="50.0" x="3300.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N22" bpmnElement="_P1_N22">
+        <dc:Bounds height="80.0" width="120.0" x="3400.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_N23" bpmnElement="_P1_N23">
+        <dc:Bounds height="80.0" width="120.0" x="3400.0" y="-10.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_PAYMENT_MERGE" bpmnElement="_P1_PAYMENT_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="3550.0" y="103.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_P1_END_SUCCESS" bpmnElement="_P1_END_SUCCESS">
+        <dc:Bounds height="56.0" width="56.0" x="3650.0" y="100.0"/>
+      </bpmndi:BPMNShape>
+
+      <!-- Connection Edges -->
       <bpmndi:BPMNEdge id="_E_BOOTSTRAP" bpmnElement="_F_BOOTSTRAP">
-        <di:waypoint x="156.0" y="128.0"/>
-        <di:waypoint x="200.0" y="128.0"/>
+        <di:waypoint x="106.0" y="128.0"/>
+        <di:waypoint x="150.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F1" bpmnElement="_P1_F1">
-        <di:waypoint x="354.0" y="128.0"/>
-        <di:waypoint x="400.0" y="128.0"/>
+        <di:waypoint x="270.0" y="128.0"/>
+        <di:waypoint x="300.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F2" bpmnElement="_P1_F2">
-        <di:waypoint x="554.0" y="128.0"/>
-        <di:waypoint x="600.0" y="128.0"/>
+        <di:waypoint x="420.0" y="128.0"/>
+        <di:waypoint x="450.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F3_OK" bpmnElement="_P1_F3_OK">
-        <di:waypoint x="656.0" y="128.0"/>
-        <di:waypoint x="700.0" y="128.0"/>
+        <di:waypoint x="500.0" y="128.0"/>
+        <di:waypoint x="550.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F3_FAIL" bpmnElement="_P1_F3_FAIL">
-        <di:waypoint x="628.0" y="156.0"/>
-        <di:waypoint x="628.0" y="250.0"/>
+        <di:waypoint x="475.0" y="153.0"/>
+        <di:waypoint x="475.0" y="200.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F3_FAIL_END" bpmnElement="_P1_F3_FAIL_END">
+        <di:waypoint x="475.0" y="280.0"/>
+        <di:waypoint x="475.0" y="320.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_P1_F4" bpmnElement="_P1_F4">
-        <di:waypoint x="854.0" y="128.0"/>
-        <di:waypoint x="900.0" y="128.0"/>
+        <di:waypoint x="670.0" y="128.0"/>
+        <di:waypoint x="700.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_DEATH_YES" bpmnElement="_P1_F_DEATH_YES">
+        <di:waypoint x="750.0" y="128.0"/>
+        <di:waypoint x="800.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_DEATH_NO" bpmnElement="_P1_F_DEATH_NO">
+        <di:waypoint x="725.0" y="103.0"/>
+        <di:waypoint x="725.0" y="40.0"/>
+        <di:waypoint x="1125.0" y="40.0"/>
+        <di:waypoint x="1125.0" y="103.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_DOCS" bpmnElement="_P1_F_DOCS">
+        <di:waypoint x="920.0" y="128.0"/>
+        <di:waypoint x="950.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_DOCS_YES" bpmnElement="_P1_F_DOCS_YES">
+        <di:waypoint x="1000.0" y="128.0"/>
+        <di:waypoint x="1100.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_DOCS_NO" bpmnElement="_P1_F_DOCS_NO">
+        <di:waypoint x="975.0" y="153.0"/>
+        <di:waypoint x="975.0" y="190.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_NIGO_LOOP" bpmnElement="_P1_F_NIGO_LOOP">
+        <di:waypoint x="915.0" y="230.0"/>
+        <di:waypoint x="860.0" y="230.0"/>
+        <di:waypoint x="860.0" y="168.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MERGE_DOC" bpmnElement="_P1_F_MERGE_DOC">
+        <di:waypoint x="1150.0" y="128.0"/>
+        <di:waypoint x="1200.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_POLICY" bpmnElement="_P1_F_POLICY">
+        <di:waypoint x="1320.0" y="128.0"/>
+        <di:waypoint x="1350.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_BENE" bpmnElement="_P1_F_BENE">
+        <di:waypoint x="1470.0" y="128.0"/>
+        <di:waypoint x="1500.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_BANK" bpmnElement="_P1_F_BANK">
+        <di:waypoint x="1620.0" y="128.0"/>
+        <di:waypoint x="1650.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_CONTESTABLE_YES" bpmnElement="_P1_F_CONTESTABLE_YES">
+        <di:waypoint x="1675.0" y="103.0"/>
+        <di:waypoint x="1675.0" y="70.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_CONTESTABLE_NO" bpmnElement="_P1_F_CONTESTABLE_NO">
+        <di:waypoint x="1700.0" y="128.0"/>
+        <di:waypoint x="1750.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MRX" bpmnElement="_P1_F_MRX">
+        <di:waypoint x="1735.0" y="30.0"/>
+        <di:waypoint x="1775.0" y="30.0"/>
+        <di:waypoint x="1775.0" y="103.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MERGE_CONTESTABLE" bpmnElement="_P1_F_MERGE_CONTESTABLE">
+        <di:waypoint x="1800.0" y="128.0"/>
+        <di:waypoint x="1850.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_TI_YES" bpmnElement="_P1_F_TI_YES">
+        <di:waypoint x="1875.0" y="103.0"/>
+        <di:waypoint x="1875.0" y="30.0"/>
+        <di:waypoint x="1950.0" y="30.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_TI_NO" bpmnElement="_P1_F_TI_NO">
+        <di:waypoint x="1900.0" y="128.0"/>
+        <di:waypoint x="1950.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MULTIFUND" bpmnElement="_P1_F_MULTIFUND">
+        <di:waypoint x="2070.0" y="30.0"/>
+        <di:waypoint x="2125.0" y="30.0"/>
+        <di:waypoint x="2125.0" y="103.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_SINGLEFUND" bpmnElement="_P1_F_SINGLEFUND">
+        <di:waypoint x="2070.0" y="128.0"/>
+        <di:waypoint x="2100.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MERGE_TI" bpmnElement="_P1_F_MERGE_TI">
+        <di:waypoint x="2150.0" y="128.0"/>
+        <di:waypoint x="2200.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_APPLYTAX" bpmnElement="_P1_F_APPLYTAX">
+        <di:waypoint x="2320.0" y="128.0"/>
+        <di:waypoint x="2350.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_TAX_YES" bpmnElement="_P1_F_TAX_YES">
+        <di:waypoint x="2375.0" y="153.0"/>
+        <di:waypoint x="2375.0" y="220.0"/>
+        <di:waypoint x="2450.0" y="220.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_TAX_NO" bpmnElement="_P1_F_TAX_NO">
+        <di:waypoint x="2400.0" y="128.0"/>
+        <di:waypoint x="2600.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_EXAMINER" bpmnElement="_P1_F_EXAMINER">
+        <di:waypoint x="2570.0" y="220.0"/>
+        <di:waypoint x="2625.0" y="220.0"/>
+        <di:waypoint x="2625.0" y="153.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MERGE_TAX" bpmnElement="_P1_F_MERGE_TAX">
+        <di:waypoint x="2650.0" y="128.0"/>
+        <di:waypoint x="2700.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_CALCBENEFIT" bpmnElement="_P1_F_CALCBENEFIT">
+        <di:waypoint x="2820.0" y="128.0"/>
+        <di:waypoint x="2850.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MISSTATEMENT" bpmnElement="_P1_F_MISSTATEMENT">
+        <di:waypoint x="2970.0" y="128.0"/>
+        <di:waypoint x="3000.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_BENESPLIT" bpmnElement="_P1_F_BENESPLIT">
+        <di:waypoint x="3090.0" y="128.0"/>
+        <di:waypoint x="3150.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_WITHHOLDING" bpmnElement="_P1_F_WITHHOLDING">
+        <di:waypoint x="3270.0" y="128.0"/>
+        <di:waypoint x="3300.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_PAYMENT_DEATH" bpmnElement="_P1_F_PAYMENT_DEATH">
+        <di:waypoint x="3350.0" y="128.0"/>
+        <di:waypoint x="3400.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_PAYMENT_TI" bpmnElement="_P1_F_PAYMENT_TI">
+        <di:waypoint x="3325.0" y="103.0"/>
+        <di:waypoint x="3325.0" y="30.0"/>
+        <di:waypoint x="3400.0" y="30.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_FINALIZE" bpmnElement="_P1_F_FINALIZE">
+        <di:waypoint x="3520.0" y="128.0"/>
+        <di:waypoint x="3550.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_KNECT" bpmnElement="_P1_F_KNECT">
+        <di:waypoint x="3520.0" y="30.0"/>
+        <di:waypoint x="3575.0" y="30.0"/>
+        <di:waypoint x="3575.0" y="103.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_P1_F_MERGE_PAYMENT" bpmnElement="_P1_F_MERGE_PAYMENT">
+        <di:waypoint x="3600.0" y="128.0"/>
+        <di:waypoint x="3650.0" y="128.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
