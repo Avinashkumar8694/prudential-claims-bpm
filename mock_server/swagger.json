@@ -23,9 +23,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "piid": { "type": "string" },
-                  "caseId": { "type": "string" },
-                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -39,9 +48,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "validationPassed": { "type": "boolean" },
-                    "policyFlags": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "validationPassed": {
+                      "type": "boolean"
+                    },
+                    "policyFlags": {
+                      "type": "object"
+                    }
                   }
                 }
               }
@@ -61,9 +76,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "piid": { "type": "string" },
-                  "caseId": { "type": "string" },
-                  "errors": { "type": "array", "items": { "type": "object" } }
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "errors": {
+                    "type": "array",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
                 }
               }
             }
@@ -77,8 +101,12 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "auditLogId": { "type": "string" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "auditLogId": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -98,9 +126,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "piid": { "type": "string" },
-                  "caseId": { "type": "string" },
-                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -114,8 +151,15 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "updatedPolicies": { "type": "array", "items": { "type": "object" } }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "updatedPolicies": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
                   }
                 }
               }
@@ -135,9 +179,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "piid": { "type": "string" },
-                  "caseId": { "type": "string" },
-                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -151,9 +204,18 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "allDocsVerified": { "type": "boolean" },
-                    "missingDocs": { "type": "array", "items": { "type": "string" } }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "allDocsVerified": {
+                      "type": "boolean"
+                    },
+                    "missingDocs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
                   }
                 }
               }
@@ -174,9 +236,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "validationPassed": { "type": "boolean" },
-                    "policyFlags": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "validationPassed": {
+                      "type": "boolean"
+                    },
+                    "policyFlags": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -197,9 +289,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "minorDetected": { "type": "boolean" },
-                    "beneficiaryFlags": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "minorDetected": {
+                      "type": "boolean"
+                    },
+                    "beneficiaryFlags": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -220,9 +342,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "pvsMatch": { "type": "boolean" },
-                    "bankValidationResult": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "pvsMatch": {
+                      "type": "boolean"
+                    },
+                    "bankValidationResult": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -243,9 +395,42 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "alerts": { "type": "array", "items": { "type": "string" } },
-                    "mrxCheckResult": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "mrxCheckResult": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -266,8 +451,36 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "fundTaxResult": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "fundTaxResult": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -288,8 +501,36 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "fundTaxResult": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "fundTaxResult": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -310,9 +551,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "taxExceptions": { "type": "boolean" },
-                    "taxCheckResult": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "taxExceptions": {
+                      "type": "boolean"
+                    },
+                    "taxCheckResult": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -333,9 +604,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "payoutAmount": { "type": "number" },
-                    "benefitCalculation": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "payoutAmount": {
+                      "type": "number"
+                    },
+                    "benefitCalculation": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -356,8 +657,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "adjustedBenefitCalculation": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "adjustedBenefitCalculation": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "benefitCalculation": {
+                    "type": "object"
                   }
                 }
               }
@@ -378,8 +704,36 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "beneficiarySplit": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "beneficiarySplit": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -400,9 +754,42 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "withholdingResult": { "type": "object" },
-                    "finalPayouts": { "type": "array", "items": { "type": "object" } }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "withholdingResult": {
+                      "type": "object"
+                    },
+                    "finalPayouts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -423,8 +810,36 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "finalPaymentInstructions": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "finalPaymentInstructions": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -445,8 +860,36 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "knectTransactionId": { "type": "string" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "knectTransactionId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -467,8 +910,42 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "noticeSentAt": { "type": "string" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "noticeSentAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "missingDocuments": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -489,8 +966,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "documentS3Key": { "type": "string" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "documentS3Key": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "noticeType": {
+                    "type": "string"
                   }
                 }
               }
@@ -511,8 +1013,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "documentS3Key": { "type": "string" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "documentS3Key": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "noticeType": {
+                    "type": "string"
                   }
                 }
               }
@@ -533,8 +1060,33 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "followupCount": { "type": "integer" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "followupCount": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "followupCount": {
+                    "type": "integer"
                   }
                 }
               }
@@ -555,8 +1107,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "extractionResult": { "type": "object" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "extractionResult": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
                   }
                 }
               }
@@ -577,8 +1151,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "allDocsReceived": { "type": "boolean" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "allDocsReceived": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
                   }
                 }
               }
@@ -599,8 +1195,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "success": { "type": "boolean" },
-                    "verificationStatus": { "type": "string" }
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "verificationStatus": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
                   }
                 }
               }
@@ -631,10 +1249,19 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "gitURL": { "type": "string", "example": "https://github.com/Avinashkumar8694/prudential-claims-bpm.git" },
-                  "name": { "type": "string", "example": "prudential-claims-bpm" }
+                  "gitURL": {
+                    "type": "string",
+                    "example": "https://github.com/Avinashkumar8694/prudential-claims-bpm.git"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "prudential-claims-bpm"
+                  }
                 },
-                "required": ["gitURL", "name"]
+                "required": [
+                  "gitURL",
+                  "name"
+                ]
               }
             }
           }
@@ -647,10 +1274,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "APPROVED" },
-                    "jobId": { "type": "string", "example": "job-x9z2k1s5p" },
-                    "spaceName": { "type": "string", "example": "claims" },
-                    "projectName": { "type": "string", "example": "prudential-claims-bpm" }
+                    "status": {
+                      "type": "string",
+                      "example": "APPROVED"
+                    },
+                    "jobId": {
+                      "type": "string",
+                      "example": "job-x9z2k1s5p"
+                    },
+                    "spaceName": {
+                      "type": "string",
+                      "example": "claims"
+                    },
+                    "projectName": {
+                      "type": "string",
+                      "example": "prudential-claims-bpm"
+                    }
                   }
                 }
               }
@@ -682,11 +1321,27 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "SUCCESS" },
-                    "jobId": { "type": "string", "example": "job-x9z2k1s5p" },
-                    "result": { "type": "string", "example": "Repository operation completed successfully" },
-                    "lastModified": { "type": "integer", "example": 1779016652364 },
-                    "detailedResult": { "type": "string", "nullable": true, "example": null }
+                    "status": {
+                      "type": "string",
+                      "example": "SUCCESS"
+                    },
+                    "jobId": {
+                      "type": "string",
+                      "example": "job-x9z2k1s5p"
+                    },
+                    "result": {
+                      "type": "string",
+                      "example": "Repository operation completed successfully"
+                    },
+                    "lastModified": {
+                      "type": "integer",
+                      "example": 1779016652364
+                    },
+                    "detailedResult": {
+                      "type": "string",
+                      "nullable": true,
+                      "example": null
+                    }
                   }
                 }
               }
@@ -727,10 +1382,22 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "APPROVED" },
-                    "jobId": { "type": "string", "example": "job-del-x9z2k1s5p" },
-                    "spaceName": { "type": "string", "example": "claims" },
-                    "projectName": { "type": "string", "example": "prudential-claims-bpm" }
+                    "status": {
+                      "type": "string",
+                      "example": "APPROVED"
+                    },
+                    "jobId": {
+                      "type": "string",
+                      "example": "job-del-x9z2k1s5p"
+                    },
+                    "spaceName": {
+                      "type": "string",
+                      "example": "claims"
+                    },
+                    "projectName": {
+                      "type": "string",
+                      "example": "prudential-claims-bpm"
+                    }
                   }
                 }
               }
