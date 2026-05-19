@@ -773,20 +773,38 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_DOCS_NO</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_REVIEW_DONE</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_P2_N9_io">
+        <bpmn2:dataInput id="_P2_N9_TaskNameInputX" name="TaskName" structureRef="Object"/>
+        <bpmn2:dataInput id="_P2_N9_SkippableInputX" name="Skippable" structureRef="Object"/>
         <bpmn2:dataInput id="_P2_N9_caseId" name="caseId" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N9_decision" name="examinerDecision" structureRef="String"/>
         <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N9_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N9_SkippableInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N9_caseId</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet>
           <bpmn2:dataOutputRefs>_P2_N9_decision</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N9_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N9_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N9_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[N9: ExaminerPartialReview]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P2_N9_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N9_assoc_Skippable">
+        <bpmn2:targetRef>_P2_N9_SkippableInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N9_assign_Skippable">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[false]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P2_N9_SkippableInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N9_assoc_caseId">
         <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
         <bpmn2:targetRef>_P2_N9_caseId</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="_P2_N9_assoc_decision">
         <bpmn2:sourceRef>_P2_N9_decision</bpmn2:sourceRef>
         <bpmn2:targetRef>examinerDecision</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
@@ -914,6 +932,29 @@ if (response != null && !response.isEmpty()) {
     <bpmn2:userTask id="_P2_N13" name="N13: ExaminerDeathVerif">
       <bpmn2:incoming>_P2_F_DEATH_VER_UPDATED</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_DEATH_VER_DONE</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P2_N13_io">
+        <bpmn2:dataInput id="_P2_N13_TaskNameInputX" name="TaskName" structureRef="Object"/>
+        <bpmn2:dataInput id="_P2_N13_SkippableInputX" name="Skippable" structureRef="Object"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P2_N13_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N13_SkippableInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet/>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation id="_P2_N13_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N13_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N13_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[N13: ExaminerDeathVerif]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P2_N13_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P2_N13_assoc_Skippable">
+        <bpmn2:targetRef>_P2_N13_SkippableInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N13_assign_Skippable">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[false]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P2_N13_SkippableInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
           <bpmn2:formalExpression>SeniorInvestigator</bpmn2:formalExpression>

@@ -199,6 +199,36 @@ System.out.println("Error Handler: API Retry failed. Attempt: " + (count + 1));<
     <bpmn2:userTask id="_ADMIN_REVIEW" name="IT Admin Exception Review">
       <bpmn2:incoming>_flow_limit_exceeded</bpmn2:incoming>
       <bpmn2:outgoing>_flow_admin_action</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_ADMIN_REVIEW_io">
+        <bpmn2:dataInput id="_ADMIN_REVIEW_TaskNameInputX" name="TaskName" structureRef="Object"/>
+        <bpmn2:dataInput id="_ADMIN_REVIEW_SkippableInputX" name="Skippable" structureRef="Object"/>
+        <bpmn2:dataOutput id="_ADMIN_REVIEW_decisionOutput" name="adminDecision" structureRef="String"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_ADMIN_REVIEW_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_ADMIN_REVIEW_SkippableInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet>
+          <bpmn2:dataOutputRefs>_ADMIN_REVIEW_decisionOutput</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation id="_ADMIN_REVIEW_assoc_TaskName">
+        <bpmn2:targetRef>_ADMIN_REVIEW_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_ADMIN_REVIEW_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[IT Admin Exception Review]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_ADMIN_REVIEW_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_ADMIN_REVIEW_assoc_Skippable">
+        <bpmn2:targetRef>_ADMIN_REVIEW_SkippableInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_ADMIN_REVIEW_assign_Skippable">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[false]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_ADMIN_REVIEW_SkippableInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation id="_ADMIN_REVIEW_assoc_decision">
+        <bpmn2:sourceRef>_ADMIN_REVIEW_decisionOutput</bpmn2:sourceRef>
+        <bpmn2:targetRef>adminDecision</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
           <bpmn2:formalExpression>SystemAdmin</bpmn2:formalExpression>

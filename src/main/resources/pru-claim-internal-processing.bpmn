@@ -1416,6 +1416,29 @@ if (response != null && !response.isEmpty()) {
     <bpmn2:userTask id="_P1_N16" name="N16: ExaminerReview">
       <bpmn2:incoming>_P1_F_TAX_YES</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F_EXAMINER</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_P1_N16_io">
+        <bpmn2:dataInput id="_P1_N16_TaskNameInputX" name="TaskName" structureRef="Object"/>
+        <bpmn2:dataInput id="_P1_N16_SkippableInputX" name="Skippable" structureRef="Object"/>
+        <bpmn2:inputSet>
+          <bpmn2:dataInputRefs>_P1_N16_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P1_N16_SkippableInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet/>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation id="_P1_N16_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N16_TaskNameInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N16_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[N16: ExaminerReview]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P1_N16_TaskNameInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_P1_N16_assoc_Skippable">
+        <bpmn2:targetRef>_P1_N16_SkippableInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N16_assign_Skippable">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[false]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P1_N16_SkippableInputX</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
           <bpmn2:formalExpression>ClaimExaminer</bpmn2:formalExpression>
