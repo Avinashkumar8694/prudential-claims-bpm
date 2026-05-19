@@ -76,6 +76,7 @@ System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " +
     <!-- Node 1: Send NIGO Notice -->
     <bpmn2:task id="_P2_N1" drools:taskName="Rest" name="N1: SendNIGO">
       <bpmn2:ioSpecification id="_P2_N1_io">
+        <bpmn2:dataInput id="_P2_N1_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N1_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N1_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N1_AuthType" name="AuthType" structureRef="String"/>
@@ -95,6 +96,7 @@ System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " +
         <bpmn2:dataInput id="_P2_N1_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N1_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P2_N1_inputSet">
+          <bpmn2:dataInputRefs>_P2_N1_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N1_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N1_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N1_AuthType</bpmn2:dataInputRefs>
@@ -174,6 +176,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P2_N1_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N1_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N1_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P2_N1_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P2_F2" sourceRef="_P2_N1" targetRef="_P2_XG_CLAIMTYPE"/>
     <!-- Node 2: Exclusive Gateway (Diverging Claim Type Gate) -->
@@ -191,6 +200,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 2a: Funding Notice (Death Path) -->
     <bpmn2:task id="_P2_N2A" drools:taskName="Rest" name="N2a: FundingNotice">
       <bpmn2:ioSpecification id="_P2_N2A_io">
+        <bpmn2:dataInput id="_P2_N2A_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2A_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2A_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2A_AuthType" name="AuthType" structureRef="String"/>
@@ -210,6 +220,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P2_N2A_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N2A_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P2_N2A_inputSet">
+          <bpmn2:dataInputRefs>_P2_N2A_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2A_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2A_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2A_AuthType</bpmn2:dataInputRefs>
@@ -288,11 +299,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P2_N2A_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N2A_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N2A_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P2_N2A_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P2_F_MERGE_2A" sourceRef="_P2_N2A" targetRef="_P2_MERGE"/>
     <!-- Node 2b: Standard Notice (TI Path) -->
     <bpmn2:task id="_P2_N2B" drools:taskName="Rest" name="N2b: StandardNotice">
       <bpmn2:ioSpecification id="_P2_N2B_io">
+        <bpmn2:dataInput id="_P2_N2B_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2B_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2B_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N2B_AuthType" name="AuthType" structureRef="String"/>
@@ -312,6 +331,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P2_N2B_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N2B_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P2_N2B_inputSet">
+          <bpmn2:dataInputRefs>_P2_N2B_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2B_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2B_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N2B_AuthType</bpmn2:dataInputRefs>
@@ -390,6 +410,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P2_N2B_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N2B_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N2B_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P2_N2B_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P2_F_MERGE_2B" sourceRef="_P2_N2B" targetRef="_P2_MERGE"/>
     <!-- Node 3: Converging Exclusive Gateway -->
@@ -455,6 +482,7 @@ return count >= 3;]]></bpmn2:conditionExpression>
     <!-- Node 11: AutoFollowup Service Task -->
     <bpmn2:task id="_P2_N11" drools:taskName="Rest" name="N11: AutoFollowup">
       <bpmn2:ioSpecification id="_P2_N11_io">
+        <bpmn2:dataInput id="_P2_N11_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N11_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N11_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N11_AuthType" name="AuthType" structureRef="String"/>
@@ -474,6 +502,7 @@ return count >= 3;]]></bpmn2:conditionExpression>
         <bpmn2:dataInput id="_P2_N11_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N11_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P2_N11_inputSet">
+          <bpmn2:dataInputRefs>_P2_N11_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N11_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N11_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N11_AuthType</bpmn2:dataInputRefs>
@@ -552,11 +581,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P2_N11_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N11_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N11_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P2_N11_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_MERGE"/>
     <!-- Node 6: Re-Run IDP Extraction Service Task -->
     <bpmn2:task id="_P2_N6" drools:taskName="Rest" name="N6: ReRunIDPExtraction">
       <bpmn2:ioSpecification id="_P2_N6_io">
+        <bpmn2:dataInput id="_P2_N6_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N6_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N6_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N6_AuthType" name="AuthType" structureRef="String"/>
@@ -576,6 +613,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P2_N6_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N6_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P2_N6_inputSet">
+          <bpmn2:dataInputRefs>_P2_N6_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N6_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N6_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N6_AuthType</bpmn2:dataInputRefs>
@@ -653,11 +691,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P2_N6_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N6_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N6_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P2_N6_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P2_F_IDP_DONE" sourceRef="_P2_N6" targetRef="_P2_N7"/>
     <!-- Node 7: Update Status Service Task -->
     <bpmn2:task id="_P2_N7" drools:taskName="Rest" name="N7: UpdateClaimStatus">
       <bpmn2:ioSpecification id="_P2_N7_io">
+        <bpmn2:dataInput id="_P2_N7_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N7_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N7_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N7_AuthType" name="AuthType" structureRef="String"/>
@@ -677,6 +723,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P2_N7_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N7_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P2_N7_inputSet">
+          <bpmn2:dataInputRefs>_P2_N7_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N7_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N7_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N7_AuthType</bpmn2:dataInputRefs>
@@ -754,6 +801,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P2_N7_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N7_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N7_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P2_N7_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P2_F_STATUS_DONE" sourceRef="_P2_N7" targetRef="_P2_XG_DOCS"/>
     <!-- Node 8: Exclusive Gateway (Docs OK?) -->
@@ -789,7 +843,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_P2_N9_assoc_TaskName">
         <bpmn2:targetRef>_P2_N9_TaskNameInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_P2_N9_assign_TaskName">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[N9: ExaminerPartialReview]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ExaminerPartialReview]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P2_N9_TaskNameInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -830,6 +884,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 12: Update Death Verification Status Service Task -->
     <bpmn2:task id="_P2_N12" drools:taskName="Rest" name="N12: UpdateDeathVerification">
       <bpmn2:ioSpecification id="_P2_N12_io">
+        <bpmn2:dataInput id="_P2_N12_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N12_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N12_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P2_N12_AuthType" name="AuthType" structureRef="String"/>
@@ -849,6 +904,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P2_N12_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P2_N12_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P2_N12_inputSet">
+          <bpmn2:dataInputRefs>_P2_N12_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N12_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N12_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P2_N12_AuthType</bpmn2:dataInputRefs>
@@ -926,6 +982,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P2_N12_assoc_TaskName">
+        <bpmn2:targetRef>_P2_N12_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P2_N12_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P2_N12_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_UPDATED" sourceRef="_P2_N12" targetRef="_P2_N13"/>
     <!-- Node 13: Examiner Death Verification User Task -->
@@ -944,7 +1007,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_P2_N13_assoc_TaskName">
         <bpmn2:targetRef>_P2_N13_TaskNameInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_P2_N13_assign_TaskName">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[N13: ExaminerDeathVerif]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ExaminerDeathVerif]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P2_N13_TaskNameInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>

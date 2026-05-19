@@ -130,6 +130,7 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);</b
     <!-- Node 1: Validate Submitted Data -->
     <bpmn2:task id="_P1_N1" drools:taskName="Rest" name="N1: ValidateData">
       <bpmn2:ioSpecification id="_P1_N1_io">
+        <bpmn2:dataInput id="_P1_N1_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N1_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N1_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N1_AuthType" name="AuthType" structureRef="String"/>
@@ -149,6 +150,7 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);</b
         <bpmn2:dataInput id="_P1_N1_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N1_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N1_inputSet">
+          <bpmn2:dataInputRefs>_P1_N1_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N1_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N1_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N1_AuthType</bpmn2:dataInputRefs>
@@ -239,6 +241,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N1_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N1_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N1_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N1_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F2" sourceRef="_P1_N1" targetRef="_P1_XG1"/>
     <!-- Gateway: Validation Passed? -->
@@ -256,6 +265,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 3: Log Validation Error & Notify -->
     <bpmn2:task id="_P1_N3" drools:taskName="Rest" name="N3: LogError">
       <bpmn2:ioSpecification id="_P1_N3_io">
+        <bpmn2:dataInput id="_P1_N3_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N3_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N3_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N3_AuthType" name="AuthType" structureRef="String"/>
@@ -275,6 +285,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N3_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N3_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N3_inputSet">
+          <bpmn2:dataInputRefs>_P1_N3_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N3_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N3_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N3_AuthType</bpmn2:dataInputRefs>
@@ -353,6 +364,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N3_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N3_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N3_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N3_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F3_FAIL_END" sourceRef="_P1_N3" targetRef="_P1_END_FAIL"/>
     <bpmn2:endEvent id="_P1_END_FAIL" name="End (Failed)">
@@ -361,6 +379,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 4: Set Policy Status Pend Death -->
     <bpmn2:task id="_P1_N4" drools:taskName="Rest" name="N4: SetPendDeath">
       <bpmn2:ioSpecification id="_P1_N4_io">
+        <bpmn2:dataInput id="_P1_N4_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N4_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N4_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N4_AuthType" name="AuthType" structureRef="String"/>
@@ -380,6 +399,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N4_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N4_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N4_inputSet">
+          <bpmn2:dataInputRefs>_P1_N4_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N4_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N4_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N4_AuthType</bpmn2:dataInputRefs>
@@ -458,6 +478,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N4_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N4_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N4_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N4_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F4" sourceRef="_P1_N4" targetRef="_P1_XG_DEATH"/>
     <!-- Gateway: Is Death Claim? -->
@@ -482,6 +509,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 6: Check Document Completeness -->
     <bpmn2:task id="_P1_N6" drools:taskName="Rest" name="N6: CheckDocCompleteness">
       <bpmn2:ioSpecification id="_P1_N6_io">
+        <bpmn2:dataInput id="_P1_N6_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N6_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N6_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N6_AuthType" name="AuthType" structureRef="String"/>
@@ -501,6 +529,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N6_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N6_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N6_inputSet">
+          <bpmn2:dataInputRefs>_P1_N6_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N6_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N6_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N6_AuthType</bpmn2:dataInputRefs>
@@ -580,6 +609,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N6_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N6_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N6_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N6_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_DOCS" sourceRef="_P1_N6" targetRef="_P1_XG_DOCS"/>
     <!-- Gateway: All Docs Correct & Verified? -->
@@ -646,6 +682,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 9: Policy Validation -->
     <bpmn2:task id="_P1_N9" drools:taskName="Rest" name="N9: PolicyValidation">
       <bpmn2:ioSpecification id="_P1_N9_io">
+        <bpmn2:dataInput id="_P1_N9_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N9_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N9_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N9_AuthType" name="AuthType" structureRef="String"/>
@@ -665,6 +702,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N9_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N9_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N9_inputSet">
+          <bpmn2:dataInputRefs>_P1_N9_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N9_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N9_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N9_AuthType</bpmn2:dataInputRefs>
@@ -744,11 +782,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N9_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N9_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N9_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N9_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_POLICY" sourceRef="_P1_N9" targetRef="_P1_N9A"/>
     <!-- Node 9A: Perform Bene Validation -->
     <bpmn2:task id="_P1_N9A" drools:taskName="Rest" name="N9a: BeneValidation">
       <bpmn2:ioSpecification id="_P1_N9A_io">
+        <bpmn2:dataInput id="_P1_N9A_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N9A_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N9A_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N9A_AuthType" name="AuthType" structureRef="String"/>
@@ -768,6 +814,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N9A_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N9A_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N9A_inputSet">
+          <bpmn2:dataInputRefs>_P1_N9A_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N9A_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N9A_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N9A_AuthType</bpmn2:dataInputRefs>
@@ -847,11 +894,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N9A_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N9A_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N9A_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N9A_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_BENE" sourceRef="_P1_N9A" targetRef="_P1_N10"/>
     <!-- Node 10: Bank PVS Validation -->
     <bpmn2:task id="_P1_N10" drools:taskName="Rest" name="N10: BankValidation">
       <bpmn2:ioSpecification id="_P1_N10_io">
+        <bpmn2:dataInput id="_P1_N10_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N10_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N10_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N10_AuthType" name="AuthType" structureRef="String"/>
@@ -871,6 +926,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N10_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N10_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N10_inputSet">
+          <bpmn2:dataInputRefs>_P1_N10_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N10_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N10_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N10_AuthType</bpmn2:dataInputRefs>
@@ -950,6 +1006,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N10_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N10_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N10_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N10_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_BANK" sourceRef="_P1_N10" targetRef="_P1_XG_CONTESTABLE"/>
     <!-- Gateway: Contestable? -->
@@ -967,6 +1030,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 11: MRX Check -->
     <bpmn2:task id="_P1_N11" drools:taskName="Rest" name="N11: MRXCheck">
       <bpmn2:ioSpecification id="_P1_N11_io">
+        <bpmn2:dataInput id="_P1_N11_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N11_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N11_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N11_AuthType" name="AuthType" structureRef="String"/>
@@ -986,6 +1050,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N11_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N11_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N11_inputSet">
+          <bpmn2:dataInputRefs>_P1_N11_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N11_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N11_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N11_AuthType</bpmn2:dataInputRefs>
@@ -1065,6 +1130,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N11_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N11_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N11_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N11_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_MRX" sourceRef="_P1_N11" targetRef="_P1_CONTESTABLE_MERGE"/>
     <!-- Contestable Merge Gateway -->
@@ -1089,6 +1161,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 13a: Flags & Fund Tax - Multi Fund -->
     <bpmn2:task id="_P1_N13A" drools:taskName="Rest" name="N13a: MultiFundTax">
       <bpmn2:ioSpecification id="_P1_N13A_io">
+        <bpmn2:dataInput id="_P1_N13A_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N13A_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N13A_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N13A_AuthType" name="AuthType" structureRef="String"/>
@@ -1108,6 +1181,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N13A_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N13A_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N13A_inputSet">
+          <bpmn2:dataInputRefs>_P1_N13A_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N13A_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N13A_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N13A_AuthType</bpmn2:dataInputRefs>
@@ -1186,11 +1260,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N13A_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N13A_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N13A_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N13A_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_MULTIFUND" sourceRef="_P1_N13A" targetRef="_P1_TI_MERGE"/>
     <!-- Node 13b: Flags & Fund Tax - Single Fund -->
     <bpmn2:task id="_P1_N13B" drools:taskName="Rest" name="N13b: SingleFundTax">
       <bpmn2:ioSpecification id="_P1_N13B_io">
+        <bpmn2:dataInput id="_P1_N13B_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N13B_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N13B_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N13B_AuthType" name="AuthType" structureRef="String"/>
@@ -1210,6 +1292,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N13B_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N13B_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N13B_inputSet">
+          <bpmn2:dataInputRefs>_P1_N13B_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N13B_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N13B_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N13B_AuthType</bpmn2:dataInputRefs>
@@ -1288,6 +1371,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N13B_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N13B_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N13B_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N13B_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_SINGLEFUND" sourceRef="_P1_N13B" targetRef="_P1_TI_MERGE"/>
     <!-- TI Merge Gateway -->
@@ -1300,6 +1390,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 14: Apply Tax Checks -->
     <bpmn2:task id="_P1_N14" drools:taskName="Rest" name="N14: ApplyTax">
       <bpmn2:ioSpecification id="_P1_N14_io">
+        <bpmn2:dataInput id="_P1_N14_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N14_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N14_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N14_AuthType" name="AuthType" structureRef="String"/>
@@ -1319,6 +1410,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N14_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N14_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N14_inputSet">
+          <bpmn2:dataInputRefs>_P1_N14_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N14_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N14_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N14_AuthType</bpmn2:dataInputRefs>
@@ -1398,6 +1490,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N14_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N14_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N14_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N14_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_APPLYTAX" sourceRef="_P1_N14" targetRef="_P1_XG_TAX"/>
     <!-- Gateway: Tax Exceptions? -->
@@ -1428,7 +1527,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_P1_N16_assoc_TaskName">
         <bpmn2:targetRef>_P1_N16_TaskNameInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_P1_N16_assign_TaskName">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[N16: ExaminerReview]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ExaminerReview]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression">_P1_N16_TaskNameInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1456,6 +1555,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 17: Calculate Benefit & PMI -->
     <bpmn2:task id="_P1_N17" drools:taskName="Rest" name="N17: CalcBenefit">
       <bpmn2:ioSpecification id="_P1_N17_io">
+        <bpmn2:dataInput id="_P1_N17_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N17_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N17_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N17_AuthType" name="AuthType" structureRef="String"/>
@@ -1475,6 +1575,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N17_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N17_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N17_inputSet">
+          <bpmn2:dataInputRefs>_P1_N17_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N17_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N17_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N17_AuthType</bpmn2:dataInputRefs>
@@ -1554,11 +1655,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N17_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N17_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N17_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N17_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_CALCBENEFIT" sourceRef="_P1_N17" targetRef="_P1_N18"/>
     <!-- Node 18: Mis-statement M&E Adjust -->
     <bpmn2:task id="_P1_N18" drools:taskName="Rest" name="N18: MisstatementAdjust">
       <bpmn2:ioSpecification id="_P1_N18_io">
+        <bpmn2:dataInput id="_P1_N18_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N18_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N18_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N18_AuthType" name="AuthType" structureRef="String"/>
@@ -1578,6 +1687,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N18_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N18_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N18_inputSet">
+          <bpmn2:dataInputRefs>_P1_N18_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N18_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N18_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N18_AuthType</bpmn2:dataInputRefs>
@@ -1656,11 +1766,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N18_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N18_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N18_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N18_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_MISSTATEMENT" sourceRef="_P1_N18" targetRef="_P1_N19"/>
     <!-- Node 19: Beneficiary Split -->
     <bpmn2:task id="_P1_N19" drools:taskName="Rest" name="N19: BeneSplit">
       <bpmn2:ioSpecification id="_P1_N19_io">
+        <bpmn2:dataInput id="_P1_N19_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N19_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N19_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N19_AuthType" name="AuthType" structureRef="String"/>
@@ -1680,6 +1798,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N19_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N19_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N19_inputSet">
+          <bpmn2:dataInputRefs>_P1_N19_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N19_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N19_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N19_AuthType</bpmn2:dataInputRefs>
@@ -1758,11 +1877,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N19_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N19_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N19_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N19_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_BENESPLIT" sourceRef="_P1_N19" targetRef="_P1_N20"/>
     <!-- Node 20: Backup Withholding CCIS/IRS -->
     <bpmn2:task id="_P1_N20" drools:taskName="Rest" name="N20: BackupWithholding">
       <bpmn2:ioSpecification id="_P1_N20_io">
+        <bpmn2:dataInput id="_P1_N20_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N20_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N20_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N20_AuthType" name="AuthType" structureRef="String"/>
@@ -1782,6 +1909,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N20_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N20_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N20_inputSet">
+          <bpmn2:dataInputRefs>_P1_N20_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N20_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N20_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N20_AuthType</bpmn2:dataInputRefs>
@@ -1861,6 +1989,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N20_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N20_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N20_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N20_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_WITHHOLDING" sourceRef="_P1_N20" targetRef="_P1_XG_PAYMENT"/>
     <!-- Gateway: Route Final Payment -->
@@ -1878,6 +2013,7 @@ if (response != null && !response.isEmpty()) {
     <!-- Node 22: Finalize Payment (Death) -->
     <bpmn2:task id="_P1_N22" drools:taskName="Rest" name="N22: FinalizePayment">
       <bpmn2:ioSpecification id="_P1_N22_io">
+        <bpmn2:dataInput id="_P1_N22_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N22_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N22_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N22_AuthType" name="AuthType" structureRef="String"/>
@@ -1897,6 +2033,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N22_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N22_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N22_inputSet">
+          <bpmn2:dataInputRefs>_P1_N22_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N22_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N22_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N22_AuthType</bpmn2:dataInputRefs>
@@ -1975,11 +2112,19 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N22_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N22_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N22_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N22_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_FINALIZE" sourceRef="_P1_N22" targetRef="_P1_PAYMENT_MERGE"/>
     <!-- Node 23: TI KNECT Payment -->
     <bpmn2:task id="_P1_N23" drools:taskName="Rest" name="N23: KNECTPayment">
       <bpmn2:ioSpecification id="_P1_N23_io">
+        <bpmn2:dataInput id="_P1_N23_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N23_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N23_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_P1_N23_AuthType" name="AuthType" structureRef="String"/>
@@ -1999,6 +2144,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:dataInput id="_P1_N23_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_P1_N23_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_P1_N23_inputSet">
+          <bpmn2:dataInputRefs>_P1_N23_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N23_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N23_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_N23_AuthType</bpmn2:dataInputRefs>
@@ -2077,6 +2223,13 @@ if (response != null && !response.isEmpty()) {
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
+          <bpmn2:dataInputAssociation id="_P1_N23_assoc_TaskName">
+        <bpmn2:targetRef>_P1_N23_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_P1_N23_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_P1_N23_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_P1_F_KNECT" sourceRef="_P1_N23" targetRef="_P1_PAYMENT_MERGE"/>
     <!-- Payment Merge Gateway -->

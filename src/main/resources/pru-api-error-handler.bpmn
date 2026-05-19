@@ -87,6 +87,7 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
     <!-- Retry the REST API dynamically -->
     <bpmn2:task id="_RETRY_REST" drools:taskName="Rest" name="Rest_RetryAPI">
       <bpmn2:ioSpecification id="_RETRY_REST_io">
+        <bpmn2:dataInput id="_RETRY_REST_TaskName" name="TaskName" structureRef="String"/>
         <bpmn2:dataInput id="_RETRY_REST_AcceptCharset" name="AcceptCharset" structureRef="String"/>
         <bpmn2:dataInput id="_RETRY_REST_AcceptHeader" name="AcceptHeader" structureRef="String"/>
         <bpmn2:dataInput id="_RETRY_REST_AuthType" name="AuthType" structureRef="String"/>
@@ -106,6 +107,7 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
         <bpmn2:dataInput id="_RETRY_REST_Username" name="Username" structureRef="String"/>
         <bpmn2:dataOutput id="_RETRY_REST_Result" name="Result" structureRef="String"/>
         <bpmn2:inputSet id="_RETRY_REST_inputSet">
+          <bpmn2:dataInputRefs>_RETRY_REST_TaskName</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_RETRY_REST_AcceptCharset</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_RETRY_REST_AcceptHeader</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_RETRY_REST_AuthType</bpmn2:dataInputRefs>
@@ -160,6 +162,13 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
         <bpmn2:sourceRef>_RETRY_REST_Result</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
+          <bpmn2:dataInputAssociation id="_RETRY_REST_assoc_TaskName">
+        <bpmn2:targetRef>_RETRY_REST_TaskName</bpmn2:targetRef>
+        <bpmn2:assignment id="_RETRY_REST_assign_TaskName">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[Rest]]></bpmn2:from>
+          <bpmn2:to>_RETRY_REST_TaskName</bpmn2:to>
+        </bpmn2:assignment>
+      </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_flow4" sourceRef="_RETRY_REST" targetRef="_CHECK_SUCCESS"/>
     <!-- Exclusive Gateway: Success? -->
@@ -214,7 +223,7 @@ System.out.println("Error Handler: API Retry failed. Attempt: " + (count + 1));<
       <bpmn2:dataInputAssociation id="_ADMIN_REVIEW_assoc_TaskName">
         <bpmn2:targetRef>_ADMIN_REVIEW_TaskNameInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_ADMIN_REVIEW_assign_TaskName">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[IT Admin Exception Review]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[ITAdminExceptionReview]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression">_ADMIN_REVIEW_TaskNameInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
