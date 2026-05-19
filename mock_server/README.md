@@ -101,3 +101,21 @@ Add the ngrok URL to your WildFly / JBoss EAP JVM start arguments:
 22. `POST /api/v1/claims/nigo/rerun-idp` — Re-triggers optical character document classification.
 23. `POST /api/v1/claims/nigo/update-status` — Re-checks missing documents index.
 24. `POST /api/v1/claims/nigo/death-verification` — Simulates public records death check.
+
+---
+
+## 👤 5. User Accounts, Roles & Task Routing
+
+To test the User/Human Task nodes, the process engine assigns tasks to roles/groups rather than specific individuals. Ensure your KIE Server User Registry (e.g. `application-users.properties` and `application-roles.properties`) is configured with the following credentials and group memberships:
+
+| Username | Password | Assigned Groups / Roles | Description |
+| :--- | :--- | :--- | :--- |
+| **`krisv`** | `krisv` | `ClaimExaminer`, `SystemAdmin` | Can view and work on both standard examiner reviews and IT admin exceptions. |
+| **`john`** | `john` | `ClaimExaminer` | Standard Claim Examiner. Can view/work on `ExaminerReview` and `ExaminerPartialReview`. |
+| **`mary`** | `mary` | `SeniorInvestigator` | Senior Investigator. Can view and work on `ExaminerDeathVerif` (Death Verification). |
+
+### 🔍 How Task Routing & Visibility Works
+* **Group Queue:** Tasks assigned to groups (e.g. `ClaimExaminer`) will appear in the tasks list query (`pot-owners`) for any user belonging to that group.
+* **Task Claiming:** A user must **claim** a task to assign it to themselves (setting themselves as the `actualOwner`). Once claimed, the task is reserved, and other group members will no longer see it in their queues.
+* **Pot Owners Scope:** The `/queries/tasks/instances/pot-owners` API *only* returns tasks that the calling user is eligible to claim. It will **not** return all tasks in the system. To view all tasks globally, you must use administrative APIs (requiring `admin` role) or query the jBPM Audit tables directly.
+

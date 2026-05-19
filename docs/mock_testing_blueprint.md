@@ -603,9 +603,38 @@ Delivers an external signal (e.g., `DocumentUploaded`) to resume execution on NI
 
 ---
 
+## 👤 User Accounts, Roles & Task Visibility
+
+When executing and testing human task flows, the jBPM process engine delegates tasks to specific roles (groups) instead of hardcoding user assignments. Use the following configuration in your KIE Server registry to log in and query task lists:
+
+### 🔑 Configured Testing Users
+*   **`krisv`** (Password: `krisv`)
+    *   *Roles/Groups:* `ClaimExaminer`, `SystemAdmin`
+    *   *Testing Use:* Can access all examiner review tasks and IT admin exception reviews.
+*   **`john`** (Password: `john`)
+    *   *Roles/Groups:* `ClaimExaminer`
+    *   *Testing Use:* Can access examiner review tasks (`ExaminerReview` and `ExaminerPartialReview`).
+*   **`mary`** (Password: `mary`)
+    *   *Roles/Groups:* `SeniorInvestigator`
+    *   *Testing Use:* Can access death verification tasks (`ExaminerDeathVerif`).
+
+### ⚙️ Task Search & Claiming Mechanics
+1.  **Group and User Search:** If a task is assigned to a group (e.g. `ClaimExaminer`), any user in that group can query it. The `/queries/tasks/instances/pot-owners` API will return all tasks that the calling user is eligible to claim.
+2.  **Claiming a Task:** A group member must claim the task to work on it. Once claimed:
+    *   The task `actualOwner` is set to that specific user.
+    *   The task status transitions to `Reserved`.
+    *   It is hidden from the `pot-owners` ready task queue of other group members.
+3.  **Returning All Tasks:** The `/pot-owners` query API **does not** return all tasks in the system globally; it is security-filtered to the caller's identity. To view all tasks globally (e.g., for reporting or general monitoring), you must:
+    *   Use the **Administrative Query API**: `/kie-server/services/rest/server/admin/queries/tasks/instances` (requires a user with the `admin` role).
+    *   Query the process instance task list: `/kie-server/services/rest/server/queries/tasks/instances/process/{processInstanceId}`.
+    *   Directly query the jBPM schema database (`AuditTaskImpl` / `Task` tables).
+
+---
+
 ## 📋 Approval & Implementation Plan
 
 > [!IMPORTANT]
 > Once you approve this test scenario mapping:
 > 1. We will update the **Mock Server `server.js`** file to handle these conditional mock behaviors based on the incoming `caseId` (e.g. returning `pvsMatch: false` if caseId contains `BANKFAIL`).
 > 2. This will allow you to run automated or manual end-to-end tests simply by changing the `caseId` in your startup payload!
+
