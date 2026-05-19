@@ -4,7 +4,8 @@
   "description": "Mock server with Swagger UI for Prudential Claims BPM integration testing",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "stop": "lsof -t -i :3010 | xargs kill -9 2>/dev/null || true"
   },
   "dependencies": {
     "express": "^4.19.2",

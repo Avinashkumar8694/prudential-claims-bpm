@@ -13,12 +13,9 @@ function proxyToBusinessCentral(req, res, targetPath, method) {
     'Accept': req.headers['accept'] || 'application/json',
   };
   
-  if (req.headers['authorization']) {
-    headers['Authorization'] = req.headers['authorization'];
-  } else {
-    // Fallback default: Basic Auth credentials for krisv:krisv
-    headers['Authorization'] = 'Basic a3Jpc3Y6a3Jpc3Y=';
-  }
+  // Always use krisv:krisv credentials for Business Central APIs
+  headers['Authorization'] = 'Basic a3Jpc3Y6a3Jpc3Y=';
+
   if (req.headers['cookie']) {
     headers['Cookie'] = req.headers['cookie'];
   }
@@ -31,7 +28,7 @@ function proxyToBusinessCentral(req, res, targetPath, method) {
     headers: headers
   };
 
-  console.log(`\x1b[36m[BC Proxy]\x1b[0m Forwarding ${method} to https://${targetHost}${targetPath}`);
+  console.log(`\x1b[36m[BC Proxy]\x1b[0m Forwarding ${method} to https://${targetHost}${targetPath} using krisv credentials`);
 
   const proxyReq = https.request(options, (proxyRes) => {
     let data = '';
@@ -67,6 +64,253 @@ function proxyToBusinessCentral(req, res, targetPath, method) {
   proxyReq.end();
 }
 
+let cachedToken = null;
+let tokenExpiry = 0;
+
+// Helper to retrieve Oauth Bearer Token from Identity Server
+function getBpmBearerToken(callback) {
+  if (cachedToken && Date.now() < tokenExpiry) {
+    return callback(null, cachedToken);
+  }
+
+  console.log('[BPM Proxy] Fetching new Bearer token from Identity Server...');
+  const url = require('url');
+  const tokenUrl = 'https://prudential-dev-ids.neutrinos-apps.com/token';
+  const parsedUrl = url.parse(tokenUrl);
+  
+  const postData = new URLSearchParams({
+    client_id: '6ddh_euTKkSA682Yy5HuA',
+    client_secret: 'e28WZR6ZKyrYILTSKKClFEwNlYoGR2cvISwFCoIXP4S7DJgsaqhHRSNqpoWgYbcx_DUlrSkoA1zS5uFOzP-J9C',
+    grant_type: 'client_credentials'
+  }).toString();
+
+  const options = {
+    hostname: parsedUrl.hostname,
+    port: 443,
+    path: parsedUrl.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Content-Length': Buffer.byteLength(postData)
+    },
+    rejectUnauthorized: false
+  };
+
+  const req = https.request(options, (res) => {
+    let data = '';
+    res.on('data', (chunk) => { data += chunk; });
+    res.on('end', () => {
+      try {
+        const json = JSON.parse(data);
+        if (json.access_token) {
+          cachedToken = json.access_token;
+          // Set expiry to 50 minutes (3000 seconds) to be safe (typical expiry is 1 hour)
+          tokenExpiry = Date.now() + 3000 * 1000;
+          console.log('[BPM Proxy] Bearer token retrieved and cached.');
+          callback(null, cachedToken);
+        } else {
+          callback(new Error(`Identity Server response: ${data}`));
+        }
+      } catch (e) {
+        callback(e);
+      }
+    });
+  });
+
+  req.on('error', (err) => {
+    callback(err);
+  });
+
+  req.write(postData);
+  req.end();
+}
+
+// Helper to proxy requests to the bpmservice REST API wrapper
+function proxyToBpmService(req, res, pathType, extraParams = {}) {
+  getBpmBearerToken((tokenErr, token) => {
+    if (tokenErr) {
+      console.error(`\x1b[31m[BPM Proxy Token Error]\x1b[0m Failed to get Bearer token: ${tokenErr.message}`);
+      res.status(500).json({
+        status: "SERVER_ERROR",
+        result: `Failed to authenticate with Identity Server: ${tokenErr.message}`
+      });
+      return;
+    }
+
+    const targetHost = 'prudential-dev-alpha.neutrinos-apps.com';
+    
+    // 1. Decode Authorization header to get user/password
+    let username = 'krisv';
+    let password = 'krisv';
+    const authHeader = req.headers['authorization'];
+    if (authHeader && authHeader.startsWith('Basic ')) {
+      try {
+        const creds = Buffer.from(authHeader.split(' ')[1], 'base64').toString().split(':');
+        username = creds[0];
+        password = creds[1];
+      } catch (e) {
+        console.error('[BPM Proxy] Failed to decode Basic Auth header', e);
+      }
+    }
+
+    // 2. Determine target path, method, and request body mapping
+    let targetPath = '';
+    let method = 'POST';
+    let requestBody = null;
+
+    if (pathType === 'startProcess') {
+      targetPath = '/bpmservice/process/instance/start';
+      requestBody = {
+        processDefinitionId: extraParams.processId,
+        variables: req.body || {},
+        metadata: {
+          containerId: extraParams.containerId
+        }
+      };
+    } else if (pathType === 'signalProcess') {
+      targetPath = '/bpmservice/process/instance/signal/send';
+      requestBody = {
+        processInstanceId: Number(extraParams.processInstanceId),
+        signalName: extraParams.signalName,
+        variables: req.body || {},
+        metadata: {
+          containerId: extraParams.containerId
+        }
+      };
+    } else if (pathType === 'queryTasks') {
+      targetPath = '/bpmservice/task/instance/fetch-all';
+      const statusQuery = req.query.status || 'Ready,Reserved,InProgress';
+      const statusList = statusQuery.split(',').map(s => s.trim().toUpperCase());
+      requestBody = {
+        options: {
+          userNames: [username],
+          status: statusList,
+          page: Number(req.query.page || 0),
+          pageSize: Number(req.query.pageSize || 10)
+        }
+      };
+    } else if (pathType === 'claimTask') {
+      targetPath = '/bpmservice/task/instance/check-out';
+      requestBody = {
+        taskId: Number(extraParams.taskId),
+        metadata: {
+          containerId: extraParams.containerId
+        }
+      };
+    } else if (pathType === 'startTask') {
+      targetPath = '/bpmservice/task/instance/check-in';
+      requestBody = {
+        taskId: Number(extraParams.taskId),
+        metadata: {
+          containerId: extraParams.containerId
+        }
+      };
+    } else if (pathType === 'completeTask') {
+      targetPath = '/bpmservice/task/instance/complete';
+      requestBody = {
+        taskId: Number(extraParams.taskId),
+        variables: req.body || {},
+        metadata: {
+          containerId: extraParams.containerId
+        }
+      };
+    }
+
+    // 3. Build headers for bpmservice NestJS service
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'user': username,
+      'password': password,
+      'Authorization': 'Bearer ' + token
+    };
+
+    if (req.headers['cookie']) {
+      headers['Cookie'] = req.headers['cookie'];
+    }
+
+    const options = {
+      hostname: targetHost,
+      port: 443,
+      path: targetPath,
+      method: method,
+      headers: headers
+    };
+
+    console.log(`\x1b[36m[BPM Proxy]\x1b[0m Forwarding ${req.method} ${req.url} to https://${targetHost}${targetPath} with user: ${username}`);
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      let data = '';
+      
+      proxyRes.on('data', (chunk) => {
+        data += chunk;
+      });
+
+      proxyRes.on('end', () => {
+        console.log(`\x1b[36m[BPM Proxy]\x1b[0m Response from BPM received with status: ${proxyRes.statusCode}`);
+        
+        if (proxyRes.statusCode >= 400) {
+          res.status(proxyRes.statusCode);
+          res.send(data);
+          return;
+        }
+
+        try {
+          const jsonResponse = JSON.parse(data);
+          
+          if (pathType === 'startProcess') {
+            if (jsonResponse.processInstanceId) {
+              res.status(201).json(Number(jsonResponse.processInstanceId));
+            } else {
+              res.status(201).send(data);
+            }
+          } else if (pathType === 'queryTasks') {
+            const tasks = Array.isArray(jsonResponse) ? jsonResponse.map(t => ({
+              "task-id": t.taskId,
+              "task-name": t.taskName,
+              "task-subject": "",
+              "task-description": "",
+              "task-status": t.taskStatus,
+              "task-priority": 0,
+              "task-is-skipable": false,
+              "task-actual-owner": username,
+              "task-created-by": "",
+              "task-created-on": t.createdOn || Date.now(),
+              "task-activation-time": t.createdOn || Date.now(),
+              "task-expiration-time": null,
+              "task-process-instance-id": t.currentProcessInstanceId,
+              "task-process-id": t.taskProcessDefinitionId,
+              "task-container-id": t.metadata?.containerId || extraParams.containerId || "prudential-claims-bpm",
+              "task-parent-id": t.parentProcessInstanceId || -1
+            })) : [];
+            
+            res.setHeader('Content-Type', 'application/json');
+            res.status(200).json({ "task-summary": tasks });
+          } else {
+            res.status(proxyRes.statusCode).json(jsonResponse);
+          }
+        } catch (e) {
+          res.status(proxyRes.statusCode);
+          res.send(data);
+        }
+      });
+    });
+
+    proxyReq.on('error', (err) => {
+      console.error(`\x1b[31m[BPM Proxy Error]\x1b[0m ${err.message}`);
+      res.status(500).json({
+        status: "SERVER_ERROR",
+        result: `Proxy failed to connect to BPM service: ${err.message}`
+      });
+    });
+
+    if (requestBody) {
+      proxyReq.write(JSON.stringify(requestBody));
+    }
+    proxyReq.end();
+  });
+}
+
 const app = express();
 const PORT = process.env.PORT || 3010;
 
@@ -84,20 +328,95 @@ app.use((req, res, next) => {
   next();
 });
 
+// In-memory route override configurations
+const routeOverrides = {};
+
+// Middleware to apply dynamic overrides (failures, auto-retry, status overrides)
+app.use((req, res, next) => {
+  const path = req.path;
+  if (routeOverrides[path]) {
+    const override = routeOverrides[path];
+    
+    // Check if we should fail only a limited number of times (for auto-retry testing)
+    if (override.failCount !== undefined) {
+      if (override.failCount > 0) {
+        override.failCount--;
+        console.log(`\x1b[33m[Route Override]\x1b[0m Simulating failure for ${path}. Remaining failures before success: ${override.failCount}`);
+        return res.status(override.status || 500).json(override.response || { success: false, error: "Simulated route failure" });
+      } else {
+        // failCount is 0, clear override and fall through to default mock behavior (success)
+        delete routeOverrides[path];
+        console.log(`\x1b[32m[Route Override Expired]\x1b[0m failCount reached 0, clearing override for ${path}`);
+      }
+    } else if (override.success === false) {
+      // Check if we should persistently fail
+      console.log(`\x1b[33m[Route Override]\x1b[0m Simulating persistent failure for ${path}`);
+      return res.status(override.status || 500).json(override.response || { success: false, error: "Simulated route failure" });
+    }
+  }
+  next();
+});
+
+// Configure a route override
+app.post('/api/mock/override', (req, res) => {
+  const { path, status, response, failCount, success } = req.body;
+  if (!path) {
+    return res.status(400).json({ error: "Missing required parameter: path" });
+  }
+  routeOverrides[path] = {
+    status: status !== undefined ? Number(status) : 500,
+    response: response || null,
+    failCount: failCount !== undefined ? Number(failCount) : undefined,
+    success: success !== undefined ? !!success : false
+  };
+  console.log(`\x1b[32m[Route Override Configured]\x1b[0m ${path} -> success: ${success}, failCount: ${failCount}`);
+  res.json({ success: true, overrides: routeOverrides });
+});
+
+// List all configured overrides
+app.get('/api/mock/overrides', (req, res) => {
+  res.json(routeOverrides);
+});
+
+// Clear route overrides
+app.delete('/api/mock/override', (req, res) => {
+  const { path } = req.body;
+  if (path) {
+    delete routeOverrides[path];
+    console.log(`\x1b[33m[Route Override Cleared]\x1b[0m ${path}`);
+  } else {
+    // Clear all
+    for (const key in routeOverrides) {
+      delete routeOverrides[key];
+    }
+    console.log(`\x1b[33m[Route Overrides Cleared]\x1b[0m All overrides reset.`);
+  }
+  res.json({ success: true, overrides: routeOverrides });
+});
+
 // --- PROCESS 1: MAIN CLAIMS INTERNAL PROCESSING ENDPOINTS ---
 
 // 1. Validate Data
 app.post('/api/v1/claims/validate-data', (req, res) => {
   const { piid, caseId } = req.body;
+  const isFail = caseId && caseId.includes('VALFAIL');
+  const isContest = caseId && caseId.includes('CONTEST');
+  const isSuicide = caseId && caseId.includes('SUICIDE');
+  const isForeign = caseId && caseId.includes('FOREIGN');
+  const isAids = caseId && caseId.includes('AIDS');
   res.json({
     success: true,
-    validationPassed: true,
+    validationPassed: !isFail,
     policyFlags: {
-      isSuicide: false,
-      isContestable: false,
-      isForeignDeath: false,
-      isAIDS: false
-    }
+      isSuicide: !!isSuicide,
+      isContestable: !!isContest,
+      isForeignDeath: !!isForeign,
+      isAIDS: !!isAids
+    },
+    validationErrors: isFail ? [
+      { field: "claimType", error: "Claim type selection is missing or invalid" },
+      { field: "primaryPolicyNumber", error: "Target policy status is inactive" }
+    ] : []
   });
 });
 
@@ -127,45 +446,57 @@ app.put('/api/v1/policy/status', (req, res) => {
 // 4. Check Documents
 app.post('/api/v1/claims/check-documents', (req, res) => {
   const { caseId } = req.body;
-  // Simulating all documents verified successfully by default
+  const isNigo = caseId && caseId.includes('NIGO');
   res.json({
     success: true,
-    allDocsVerified: true,
-    missingDocs: []
+    allDocsVerified: !isNigo,
+    missingDocs: isNigo ? ['CERTIFIED_DEATH_CERTIFICATE'] : []
   });
 });
 
 // 5. Policy Validation (Mainframe)
 app.post('/api/v1/claims/validate-policy', (req, res) => {
+  const { caseId } = req.body;
+  const isLapse = caseId && (caseId.includes('LAPSE') || caseId.includes('POLICYFAIL'));
   res.json({
     success: true,
-    validationPassed: true,
+    validationPassed: !isLapse,
     policyFlags: {
-      isActive: true,
-      premiumsPaid: true,
-      hasLapseAlert: false
+      isActive: !isLapse,
+      premiumsPaid: !isLapse,
+      hasLapseAlert: isLapse
     }
   });
 });
 
 // 6. Beneficiary Validation
 app.post('/api/v1/claims/validate-beneficiary', (req, res) => {
+  const { caseId } = req.body;
+  const isMinor = caseId && caseId.includes('MINOR');
+  const isSanction = caseId && caseId.includes('SANCTION');
   res.json({
     success: true,
-    minorDetected: false,
+    minorDetected: isMinor,
     beneficiaryFlags: {
-      identitiesVerified: true,
-      sanctionsChecked: true
+      identitiesVerified: !isSanction,
+      sanctionsChecked: !isSanction
     }
   });
 });
 
 // 7. Bank Account Validation (PVS)
 app.post('/api/v1/claims/validate-bank', (req, res) => {
+  const { caseId } = req.body;
+  const isFail = caseId && caseId.includes('BANKFAIL');
   res.json({
     success: true,
-    pvsMatch: true,
-    bankValidationResult: {
+    pvsMatch: !isFail,
+    bankValidationResult: isFail ? {
+      accountActive: true,
+      ownerMatch: false,
+      routingValid: true,
+      error: 'OWNER_MISMATCH'
+    } : {
       accountActive: true,
       ownerMatch: true,
       routingValid: true
@@ -175,10 +506,17 @@ app.post('/api/v1/claims/validate-bank', (req, res) => {
 
 // 8. Contestability check (MRX)
 app.post('/api/v1/claims/mrx-check', (req, res) => {
+  const { caseId } = req.body;
+  const isContest = caseId && caseId.includes('CONTEST');
   res.json({
     success: true,
-    alerts: [],
-    mrxCheckResult: {
+    alerts: isContest ? ['SUICIDE_CONTESTABLE_WINDOW'] : [],
+    mrxCheckResult: isContest ? {
+      medicalRecordsMatch: true,
+      preExistingExclusionsChecked: true,
+      isSuicide: true,
+      isContestable: true
+    } : {
       medicalRecordsMatch: true,
       preExistingExclusionsChecked: true
     }
@@ -211,9 +549,11 @@ app.post('/api/v1/claims/tax/single-fund', (req, res) => {
 
 // 11. Apply Tax Rules
 app.post('/api/v1/claims/tax/apply', (req, res) => {
+  const { caseId } = req.body;
+  const isTaxExcept = caseId && caseId.includes('TAXEXCEPT');
   res.json({
     success: true,
-    taxExceptions: false,
+    taxExceptions: !!isTaxExcept,
     taxCheckResult: {
       withholdingApplied: true,
       irsReportingGenerated: true
@@ -223,39 +563,52 @@ app.post('/api/v1/claims/tax/apply', (req, res) => {
 
 // 12. Calculate Benefit
 app.post('/api/v1/claims/calculate', (req, res) => {
+  const { caseId } = req.body;
+  const isMisstate = caseId && caseId.includes('MISSTATE');
+  const outstandingLoans = isMisstate ? 30000.00 : 0.00;
   res.json({
     success: true,
     payoutAmount: 250000.00,
     benefitCalculation: {
       baseFaceAmount: 250000.00,
       accruedInterest: 1250.00,
-      outstandingLoans: 0.00,
-      netPayout: 251250.00
+      outstandingLoans: outstandingLoans,
+      netPayout: 251250.00 - outstandingLoans
     }
   });
 });
 
 // 13. Misstatement Adjustments
 app.post('/api/v1/claims/misstatement-adjust', (req, res) => {
-  const { benefitCalculation } = req.body;
+  const { caseId, benefitCalculation } = req.body;
+  const isMisstate = caseId && caseId.includes('MISSTATE');
+  const basePayout = benefitCalculation ? benefitCalculation.netPayout : 251250.00;
+  const adjustedPayout = isMisstate ? basePayout - 20000.00 : basePayout;
   res.json({
     success: true,
     adjustedBenefitCalculation: {
-      ...benefitCalculation,
-      misstatementExclusionApplied: true,
-      adjustedPayout: benefitCalculation ? benefitCalculation.netPayout : 251250.00
+      ...(benefitCalculation || {
+        baseFaceAmount: 250000.00,
+        accruedInterest: 1250.00,
+        outstandingLoans: isMisstate ? 30000.00 : 0.00,
+        netPayout: basePayout
+      }),
+      misstatementExclusionApplied: !isMisstate,
+      adjustedPayout: adjustedPayout
     }
   });
 });
 
 // 14. Beneficiary Split Execution
 app.post('/api/v1/claims/beneficiary-split', (req, res) => {
+  const { caseId, adjustedBenefitCalculation } = req.body;
+  const payout = adjustedBenefitCalculation ? adjustedBenefitCalculation.adjustedPayout : 251250.00;
   res.json({
     success: true,
     beneficiarySplit: {
       primaryBeneficiaryRatio: 1.0,
       splits: [
-        { name: "John Doe", amount: 251250.00, role: "Primary" }
+        { name: "John Doe", amount: payout, role: "Primary" }
       ]
     }
   });
@@ -263,35 +616,44 @@ app.post('/api/v1/claims/beneficiary-split', (req, res) => {
 
 // 15. Backup Withholding Checks
 app.post('/api/v1/claims/backup-withholding', (req, res) => {
+  const { caseId, beneficiarySplit } = req.body;
+  const payout = (beneficiarySplit && beneficiarySplit.splits && beneficiarySplit.splits[0]) ? beneficiarySplit.splits[0].amount : 251250.00;
+  const isWithhold = caseId && caseId.includes('WITHHOLD');
+  const taxDeducted = isWithhold ? payout * 0.24 : 0.00; // 24% IRS Backup Withholding
   res.json({
     success: true,
     withholdingResult: {
-      withholdingDeducted: 0.00,
-      finalPayout: 251250.00
+      withholdingDeducted: taxDeducted,
+      finalPayout: payout - taxDeducted
     },
     finalPayouts: [
-      { beneficiary: "John Doe", amount: 251250.00 }
+      { beneficiary: "John Doe", amount: payout - taxDeducted }
     ]
   });
 });
 
 // 16. Finalize Payment
 app.post('/api/v1/claims/finalize', (req, res) => {
+  const { caseId } = req.body;
+  const isPayFail = caseId && caseId.includes('PAYFAIL');
   res.json({
-    success: true,
+    success: !isPayFail,
     finalPaymentInstructions: {
       paymentGateway: "EFT",
-      payoutStatus: "SUCCESS",
-      bankRefNum: `EFT-${Math.floor(1000000 + Math.random() * 9000000)}`
+      payoutStatus: isPayFail ? "FAILED" : "SUCCESS",
+      bankRefNum: isPayFail ? null : `EFT-${Math.floor(1000000 + Math.random() * 9000000)}`
     }
   });
 });
 
 // 17. TI KNECT Payment (Accelerated Benefits Path)
 app.post('/api/v1/claims/ti-knect-payment', (req, res) => {
+  const { caseId } = req.body;
+  const isKnectFail = caseId && caseId.includes('KNECTFAIL');
   res.json({
-    success: true,
-    knectTransactionId: `TXN-${Math.floor(10000000 + Math.random() * 90000000)}`
+    success: !isKnectFail,
+    knectTransactionId: isKnectFail ? null : `TXN-${Math.floor(10000000 + Math.random() * 90000000)}`,
+    error: isKnectFail ? "KNECT_GATEWAY_TIMEOUT" : null
   });
 });
 
@@ -337,7 +699,7 @@ app.post('/api/v1/claims/nigo/rerun-idp', (req, res) => {
     success: true,
     extractionResult: {
       ocrConfidence: 0.98,
-      documentClassified: "DEATH_CERTIFICATE",
+      documentClassClassified: "DEATH_CERTIFICATE",
       extractedData: {
         decedentName: "Jane Doe",
         dateOfDeath: "2026-05-01"
@@ -348,17 +710,21 @@ app.post('/api/v1/claims/nigo/rerun-idp', (req, res) => {
 
 // 23. Update Claim Status (Check Outstanding Documents)
 app.post('/api/v1/claims/nigo/update-status', (req, res) => {
+  const { caseId } = req.body;
+  const isPartial = caseId && (caseId.includes('PARTIAL') || caseId.includes('NIGOFAIL'));
   res.json({
     success: true,
-    allDocsReceived: true
+    allDocsReceived: !isPartial
   });
 });
 
 // 24. Death Verification Status
 app.post('/api/v1/claims/nigo/death-verification', (req, res) => {
+  const { caseId } = req.body;
+  const isVerifyFail = caseId && caseId.includes('VERIFYFAIL');
   res.json({
-    success: true,
-    verificationStatus: "VERIFIED"
+    success: !isVerifyFail,
+    verificationStatus: isVerifyFail ? "FAILED" : "VERIFIED"
   });
 });
 
@@ -378,6 +744,52 @@ app.get('/business-central/rest/jobs/:jobId', (req, res) => {
 app.delete('/business-central/rest/spaces/:spaceName/projects/:projectName', (req, res) => {
   const targetPath = `/business-central/rest/spaces/${req.params.spaceName}/projects/${req.params.projectName}`;
   proxyToBusinessCentral(req, res, targetPath, 'DELETE');
+});
+
+// 28. KIE Server Start Process Instance - Live Proxy
+app.post('/kie-server/services/rest/server/containers/:containerId/processes/:processId/instances', (req, res) => {
+  proxyToBpmService(req, res, 'startProcess', {
+    containerId: req.params.containerId,
+    processId: req.params.processId
+  });
+});
+
+// 29. KIE Server Signal Process Instance - Live Proxy
+app.post('/kie-server/services/rest/server/containers/:containerId/processes/instances/:processInstanceId/signal/:signalName', (req, res) => {
+  proxyToBpmService(req, res, 'signalProcess', {
+    containerId: req.params.containerId,
+    processInstanceId: req.params.processInstanceId,
+    signalName: req.params.signalName
+  });
+});
+
+// 30. KIE Server Query Pot-Owners Tasks - Live Proxy
+app.get('/kie-server/services/rest/server/queries/tasks/instances/pot-owners', (req, res) => {
+  proxyToBpmService(req, res, 'queryTasks');
+});
+
+// 31. KIE Server Claim Task - Live Proxy
+app.put('/kie-server/services/rest/server/containers/:containerId/tasks/:taskId/states/claimed', (req, res) => {
+  proxyToBpmService(req, res, 'claimTask', {
+    containerId: req.params.containerId,
+    taskId: req.params.taskId
+  });
+});
+
+// 32. KIE Server Start Task - Live Proxy
+app.put('/kie-server/services/rest/server/containers/:containerId/tasks/:taskId/states/started', (req, res) => {
+  proxyToBpmService(req, res, 'startTask', {
+    containerId: req.params.containerId,
+    taskId: req.params.taskId
+  });
+});
+
+// 33. KIE Server Complete Task - Live Proxy
+app.put('/kie-server/services/rest/server/containers/:containerId/tasks/:taskId/states/completed', (req, res) => {
+  proxyToBpmService(req, res, 'completeTask', {
+    containerId: req.params.containerId,
+    taskId: req.params.taskId
+  });
 });
 
 // Start the server

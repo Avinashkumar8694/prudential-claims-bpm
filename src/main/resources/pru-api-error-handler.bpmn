@@ -69,12 +69,12 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
       <bpmn2:outgoing>_flow_to_timer</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
     <bpmn2:sequenceFlow id="_flow_to_timer" sourceRef="_TIMER_MERGE" targetRef="_TIMER_NODE"/>
-    <!-- Intermediate catch timer: 15 minutes backoff -->
-    <bpmn2:intermediateCatchEvent id="_TIMER_NODE" name="Timer_15mWait">
+    <!-- Intermediate catch timer: 1 minute backoff -->
+    <bpmn2:intermediateCatchEvent id="_TIMER_NODE" name="Timer_1mWait">
       <bpmn2:incoming>_flow_to_timer</bpmn2:incoming>
       <bpmn2:outgoing>_flow3</bpmn2:outgoing>
       <bpmn2:timerEventDefinition id="_timerDef">
-        <bpmn2:timeDuration xsi:type="bpmn2:tFormalExpression" id="_duration">PT15M</bpmn2:timeDuration>
+        <bpmn2:timeDuration xsi:type="bpmn2:tFormalExpression" id="_duration">PT1M</bpmn2:timeDuration>
       </bpmn2:timerEventDefinition>
     </bpmn2:intermediateCatchEvent>
     <bpmn2:sequenceFlow id="_flow3" sourceRef="_TIMER_NODE" targetRef="_RETRY_MERGE"/>

@@ -224,6 +224,17 @@ if (response != null && !response.isEmpty()) {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("policyFlags", root.get("policyFlags"));
         kcontext.setVariable("validationPassed", root.get("validationPassed").asBoolean());
+        if (root.has("validationErrors")) {
+            java.util.List errors = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(root.get("validationErrors"), java.util.List.class);
+            kcontext.setVariable("validationErrors", errors);
+        }
+        com.fasterxml.jackson.databind.JsonNode flags = root.get("policyFlags");
+        if (flags != null) {
+            if (flags.has("isSuicide")) kcontext.setVariable("flagSuicide", flags.get("isSuicide").asBoolean());
+            if (flags.has("isContestable")) kcontext.setVariable("flagContestable", flags.get("isContestable").asBoolean());
+            if (flags.has("isForeignDeath")) kcontext.setVariable("flagForeignDeath", flags.get("isForeignDeath").asBoolean());
+            if (flags.has("isAIDS")) kcontext.setVariable("flagAIDS", flags.get("isAIDS").asBoolean());
+        }
     } catch(Exception e) {}
 }]]></drools:script>
         </drools:onExit-script>
