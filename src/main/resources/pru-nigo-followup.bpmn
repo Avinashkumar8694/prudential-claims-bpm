@@ -22,11 +22,13 @@
   <bpmn2:itemDefinition id="_idpExtractionResultItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_verificationStatusItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_maxRetryCountItem" structureRef="Integer"/>
+  <bpmn2:itemDefinition id="_nodeErrorItem" structureRef="java.lang.Object"/>
 
   <bpmn2:error id="REST_API_FAILURE" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
+    <bpmn2:property id="nodeError" itemSubjectRef="_nodeErrorItem" name="nodeError"/>
     <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
     <bpmn2:property id="followupCount" itemSubjectRef="_followupCountItem" name="followupCount"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
@@ -125,7 +127,7 @@ System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " +
       <bpmn2:outgoing>_P2_F2</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N1_assoc_Url">
         <bpmn2:assignment id="_P2_N1_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/send]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/nigo/send]]></bpmn2:from>
           <bpmn2:to>_P2_N1_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N1_Url</bpmn2:targetRef>
@@ -255,7 +257,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_MERGE_2A</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N2A_assoc_Url">
         <bpmn2:assignment id="_P2_N2A_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/funding-notice]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/nigo/funding-notice]]></bpmn2:from>
           <bpmn2:to>_P2_N2A_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2A_Url</bpmn2:targetRef>
@@ -372,7 +374,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_MERGE_2B</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N2B_assoc_Url">
         <bpmn2:assignment id="_P2_N2B_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/standard-notice]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/nigo/standard-notice]]></bpmn2:from>
           <bpmn2:to>_P2_N2B_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N2B_Url</bpmn2:targetRef>
@@ -549,7 +551,7 @@ return count >= 3;]]></bpmn2:conditionExpression>
       <bpmn2:outgoing>_P2_F_LOOP</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N11_assoc_Url">
         <bpmn2:assignment id="_P2_N11_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/auto-followup]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/nigo/auto-followup]]></bpmn2:from>
           <bpmn2:to>_P2_N11_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N11_Url</bpmn2:targetRef>
@@ -666,7 +668,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_IDP_DONE</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N6_assoc_Url">
         <bpmn2:assignment id="_P2_N6_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/rerun-idp]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/nigo/rerun-idp]]></bpmn2:from>
           <bpmn2:to>_P2_N6_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N6_Url</bpmn2:targetRef>
@@ -782,7 +784,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_STATUS_DONE</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N7_assoc_Url">
         <bpmn2:assignment id="_P2_N7_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/update-status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/nigo/update-status]]></bpmn2:from>
           <bpmn2:to>_P2_N7_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N7_Url</bpmn2:targetRef>
@@ -969,7 +971,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_DEATH_VER_UPDATED</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P2_N12_assoc_Url">
         <bpmn2:assignment id="_P2_N12_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/nigo/death-verification]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/nigo/death-verification]]></bpmn2:from>
           <bpmn2:to>_P2_N12_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P2_N12_Url</bpmn2:targetRef>
@@ -1064,7 +1066,7 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataInputAssociation>
       <bpmn2:potentialOwner>
         <bpmn2:resourceAssignmentExpression>
-          <bpmn2:formalExpression>SeniorInvestigator</bpmn2:formalExpression>
+          <bpmn2:formalExpression>ClaimExaminer</bpmn2:formalExpression>
         </bpmn2:resourceAssignmentExpression>
       </bpmn2:potentialOwner>
     </bpmn2:userTask>
@@ -1085,27 +1087,113 @@ if (response != null && !response.isEmpty()) {
     <bpmn2:subProcess id="_P2_ERROR_SUBPROCESS" name="Global API Error Handler" triggeredByEvent="true">
       <bpmn2:startEvent id="_P2_ERROR_START" name="Catch REST API Failure">
         <bpmn2:outgoing>_P2_ERR_F1</bpmn2:outgoing>
+        <bpmn2:dataOutput id="_P2_ERROR_START_out" name="Error" structureRef="java.lang.Object"/>
+        <bpmn2:dataOutputAssociation id="_P2_ERROR_START_assoc">
+          <bpmn2:sourceRef>_P2_ERROR_START_out</bpmn2:sourceRef>
+          <bpmn2:targetRef>nodeError</bpmn2:targetRef>
+        </bpmn2:dataOutputAssociation>
+        <bpmn2:outputSet id="_P2_ERROR_START_outputSet">
+          <bpmn2:dataOutputRefs>_P2_ERROR_START_out</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
         <bpmn2:errorEventDefinition id="_P2_ERR_DEF" errorRef="REST_API_FAILURE"/>
       </bpmn2:startEvent>
       <bpmn2:sequenceFlow id="_P2_ERR_F1" sourceRef="_P2_ERROR_START" targetRef="_P2_ERROR_CALL"/>
       <bpmn2:callActivity id="_P2_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false" drools:waitForCompletion="true">
         <bpmn2:extensionElements>
           <drools:onEntry-script scriptFormat="http://www.java.com/java">
-            <drools:script>// Extract failed REST node parameters
-org.kie.api.runtime.process.WorkItem failedWorkItem = (org.kie.api.runtime.process.WorkItem) kcontext.getNodeInstance().getVariable("WorkItem");
-if (failedWorkItem != null) {
-    String url = (String) failedWorkItem.getParameter("Url");
-    String payload = (String) failedWorkItem.getParameter("ContentData");
-    String ctx = "{\"url\":\"" + url + "\", \"payload\":" + payload + "}";
-    kcontext.setVariable("resPayload", ctx);
-    Object customMaxRetry = failedWorkItem.getParameter("maxRetryCount");
-    if (customMaxRetry != null) {
-        kcontext.setVariable("maxRetryCount", Integer.parseInt(customMaxRetry.toString()));
-    } else {
-        kcontext.setVariable("maxRetryCount", 3);
+            <drools:script>// Extract failed REST node parameters dynamically from active node instances
+String urlVal = "/v1/unknown";
+String payloadVal = "{}";
+String methodVal = "POST";
+String headersVal = "";
+
+// 1. Get the failed Node ID and extract endpoint from exception message (if present)
+long failedNodeId = -1;
+Object nodeErrObj = kcontext.getVariable("nodeError");
+if (nodeErrObj instanceof Throwable) {
+    Throwable cause = (Throwable) nodeErrObj;
+    while (cause != null) {
+        if (cause instanceof org.jbpm.workflow.instance.WorkflowRuntimeException) {
+            failedNodeId = ((org.jbpm.workflow.instance.WorkflowRuntimeException) cause).getNodeId();
+        }
+        String msg = cause.getMessage();
+        if (msg != null &amp;&amp; msg.contains("endpoint ")) {
+            int idx = msg.indexOf("endpoint ");
+            int commaIdx = msg.indexOf(",", idx);
+            if (commaIdx > idx) {
+                String parsedUrl = msg.substring(idx + 9, commaIdx).trim();
+                if (parsedUrl.startsWith("\"") &amp;&amp; parsedUrl.endsWith("\"")) {
+                    parsedUrl = parsedUrl.substring(1, parsedUrl.length() - 1);
+                }
+                urlVal = parsedUrl;
+            }
+        }
+        cause = cause.getCause();
+    }
+}
+
+// 2. Locate the failed WorkItem by matching the failedNodeId
+org.kie.api.runtime.process.WorkflowProcessInstance pi = (org.kie.api.runtime.process.WorkflowProcessInstance) kcontext.getProcessInstance();
+org.kie.api.runtime.process.WorkItem failedWI = null;
+
+if (pi != null &amp;&amp; pi.getNodeInstances() != null) {
+    for (org.kie.api.runtime.process.NodeInstance ni : pi.getNodeInstances()) {
+        if (ni instanceof org.jbpm.workflow.instance.node.WorkItemNodeInstance) {
+            org.jbpm.workflow.instance.node.WorkItemNodeInstance wini = (org.jbpm.workflow.instance.node.WorkItemNodeInstance) ni;
+            if (failedNodeId != -1 &amp;&amp; ni.getNodeId() == failedNodeId) {
+                failedWI = wini.getWorkItem();
+                break;
+            }
+            if (failedWI == null) {
+                failedWI = wini.getWorkItem();
+            }
+        }
+    }
+}
+
+// 3. Extract parameters from the matched WorkItem
+if (failedWI != null) {
+    String wiUrl = (String) failedWI.getParameter("Url");
+    if (wiUrl != null &amp;&amp; !wiUrl.isEmpty()) {
+        urlVal = wiUrl;
+    }
+    String wiPayload = (String) failedWI.getParameter("ContentData");
+    if (wiPayload != null &amp;&amp; !wiPayload.isEmpty()) {
+        payloadVal = wiPayload;
+    }
+    String wiMethod = (String) failedWI.getParameter("Method");
+    if (wiMethod != null &amp;&amp; !wiMethod.isEmpty()) {
+        methodVal = wiMethod;
+    }
+    String wiHeaders = (String) failedWI.getParameter("Headers");
+    if (wiHeaders != null &amp;&amp; !wiHeaders.isEmpty()) {
+        headersVal = wiHeaders;
     }
 } else {
-    kcontext.setVariable("resPayload", "{\"url\":\"/api/v1/unknown\", \"payload\":{}}");
+    Object reqPayObj = kcontext.getVariable("reqPayload");
+    if (reqPayObj != null &amp;&amp; !reqPayObj.toString().isEmpty()) {
+        payloadVal = reqPayObj.toString();
+    }
+}
+
+// 4. Construct JSON context
+String escapedHeaders = headersVal != null ? headersVal.replace("\"", "\\\"") : "";
+String ctx = "{\"url\":\"" + urlVal + "\", \"payload\":" + payloadVal + ", \"method\":\"" + methodVal + "\", \"headers\":\"" + escapedHeaders + "\"}";
+kcontext.setVariable("resPayload", ctx);
+
+// 5. Parse maxRetryCount
+Object customMaxRetry = null;
+if (failedWI != null) {
+    customMaxRetry = failedWI.getParameter("maxRetryCount");
+} else {
+    org.kie.api.runtime.process.WorkItem failedWorkItem = (org.kie.api.runtime.process.WorkItem) kcontext.getNodeInstance().getVariable("WorkItem");
+    if (failedWorkItem != null) {
+        customMaxRetry = failedWorkItem.getParameter("maxRetryCount");
+    }
+}
+if (customMaxRetry != null) {
+    kcontext.setVariable("maxRetryCount", Integer.parseInt(customMaxRetry.toString()));
+} else {
     kcontext.setVariable("maxRetryCount", 3);
 }</drools:script>
           </drools:onEntry-script>

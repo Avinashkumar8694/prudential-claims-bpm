@@ -20,7 +20,7 @@
     <environment-entries>
         <environment-entry>
             <resolver>mvel</resolver>
-            <identifier>"https://719f-106-51-76-221.ngrok-free.app"</identifier>
+            <identifier>"https://soar.neutrinos-apps.com/claims-ms"</identifier>
             <parameters/>
             <name>INTEGRATION_LAYER_URL</name>
         </environment-entry>

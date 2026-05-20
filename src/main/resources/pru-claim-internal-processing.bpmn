@@ -49,12 +49,14 @@
   <bpmn2:itemDefinition id="_updatedPoliciesItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_finalPayoutsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_maxRetryCountItem" structureRef="Integer"/>
+  <bpmn2:itemDefinition id="_nodeErrorItem" structureRef="java.lang.Object"/>
 
   <!-- The main Process Definition -->
   <bpmn2:process id="prudential-claims-submission.pru-claim-internal-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-internal-processing" isExecutable="true" processType="Public">
     <!-- Properties / Variables -->
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
+    <bpmn2:property id="nodeError" itemSubjectRef="_nodeErrorItem" name="nodeError"/>
     <bpmn2:property id="policyNumber" itemSubjectRef="_policyNumberItem" name="policyNumber"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
     <bpmn2:property id="applicablePolicies" itemSubjectRef="_applicablePoliciesItem" name="applicablePolicies"/>
@@ -181,7 +183,7 @@ System.out.println("[BPM][BOOTSTRAP] process=pru-claim-internal | piid=" + kcont
       <bpmn2:outgoing>_P1_F2</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N1_assoc_Url">
         <bpmn2:assignment id="_P1_N1_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/validate-data]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/validate-data]]></bpmn2:from>
           <bpmn2:to>_P1_N1_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N1_Url</bpmn2:targetRef>
@@ -321,7 +323,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F3_FAIL_END</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N3_assoc_Url">
         <bpmn2:assignment id="_P1_N3_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/audit/log-failure]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/audit/log-failure]]></bpmn2:from>
           <bpmn2:to>_P1_N3_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N3_Url</bpmn2:targetRef>
@@ -441,7 +443,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F4</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N4_assoc_Url">
         <bpmn2:assignment id="_P1_N4_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/policy/status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/policy/status]]></bpmn2:from>
           <bpmn2:to>_P1_N4_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N4_Url</bpmn2:targetRef>
@@ -577,7 +579,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_DOCS</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N6_assoc_Url">
         <bpmn2:assignment id="_P1_N6_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/check-documents]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/check-documents]]></bpmn2:from>
           <bpmn2:to>_P1_N6_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N6_Url</bpmn2:targetRef>
@@ -756,7 +758,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_POLICY</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N9_assoc_Url">
         <bpmn2:assignment id="_P1_N9_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/validate-policy]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/validate-policy]]></bpmn2:from>
           <bpmn2:to>_P1_N9_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N9_Url</bpmn2:targetRef>
@@ -874,7 +876,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_BENE</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N9A_assoc_Url">
         <bpmn2:assignment id="_P1_N9A_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/validate-beneficiary]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/validate-beneficiary]]></bpmn2:from>
           <bpmn2:to>_P1_N9A_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N9A_Url</bpmn2:targetRef>
@@ -992,7 +994,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_BANK</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N10_assoc_Url">
         <bpmn2:assignment id="_P1_N10_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/validate-bank]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/validate-bank]]></bpmn2:from>
           <bpmn2:to>_P1_N10_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N10_Url</bpmn2:targetRef>
@@ -1122,7 +1124,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_MRX</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N11_assoc_Url">
         <bpmn2:assignment id="_P1_N11_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/mrx-check]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/mrx-check]]></bpmn2:from>
           <bpmn2:to>_P1_N11_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N11_Url</bpmn2:targetRef>
@@ -1259,7 +1261,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_MULTIFUND</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N13A_assoc_Url">
         <bpmn2:assignment id="_P1_N13A_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/tax/multi-fund]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/tax/multi-fund]]></bpmn2:from>
           <bpmn2:to>_P1_N13A_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N13A_Url</bpmn2:targetRef>
@@ -1376,7 +1378,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_SINGLEFUND</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N13B_assoc_Url">
         <bpmn2:assignment id="_P1_N13B_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/tax/single-fund]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/tax/single-fund]]></bpmn2:from>
           <bpmn2:to>_P1_N13B_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N13B_Url</bpmn2:targetRef>
@@ -1500,7 +1502,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_APPLYTAX</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N14_assoc_Url">
         <bpmn2:assignment id="_P1_N14_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/tax/apply]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/tax/apply]]></bpmn2:from>
           <bpmn2:to>_P1_N14_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N14_Url</bpmn2:targetRef>
@@ -1671,7 +1673,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_CALCBENEFIT</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N17_assoc_Url">
         <bpmn2:assignment id="_P1_N17_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/calculate]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/calculate]]></bpmn2:from>
           <bpmn2:to>_P1_N17_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N17_Url</bpmn2:targetRef>
@@ -1789,7 +1791,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_MISSTATEMENT</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N18_assoc_Url">
         <bpmn2:assignment id="_P1_N18_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/misstatement-adjust]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/misstatement-adjust]]></bpmn2:from>
           <bpmn2:to>_P1_N18_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N18_Url</bpmn2:targetRef>
@@ -1906,7 +1908,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_BENESPLIT</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N19_assoc_Url">
         <bpmn2:assignment id="_P1_N19_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/beneficiary-split]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/beneficiary-split]]></bpmn2:from>
           <bpmn2:to>_P1_N19_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N19_Url</bpmn2:targetRef>
@@ -2023,7 +2025,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_WITHHOLDING</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N20_assoc_Url">
         <bpmn2:assignment id="_P1_N20_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/backup-withholding]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/backup-withholding]]></bpmn2:from>
           <bpmn2:to>_P1_N20_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N20_Url</bpmn2:targetRef>
@@ -2153,7 +2155,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_FINALIZE</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N22_assoc_Url">
         <bpmn2:assignment id="_P1_N22_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/finalize]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/finalize]]></bpmn2:from>
           <bpmn2:to>_P1_N22_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N22_Url</bpmn2:targetRef>
@@ -2270,7 +2272,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:outgoing>_P1_F_KNECT</bpmn2:outgoing>
       <bpmn2:dataInputAssociation id="_P1_N23_assoc_Url">
         <bpmn2:assignment id="_P1_N23_assign_Url">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/api/v1/claims/ti-knect-payment]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[#{baseUrl}/v1/claims/ti-knect-payment]]></bpmn2:from>
           <bpmn2:to>_P1_N23_Url</bpmn2:to>
         </bpmn2:assignment>
         <bpmn2:targetRef>_P1_N23_Url</bpmn2:targetRef>
@@ -2351,27 +2353,113 @@ if (response != null && !response.isEmpty()) {
     <bpmn2:subProcess id="_P1_ERROR_SUBPROCESS" name="Global API Error Handler" triggeredByEvent="true">
       <bpmn2:startEvent id="_P1_ERROR_START" name="Catch REST API Failure">
         <bpmn2:outgoing>_P1_ERR_F1</bpmn2:outgoing>
+        <bpmn2:dataOutput id="_P1_ERROR_START_out" name="Error" structureRef="java.lang.Object"/>
+        <bpmn2:dataOutputAssociation id="_P1_ERROR_START_assoc">
+          <bpmn2:sourceRef>_P1_ERROR_START_out</bpmn2:sourceRef>
+          <bpmn2:targetRef>nodeError</bpmn2:targetRef>
+        </bpmn2:dataOutputAssociation>
+        <bpmn2:outputSet id="_P1_ERROR_START_outputSet">
+          <bpmn2:dataOutputRefs>_P1_ERROR_START_out</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
         <bpmn2:errorEventDefinition id="_P1_ERR_DEF" errorRef="REST_API_FAILURE"/>
       </bpmn2:startEvent>
       <bpmn2:sequenceFlow id="_P1_ERR_F1" sourceRef="_P1_ERROR_START" targetRef="_P1_ERROR_CALL"/>
       <bpmn2:callActivity id="_P1_ERROR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false" drools:waitForCompletion="true">
         <bpmn2:extensionElements>
           <drools:onEntry-script scriptFormat="http://www.java.com/java">
-            <drools:script>// Extract failed REST node parameters
-org.kie.api.runtime.process.WorkItem failedWorkItem = (org.kie.api.runtime.process.WorkItem) kcontext.getNodeInstance().getVariable("WorkItem");
-if (failedWorkItem != null) {
-    String url = (String) failedWorkItem.getParameter("Url");
-    String payload = (String) failedWorkItem.getParameter("ContentData");
-    String ctx = "{\"url\":\"" + url + "\", \"payload\":" + payload + "}";
-    kcontext.setVariable("resPayload", ctx);
-    Object customMaxRetry = failedWorkItem.getParameter("maxRetryCount");
-    if (customMaxRetry != null) {
-        kcontext.setVariable("maxRetryCount", Integer.parseInt(customMaxRetry.toString()));
-    } else {
-        kcontext.setVariable("maxRetryCount", 3);
+            <drools:script>// Extract failed REST node parameters dynamically from active node instances
+String urlVal = "/v1/unknown";
+String payloadVal = "{}";
+String methodVal = "POST";
+String headersVal = "";
+
+// 1. Get the failed Node ID and extract endpoint from exception message (if present)
+long failedNodeId = -1;
+Object nodeErrObj = kcontext.getVariable("nodeError");
+if (nodeErrObj instanceof Throwable) {
+    Throwable cause = (Throwable) nodeErrObj;
+    while (cause != null) {
+        if (cause instanceof org.jbpm.workflow.instance.WorkflowRuntimeException) {
+            failedNodeId = ((org.jbpm.workflow.instance.WorkflowRuntimeException) cause).getNodeId();
+        }
+        String msg = cause.getMessage();
+        if (msg != null &amp;&amp; msg.contains("endpoint ")) {
+            int idx = msg.indexOf("endpoint ");
+            int commaIdx = msg.indexOf(",", idx);
+            if (commaIdx > idx) {
+                String parsedUrl = msg.substring(idx + 9, commaIdx).trim();
+                if (parsedUrl.startsWith("\"") &amp;&amp; parsedUrl.endsWith("\"")) {
+                    parsedUrl = parsedUrl.substring(1, parsedUrl.length() - 1);
+                }
+                urlVal = parsedUrl;
+            }
+        }
+        cause = cause.getCause();
+    }
+}
+
+// 2. Locate the failed WorkItem by matching the failedNodeId
+org.kie.api.runtime.process.WorkflowProcessInstance pi = (org.kie.api.runtime.process.WorkflowProcessInstance) kcontext.getProcessInstance();
+org.kie.api.runtime.process.WorkItem failedWI = null;
+
+if (pi != null &amp;&amp; pi.getNodeInstances() != null) {
+    for (org.kie.api.runtime.process.NodeInstance ni : pi.getNodeInstances()) {
+        if (ni instanceof org.jbpm.workflow.instance.node.WorkItemNodeInstance) {
+            org.jbpm.workflow.instance.node.WorkItemNodeInstance wini = (org.jbpm.workflow.instance.node.WorkItemNodeInstance) ni;
+            if (failedNodeId != -1 &amp;&amp; ni.getNodeId() == failedNodeId) {
+                failedWI = wini.getWorkItem();
+                break;
+            }
+            if (failedWI == null) {
+                failedWI = wini.getWorkItem();
+            }
+        }
+    }
+}
+
+// 3. Extract parameters from the matched WorkItem
+if (failedWI != null) {
+    String wiUrl = (String) failedWI.getParameter("Url");
+    if (wiUrl != null &amp;&amp; !wiUrl.isEmpty()) {
+        urlVal = wiUrl;
+    }
+    String wiPayload = (String) failedWI.getParameter("ContentData");
+    if (wiPayload != null &amp;&amp; !wiPayload.isEmpty()) {
+        payloadVal = wiPayload;
+    }
+    String wiMethod = (String) failedWI.getParameter("Method");
+    if (wiMethod != null &amp;&amp; !wiMethod.isEmpty()) {
+        methodVal = wiMethod;
+    }
+    String wiHeaders = (String) failedWI.getParameter("Headers");
+    if (wiHeaders != null &amp;&amp; !wiHeaders.isEmpty()) {
+        headersVal = wiHeaders;
     }
 } else {
-    kcontext.setVariable("resPayload", "{\"url\":\"/api/v1/unknown\", \"payload\":{}}");
+    Object reqPayObj = kcontext.getVariable("reqPayload");
+    if (reqPayObj != null &amp;&amp; !reqPayObj.toString().isEmpty()) {
+        payloadVal = reqPayObj.toString();
+    }
+}
+
+// 4. Construct JSON context
+String escapedHeaders = headersVal != null ? headersVal.replace("\"", "\\\"") : "";
+String ctx = "{\"url\":\"" + urlVal + "\", \"payload\":" + payloadVal + ", \"method\":\"" + methodVal + "\", \"headers\":\"" + escapedHeaders + "\"}";
+kcontext.setVariable("resPayload", ctx);
+
+// 5. Parse maxRetryCount
+Object customMaxRetry = null;
+if (failedWI != null) {
+    customMaxRetry = failedWI.getParameter("maxRetryCount");
+} else {
+    org.kie.api.runtime.process.WorkItem failedWorkItem = (org.kie.api.runtime.process.WorkItem) kcontext.getNodeInstance().getVariable("WorkItem");
+    if (failedWorkItem != null) {
+        customMaxRetry = failedWorkItem.getParameter("maxRetryCount");
+    }
+}
+if (customMaxRetry != null) {
+    kcontext.setVariable("maxRetryCount", Integer.parseInt(customMaxRetry.toString()));
+} else {
     kcontext.setVariable("maxRetryCount", 3);
 }</drools:script>
           </drools:onEntry-script>

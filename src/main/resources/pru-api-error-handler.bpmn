@@ -11,6 +11,7 @@
   <bpmn2:itemDefinition id="_adminDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_failedMethodItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_failedHeadersItem" structureRef="String"/>
   <bpmn2:error id="REST_API_FAILURE" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:process id="prudential-claims-submission.pru-api-error-handler" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-api-error-handler" isExecutable="true" processType="Public">
     <bpmn2:property id="failedEndpoint" itemSubjectRef="_failedEndpointItem" name="failedEndpoint"/>
@@ -23,6 +24,7 @@
     <bpmn2:property id="retrySuccess" itemSubjectRef="_retrySuccessItem" name="retrySuccess"/>
     <bpmn2:property id="adminDecision" itemSubjectRef="_adminDecisionItem" name="adminDecision"/>
     <bpmn2:property id="failedMethod" itemSubjectRef="_failedMethodItem" name="failedMethod"/>
+    <bpmn2:property id="failedHeaders" itemSubjectRef="_failedHeadersItem" name="failedHeaders"/>
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <!-- Nodes -->
     <bpmn2:startEvent id="_START_NODE" name="Start Error Handler">
@@ -65,12 +67,27 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
         }
         kcontext.setVariable("failedEndpoint", endpoint);
         kcontext.setVariable("failedPayload", node.get("payload").toString());
+        
+        String method = "POST";
+        if (node.has("method")) {
+            method = node.get("method").asText();
+        }
+        kcontext.setVariable("failedMethod", method);
 
-        System.out.println("[BPM][EXIT][OK] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=ParseContext | caseId=" + kcontext.getVariable("caseId") + " | failedEndpoint=" + endpoint);
+        String headers = "";
+        if (node.has("headers")) {
+            headers = node.get("headers").asText();
+        }
+        kcontext.setVariable("failedHeaders", headers);
+
+        System.out.println("[BPM][EXIT][OK] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=ParseContext | caseId=" + kcontext.getVariable("caseId") + " | failedEndpoint=" + endpoint + " | failedMethod=" + method + " | failedHeaders=" + headers);
     } catch(Exception e) {
         System.out.println("[BPM][EXIT][ERROR] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=ParseContext | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
     }
-}</bpmn2:script>
+}
+// Default method if not unpacked
+if (kcontext.getVariable("failedMethod") == null) { kcontext.setVariable("failedMethod", "POST"); }
+if (kcontext.getVariable("failedHeaders") == null) { kcontext.setVariable("failedHeaders", ""); }</bpmn2:script>
     </bpmn2:scriptTask>
     <bpmn2:sequenceFlow id="_flow2" sourceRef="_PARSE_SCRIPT" targetRef="_TIMER_MERGE"/>
     <bpmn2:exclusiveGateway id="_TIMER_MERGE" name="Timer Merge" gatewayDirection="Converging">
@@ -161,6 +178,10 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
         </bpmn2:assignment>
         <bpmn2:targetRef>_RETRY_REST_ContentType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="_RETRY_REST_assoc_Headers">
+        <bpmn2:sourceRef>failedHeaders</bpmn2:sourceRef>
+        <bpmn2:targetRef>_RETRY_REST_Headers</bpmn2:targetRef>
+      </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_RETRY_REST_assoc_HandleResponseErrors">
         <bpmn2:assignment id="_RETRY_REST_assign_HandleResponseErrors">
           <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[true]]></bpmn2:from>
@@ -181,6 +202,11 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
       </bpmn2:dataInputAssociation>
     </bpmn2:task>
     <bpmn2:sequenceFlow id="_flow4" sourceRef="_RETRY_REST" targetRef="_CHECK_SUCCESS"/>
+    <bpmn2:boundaryEvent id="_RETRY_REST_ERROR" name="Catch Retry Failure" attachedToRef="_RETRY_REST" cancelActivity="true">
+      <bpmn2:outgoing>_flow_retry_error</bpmn2:outgoing>
+      <bpmn2:errorEventDefinition id="_retry_err_def" errorRef="REST_API_FAILURE"/>
+    </bpmn2:boundaryEvent>
+    <bpmn2:sequenceFlow id="_flow_retry_error" sourceRef="_RETRY_REST_ERROR" targetRef="_INCREMENT_RETRY"/>
     <!-- Exclusive Gateway: Success? -->
     <bpmn2:exclusiveGateway id="_CHECK_SUCCESS" name="Success?" gatewayDirection="Diverging">
       <bpmn2:incoming>_flow4</bpmn2:incoming>
@@ -196,6 +222,7 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
     <!-- Script Task: Increment retryCount -->
     <bpmn2:scriptTask id="_INCREMENT_RETRY" name="Increment retryCount" scriptFormat="http://www.java.com/java">
       <bpmn2:incoming>_flow_fail_increment</bpmn2:incoming>
+      <bpmn2:incoming>_flow_retry_error</bpmn2:incoming>
       <bpmn2:outgoing>_flow_check_limit</bpmn2:outgoing>
       <bpmn2:script>int count = (int) kcontext.getVariable("retryCount");
 kcontext.setVariable("retryCount", count + 1);
