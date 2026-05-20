@@ -530,7 +530,7 @@ This allows developers and testers to execute the entire claims lifecycle intera
 ### 📥 1. Start Process Instance
 Create a new claims orchestration run.
 * **HTTP Method:** `POST`
-* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-submission/processes/prudential-claims-submission.pru-claim-internal-processing/instances`
+* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/processes/prudential-claims-submission.pru-claim-internal-processing/instances`
 * **Headers:**
   * `Content-Type: application/json`
   * `Authorization: Basic a3Jpc3Y6a3Jpc3Y=` (krisv/krisv)
@@ -558,7 +558,7 @@ Retrieve active examiner tasks (e.g., when routing escalates to `N16: ExaminerRe
         "task-name": "N16: ExaminerReview",
         "task-status": "Ready",
         "task-process-instance-id": 1059,
-        "task-container-id": "prudential-claims-submission"
+        "task-container-id": "prudential-claims-bpm_1.0.0-SNAPSHOT"
       }
     ]
   }
@@ -567,19 +567,19 @@ Retrieve active examiner tasks (e.g., when routing escalates to `N16: ExaminerRe
 ### 📥 3. Claim Human Task
 Assign the task to yourself before completing it.
 * **HTTP Method:** `PUT`
-* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-submission/tasks/89/states/claimed`
+* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/tasks/89/states/claimed`
 * **Response (200 OK):** Empty success body.
 
 ### 📥 4. Start Human Task
 Move the task status to started.
 * **HTTP Method:** `PUT`
-* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-submission/tasks/89/states/started`
+* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/tasks/89/states/started`
 * **Response (200 OK):** Empty success body.
 
 ### 📥 5. Complete Human Task
 Submit the examiner's decision (e.g. approval, overrides) to resume automated execution!
 * **HTTP Method:** `PUT`
-* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-submission/tasks/89/states/completed`
+* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/tasks/89/states/completed`
 * **Sample Payload:**
   ```json
   {
@@ -592,7 +592,7 @@ Submit the examiner's decision (e.g. approval, overrides) to resume automated ex
 ### 📥 6. Signal NIGO Document Upload
 Delivers an external signal (e.g., `DocumentUploaded`) to resume execution on NIGO loops.
 * **HTTP Method:** `POST`
-* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-submission/processes/instances/1059/signal/DocumentUploaded`
+* **URL:** `/kie-server/services/rest/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/processes/instances/1059/signal/DocumentUploaded`
 * **Sample Payload (Array of Uploaded URLs):**
   ```json
   [

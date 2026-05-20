@@ -22,7 +22,7 @@
   <bpmn2:itemDefinition id="_idpExtractionResultItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_verificationStatusItem" structureRef="String"/>
 
-  <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
+  <bpmn2:error id="REST_API_FAILURE" errorCode="java.lang.Exception"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
@@ -159,7 +159,8 @@ System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " +
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N1-SendNIGO | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -168,11 +169,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N1-SendNIGO | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("noticeSentAt", root.get("noticeSentAt").asText());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N1-SendNIGO | caseId=" + kcontext.getVariable("caseId") + " | noticeSentAt=" + kcontext.getVariable("noticeSentAt"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N1-SendNIGO | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -283,7 +289,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.put("caseId", (String)kcontext.getVariable("caseId"));
 json.put("noticeType", "DEATH_FUNDING");
@@ -291,11 +298,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("noticeS3Key", root.get("documentS3Key").asText());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId") + " | noticeS3Key=" + kcontext.getVariable("noticeS3Key"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -394,7 +406,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.put("caseId", (String)kcontext.getVariable("caseId"));
 json.put("noticeType", "TI_STANDARD");
@@ -402,11 +415,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("noticeS3Key", root.get("documentS3Key").asText());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId") + " | noticeS3Key=" + kcontext.getVariable("noticeS3Key"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -565,7 +583,8 @@ return count >= 3;]]></bpmn2:conditionExpression>
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-AutoFollowup | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.put("followupCount", (Integer)kcontext.getVariable("followupCount"));
@@ -573,11 +592,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-AutoFollowup | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("followupCount", root.get("followupCount").asInt());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-AutoFollowup | caseId=" + kcontext.getVariable("caseId") + " | followupCount=" + kcontext.getVariable("followupCount"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-AutoFollowup | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -676,18 +700,24 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-ReRunIDPExtraction | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-ReRunIDPExtraction | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("idpExtractionResult", root.get("extractionResult"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-ReRunIDPExtraction | caseId=" + kcontext.getVariable("caseId") + " | idpExtractionResult=" + kcontext.getVariable("idpExtractionResult"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-ReRunIDPExtraction | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -786,18 +816,24 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N7-UpdateClaimStatus | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N7-UpdateClaimStatus | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("allDocsReceived", root.get("allDocsReceived").asBoolean());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N7-UpdateClaimStatus | caseId=" + kcontext.getVariable("caseId") + " | allDocsReceived=" + kcontext.getVariable("allDocsReceived"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N7-UpdateClaimStatus | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -967,18 +1003,24 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N12-UpdateDeathVerification | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N13-ExaminerDeathVerif | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("verificationStatus", root.get("verificationStatus").asText());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N13-ExaminerDeathVerif | caseId=" + kcontext.getVariable("caseId") + " | verificationStatus=" + kcontext.getVariable("verificationStatus"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N13-ExaminerDeathVerif | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1063,9 +1105,11 @@ if (failedWorkItem != null) {
         <bpmn2:outgoing>_P2_ERR_F2</bpmn2:outgoing>
         <bpmn2:ioSpecification id="_P2_ERROR_CALL_io">
           <bpmn2:dataInput id="_P2_ERROR_CALL_failedContext" name="failedContext" structureRef="String"/>
+          <bpmn2:dataInput id="_P2_ERROR_CALL_caseId" name="caseId" structureRef="String"/>
           <bpmn2:dataOutput id="_P2_ERROR_CALL_out_failedContext" name="failedContext" structureRef="String"/>
           <bpmn2:inputSet id="_P2_ERROR_CALL_input_set">
             <bpmn2:dataInputRefs>_P2_ERROR_CALL_failedContext</bpmn2:dataInputRefs>
+            <bpmn2:dataInputRefs>_P2_ERROR_CALL_caseId</bpmn2:dataInputRefs>
           </bpmn2:inputSet>
           <bpmn2:outputSet id="_P2_ERROR_CALL_output_set">
             <bpmn2:dataOutputRefs>_P2_ERROR_CALL_out_failedContext</bpmn2:dataOutputRefs>
@@ -1074,6 +1118,10 @@ if (failedWorkItem != null) {
         <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_assoc">
           <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
           <bpmn2:targetRef>_P2_ERROR_CALL_failedContext</bpmn2:targetRef>
+        </bpmn2:dataInputAssociation>
+        <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_caseId_assoc">
+          <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
+          <bpmn2:targetRef>_P2_ERROR_CALL_caseId</bpmn2:targetRef>
         </bpmn2:dataInputAssociation>
         <bpmn2:dataOutputAssociation id="_P2_ERROR_CALL_out_assoc">
           <bpmn2:sourceRef>_P2_ERROR_CALL_out_failedContext</bpmn2:sourceRef>

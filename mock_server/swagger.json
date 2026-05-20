@@ -1501,7 +1501,7 @@
             "schema": {
               "type": "string"
             },
-            "example": "prudential-claims-submission"
+            "example": "prudential-claims-bpm_1.0.0-SNAPSHOT"
           },
           {
             "name": "processId",
@@ -1572,7 +1572,7 @@
             "schema": {
               "type": "string"
             },
-            "example": "prudential-claims-submission"
+            "example": "prudential-claims-bpm_1.0.0-SNAPSHOT"
           },
           {
             "name": "processInstanceId",
@@ -1699,7 +1699,7 @@
             "schema": {
               "type": "string"
             },
-            "example": "prudential-claims-submission"
+            "example": "prudential-claims-bpm_1.0.0-SNAPSHOT"
           },
           {
             "name": "taskId",
@@ -1730,7 +1730,7 @@
             "schema": {
               "type": "string"
             },
-            "example": "prudential-claims-submission"
+            "example": "prudential-claims-bpm_1.0.0-SNAPSHOT"
           },
           {
             "name": "taskId",
@@ -1761,7 +1761,7 @@
             "schema": {
               "type": "string"
             },
-            "example": "prudential-claims-submission"
+            "example": "prudential-claims-bpm_1.0.0-SNAPSHOT"
           },
           {
             "name": "taskId",

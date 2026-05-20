@@ -38,7 +38,7 @@
   <bpmn2:itemDefinition id="_reqPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_resPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
-  <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
+  <bpmn2:error id="REST_API_FAILURE" errorCode="java.lang.Exception"/>
   <bpmn2:itemDefinition id="_auditLogIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_alertsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_beneficiaryFlagsItem" structureRef="java.lang.Object"/>
@@ -119,7 +119,9 @@ if (url == null || url.isEmpty()) {
     url = "http://localhost:3000";
 }
 kcontext.setVariable("baseUrl", url);
-System.out.println("Process Industrialized: Initialized Base URL to " + url);</bpmn2:script>
+
+System.out.println("[BPM][BOOTSTRAP] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | caseId=" + kcontext.getVariable("caseId") + " | baseUrl=" + url);
+</bpmn2:script>
       <bpmn2:extensionElements>
         <drools:metaData name="customAsync">
           <drools:metaValue><![CDATA[true]]></drools:metaValue>
@@ -213,7 +215,8 @@ System.out.println("Process Industrialized: Initialized Base URL to " + url);</b
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N1-ValidateData | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -221,6 +224,8 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N1-ValidateData | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
@@ -237,7 +242,9 @@ if (response != null && !response.isEmpty()) {
             if (flags.has("isForeignDeath")) kcontext.setVariable("flagForeignDeath", flags.get("isForeignDeath").asBoolean());
             if (flags.has("isAIDS")) kcontext.setVariable("flagAIDS", flags.get("isAIDS").asBoolean());
         }
-    } catch(Exception e) {}
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N1-ValidateData | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -348,7 +355,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N3-LogError | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("errors", kcontext.getVariable("validationErrors"));
@@ -356,11 +364,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N3-LogError | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("auditLogId", root.get("auditLogId").asText());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N3-LogError | caseId=" + kcontext.getVariable("caseId") + " | auditLogId=" + kcontext.getVariable("auditLogId"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N3-LogError | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -462,7 +475,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N4-SetPendDeath | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -470,11 +484,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N4-SetPendDeath | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("updatedPolicies", root.get("updatedPolicies"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N4-SetPendDeath | caseId=" + kcontext.getVariable("caseId") + " | updatedPolicies=" + kcontext.getVariable("updatedPolicies"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N4-SetPendDeath | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -592,7 +611,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-CheckDocCompleteness | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -600,12 +620,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-CheckDocCompleteness | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("allDocsVerified", root.get("allDocsVerified").asBoolean());
         kcontext.setVariable("missingDocs", root.get("missingDocs"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-CheckDocCompleteness | caseId=" + kcontext.getVariable("caseId") + " | missingDocs=" + kcontext.getVariable("missingDocs"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-CheckDocCompleteness | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -765,7 +790,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9-PolicyValidation | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -773,12 +799,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9-PolicyValidation | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("policyFlags", root.get("policyFlags"));
         kcontext.setVariable("validationPassed", root.get("validationPassed").asBoolean());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9-PolicyValidation | caseId=" + kcontext.getVariable("caseId") + " | validationPassed=" + kcontext.getVariable("validationPassed"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9-PolicyValidation | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -877,7 +908,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9a-BeneValidation | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -885,12 +917,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9a-BeneValidation | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("beneficiaryFlags", root.get("beneficiaryFlags"));
         kcontext.setVariable("minorDetected", root.get("minorDetected").asBoolean());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9a-BeneValidation | caseId=" + kcontext.getVariable("caseId") + " | minorDetected=" + kcontext.getVariable("minorDetected"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N9a-BeneValidation | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -989,7 +1026,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N10-BankValidation | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -997,12 +1035,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N10-BankValidation | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("bankValidationResult", root.get("bankValidationResult"));
         kcontext.setVariable("pvsMatch", root.get("pvsMatch").asBoolean());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N10-BankValidation | caseId=" + kcontext.getVariable("caseId") + " | pvsMatch=" + kcontext.getVariable("pvsMatch"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N10-BankValidation | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1113,7 +1156,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-MRXCheck | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -1121,12 +1165,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-MRXCheck | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("mrxCheckResult", root.get("mrxCheckResult"));
         kcontext.setVariable("alerts", root.get("alerts"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-MRXCheck | caseId=" + kcontext.getVariable("caseId") + " | alerts=" + kcontext.getVariable("alerts"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N11-MRXCheck | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1244,7 +1293,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N13a-MultiFundTax | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -1252,11 +1302,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N13b-SingleFundTax | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("fundTaxResult", root.get("fundTaxResult"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N13b-SingleFundTax | caseId=" + kcontext.getVariable("caseId") + " | fundTaxResult=" + kcontext.getVariable("fundTaxResult"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N13b-SingleFundTax | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1355,7 +1410,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N13b-SingleFundTax | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -1363,11 +1419,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N14-ApplyTax | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("fundTaxResult", root.get("fundTaxResult"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N14-ApplyTax | caseId=" + kcontext.getVariable("caseId") + " | fundTaxResult=" + kcontext.getVariable("fundTaxResult"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N14-ApplyTax | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1473,7 +1534,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N14-ApplyTax | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -1481,12 +1543,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N14-ApplyTax | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("taxCheckResult", root.get("taxCheckResult"));
         kcontext.setVariable("taxExceptions", root.get("taxExceptions").asBoolean());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N14-ApplyTax | caseId=" + kcontext.getVariable("caseId") + " | taxExceptions=" + kcontext.getVariable("taxExceptions"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N14-ApplyTax | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1638,7 +1705,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N17-CalcBenefit | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -1646,12 +1714,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N18-MisstatementAdjust | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("benefitCalculation", root.get("benefitCalculation"));
         kcontext.setVariable("payoutAmount", root.get("payoutAmount").asDouble());
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N18-MisstatementAdjust | caseId=" + kcontext.getVariable("caseId") + " | payoutAmount=" + kcontext.getVariable("payoutAmount"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N18-MisstatementAdjust | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1750,7 +1823,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N18-MisstatementAdjust | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("benefitCalculation", kcontext.getVariable("benefitCalculation"));
@@ -1758,11 +1832,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N19-BeneSplit | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("adjustedBenefitCalculation", root.get("adjustedBenefitCalculation"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N19-BeneSplit | caseId=" + kcontext.getVariable("caseId") + " | adjustedBenefitCalculation=" + kcontext.getVariable("adjustedBenefitCalculation"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N19-BeneSplit | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1861,7 +1940,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N19-BeneSplit | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -1869,11 +1949,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N20-BackupWithholding | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("beneficiarySplit", root.get("beneficiarySplit"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N20-BackupWithholding | caseId=" + kcontext.getVariable("caseId") + " | beneficiarySplit=" + kcontext.getVariable("beneficiarySplit"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N20-BackupWithholding | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -1972,7 +2057,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N20-BackupWithholding | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -1980,12 +2066,17 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N22-FinalizePayment | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("withholdingResult", root.get("withholdingResult"));
         kcontext.setVariable("finalPayouts", root.get("finalPayouts"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N22-FinalizePayment | caseId=" + kcontext.getVariable("caseId") + " | finalPayouts=" + kcontext.getVariable("finalPayouts"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N22-FinalizePayment | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -2096,7 +2187,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N22-FinalizePayment | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -2104,11 +2196,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N23-KNECTPayment | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("finalPaymentInstructions", root.get("finalPaymentInstructions"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N23-KNECTPayment | caseId=" + kcontext.getVariable("caseId") + " | finalPaymentInstructions=" + kcontext.getVariable("finalPaymentInstructions"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N23-KNECTPayment | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -2207,7 +2304,8 @@ if (response != null && !response.isEmpty()) {
       </bpmn2:dataOutputAssociation>
       <bpmn2:extensionElements>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N23-KNECTPayment | caseId=" + kcontext.getVariable("caseId"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
@@ -2215,11 +2313,16 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+
+System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=Call-Reusable-Error-Handler | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
 if (response != null && !response.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
         kcontext.setVariable("knectTransactionId", root.get("knectTransactionId"));
-    } catch(Exception e) {}
+        System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=Call-Reusable-Error-Handler | caseId=" + kcontext.getVariable("caseId") + " | knectTransactionId=" + kcontext.getVariable("knectTransactionId"));
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=Call-Reusable-Error-Handler | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -2268,9 +2371,11 @@ if (failedWorkItem != null) {
         <bpmn2:outgoing>_P1_ERR_F2</bpmn2:outgoing>
         <bpmn2:ioSpecification id="_P1_ERROR_CALL_io">
           <bpmn2:dataInput id="_P1_ERROR_CALL_failedContext" name="failedContext" structureRef="String"/>
+          <bpmn2:dataInput id="_P1_ERROR_CALL_caseId" name="caseId" structureRef="String"/>
           <bpmn2:dataOutput id="_P1_ERROR_CALL_out_failedContext" name="failedContext" structureRef="String"/>
           <bpmn2:inputSet id="_P1_ERROR_CALL_input_set">
             <bpmn2:dataInputRefs>_P1_ERROR_CALL_failedContext</bpmn2:dataInputRefs>
+            <bpmn2:dataInputRefs>_P1_ERROR_CALL_caseId</bpmn2:dataInputRefs>
           </bpmn2:inputSet>
           <bpmn2:outputSet id="_P1_ERROR_CALL_output_set">
             <bpmn2:dataOutputRefs>_P1_ERROR_CALL_out_failedContext</bpmn2:dataOutputRefs>
@@ -2279,6 +2384,10 @@ if (failedWorkItem != null) {
         <bpmn2:dataInputAssociation id="_P1_ERROR_CALL_assoc">
           <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
           <bpmn2:targetRef>_P1_ERROR_CALL_failedContext</bpmn2:targetRef>
+        </bpmn2:dataInputAssociation>
+        <bpmn2:dataInputAssociation id="_P1_ERROR_CALL_caseId_assoc">
+          <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
+          <bpmn2:targetRef>_P1_ERROR_CALL_caseId</bpmn2:targetRef>
         </bpmn2:dataInputAssociation>
         <bpmn2:dataOutputAssociation id="_P1_ERROR_CALL_out_assoc">
           <bpmn2:sourceRef>_P1_ERROR_CALL_out_failedContext</bpmn2:sourceRef>

@@ -10,7 +10,8 @@
   <bpmn2:itemDefinition id="_retrySuccessItem" structureRef="java.lang.Boolean"/>
   <bpmn2:itemDefinition id="_adminDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_failedMethodItem" structureRef="String"/>
-  <bpmn2:error id="REST_API_FAILURE" errorCode="REST_API_FAILURE"/>
+  <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
+  <bpmn2:error id="REST_API_FAILURE" errorCode="java.lang.Exception"/>
   <bpmn2:process id="prudential-claims-submission.pru-api-error-handler" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-api-error-handler" isExecutable="true" processType="Public">
     <bpmn2:property id="failedEndpoint" itemSubjectRef="_failedEndpointItem" name="failedEndpoint"/>
     <bpmn2:property id="failedPayload" itemSubjectRef="_failedPayloadItem" name="failedPayload"/>
@@ -22,6 +23,7 @@
     <bpmn2:property id="retrySuccess" itemSubjectRef="_retrySuccessItem" name="retrySuccess"/>
     <bpmn2:property id="adminDecision" itemSubjectRef="_adminDecisionItem" name="adminDecision"/>
     <bpmn2:property id="failedMethod" itemSubjectRef="_failedMethodItem" name="failedMethod"/>
+    <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <!-- Nodes -->
     <bpmn2:startEvent id="_START_NODE" name="Start Error Handler">
       <bpmn2:outgoing>_flow1</bpmn2:outgoing>
@@ -37,10 +39,14 @@ if (url == null || url.isEmpty()) { url = System.getenv("INTEGRATION_LAYER_URL")
 if (url == null || url.isEmpty()) {
     try {
         url = (String) kcontext.getKieRuntime().getEnvironment().get("INTEGRATION_LAYER_URL");
-    } catch (Exception e) {}
+    } catch(Exception e) {
+        System.out.println("[BPM][EXIT][ERROR] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=ParseContext | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+    }
 }
 if (url == null || url.isEmpty()) { url = "http://localhost:3000"; }
 kcontext.setVariable("baseUrl", url);
+
+System.out.println("[BPM][BOOTSTRAP] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | caseId=" + kcontext.getVariable("caseId") + " | baseUrl=" + url);
 
 // 2. Initialize default retry states if empty
 if (kcontext.getVariable("retryCount") == null) { kcontext.setVariable("retryCount", 0); }
@@ -48,6 +54,8 @@ if (kcontext.getVariable("maxRetryCount") == null) { kcontext.setVariable("maxRe
 
 // 3. Unpack the JSON context sent from the main process
 String ctx = (String) kcontext.getVariable("failedContext");
+
+System.out.println("[BPM][ENTRY] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=ParseContext | caseId=" + kcontext.getVariable("caseId") + " | failedContext=" + (ctx != null ? ctx.substring(0, Math.min(ctx.length(), 200)) : "null"));
 if (ctx != null &amp;&amp; !ctx.isEmpty()) {
     try {
         com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(ctx);
@@ -57,8 +65,10 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
         }
         kcontext.setVariable("failedEndpoint", endpoint);
         kcontext.setVariable("failedPayload", node.get("payload").toString());
+
+        System.out.println("[BPM][EXIT][OK] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=ParseContext | caseId=" + kcontext.getVariable("caseId") + " | failedEndpoint=" + endpoint);
     } catch(Exception e) {
-        System.out.println("Error parsing context: " + e.getMessage());
+        System.out.println("[BPM][EXIT][ERROR] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=ParseContext | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
     }
 }</bpmn2:script>
     </bpmn2:scriptTask>
@@ -189,7 +199,9 @@ if (ctx != null &amp;&amp; !ctx.isEmpty()) {
       <bpmn2:outgoing>_flow_check_limit</bpmn2:outgoing>
       <bpmn2:script>int count = (int) kcontext.getVariable("retryCount");
 kcontext.setVariable("retryCount", count + 1);
-System.out.println("Error Handler: API Retry failed. Attempt: " + (count + 1));</bpmn2:script>
+
+System.out.println("[BPM][RETRY] process=pru-api-error-handler | piid=" + kcontext.getProcessInstance().getId() + " | node=IncrementRetry | caseId=" + kcontext.getVariable("caseId") + " | attempt=" + (count + 1) + " | maxRetries=" + kcontext.getVariable("maxRetryCount") + " | failedEndpoint=" + kcontext.getVariable("failedEndpoint"));
+</bpmn2:script>
     </bpmn2:scriptTask>
     <bpmn2:sequenceFlow id="_flow_check_limit" sourceRef="_INCREMENT_RETRY" targetRef="_CHECK_LIMIT"/>
     <!-- Exclusive Gateway: Check max retry limit -->
