@@ -21,10 +21,12 @@
   <bpmn2:itemDefinition id="_applicablePoliciesItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_idpExtractionResultItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_verificationStatusItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_maxRetryCountItem" structureRef="Integer"/>
 
   <bpmn2:error id="REST_API_FAILURE" errorCode="java.lang.Exception"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
+    <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
     <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments"/>
     <bpmn2:property id="followupCount" itemSubjectRef="_followupCountItem" name="followupCount"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
@@ -1096,8 +1098,15 @@ if (failedWorkItem != null) {
     String payload = (String) failedWorkItem.getParameter("ContentData");
     String ctx = "{\"url\":\"" + url + "\", \"payload\":" + payload + "}";
     kcontext.setVariable("resPayload", ctx);
+    Object customMaxRetry = failedWorkItem.getParameter("maxRetryCount");
+    if (customMaxRetry != null) {
+        kcontext.setVariable("maxRetryCount", Integer.parseInt(customMaxRetry.toString()));
+    } else {
+        kcontext.setVariable("maxRetryCount", 3);
+    }
 } else {
     kcontext.setVariable("resPayload", "{\"url\":\"/api/v1/unknown\", \"payload\":{}}");
+    kcontext.setVariable("maxRetryCount", 3);
 }</drools:script>
           </drools:onEntry-script>
         </bpmn2:extensionElements>
@@ -1106,10 +1115,12 @@ if (failedWorkItem != null) {
         <bpmn2:ioSpecification id="_P2_ERROR_CALL_io">
           <bpmn2:dataInput id="_P2_ERROR_CALL_failedContext" name="failedContext" structureRef="String"/>
           <bpmn2:dataInput id="_P2_ERROR_CALL_caseId" name="caseId" structureRef="String"/>
+          <bpmn2:dataInput id="_P2_ERROR_CALL_maxRetryCount" name="maxRetryCount" structureRef="Integer"/>
           <bpmn2:dataOutput id="_P2_ERROR_CALL_out_failedContext" name="failedContext" structureRef="String"/>
           <bpmn2:inputSet id="_P2_ERROR_CALL_input_set">
             <bpmn2:dataInputRefs>_P2_ERROR_CALL_failedContext</bpmn2:dataInputRefs>
             <bpmn2:dataInputRefs>_P2_ERROR_CALL_caseId</bpmn2:dataInputRefs>
+            <bpmn2:dataInputRefs>_P2_ERROR_CALL_maxRetryCount</bpmn2:dataInputRefs>
           </bpmn2:inputSet>
           <bpmn2:outputSet id="_P2_ERROR_CALL_output_set">
             <bpmn2:dataOutputRefs>_P2_ERROR_CALL_out_failedContext</bpmn2:dataOutputRefs>
@@ -1122,6 +1133,10 @@ if (failedWorkItem != null) {
         <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_caseId_assoc">
           <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
           <bpmn2:targetRef>_P2_ERROR_CALL_caseId</bpmn2:targetRef>
+        </bpmn2:dataInputAssociation>
+        <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_maxRetryCount_assoc">
+          <bpmn2:sourceRef>maxRetryCount</bpmn2:sourceRef>
+          <bpmn2:targetRef>_P2_ERROR_CALL_maxRetryCount</bpmn2:targetRef>
         </bpmn2:dataInputAssociation>
         <bpmn2:dataOutputAssociation id="_P2_ERROR_CALL_out_assoc">
           <bpmn2:sourceRef>_P2_ERROR_CALL_out_failedContext</bpmn2:sourceRef>
