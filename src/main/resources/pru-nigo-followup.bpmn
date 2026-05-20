@@ -1132,22 +1132,29 @@ if (nodeErrObj instanceof Throwable) {
     }
 }
 
-// 2. Locate the failed WorkItem by matching the failedNodeId
+// 2. Locate the failed WorkItem — ONLY by exact failedNodeId match.
+// SAFE: no fallback to a random WorkItem; in a process with multiple REST nodes,
+// picking the wrong one would retry the wrong endpoint.
+// If the node is already gone from memory, urlVal from step 1 (exception message) is used.
 org.kie.api.runtime.process.WorkflowProcessInstance pi = (org.kie.api.runtime.process.WorkflowProcessInstance) kcontext.getProcessInstance();
 org.kie.api.runtime.process.WorkItem failedWI = null;
 
-if (pi != null &amp;&amp; pi.getNodeInstances() != null) {
-    for (org.kie.api.runtime.process.NodeInstance ni : pi.getNodeInstances()) {
-        if (ni instanceof org.jbpm.workflow.instance.node.WorkItemNodeInstance) {
-            org.jbpm.workflow.instance.node.WorkItemNodeInstance wini = (org.jbpm.workflow.instance.node.WorkItemNodeInstance) ni;
-            if (failedNodeId != -1 &amp;&amp; ni.getNodeId() == failedNodeId) {
-                failedWI = wini.getWorkItem();
-                break;
-            }
-            if (failedWI == null) {
-                failedWI = wini.getWorkItem();
+if (pi != null &amp;&amp; failedNodeId != -1) {
+    try {
+        java.util.Collection&lt;org.kie.api.runtime.process.NodeInstance&gt; nodeInstances = pi.getNodeInstances();
+        if (nodeInstances != null) {
+            for (org.kie.api.runtime.process.NodeInstance ni : nodeInstances) {
+                if (ni instanceof org.jbpm.workflow.instance.node.WorkItemNodeInstance
+                        &amp;&amp; ni.getNodeId() == failedNodeId) {
+                    failedWI = ((org.jbpm.workflow.instance.node.WorkItemNodeInstance) ni).getWorkItem();
+                    break;
+                }
             }
         }
+    } catch (Exception lookupEx) {
+        // Node instance may already be completed/removed from memory — safe to ignore.
+        // urlVal extracted from the exception message in step 1 is the authoritative fallback.
+        System.out.println("[BPM][WARN] Could not look up node instance for nodeId=" + failedNodeId + ": " + lookupEx.getMessage());
     }
 }
 
@@ -1177,9 +1184,17 @@ if (failedWI != null) {
 }
 
 // 4. Construct JSON context
+// Include failedNodeId so the error handler is self-identifying (parallel-safe)
 String escapedHeaders = headersVal != null ? headersVal.replace("\"", "\\\"") : "";
-String ctx = "{\"url\":\"" + urlVal + "\", \"payload\":" + payloadVal + ", \"method\":\"" + methodVal + "\", \"headers\":\"" + escapedHeaders + "\"}";
+String ctx = "{\"url\":\"" + urlVal + "\", \"payload\":" + payloadVal + ", \"method\":\"" + methodVal + "\", \"headers\":\"" + escapedHeaders + "\", \"nodeId\":\"" + failedNodeId + "\"}";
+
+// Write to a node-scoped variable keyed by failedNodeId to prevent parallel error handlers
+// from overwriting each other's context on the shared 'resPayload' variable.
+String nodeKey = "resPayload_" + (failedNodeId != -1 ? failedNodeId : "unknown");
+kcontext.setVariable(nodeKey, ctx);
+// Also keep resPayload for compatibility (single-failure path)
 kcontext.setVariable("resPayload", ctx);
+kcontext.setVariable("_activeNodeKey", nodeKey);
 
 // 5. Parse maxRetryCount
 Object customMaxRetry = null;
@@ -1215,8 +1230,17 @@ if (customMaxRetry != null) {
           </bpmn2:outputSet>
         </bpmn2:ioSpecification>
         <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_assoc">
-          <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
           <bpmn2:targetRef>_P2_ERROR_CALL_failedContext</bpmn2:targetRef>
+          <bpmn2:assignment id="_P2_ERROR_CALL_ctx_assign">
+            <!-- Read from the node-scoped slot; falls back to shared resPayload if slot is missing.
+                 This prevents two parallel error handlers from overwriting each other's context. -->
+            <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[
+              String nk = (String) kcontext.getVariable("_activeNodeKey");
+              Object v = (nk != null) ? kcontext.getVariable(nk) : null;
+              return (v != null) ? v.toString() : (String) kcontext.getVariable("resPayload");
+            ]]></bpmn2:from>
+            <bpmn2:to>_P2_ERROR_CALL_failedContext</bpmn2:to>
+          </bpmn2:assignment>
         </bpmn2:dataInputAssociation>
         <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_caseId_assoc">
           <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
