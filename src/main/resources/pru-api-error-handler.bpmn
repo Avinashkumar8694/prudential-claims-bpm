@@ -11,7 +11,7 @@
   <bpmn2:itemDefinition id="_adminDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_failedMethodItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
-  <bpmn2:error id="REST_API_FAILURE" errorCode="java.lang.Exception"/>
+  <bpmn2:error id="REST_API_FAILURE" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:process id="prudential-claims-submission.pru-api-error-handler" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-api-error-handler" isExecutable="true" processType="Public">
     <bpmn2:property id="failedEndpoint" itemSubjectRef="_failedEndpointItem" name="failedEndpoint"/>
     <bpmn2:property id="failedPayload" itemSubjectRef="_failedPayloadItem" name="failedPayload"/>

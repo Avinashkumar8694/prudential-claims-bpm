@@ -38,7 +38,7 @@
   <bpmn2:itemDefinition id="_reqPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_resPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
-  <bpmn2:error id="REST_API_FAILURE" errorCode="java.lang.Exception"/>
+  <bpmn2:error id="REST_API_FAILURE" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:itemDefinition id="_auditLogIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_alertsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_beneficiaryFlagsItem" structureRef="java.lang.Object"/>
