@@ -484,6 +484,7 @@ com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
+json.put("status", "PENDING_DEATH_CLAIM");
 kcontext.setVariable("reqPayload", json.toString());</drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">

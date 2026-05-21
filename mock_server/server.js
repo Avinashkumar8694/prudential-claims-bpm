@@ -431,10 +431,10 @@ app.post('/api/v1/audit/log-failure', (req, res) => {
 
 // 3. Update Policy Status
 app.put('/api/v1/policy/status', (req, res) => {
-  const { caseId, applicablePolicies } = req.body;
+  const { caseId, applicablePolicies, status } = req.body;
   const updatedPolicies = (applicablePolicies || ['POL12345']).map(policy => ({
     policyNumber: policy,
-    status: 'PENDING_DEATH_CLAIM',
+    status: status || 'PENDING_DEATH_CLAIM',
     updatedAt: new Date().toISOString()
   }));
   res.json({
