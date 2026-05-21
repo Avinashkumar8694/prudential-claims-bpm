@@ -857,10 +857,10 @@ if (response != null &amp;&amp; !response.isEmpty()) {
       <bpmn2:outgoing>_P2_F_DOCS_NO</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
     <bpmn2:sequenceFlow id="_P2_F_DOCS_YES" name="Yes" sourceRef="_P2_XG_DOCS" targetRef="_P2_END_MERGE">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return allDocsReceived == true;</bpmn2:conditionExpression>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return Boolean.TRUE.equals(allDocsReceived);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_P2_F_DOCS_NO" name="No" sourceRef="_P2_XG_DOCS" targetRef="_P2_N9">
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return allDocsReceived == false;</bpmn2:conditionExpression>
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return !Boolean.TRUE.equals(allDocsReceived);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     
     <bpmn2:userTask id="_P2_N9" name="N9: ExaminerPartialReview">
