@@ -206,7 +206,7 @@ if (kcontext.getVariable("failedHeaders") == null) { kcontext.setVariable("faile
       <bpmn2:outgoing>_flow_retry_error</bpmn2:outgoing>
       <bpmn2:errorEventDefinition id="_retry_err_def" errorRef="REST_API_FAILURE"/>
     </bpmn2:boundaryEvent>
-    <bpmn2:sequenceFlow id="_flow_retry_error" sourceRef="_RETRY_REST_ERROR" targetRef="_INCREMENT_RETRY"/>
+    <bpmn2:sequenceFlow id="_flow_retry_error" sourceRef="_RETRY_REST_ERROR" targetRef="_INCREMENT_MERGE"/>
     <!-- Exclusive Gateway: Success? -->
     <bpmn2:exclusiveGateway id="_CHECK_SUCCESS" name="Success?" gatewayDirection="Diverging">
       <bpmn2:incoming>_flow4</bpmn2:incoming>
@@ -216,13 +216,19 @@ if (kcontext.getVariable("failedHeaders") == null) { kcontext.setVariable("faile
     <bpmn2:sequenceFlow id="_flow_success_end" name="Yes" sourceRef="_CHECK_SUCCESS" targetRef="_END_MERGE">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return resPayload != null &amp;&amp; !resPayload.isEmpty();</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_flow_fail_increment" name="No" sourceRef="_CHECK_SUCCESS" targetRef="_INCREMENT_RETRY">
+    <bpmn2:sequenceFlow id="_flow_fail_increment" name="No" sourceRef="_CHECK_SUCCESS" targetRef="_INCREMENT_MERGE">
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return resPayload == null || resPayload.isEmpty();</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <!-- Script Task: Increment retryCount -->
-    <bpmn2:scriptTask id="_INCREMENT_RETRY" name="Increment retryCount" scriptFormat="http://www.java.com/java">
+    <!-- Converging gateway: merges "No" path and boundary error path before INCREMENT_RETRY -->
+    <bpmn2:exclusiveGateway id="_INCREMENT_MERGE" name="Increment Merge" gatewayDirection="Converging">
       <bpmn2:incoming>_flow_fail_increment</bpmn2:incoming>
       <bpmn2:incoming>_flow_retry_error</bpmn2:incoming>
+      <bpmn2:outgoing>_flow_to_increment</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="_flow_to_increment" sourceRef="_INCREMENT_MERGE" targetRef="_INCREMENT_RETRY"/>
+    <!-- Script Task: Increment retryCount -->
+    <bpmn2:scriptTask id="_INCREMENT_RETRY" name="Increment retryCount" scriptFormat="http://www.java.com/java">
+      <bpmn2:incoming>_flow_to_increment</bpmn2:incoming>
       <bpmn2:outgoing>_flow_check_limit</bpmn2:outgoing>
       <bpmn2:script>int count = (int) kcontext.getVariable("retryCount");
 kcontext.setVariable("retryCount", count + 1);
@@ -346,6 +352,9 @@ System.out.println("[BPM][RETRY] process=pru-api-error-handler | piid=" + kconte
       <bpmndi:BPMNShape id="_S_INCREMENT_RETRY" bpmnElement="_INCREMENT_RETRY">
         <dc:Bounds height="80.0" width="120.0" x="545.0" y="220.0"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_INCREMENT_MERGE" bpmnElement="_INCREMENT_MERGE">
+        <dc:Bounds height="50.0" width="50.0" x="490.0" y="235.0"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_CHECK_LIMIT" bpmnElement="_CHECK_LIMIT">
         <dc:Bounds height="50.0" width="50.0" x="700.0" y="235.0"/>
       </bpmndi:BPMNShape>
@@ -393,7 +402,7 @@ System.out.println("[BPM][RETRY] process=pru-api-error-handler | piid=" + kconte
       <bpmndi:BPMNEdge id="_E_RETRY_ERROR" bpmnElement="_flow_retry_error">
         <di:waypoint x="520.0" y="186.0"/>
         <di:waypoint x="520.0" y="260.0"/>
-        <di:waypoint x="545.0" y="260.0"/>
+        <di:waypoint x="490.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_SUCCESS_END" bpmnElement="_flow_success_end">
         <di:waypoint x="630.0" y="128.0"/>
@@ -405,7 +414,13 @@ System.out.println("[BPM][RETRY] process=pru-api-error-handler | piid=" + kconte
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_FAIL_INC" bpmnElement="_flow_fail_increment">
         <di:waypoint x="605.0" y="153.0"/>
-        <di:waypoint x="605.0" y="220.0"/>
+        <di:waypoint x="605.0" y="200.0"/>
+        <di:waypoint x="515.0" y="200.0"/>
+        <di:waypoint x="515.0" y="235.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_TO_INCREMENT" bpmnElement="_flow_to_increment">
+        <di:waypoint x="540.0" y="260.0"/>
+        <di:waypoint x="545.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_CHECK_LIMIT" bpmnElement="_flow_check_limit">
         <di:waypoint x="665.0" y="260.0"/>
