@@ -52,10 +52,36 @@
     <bpmn2:startEvent id="_START" name="Start">
       <bpmn2:outgoing>_F1</bpmn2:outgoing>
     </bpmn2:startEvent>
-    <bpmn2:sequenceFlow id="_F1" sourceRef="_START" targetRef="_REST_TASK"/>
+    <bpmn2:sequenceFlow id="_F1" sourceRef="_START" targetRef="_PRE_EXECUTE"/>
+
+    <bpmn2:scriptTask id="_PRE_EXECUTE" name="Pre-Execute Params Sanity" scriptFormat="http://www.java.com/java">
+      <bpmn2:incoming>_F1</bpmn2:incoming>
+      <bpmn2:outgoing>_F_PRE_TO_REST</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[
+Object handleErr = kcontext.getVariable("HandleResponseErrors");
+if (handleErr instanceof Boolean) {
+    kcontext.setVariable("HandleResponseErrors", String.valueOf((Boolean) handleErr));
+} else if (handleErr != null) {
+    kcontext.setVariable("HandleResponseErrors", handleErr.toString());
+} else {
+    kcontext.setVariable("HandleResponseErrors", "false");
+}
+
+Object connTimeout = kcontext.getVariable("ConnectTimeout");
+if (connTimeout != null) {
+    kcontext.setVariable("ConnectTimeout", connTimeout.toString());
+}
+Object readTimeout = kcontext.getVariable("ReadTimeout");
+if (readTimeout != null) {
+    kcontext.setVariable("ReadTimeout", readTimeout.toString());
+}
+      ]]></bpmn2:script>
+    </bpmn2:scriptTask>
+
+    <bpmn2:sequenceFlow id="_F_PRE_TO_REST" sourceRef="_PRE_EXECUTE" targetRef="_REST_TASK"/>
 
     <bpmn2:task id="_REST_TASK" drools:taskName="Rest" name="REST Execution">
-      <bpmn2:incoming>_F1</bpmn2:incoming>
+      <bpmn2:incoming>_F_PRE_TO_REST</bpmn2:incoming>
       <bpmn2:outgoing>_F2</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_REST_io">
         <bpmn2:dataInput id="_R_Url" name="Url" structureRef="String"/>
@@ -160,7 +186,7 @@ kcontext.setVariable("failedContext", ctx);
 
     <bpmn2:sequenceFlow id="_F4" sourceRef="_BUILD_CTX" targetRef="_CALL_ERR"/>
 
-    <bpmn2:callActivity id="_CALL_ERR" name="Call API Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_CALL_ERR" name="Call API Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:incoming>_F4</bpmn2:incoming>
       <bpmn2:outgoing>_F5</bpmn2:outgoing>
       <bpmn2:ioSpecification id="_CALL_ERR_io">

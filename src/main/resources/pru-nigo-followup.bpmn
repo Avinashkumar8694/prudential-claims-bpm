@@ -78,7 +78,7 @@ System.out.println("NIGO: Bootstrapped. Base URL = " + url + ", Claim Type = " +
     </bpmn2:scriptTask>
     <bpmn2:sequenceFlow id="_P2_F1" sourceRef="_P2_BOOTSTRAP" targetRef="_P2_N1" />
     
-    <bpmn2:callActivity id="_P2_N1" name="N1: SendNIGO" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_P2_N1" name="N1: SendNIGO" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:ioSpecification id="_P2_N1_io">
         <bpmn2:dataInput id="_P2_N1_TaskName" name="TaskName" structureRef="String" />
         <bpmn2:dataInput id="_P2_N1_AcceptCharset" name="AcceptCharset" structureRef="String" />
@@ -208,7 +208,7 @@ if (response != null &amp;&amp; !response.isEmpty()) {
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return !"DEATH".equals(claimType);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     
-    <bpmn2:callActivity id="_P2_N2A" name="N2a: FundingNotice" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_P2_N2A" name="N2a: FundingNotice" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:ioSpecification id="_P2_N2A_io">
         <bpmn2:dataInput id="_P2_N2A_TaskName" name="TaskName" structureRef="String" />
         <bpmn2:dataInput id="_P2_N2A_AcceptCharset" name="AcceptCharset" structureRef="String" />
@@ -325,7 +325,7 @@ if (response != null &amp;&amp; !response.isEmpty()) {
     </bpmn2:callActivity>
     <bpmn2:sequenceFlow id="_P2_F_MERGE_2A" sourceRef="_P2_N2A" targetRef="_P2_MERGE" />
     
-    <bpmn2:callActivity id="_P2_N2B" name="N2b: StandardNotice" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_P2_N2B" name="N2b: StandardNotice" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:ioSpecification id="_P2_N2B_io">
         <bpmn2:dataInput id="_P2_N2B_TaskName" name="TaskName" structureRef="String" />
         <bpmn2:dataInput id="_P2_N2B_AcceptCharset" name="AcceptCharset" structureRef="String" />
@@ -502,7 +502,7 @@ return count &lt; 3;</bpmn2:conditionExpression>
 return count &gt;= 3;</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     
-    <bpmn2:callActivity id="_P2_N11" name="N11: AutoFollowup" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_P2_N11" name="N11: AutoFollowup" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:ioSpecification id="_P2_N11_io">
         <bpmn2:dataInput id="_P2_N11_TaskName" name="TaskName" structureRef="String" />
         <bpmn2:dataInput id="_P2_N11_AcceptCharset" name="AcceptCharset" structureRef="String" />
@@ -619,7 +619,7 @@ if (response != null &amp;&amp; !response.isEmpty()) {
     </bpmn2:callActivity>
     <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_MERGE" />
     
-    <bpmn2:callActivity id="_P2_N6" name="N6: ReRunIDPExtraction" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_P2_N6" name="N6: ReRunIDPExtraction" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:ioSpecification id="_P2_N6_io">
         <bpmn2:dataInput id="_P2_N6_TaskName" name="TaskName" structureRef="String" />
         <bpmn2:dataInput id="_P2_N6_AcceptCharset" name="AcceptCharset" structureRef="String" />
@@ -735,7 +735,7 @@ if (response != null &amp;&amp; !response.isEmpty()) {
     </bpmn2:callActivity>
     <bpmn2:sequenceFlow id="_P2_F_IDP_DONE" sourceRef="_P2_N6" targetRef="_P2_N7" />
     
-    <bpmn2:callActivity id="_P2_N7" name="N7: UpdateClaimStatus" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_P2_N7" name="N7: UpdateClaimStatus" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:ioSpecification id="_P2_N7_io">
         <bpmn2:dataInput id="_P2_N7_TaskName" name="TaskName" structureRef="String" />
         <bpmn2:dataInput id="_P2_N7_AcceptCharset" name="AcceptCharset" structureRef="String" />
@@ -922,7 +922,7 @@ if (response != null &amp;&amp; !response.isEmpty()) {
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" language="http://www.java.com/java">return !"CONTINUE".equals(examinerDecision);</bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     
-    <bpmn2:callActivity id="_P2_N12" name="N12: UpdateDeathVerification" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="false" drools:waitForCompletion="true">
+    <bpmn2:callActivity id="_P2_N12" name="N12: UpdateDeathVerification" calledElement="prudential-claims-submission.pru-rest-executor" drools:independent="true" drools:waitForCompletion="true">
       <bpmn2:ioSpecification id="_P2_N12_io">
         <bpmn2:dataInput id="_P2_N12_TaskName" name="TaskName" structureRef="String" />
         <bpmn2:dataInput id="_P2_N12_AcceptCharset" name="AcceptCharset" structureRef="String" />

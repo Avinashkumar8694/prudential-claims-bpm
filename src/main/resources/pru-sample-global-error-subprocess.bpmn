@@ -44,7 +44,7 @@
       <bpmn2:sequenceFlow id="_ERR_F1" sourceRef="_ERR_START" targetRef="_ERR_CALL"/>
       
       <!-- Call the Reusable Error Handler Process -->
-      <bpmn2:callActivity id="_ERR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="false" drools:waitForCompletion="true">
+      <bpmn2:callActivity id="_ERR_CALL" name="Call Reusable Error Handler" calledElement="prudential-claims-submission.pru-api-error-handler" drools:independent="true" drools:waitForCompletion="true">
         <bpmn2:incoming>_ERR_F1</bpmn2:incoming>
         <bpmn2:outgoing>_ERR_F2</bpmn2:outgoing>
         <bpmn2:ioSpecification id="_ERR_CALL_io">
