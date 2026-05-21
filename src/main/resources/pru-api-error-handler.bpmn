@@ -337,6 +337,9 @@ System.out.println("[BPM][RETRY] process=pru-api-error-handler | piid=" + kconte
       <bpmndi:BPMNShape id="_S4" bpmnElement="_RETRY_REST">
         <dc:Bounds height="80.0" width="120.0" x="420.0" y="88.0"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="_S_RETRY_REST_ERROR" bpmnElement="_RETRY_REST_ERROR">
+        <dc:Bounds height="36.0" width="36.0" x="502.0" y="150.0"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="_S_CHECK_SUCCESS" bpmnElement="_CHECK_SUCCESS">
         <dc:Bounds height="50.0" width="50.0" x="580.0" y="103.0"/>
       </bpmndi:BPMNShape>
@@ -386,6 +389,11 @@ System.out.println("[BPM][RETRY] process=pru-api-error-handler | piid=" + kconte
       <bpmndi:BPMNEdge id="_E4" bpmnElement="_flow4">
         <di:waypoint x="540.0" y="128.0"/>
         <di:waypoint x="580.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="_E_RETRY_ERROR" bpmnElement="_flow_retry_error">
+        <di:waypoint x="520.0" y="186.0"/>
+        <di:waypoint x="520.0" y="260.0"/>
+        <di:waypoint x="545.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="_E_SUCCESS_END" bpmnElement="_flow_success_end">
         <di:waypoint x="630.0" y="128.0"/>

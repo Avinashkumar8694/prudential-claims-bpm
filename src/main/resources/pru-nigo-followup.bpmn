@@ -1230,17 +1230,8 @@ if (customMaxRetry != null) {
           </bpmn2:outputSet>
         </bpmn2:ioSpecification>
         <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_assoc">
+          <bpmn2:sourceRef>resPayload</bpmn2:sourceRef>
           <bpmn2:targetRef>_P2_ERROR_CALL_failedContext</bpmn2:targetRef>
-          <bpmn2:assignment id="_P2_ERROR_CALL_ctx_assign">
-            <!-- Read from the node-scoped slot; falls back to shared resPayload if slot is missing.
-                 This prevents two parallel error handlers from overwriting each other's context. -->
-            <bpmn2:from xsi:type="bpmn2:tFormalExpression"><![CDATA[
-              String nk = (String) kcontext.getVariable("_activeNodeKey");
-              Object v = (nk != null) ? kcontext.getVariable(nk) : null;
-              return (v != null) ? v.toString() : (String) kcontext.getVariable("resPayload");
-            ]]></bpmn2:from>
-            <bpmn2:to>_P2_ERROR_CALL_failedContext</bpmn2:to>
-          </bpmn2:assignment>
         </bpmn2:dataInputAssociation>
         <bpmn2:dataInputAssociation id="_P2_ERROR_CALL_caseId_assoc">
           <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
