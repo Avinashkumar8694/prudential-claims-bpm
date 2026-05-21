@@ -627,15 +627,63 @@ kcontext.setVariable("reqPayload", json.toString());</drools:script>
           <drools:script>String response = (String) kcontext.getVariable("resPayload");
 
 System.out.println("[BPM][EXIT] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-CheckDocCompleteness | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
-if (response != null &amp;&amp; !response.isEmpty()) {
+if (response != null &amp;&amp; !response.trim().isEmpty()) {
     try {
-        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
-        kcontext.setVariable("allDocsVerified", root.get("allDocsVerified").asBoolean());
-        kcontext.setVariable("missingDocs", root.get("missingDocs"));
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(response);
+        boolean allDocsVerified = false;
+        if (root.has("allDocsVerified") &amp;&amp; !root.get("allDocsVerified").isNull()) {
+            allDocsVerified = root.get("allDocsVerified").asBoolean();
+        }
+        kcontext.setVariable("allDocsVerified", allDocsVerified);
+        
+        java.util.List missingDocs = new java.util.ArrayList();
+        com.fasterxml.jackson.databind.JsonNode missingNode = root.get("missingDocs");
+        if (missingNode != null &amp;&amp; !missingNode.isNull() &amp;&amp; missingNode.isArray()) {
+            for (int i = 0; i &lt; missingNode.size(); i++) {
+                missingDocs.add(missingNode.get(i).asText());
+            }
+        }
+        kcontext.setVariable("missingDocs", missingDocs);
+        
         System.out.println("[BPM][EXIT][OK] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-CheckDocCompleteness | caseId=" + kcontext.getVariable("caseId") + " | missingDocs=" + kcontext.getVariable("missingDocs"));
     } catch(Exception e) {
         System.out.println("[BPM][EXIT][ERROR] process=pru-claim-internal | piid=" + kcontext.getProcessInstance().getId() + " | node=N6-CheckDocCompleteness | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
+        e.printStackTrace();
+        kcontext.setVariable("allDocsVerified", false);
+        kcontext.setVariable("missingDocs", new java.util.ArrayList());
     }
+} else {
+    System.out.println("[BPM][EXIT][WARN] Empty or null resPayload");
+    kcontext.setVariable("allDocsVerified", false);
+    kcontext.setVariable("missingDocs", new java.util.ArrayList());
+}
+
+Object policiesObj = kcontext.getVariable("applicablePolicies");
+if (policiesObj instanceof com.fasterxml.jackson.databind.JsonNode) {
+    com.fasterxml.jackson.databind.JsonNode policiesNode = (com.fasterxml.jackson.databind.JsonNode) policiesObj;
+    java.util.List policiesList = new java.util.ArrayList();
+    if (policiesNode.isArray()) {
+        for (int i = 0; i &lt; policiesNode.size(); i++) {
+            policiesList.add(policiesNode.get(i).asText());
+        }
+    }
+    kcontext.setVariable("applicablePolicies", policiesList);
+} else if (policiesObj instanceof java.util.List) {
+    java.util.List rawList = (java.util.List) policiesObj;
+    java.util.List policiesList = new java.util.ArrayList();
+    for (Object item : rawList) {
+        if (item != null) {
+            if (item instanceof com.fasterxml.jackson.databind.JsonNode) {
+                policiesList.add(((com.fasterxml.jackson.databind.JsonNode) item).asText());
+            } else {
+                policiesList.add(item.toString());
+            }
+        }
+    }
+    kcontext.setVariable("applicablePolicies", policiesList);
+} else {
+    kcontext.setVariable("applicablePolicies", new java.util.ArrayList());
 }</drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -667,13 +715,13 @@ if (response != null &amp;&amp; !response.isEmpty()) {
       <bpmn2:ioSpecification id="_P1_CALL_NIGO_io">
         <bpmn2:dataInput id="_P1_CALL_NIGO_caseId" name="caseId" structureRef="String" />
         <bpmn2:dataInput id="_P1_CALL_NIGO_claimType" name="claimType" structureRef="String" />
-        <bpmn2:dataInput id="_P1_CALL_NIGO_missingDocuments" name="missingDocuments" structureRef="java.util.List" />
+        <bpmn2:dataInput id="_P1_CALL_NIGO_missingDocs" name="missingDocs" structureRef="java.util.List" />
         <bpmn2:dataInput id="_P1_CALL_NIGO_applicablePolicies" name="applicablePolicies" structureRef="java.util.List" />
         <bpmn2:dataOutput id="_P1_CALL_NIGO_out_caseId" name="caseId" structureRef="String" />
         <bpmn2:inputSet id="_P1_CALL_NIGO_inputSet">
           <bpmn2:dataInputRefs>_P1_CALL_NIGO_caseId</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_CALL_NIGO_claimType</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_CALL_NIGO_missingDocuments</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P1_CALL_NIGO_missingDocs</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P1_CALL_NIGO_applicablePolicies</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet id="_P1_CALL_NIGO_outputSet">
@@ -688,9 +736,9 @@ if (response != null &amp;&amp; !response.isEmpty()) {
         <bpmn2:sourceRef>claimType</bpmn2:sourceRef>
         <bpmn2:targetRef>_P1_CALL_NIGO_claimType</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_P1_CALL_NIGO_assoc_missingDocuments">
+      <bpmn2:dataInputAssociation id="_P1_CALL_NIGO_assoc_missingDocs">
         <bpmn2:sourceRef>missingDocs</bpmn2:sourceRef>
-        <bpmn2:targetRef>_P1_CALL_NIGO_missingDocuments</bpmn2:targetRef>
+        <bpmn2:targetRef>_P1_CALL_NIGO_missingDocs</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="_P1_CALL_NIGO_assoc_applicablePolicies">
         <bpmn2:sourceRef>applicablePolicies</bpmn2:sourceRef>

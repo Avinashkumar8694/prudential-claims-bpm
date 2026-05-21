@@ -29,7 +29,7 @@
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId" />
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount" />
     <bpmn2:property id="nodeError" itemSubjectRef="_nodeErrorItem" name="nodeError" />
-    <bpmn2:property id="missingDocuments" itemSubjectRef="_missingDocsItem" name="missingDocuments" />
+    <bpmn2:property id="missingDocs" itemSubjectRef="_missingDocsItem" name="missingDocs" />
     <bpmn2:property id="followupCount" itemSubjectRef="_followupCountItem" name="followupCount" />
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl" />
     <bpmn2:property id="reqPayload" itemSubjectRef="_reqPayloadItem" name="reqPayload" />
@@ -168,7 +168,7 @@ com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
-json.putPOJO("missingDocuments", kcontext.getVariable("missingDocuments"));
+json.putPOJO("missingDocuments", kcontext.getVariable("missingDocs"));
 kcontext.setVariable("reqPayload", json.toString());</drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
