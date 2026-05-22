@@ -22,11 +22,13 @@
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_maxRetryCountItem" structureRef="Integer"/>
   <bpmn2:itemDefinition id="_failedContextItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_adminDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="__CALL_ERR_failedContextInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__CALL_ERR_caseIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__CALL_ERR_maxRetryCountInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__CALL_ERR_failedContextOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__CALL_ERR_resPayloadOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__CALL_ERR_adminDecisionOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__REST_TASK_UrlInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__REST_TASK_MethodInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__REST_TASK_HeadersInputXItem" structureRef=""/>
@@ -38,6 +40,7 @@
   <bpmn2:itemDefinition id="__REST_TASK_HandleResponseErrorsInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__REST_TASK_ResultOutputXItem" structureRef=""/>
   <bpmn2:error id="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
+  <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
   <bpmn2:process id="prudential-claims-submission.pru-rest-executor" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-rest-executor" isExecutable="true" processType="Public">
     <bpmn2:property id="TaskName" itemSubjectRef="_TaskNameItem" name="TaskName"/>
     <bpmn2:property id="AcceptCharset" itemSubjectRef="_AcceptCharsetItem" name="AcceptCharset"/>
@@ -61,6 +64,7 @@
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
     <bpmn2:property id="failedContext" itemSubjectRef="_failedContextItem" name="failedContext"/>
+    <bpmn2:property id="adminDecision" itemSubjectRef="_adminDecisionItem" name="adminDecision"/>
     <bpmn2:sequenceFlow id="_F2" sourceRef="_REST_TASK" targetRef="_END_SUCCESS"/>
     <bpmn2:sequenceFlow id="_F_PRE_TO_REST" sourceRef="_PRE_EXECUTE" targetRef="_REST_TASK"/>
     <bpmn2:sequenceFlow id="_F4" sourceRef="_BUILD_CTX" targetRef="_CALL_ERR"/>
@@ -225,6 +229,7 @@ if (readTimeout != null) {
         <bpmn2:dataInput id="_CALL_ERR_maxRetryCountInputX" drools:dtype="" itemSubjectRef="__CALL_ERR_maxRetryCountInputXItem" name="maxRetryCount"/>
         <bpmn2:dataOutput id="_CALL_ERR_failedContextOutputX" drools:dtype="" itemSubjectRef="__CALL_ERR_failedContextOutputXItem" name="failedContext"/>
         <bpmn2:dataOutput id="_CALL_ERR_resPayloadOutputX" drools:dtype="" itemSubjectRef="__CALL_ERR_resPayloadOutputXItem" name="resPayload"/>
+        <bpmn2:dataOutput id="_CALL_ERR_adminDecisionOutputX" drools:dtype="" itemSubjectRef="__CALL_ERR_adminDecisionOutputXItem" name="adminDecision"/>
         <bpmn2:inputSet id="_7KxjpFU-EfGKZOvILHBitw">
           <bpmn2:dataInputRefs>_CALL_ERR_failedContextInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_CALL_ERR_caseIdInputX</bpmn2:dataInputRefs>
@@ -233,6 +238,7 @@ if (readTimeout != null) {
         <bpmn2:outputSet id="_7KxjpVU-EfGKZOvILHBitw">
           <bpmn2:dataOutputRefs>_CALL_ERR_failedContextOutputX</bpmn2:dataOutputRefs>
           <bpmn2:dataOutputRefs>_CALL_ERR_resPayloadOutputX</bpmn2:dataOutputRefs>
+          <bpmn2:dataOutputRefs>_CALL_ERR_adminDecisionOutputX</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation id="_7KxjplU-EfGKZOvILHBitw">
@@ -255,6 +261,10 @@ if (readTimeout != null) {
         <bpmn2:sourceRef>_CALL_ERR_resPayloadOutputX</bpmn2:sourceRef>
         <bpmn2:targetRef>Result</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="_7Kxjq_adminDecision_assoc">
+        <bpmn2:sourceRef>_CALL_ERR_adminDecisionOutputX</bpmn2:sourceRef>
+        <bpmn2:targetRef>adminDecision</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:startEvent id="_START" name="Start">
       <bpmn2:extensionElements>
@@ -270,7 +280,32 @@ if (readTimeout != null) {
           <drools:metaValue><![CDATA[End Handled]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
+      <bpmn2:incoming>_F_REST_TO_END_ERROR</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:exclusiveGateway id="_GATE_CHECK_DECISION" name="Is Terminate?" gatewayDirection="Diverging">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Is Terminate?]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
       <bpmn2:incoming>_F5</bpmn2:incoming>
+      <bpmn2:outgoing>_F_REST_TO_END_ERROR</bpmn2:outgoing>
+      <bpmn2:outgoing>_F_REST_TO_THROW_ERR</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="_F_REST_TO_END_ERROR" name="Continue/Skip" sourceRef="_GATE_CHECK_DECISION" targetRef="_END_ERROR">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_cond_not_terminate" language="http://www.java.com/java"><![CDATA[return !"TERMINATE".equals(adminDecision);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="_F_REST_TO_THROW_ERR" name="Terminate" sourceRef="_GATE_CHECK_DECISION" targetRef="_END_ERROR_TERMINATE">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_cond_terminate" language="http://www.java.com/java"><![CDATA[return "TERMINATE".equals(adminDecision);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:endEvent id="_END_ERROR_TERMINATE" name="Throw Terminate Error">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Throw Terminate Error]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>_F_REST_TO_THROW_ERR</bpmn2:incoming>
+      <bpmn2:errorEventDefinition id="_err_def_terminate" errorRef="TERMINATE_CASE"/>
     </bpmn2:endEvent>
     <bpmn2:boundaryEvent id="_B_ERROR" drools:dockerinfo="60.0^52.0|" drools:boundaryca="true" name="Catch REST Failure" attachedToRef="_REST_TASK">
       <bpmn2:extensionElements>
@@ -285,7 +320,13 @@ if (readTimeout != null) {
   <bpmndi:BPMNDiagram id="_7KxjrFU-EfGKZOvILHBitw">
     <bpmndi:BPMNPlane id="_7KxjrVU-EfGKZOvILHBitw" bpmnElement="prudential-claims-submission.pru-rest-executor">
       <bpmndi:BPMNShape id="shape__END_ERROR" bpmnElement="_END_ERROR">
+        <dc:Bounds height="56.0" width="56.0" x="900.0" y="200.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__GATE_CHECK_DECISION" bpmnElement="_GATE_CHECK_DECISION" isMarkerVisible="true">
         <dc:Bounds height="56.0" width="56.0" x="780.0" y="252.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__END_ERROR_TERMINATE" bpmnElement="_END_ERROR_TERMINATE">
+        <dc:Bounds height="56.0" width="56.0" x="900.0" y="300.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__B_ERROR" bpmnElement="_B_ERROR">
         <dc:Bounds height="56.0" width="56.0" x="500.0" y="140.0"/>
@@ -308,9 +349,19 @@ if (readTimeout != null) {
       <bpmndi:BPMNShape id="shape__END_SUCCESS" bpmnElement="_END_SUCCESS">
         <dc:Bounds height="56.0" width="56.0" x="666.0" y="100.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="edge_shape__CALL_ERR_to_shape__END_ERROR" bpmnElement="_F5">
+      <bpmndi:BPMNEdge id="edge_shape__CALL_ERR_to_shape__GATE_CHECK_DECISION" bpmnElement="_F5">
         <di:waypoint xsi:type="dc:Point" x="740.0" y="280.0"/>
         <di:waypoint xsi:type="dc:Point" x="780.0" y="280.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape__GATE_CHECK_DECISION_to_shape__END_ERROR" bpmnElement="_F_REST_TO_END_ERROR">
+        <di:waypoint xsi:type="dc:Point" x="808.0" y="252.0"/>
+        <di:waypoint xsi:type="dc:Point" x="808.0" y="228.0"/>
+        <di:waypoint xsi:type="dc:Point" x="900.0" y="228.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape__GATE_CHECK_DECISION_to_shape__END_ERROR_TERMINATE" bpmnElement="_F_REST_TO_THROW_ERR">
+        <di:waypoint xsi:type="dc:Point" x="808.0" y="308.0"/>
+        <di:waypoint xsi:type="dc:Point" x="808.0" y="328.0"/>
+        <di:waypoint xsi:type="dc:Point" x="900.0" y="328.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__B_ERROR_to_shape__BUILD_CTX" bpmnElement="_F3">
         <di:waypoint xsi:type="dc:Point" x="518.0" y="176.0"/>

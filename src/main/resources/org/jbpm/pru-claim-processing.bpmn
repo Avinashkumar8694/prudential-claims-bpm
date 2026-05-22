@@ -299,6 +299,7 @@
   <bpmn2:itemDefinition id="__P1_N11_UrlInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P1_N11_UsernameInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P1_N11_ResultOutputXItem" structureRef=""/>
+  <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
   <bpmn2:process id="prudential-claims-submission.pru-claim-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-processing" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
@@ -821,9 +822,6 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
           <drools:metaValue><![CDATA[Script_Bootstrap]]></drools:metaValue>
-        </drools:metaData>
-        <drools:metaData name="customAsync">
-          <drools:metaValue><![CDATA[true]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_BOOTSTRAP</bpmn2:incoming>
@@ -2296,6 +2294,32 @@ System.out.println("[BPM][CALC_CONTESTABLE] calculated contestable=" + contestab
 
 kcontext.setVariable("flagContestable", contestable);]]></bpmn2:script>
     </bpmn2:scriptTask>
+    <bpmn2:subProcess id="_GLOBAL_TERMINATE_SUBPROCESS" name="Global Terminate Subprocess" triggeredByEvent="true">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Global Terminate Subprocess]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:startEvent id="_START_TERMINATE_EVENT" name="Catch Terminate Error">
+        <bpmn2:extensionElements>
+          <drools:metaData name="elementname">
+            <drools:metaValue><![CDATA[Catch Terminate Error]]></drools:metaValue>
+          </drools:metaData>
+        </bpmn2:extensionElements>
+        <bpmn2:outgoing>_F_TERMINATE_SUBPROCESS</bpmn2:outgoing>
+        <bpmn2:errorEventDefinition id="_err_def_global_terminate" errorRef="TERMINATE_CASE"/>
+      </bpmn2:startEvent>
+      <bpmn2:sequenceFlow id="_F_TERMINATE_SUBPROCESS" sourceRef="_START_TERMINATE_EVENT" targetRef="_END_TERMINATE_EVENT"/>
+      <bpmn2:endEvent id="_END_TERMINATE_EVENT" name="Terminate Case">
+        <bpmn2:extensionElements>
+          <drools:metaData name="elementname">
+            <drools:metaValue><![CDATA[Terminate Case]]></drools:metaValue>
+          </drools:metaData>
+        </bpmn2:extensionElements>
+        <bpmn2:incoming>_F_TERMINATE_SUBPROCESS</bpmn2:incoming>
+        <bpmn2:terminateEventDefinition id="_term_def_global"/>
+      </bpmn2:endEvent>
+    </bpmn2:subProcess>
   </bpmn2:process>
   <bpmndi:BPMNDiagram id="_7Ut30lXqEfGKZOvILHBitw">
     <bpmndi:BPMNPlane id="_7Ut301XqEfGKZOvILHBitw" bpmnElement="prudential-claims-submission.pru-claim-processing">
@@ -2571,6 +2595,19 @@ kcontext.setVariable("flagContestable", contestable);]]></bpmn2:script>
         <di:waypoint xsi:type="dc:Point" x="2150.0" y="128.0"/>
         <di:waypoint xsi:type="dc:Point" x="2192.0" y="131.0"/>
         <di:waypoint xsi:type="dc:Point" x="2192.0" y="337.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="shape___GLOBAL_TERMINATE_SUBPROCESS" bpmnElement="_GLOBAL_TERMINATE_SUBPROCESS" isExpanded="true">
+        <dc:Bounds height="150.0" width="350.0" x="100.0" y="500.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape___START_TERMINATE_EVENT" bpmnElement="_START_TERMINATE_EVENT">
+        <dc:Bounds height="56.0" width="56.0" x="150.0" y="550.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape___END_TERMINATE_EVENT" bpmnElement="_END_TERMINATE_EVENT">
+        <dc:Bounds height="56.0" width="56.0" x="350.0" y="550.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="edge_shape___START_TERMINATE_EVENT_to_shape___END_TERMINATE_EVENT" bpmnElement="_F_TERMINATE_SUBPROCESS">
+        <di:waypoint xsi:type="dc:Point" x="206.0" y="578.0"/>
+        <di:waypoint xsi:type="dc:Point" x="350.0" y="578.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

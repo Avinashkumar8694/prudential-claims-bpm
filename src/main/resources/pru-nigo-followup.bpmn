@@ -180,6 +180,7 @@
   <bpmn2:itemDefinition id="__P2_N2A_UrlInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P2_N2A_UsernameInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P2_N2A_ResultOutputXItem" structureRef=""/>
+  <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
@@ -268,7 +269,7 @@ return count >= 3;]]></bpmn2:conditionExpression>
       </bpmn2:extensionElements>
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_CaP7NlWxEfGKZOvILHBitw" language="http://www.java.com/java"><![CDATA[return Boolean.TRUE.equals(allDocsReceived);]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_P2_F_CLOSE_CLAIM" name="No" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_END_MERGE">
+    <bpmn2:sequenceFlow id="_P2_F_CLOSE_CLAIM" name="No" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_END_ERROR_TERMINATE">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
           <drools:metaValue><![CDATA[No]]></drools:metaValue>
@@ -1152,7 +1153,6 @@ if (response != null && !response.isEmpty()) {
           <drools:metaValue><![CDATA[End Merge]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
-      <bpmn2:incoming>_P2_F_CLOSE_CLAIM</bpmn2:incoming>
       <bpmn2:incoming>_P2_F_DOCS_YES</bpmn2:incoming>
       <bpmn2:outgoing>_P2_F_TO_END_SUCCESS</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
@@ -1282,6 +1282,15 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:timeDuration xsi:type="bpmn2:tFormalExpression" id="_CaRJZlWxEfGKZOvILHBitw">PT5M</bpmn2:timeDuration>
       </bpmn2:timerEventDefinition>
     </bpmn2:boundaryEvent>
+    <bpmn2:endEvent id="_P2_END_ERROR_TERMINATE" name="Throw Terminate Error">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Throw Terminate Error]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>_P2_F_CLOSE_CLAIM</bpmn2:incoming>
+      <bpmn2:errorEventDefinition id="_err_def_nigo_terminate" errorRef="TERMINATE_CASE"/>
+    </bpmn2:endEvent>
   </bpmn2:process>
   <bpmndi:BPMNDiagram id="_CaRJZ1WxEfGKZOvILHBitw">
     <bpmndi:BPMNPlane id="_CaRJaFWxEfGKZOvILHBitw" bpmnElement="prudential-claims-submission.pru-nigo-followup">
@@ -1365,10 +1374,9 @@ if (response != null && !response.isEmpty()) {
         <di:waypoint xsi:type="dc:Point" x="735.0" y="190.0"/>
         <di:waypoint xsi:type="dc:Point" x="735.0" y="153.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shape__P2_XG_CONTINUE_to_shape__P2_END_MERGE" bpmnElement="_P2_F_CLOSE_CLAIM">
-        <di:waypoint xsi:type="dc:Point" x="1570.0" y="220.0"/>
-        <di:waypoint xsi:type="dc:Point" x="1605.0" y="220.0"/>
-        <di:waypoint xsi:type="dc:Point" x="1605.0" y="153.0"/>
+      <bpmndi:BPMNEdge id="edge_shape__P2_XG_CONTINUE_to_shape__P2_END_ERROR_TERMINATE" bpmnElement="_P2_F_CLOSE_CLAIM">
+        <di:waypoint xsi:type="dc:Point" x="1576.0" y="223.0"/>
+        <di:waypoint xsi:type="dc:Point" x="1650.0" y="223.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__P2_XG_DOCS_to_shape__P2_END_MERGE" bpmnElement="_P2_F_DOCS_YES">
         <di:waypoint xsi:type="dc:Point" x="1330.0" y="128.0"/>
@@ -1457,6 +1465,9 @@ if (response != null && !response.isEmpty()) {
         <di:waypoint xsi:type="dc:Point" x="920.0" y="128.0"/>
         <di:waypoint xsi:type="dc:Point" x="960.0" y="128.0"/>
       </bpmndi:BPMNEdge>
+      <bpmndi:BPMNShape id="shape__P2_END_ERROR_TERMINATE" bpmnElement="_P2_END_ERROR_TERMINATE">
+        <dc:Bounds height="56.0" width="56.0" x="1650.0" y="195.0"/>
+      </bpmndi:BPMNShape>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
   <bpmn2:relationship id="_CaRJaVWxEfGKZOvILHBitw" type="BPSimData">
