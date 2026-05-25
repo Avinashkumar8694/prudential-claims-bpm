@@ -461,11 +461,73 @@ Tests loop execution when a document check is updated but still has unresolved o
 ```
 
 ### ⚙️ Mock API Interactions & Behaviors
-1. **`POST /api/v1/claims/nigo/update-status`**
+1. **`POST /api/v1/claims/check-documents`**
+   * **Mock responds:** `{ "success": true, "allDocsVerified": false, "missingDocs": ["CERTIFIED_DEATH_CERTIFICATE"] }`
+   * *BPM branches to NIGO Subprocess (`pru-nigo-followup`).*
+2. **`POST /api/v1/claims/nigo/send`** $\rightarrow$ Responds `{ "success": true }`
+3. **BPM enters Wait State:** Suspends execution waiting for the **`DocumentUploaded`** signal.
+4. **Resuming/Triggering Upload Event:** Send the `DocumentUploaded` signal to the process instance.
+5. **`POST /api/v1/claims/nigo/update-status`**
    * **Mock responds:** `{ "success": true, "allDocsReceived": false }`
-   * *Resumes to NIGO Subprocess loop and escalates to N9: ExaminerPartialReview.*
+   * *Resumes to NIGO Subprocess loop and escalates to N9: ExaminerPartialReview due to outstanding requirements.*
 
 ---
+
+## 🧪 Scenario 14: Fast-Track Rule Check (FASTTRACKFAIL)
+This tests the branching and response behavior of the fast-track rule check endpoint.
+
+### 📥 Startup Payload
+To test the fast-track rule failure, send a payload containing `FASTTRACKFAIL` in the `caseId`:
+```json
+{
+  "caseId": "CASE-FASTTRACKFAIL-014",
+  "policyNumber": "POL-12345",
+  "claimType": "DEATH",
+  "applicablePolicies": ["POL-12345"]
+}
+```
+
+### ⚙️ Mock API Interactions & Behaviors
+1. **`POST /api/v1/claims/check-fast-track-rule`** (or `/v1/claims/check-fast-track-rule`)
+   * **BPM sends:** `{ "caseId": "CASE-FASTTRACKFAIL-014", ... }`
+   * **Mock responds:**
+     ```json
+     {
+       "success": true,
+       "fundTaxResult": {
+         "taxWithholdingRate": 0.1,
+         "stateTaxRate": 0.03,
+         "fundType": "MULTI"
+       },
+       "isFastTrackRuleClear": false
+     }
+     ```
+   * *Because the caseId contains `FASTTRACKFAIL`, the mock returns `isFastTrackRuleClear: false`.*
+
+To test a successful fast-track rule execution, omit `FASTTRACKFAIL` from the `caseId`:
+```json
+{
+  "caseId": "CASE-DEATH-HAPPY-001",
+  "policyNumber": "POL-12345",
+  "claimType": "DEATH",
+  "applicablePolicies": ["POL-12345"]
+}
+```
+* **Mock responds:**
+  ```json
+  {
+    "success": true,
+    "fundTaxResult": {
+      "taxWithholdingRate": 0.1,
+      "stateTaxRate": 0.03,
+      "fundType": "MULTI"
+    },
+    "isFastTrackRuleClear": true
+  }
+  ```
+
+---
+
 
 ## 🛠️ Route Overrides & Failure Injection (Auto-Retry & Admin Decisions)
 You can dynamically force any mock endpoint to fail a specific number of times (to test automated retry logic in `pru-api-error-handler.bpmn`) or persistently (to test manual admin decision and retry/skip paths).
