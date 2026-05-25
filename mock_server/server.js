@@ -547,6 +547,29 @@ app.post('/api/v1/claims/tax/single-fund', (req, res) => {
   });
 });
 
+// 10b. Check Fast-Track Rules
+app.post('/api/v1/claims/check-fast-track-rule', (req, res) => {
+  const { caseId } = req.body;
+  const hasFailure = caseId && (
+    caseId.includes('FASTTRACKFAIL') ||
+    caseId.includes('BANKFAIL') ||
+    caseId.includes('CONTEST') ||
+    caseId.includes('MINOR') ||
+    caseId.includes('SANCTION') ||
+    caseId.includes('LAPSE') ||
+    caseId.includes('POLICYFAIL')
+  );
+  res.json({
+    success: true,
+    fundTaxResult: {
+      taxWithholdingRate: 0.1,
+      stateTaxRate: 0.03,
+      fundType: "MULTI"
+    },
+    isFastTrackRuleClear: !hasFailure
+  });
+});
+
 // 11. Apply Tax Rules
 app.post('/api/v1/claims/tax/apply', (req, res) => {
   const { caseId } = req.body;

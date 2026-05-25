@@ -622,6 +622,59 @@
         }
       }
     },
+    "/api/v1/claims/check-fast-track-rule": {
+      "post": {
+        "summary": "10b. Check Fast-Track Rules",
+        "description": "Checks automated fast-track rules on the claim based on case constraints.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "fundTaxResult": {
+                      "type": "object"
+                    },
+                    "isFastTrackRuleClear": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": {
+                    "type": "string"
+                  },
+                  "caseId": {
+                    "type": "string"
+                  },
+                  "applicablePolicies": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/claims/tax/apply": {
       "post": {
         "summary": "11. Apply Tax Rules",
