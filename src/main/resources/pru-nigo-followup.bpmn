@@ -23,23 +23,23 @@
   <bpmn2:itemDefinition id="_pendingDocsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_examinerDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="__P2_N2B_AcceptCharsetInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_AcceptHeaderInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_AuthTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_AuthUrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_ConnectTimeoutInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_ContentDataInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_ContentTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_ContentTypeCharsetInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_HandleResponseErrorsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_HeadersInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_MethodInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_PasswordInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_ReadTimeoutInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_ResultClassInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_UrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_UsernameInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2B_ResultOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_AcceptCharsetInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_AcceptHeaderInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_AuthTypeInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_AuthUrlInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_ConnectTimeoutInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_ContentDataInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_ContentTypeInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_ContentTypeCharsetInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_HandleResponseErrorsInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_HeadersInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_MethodInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_PasswordInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_ReadTimeoutInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_ResultClassInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_UrlInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_UsernameInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P2_N1B_ResultOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P2_N11_AcceptCharsetInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P2_N11_AcceptHeaderInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P2_N11_AuthTypeInputXItem" structureRef=""/>
@@ -163,23 +163,7 @@
   <bpmn2:itemDefinition id="__P2_N4_NotCompletedReassignInputXItem" structureRef="Object"/>
   <bpmn2:itemDefinition id="__P2_N4_NotStartedNotifyInputXItem" structureRef="Object"/>
   <bpmn2:itemDefinition id="__P2_N4_NotCompletedNotifyInputXItem" structureRef="Object"/>
-  <bpmn2:itemDefinition id="__P2_N2A_AcceptCharsetInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_AcceptHeaderInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_AuthTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_AuthUrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_ConnectTimeoutInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_ContentDataInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_ContentTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_ContentTypeCharsetInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_HandleResponseErrorsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_HeadersInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_MethodInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_PasswordInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_ReadTimeoutInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_ResultClassInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_UrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_UsernameInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P2_N2A_ResultOutputXItem" structureRef=""/>
+
   <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
   <bpmn2:process id="prudential-claims-submission.pru-nigo-followup" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-nigo-followup" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
@@ -205,24 +189,14 @@
     <bpmn2:property id="pendingDocs" itemSubjectRef="_pendingDocsItem" name="pendingDocs"/>
     <bpmn2:property id="examinerDecision" itemSubjectRef="_examinerDecisionItem" name="examinerDecision"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
-    <bpmn2:sequenceFlow id="_P2_F_UPLOADED" sourceRef="_P2_N4" targetRef="_P2_N6"/>
-    <bpmn2:sequenceFlow id="_P2_F_TIMEOUT" sourceRef="_P2_TIMER" targetRef="_P2_INCREMENT"/>
     <bpmn2:sequenceFlow id="_P2_F_IDP_DONE" sourceRef="_P2_N6" targetRef="_P2_N7"/>
     <bpmn2:sequenceFlow id="_P2_F1" sourceRef="_P2_BOOTSTRAP" targetRef="_P2_N1"/>
-    <bpmn2:sequenceFlow id="_P2_F_DEATH" name="Death" sourceRef="_P2_XG_CLAIMTYPE" targetRef="_P2_N2A">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[Death]]></drools:metaValue>
-        </drools:metaData>
-      </bpmn2:extensionElements>
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5WgVg5EfGoNpO8onZRMw" language="http://www.java.com/java"><![CDATA[return "DEATH".equals(claimType);]]></bpmn2:conditionExpression>
-    </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_P2_F2" sourceRef="_P2_N1" targetRef="_P2_XG_CLAIMTYPE"/>
+    <bpmn2:sequenceFlow id="_P2_F2" sourceRef="_P2_N1" targetRef="_P2_N1B"/>
+    <bpmn2:sequenceFlow id="_P2_F2B" sourceRef="_P2_N1B" targetRef="_P2_MERGE"/>
     <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_UPDATED" sourceRef="_P2_N12" targetRef="_P2_N13"/>
     <bpmn2:sequenceFlow id="_P2_F_DEATH_VER_DONE" sourceRef="_P2_N13" targetRef="_P2_END_DEATH_VER"/>
     <bpmn2:sequenceFlow id="_P2_F_TO_WAIT" sourceRef="_P2_MERGE" targetRef="_P2_N4"/>
     <bpmn2:sequenceFlow id="_P2_F_LOOP" sourceRef="_P2_N11" targetRef="_P2_MERGE"/>
-    <bpmn2:sequenceFlow id="_P2_F_MERGE_2A" sourceRef="_P2_N2A" targetRef="_P2_MERGE"/>
     <bpmn2:sequenceFlow id="_P2_F_CONTINUE_CHASE" name="Yes" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_MERGE">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -242,14 +216,19 @@
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5Wg1g5EfGoNpO8onZRMw" language="http://www.java.com/java"><![CDATA[return !Boolean.TRUE.equals(allDocsReceived);]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_P2_F_STATUS_DONE" sourceRef="_P2_N7" targetRef="_P2_XG_DOCS"/>
-    <bpmn2:sequenceFlow id="_P2_F_HALT" name="Limit Reached" sourceRef="_P2_XG_COUNT" targetRef="_P2_N12">
+    <bpmn2:sequenceFlow id="_P2_F_HALT" name="Limit Reached" sourceRef="_P2_XG_COUNT" targetRef="_P2_XG_TIMEOUT_TYPE">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
           <drools:metaValue><![CDATA[Limit Reached]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5WhFg5EfGoNpO8onZRMw" language="http://www.java.com/java"><![CDATA[int count = (int) kcontext.getVariable("followupCount");
-return count >= 3;]]></bpmn2:conditionExpression>
+String claimType = (String) kcontext.getVariable("claimType");
+if ("TI".equals(claimType)) {
+    return count >= 1;
+} else {
+    return count >= 4;
+}]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_P2_F_RETRY" name="Under Limit" sourceRef="_P2_XG_COUNT" targetRef="_P2_N11">
       <bpmn2:extensionElements>
@@ -258,7 +237,12 @@ return count >= 3;]]></bpmn2:conditionExpression>
         </drools:metaData>
       </bpmn2:extensionElements>
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5WhVg5EfGoNpO8onZRMw" language="http://www.java.com/java"><![CDATA[int count = (int) kcontext.getVariable("followupCount");
-return count < 3;]]></bpmn2:conditionExpression>
+String claimType = (String) kcontext.getVariable("claimType");
+if ("TI".equals(claimType)) {
+    return count < 1;
+} else {
+    return count < 4;
+}]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_P2_F_TO_XG" sourceRef="_P2_INCREMENT" targetRef="_P2_XG_COUNT"/>
     <bpmn2:sequenceFlow id="_P2_F_CLOSE_CLAIM" name="No" sourceRef="_P2_XG_CONTINUE" targetRef="_P2_END_ERROR_TERMINATE">
@@ -269,14 +253,11 @@ return count < 3;]]></bpmn2:conditionExpression>
       </bpmn2:extensionElements>
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5Whlg5EfGoNpO8onZRMw" language="http://www.java.com/java"><![CDATA[return !"CONTINUE".equals(examinerDecision);]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_P2_F_MERGE_2B" sourceRef="_P2_N2B" targetRef="_P2_MERGE"/>
-    <bpmn2:sequenceFlow id="_P2_F_TI" name="TI" sourceRef="_P2_XG_CLAIMTYPE" targetRef="_P2_N2B">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[TI]]></drools:metaValue>
-        </drools:metaData>
-      </bpmn2:extensionElements>
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5Wh1g5EfGoNpO8onZRMw" language="http://www.java.com/java"><![CDATA[return !"DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+    <bpmn2:sequenceFlow id="_P2_F_TIMEOUT_DEATH" name="Death" sourceRef="_P2_XG_TIMEOUT_TYPE" targetRef="_P2_N12">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5X_timeout_death" language="http://www.java.com/java"><![CDATA[return "DEATH".equals(claimType);]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="_P2_F_TIMEOUT_TI" name="TI" sourceRef="_P2_XG_TIMEOUT_TYPE" targetRef="_P2_N9">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5X_timeout_ti" language="http://www.java.com/java"><![CDATA[return !"DEATH".equals(claimType);]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_P2_F_DOCS_YES" name="Yes" sourceRef="_P2_XG_DOCS" targetRef="_P2_END_SUCCESS">
       <bpmn2:extensionElements>
@@ -286,110 +267,95 @@ return count < 3;]]></bpmn2:conditionExpression>
       </bpmn2:extensionElements>
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_hw5WiFg5EfGoNpO8onZRMw" language="http://www.java.com/java"><![CDATA[return Boolean.TRUE.equals(allDocsReceived);]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <bpmn2:callActivity id="_P2_N2A" drools:independent="true" drools:waitForCompletion="true" name="N2a: FundingNotice" calledElement="prudential-claims-submission.pru-rest-executor">
+    <bpmn2:callActivity id="_P2_N1B" drools:independent="true" drools:waitForCompletion="true" name="N1b: SetStatusPendingRequirements" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[N2a: FundingNotice]]></drools:metaValue>
+          <drools:metaValue><![CDATA[N1b: SetStatusPendingRequirements]]></drools:metaValue>
         </drools:metaData>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId"));
-com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
-json.put("caseId", (String)kcontext.getVariable("caseId"));
-json.put("noticeType", "DEATH_FUNDING");
-kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
+          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N1b-SetStatusPendingRequirements | caseId=" + kcontext.getVariable("caseId"));]]></drools:script>
         </drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
-
-System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
-if (response != null && !response.isEmpty()) {
-    try {
-        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
-        kcontext.setVariable("noticeS3Key", root.get("documentS3Key").asText());
-        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId") + " | noticeS3Key=" + kcontext.getVariable("noticeS3Key"));
-    } catch(Exception e) {
-        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2a-FundingNotice | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
-    }
-}]]></drools:script>
+System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N1b-SetStatusPendingRequirements | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
-      <bpmn2:incoming>_P2_F_DEATH</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_MERGE_2A</bpmn2:outgoing>
-      <bpmn2:ioSpecification id="_hw5WiVg5EfGoNpO8onZRMw">
-        <bpmn2:dataInput id="_P2_N2A_AcceptCharsetInputX" drools:dtype="" itemSubjectRef="__P2_N2A_AcceptCharsetInputXItem" name="AcceptCharset"/>
-        <bpmn2:dataInput id="_P2_N2A_AcceptHeaderInputX" drools:dtype="" itemSubjectRef="__P2_N2A_AcceptHeaderInputXItem" name="AcceptHeader"/>
-        <bpmn2:dataInput id="_P2_N2A_AuthTypeInputX" drools:dtype="" itemSubjectRef="__P2_N2A_AuthTypeInputXItem" name="AuthType"/>
-        <bpmn2:dataInput id="_P2_N2A_AuthUrlInputX" drools:dtype="" itemSubjectRef="__P2_N2A_AuthUrlInputXItem" name="AuthUrl"/>
-        <bpmn2:dataInput id="_P2_N2A_ConnectTimeoutInputX" drools:dtype="" itemSubjectRef="__P2_N2A_ConnectTimeoutInputXItem" name="ConnectTimeout"/>
-        <bpmn2:dataInput id="_P2_N2A_ContentDataInputX" drools:dtype="" itemSubjectRef="__P2_N2A_ContentDataInputXItem" name="ContentData"/>
-        <bpmn2:dataInput id="_P2_N2A_ContentTypeInputX" drools:dtype="" itemSubjectRef="__P2_N2A_ContentTypeInputXItem" name="ContentType"/>
-        <bpmn2:dataInput id="_P2_N2A_ContentTypeCharsetInputX" drools:dtype="" itemSubjectRef="__P2_N2A_ContentTypeCharsetInputXItem" name="ContentTypeCharset"/>
-        <bpmn2:dataInput id="_P2_N2A_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="__P2_N2A_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
-        <bpmn2:dataInput id="_P2_N2A_HeadersInputX" drools:dtype="" itemSubjectRef="__P2_N2A_HeadersInputXItem" name="Headers"/>
-        <bpmn2:dataInput id="_P2_N2A_MethodInputX" drools:dtype="" itemSubjectRef="__P2_N2A_MethodInputXItem" name="Method"/>
-        <bpmn2:dataInput id="_P2_N2A_PasswordInputX" drools:dtype="" itemSubjectRef="__P2_N2A_PasswordInputXItem" name="Password"/>
-        <bpmn2:dataInput id="_P2_N2A_ReadTimeoutInputX" drools:dtype="" itemSubjectRef="__P2_N2A_ReadTimeoutInputXItem" name="ReadTimeout"/>
-        <bpmn2:dataInput id="_P2_N2A_ResultClassInputX" drools:dtype="" itemSubjectRef="__P2_N2A_ResultClassInputXItem" name="ResultClass"/>
-        <bpmn2:dataInput id="_P2_N2A_UrlInputX" drools:dtype="" itemSubjectRef="__P2_N2A_UrlInputXItem" name="Url"/>
-        <bpmn2:dataInput id="_P2_N2A_UsernameInputX" drools:dtype="" itemSubjectRef="__P2_N2A_UsernameInputXItem" name="Username"/>
-        <bpmn2:dataOutput id="_P2_N2A_ResultOutputX" drools:dtype="" itemSubjectRef="__P2_N2A_ResultOutputXItem" name="Result"/>
-        <bpmn2:inputSet id="_hw5Wilg5EfGoNpO8onZRMw">
-          <bpmn2:dataInputRefs>_P2_N2A_AcceptCharsetInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_AcceptHeaderInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_AuthTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_AuthUrlInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_ConnectTimeoutInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_ContentDataInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_ContentTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_ContentTypeCharsetInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_HeadersInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_MethodInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_PasswordInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_ReadTimeoutInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_ResultClassInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_UrlInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2A_UsernameInputX</bpmn2:dataInputRefs>
+      <bpmn2:incoming>_P2_F2</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F2B</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="_hw5W_n1b_io">
+        <bpmn2:dataInput id="_P2_N1B_AcceptCharsetInputX" drools:dtype="" itemSubjectRef="__P2_N1B_AcceptCharsetInputXItem" name="AcceptCharset"/>
+        <bpmn2:dataInput id="_P2_N1B_AcceptHeaderInputX" drools:dtype="" itemSubjectRef="__P2_N1B_AcceptHeaderInputXItem" name="AcceptHeader"/>
+        <bpmn2:dataInput id="_P2_N1B_AuthTypeInputX" drools:dtype="" itemSubjectRef="__P2_N1B_AuthTypeInputXItem" name="AuthType"/>
+        <bpmn2:dataInput id="_P2_N1B_AuthUrlInputX" drools:dtype="" itemSubjectRef="__P2_N1B_AuthUrlInputXItem" name="AuthUrl"/>
+        <bpmn2:dataInput id="_P2_N1B_ConnectTimeoutInputX" drools:dtype="" itemSubjectRef="__P2_N1B_ConnectTimeoutInputXItem" name="ConnectTimeout"/>
+        <bpmn2:dataInput id="_P2_N1B_ContentDataInputX" drools:dtype="" itemSubjectRef="__P2_N1B_ContentDataInputXItem" name="ContentData"/>
+        <bpmn2:dataInput id="_P2_N1B_ContentTypeInputX" drools:dtype="" itemSubjectRef="__P2_N1B_ContentTypeInputXItem" name="ContentType"/>
+        <bpmn2:dataInput id="_P2_N1B_ContentTypeCharsetInputX" drools:dtype="" itemSubjectRef="__P2_N1B_ContentTypeCharsetInputXItem" name="ContentTypeCharset"/>
+        <bpmn2:dataInput id="_P2_N1B_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="__P2_N1B_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
+        <bpmn2:dataInput id="_P2_N1B_HeadersInputX" drools:dtype="" itemSubjectRef="__P2_N1B_HeadersInputXItem" name="Headers"/>
+        <bpmn2:dataInput id="_P2_N1B_MethodInputX" drools:dtype="" itemSubjectRef="__P2_N1B_MethodInputXItem" name="Method"/>
+        <bpmn2:dataInput id="_P2_N1B_PasswordInputX" drools:dtype="" itemSubjectRef="__P2_N1B_PasswordInputXItem" name="Password"/>
+        <bpmn2:dataInput id="_P2_N1B_ReadTimeoutInputX" drools:dtype="" itemSubjectRef="__P2_N1B_ReadTimeoutInputXItem" name="ReadTimeout"/>
+        <bpmn2:dataInput id="_P2_N1B_ResultClassInputX" drools:dtype="" itemSubjectRef="__P2_N1B_ResultClassInputXItem" name="ResultClass"/>
+        <bpmn2:dataInput id="_P2_N1B_UrlInputX" drools:dtype="" itemSubjectRef="__P2_N1B_UrlInputXItem" name="Url"/>
+        <bpmn2:dataInput id="_P2_N1B_UsernameInputX" drools:dtype="" itemSubjectRef="__P2_N1B_UsernameInputXItem" name="Username"/>
+        <bpmn2:dataOutput id="_P2_N1B_ResultOutputX" drools:dtype="" itemSubjectRef="__P2_N1B_ResultOutputXItem" name="Result"/>
+        <bpmn2:inputSet id="_hw5W_n1b_inputset">
+          <bpmn2:dataInputRefs>_P2_N1B_AcceptCharsetInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_AcceptHeaderInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_AuthTypeInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_AuthUrlInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_ConnectTimeoutInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_ContentDataInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_ContentTypeInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_ContentTypeCharsetInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_HeadersInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_MethodInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_PasswordInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_ReadTimeoutInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_ResultClassInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_UrlInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P2_N1B_UsernameInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet id="_hw5Wi1g5EfGoNpO8onZRMw">
-          <bpmn2:dataOutputRefs>_P2_N2A_ResultOutputX</bpmn2:dataOutputRefs>
+        <bpmn2:outputSet id="_hw5W_n1b_outputset">
+          <bpmn2:dataOutputRefs>_P2_N1B_ResultOutputX</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="_hw5WjFg5EfGoNpO8onZRMw">
+      <bpmn2:dataInputAssociation id="_hw5W_n1b_assoc_content">
         <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
-        <bpmn2:targetRef>_P2_N2A_ContentDataInputX</bpmn2:targetRef>
+        <bpmn2:targetRef>_P2_N1B_ContentDataInputX</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5WjVg5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2A_ContentTypeInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5Wjlg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5Wj1g5EfGoNpO8onZRMw"><![CDATA[application/json]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5WkFg5EfGoNpO8onZRMw">_P2_N2A_ContentTypeInputX</bpmn2:to>
+      <bpmn2:dataInputAssociation id="_hw5W_n1b_assoc_ctype">
+        <bpmn2:targetRef>_P2_N1B_ContentTypeInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_hw5W_n1b_assign_ctype">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_expr_ctype"><![CDATA[application/json]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_to_ctype">_P2_N1B_ContentTypeInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5WkVg5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2A_HandleResponseErrorsInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5Wklg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5Wk1g5EfGoNpO8onZRMw"><![CDATA[true]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5WlFg5EfGoNpO8onZRMw">_P2_N2A_HandleResponseErrorsInputX</bpmn2:to>
+      <bpmn2:dataInputAssociation id="_hw5W_n1b_assoc_err">
+        <bpmn2:targetRef>_P2_N1B_HandleResponseErrorsInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_hw5W_n1b_assign_err">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_expr_err"><![CDATA[true]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_to_err">_P2_N1B_HandleResponseErrorsInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5WlVg5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2A_MethodInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5Wllg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5Wl1g5EfGoNpO8onZRMw"><![CDATA[POST]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5WmFg5EfGoNpO8onZRMw">_P2_N2A_MethodInputX</bpmn2:to>
+      <bpmn2:dataInputAssociation id="_hw5W_n1b_assoc_method">
+        <bpmn2:targetRef>_P2_N1B_MethodInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_hw5W_n1b_assign_method">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_expr_method"><![CDATA[POST]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_to_method">_P2_N1B_MethodInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5WmVg5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2A_UrlInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5Wmlg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5Wm1g5EfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/nigo/funding-notice]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5WnFg5EfGoNpO8onZRMw">_P2_N2A_UrlInputX</bpmn2:to>
+      <bpmn2:dataInputAssociation id="_hw5W_n1b_assoc_url">
+        <bpmn2:targetRef>_P2_N1B_UrlInputX</bpmn2:targetRef>
+        <bpmn2:assignment id="_hw5W_n1b_assign_url">
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_expr_url"><![CDATA[#{baseUrl}/v1/claims/status]]></bpmn2:from>
+          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5W_n1b_to_url">_P2_N1B_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="_hw5WnVg5EfGoNpO8onZRMw">
-        <bpmn2:sourceRef>_P2_N2A_ResultOutputX</bpmn2:sourceRef>
+      <bpmn2:dataOutputAssociation id="_hw5W_n1b_assoc_res">
+        <bpmn2:sourceRef>_P2_N1B_ResultOutputX</bpmn2:sourceRef>
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
@@ -792,16 +758,7 @@ if (response != null && !response.isEmpty()) {
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
-    <bpmn2:exclusiveGateway id="_P2_XG_CLAIMTYPE" name="Claim Type?" gatewayDirection="Diverging">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[Claim Type?]]></drools:metaValue>
-        </drools:metaData>
-      </bpmn2:extensionElements>
-      <bpmn2:incoming>_P2_F2</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_TI</bpmn2:outgoing>
-      <bpmn2:outgoing>_P2_F_DEATH</bpmn2:outgoing>
-    </bpmn2:exclusiveGateway>
+
     <bpmn2:userTask id="_P2_N9" name="N9: ExaminerPartialReview">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -1172,113 +1129,16 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:incoming>_P2_F_CLOSE_CLAIM</bpmn2:incoming>
       <bpmn2:errorEventDefinition id="_hw5XNlg5EfGoNpO8onZRMw" drools:erefname="TERMINATE_CASE" errorRef="TERMINATE_CASE"/>
     </bpmn2:endEvent>
-    <bpmn2:callActivity id="_P2_N2B" drools:independent="true" drools:waitForCompletion="true" name="N2b: StandardNotice" calledElement="prudential-claims-submission.pru-rest-executor">
+    <bpmn2:exclusiveGateway id="_P2_XG_TIMEOUT_TYPE" name="Timeout Type?" gatewayDirection="Diverging">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[N2b: StandardNotice]]></drools:metaValue>
+          <drools:metaValue><![CDATA[Timeout Type?]]></drools:metaValue>
         </drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId"));
-com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
-json.put("caseId", (String)kcontext.getVariable("caseId"));
-json.put("noticeType", "TI_STANDARD");
-kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
-        </drools:onEntry-script>
-        <drools:onExit-script scriptFormat="http://www.java.com/java">
-          <drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
-
-System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId") + " | responseLen=" + (response != null ? String.valueOf(response.length()) : "null"));
-if (response != null && !response.isEmpty()) {
-    try {
-        com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
-        kcontext.setVariable("noticeS3Key", root.get("documentS3Key").asText());
-        System.out.println("[BPM][EXIT][OK] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId") + " | noticeS3Key=" + kcontext.getVariable("noticeS3Key"));
-    } catch(Exception e) {
-        System.out.println("[BPM][EXIT][ERROR] process=pru-nigo-followup | piid=" + kcontext.getProcessInstance().getId() + " | node=N2b-StandardNotice | caseId=" + kcontext.getVariable("caseId") + " | error=" + e.getMessage());
-    }
-}]]></drools:script>
-        </drools:onExit-script>
       </bpmn2:extensionElements>
-      <bpmn2:incoming>_P2_F_TI</bpmn2:incoming>
-      <bpmn2:outgoing>_P2_F_MERGE_2B</bpmn2:outgoing>
-      <bpmn2:ioSpecification id="_hw5XN1g5EfGoNpO8onZRMw">
-        <bpmn2:dataInput id="_P2_N2B_AcceptCharsetInputX" drools:dtype="" itemSubjectRef="__P2_N2B_AcceptCharsetInputXItem" name="AcceptCharset"/>
-        <bpmn2:dataInput id="_P2_N2B_AcceptHeaderInputX" drools:dtype="" itemSubjectRef="__P2_N2B_AcceptHeaderInputXItem" name="AcceptHeader"/>
-        <bpmn2:dataInput id="_P2_N2B_AuthTypeInputX" drools:dtype="" itemSubjectRef="__P2_N2B_AuthTypeInputXItem" name="AuthType"/>
-        <bpmn2:dataInput id="_P2_N2B_AuthUrlInputX" drools:dtype="" itemSubjectRef="__P2_N2B_AuthUrlInputXItem" name="AuthUrl"/>
-        <bpmn2:dataInput id="_P2_N2B_ConnectTimeoutInputX" drools:dtype="" itemSubjectRef="__P2_N2B_ConnectTimeoutInputXItem" name="ConnectTimeout"/>
-        <bpmn2:dataInput id="_P2_N2B_ContentDataInputX" drools:dtype="" itemSubjectRef="__P2_N2B_ContentDataInputXItem" name="ContentData"/>
-        <bpmn2:dataInput id="_P2_N2B_ContentTypeInputX" drools:dtype="" itemSubjectRef="__P2_N2B_ContentTypeInputXItem" name="ContentType"/>
-        <bpmn2:dataInput id="_P2_N2B_ContentTypeCharsetInputX" drools:dtype="" itemSubjectRef="__P2_N2B_ContentTypeCharsetInputXItem" name="ContentTypeCharset"/>
-        <bpmn2:dataInput id="_P2_N2B_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="__P2_N2B_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
-        <bpmn2:dataInput id="_P2_N2B_HeadersInputX" drools:dtype="" itemSubjectRef="__P2_N2B_HeadersInputXItem" name="Headers"/>
-        <bpmn2:dataInput id="_P2_N2B_MethodInputX" drools:dtype="" itemSubjectRef="__P2_N2B_MethodInputXItem" name="Method"/>
-        <bpmn2:dataInput id="_P2_N2B_PasswordInputX" drools:dtype="" itemSubjectRef="__P2_N2B_PasswordInputXItem" name="Password"/>
-        <bpmn2:dataInput id="_P2_N2B_ReadTimeoutInputX" drools:dtype="" itemSubjectRef="__P2_N2B_ReadTimeoutInputXItem" name="ReadTimeout"/>
-        <bpmn2:dataInput id="_P2_N2B_ResultClassInputX" drools:dtype="" itemSubjectRef="__P2_N2B_ResultClassInputXItem" name="ResultClass"/>
-        <bpmn2:dataInput id="_P2_N2B_UrlInputX" drools:dtype="" itemSubjectRef="__P2_N2B_UrlInputXItem" name="Url"/>
-        <bpmn2:dataInput id="_P2_N2B_UsernameInputX" drools:dtype="" itemSubjectRef="__P2_N2B_UsernameInputXItem" name="Username"/>
-        <bpmn2:dataOutput id="_P2_N2B_ResultOutputX" drools:dtype="" itemSubjectRef="__P2_N2B_ResultOutputXItem" name="Result"/>
-        <bpmn2:inputSet id="_hw5XOFg5EfGoNpO8onZRMw">
-          <bpmn2:dataInputRefs>_P2_N2B_AcceptCharsetInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_AcceptHeaderInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_AuthTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_AuthUrlInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_ConnectTimeoutInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_ContentDataInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_ContentTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_ContentTypeCharsetInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_HeadersInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_MethodInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_PasswordInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_ReadTimeoutInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_ResultClassInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_UrlInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P2_N2B_UsernameInputX</bpmn2:dataInputRefs>
-        </bpmn2:inputSet>
-        <bpmn2:outputSet id="_hw5XOVg5EfGoNpO8onZRMw">
-          <bpmn2:dataOutputRefs>_P2_N2B_ResultOutputX</bpmn2:dataOutputRefs>
-        </bpmn2:outputSet>
-      </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="_hw5XOlg5EfGoNpO8onZRMw">
-        <bpmn2:sourceRef>reqPayload</bpmn2:sourceRef>
-        <bpmn2:targetRef>_P2_N2B_ContentDataInputX</bpmn2:targetRef>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5XO1g5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2B_ContentTypeInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5XPFg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5XPVg5EfGoNpO8onZRMw"><![CDATA[application/json]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5XPlg5EfGoNpO8onZRMw">_P2_N2B_ContentTypeInputX</bpmn2:to>
-        </bpmn2:assignment>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5XP1g5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2B_HandleResponseErrorsInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5XQFg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5XQVg5EfGoNpO8onZRMw"><![CDATA[true]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5XQlg5EfGoNpO8onZRMw">_P2_N2B_HandleResponseErrorsInputX</bpmn2:to>
-        </bpmn2:assignment>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5XQ1g5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2B_MethodInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5XRFg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5XRVg5EfGoNpO8onZRMw"><![CDATA[POST]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5XRlg5EfGoNpO8onZRMw">_P2_N2B_MethodInputX</bpmn2:to>
-        </bpmn2:assignment>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="_hw5XR1g5EfGoNpO8onZRMw">
-        <bpmn2:targetRef>_P2_N2B_UrlInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="_hw5XSFg5EfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_hw5XSVg5EfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/nigo/standard-notice]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_hw5XSlg5EfGoNpO8onZRMw">_P2_N2B_UrlInputX</bpmn2:to>
-        </bpmn2:assignment>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="_hw5XS1g5EfGoNpO8onZRMw">
-        <bpmn2:sourceRef>_P2_N2B_ResultOutputX</bpmn2:sourceRef>
-        <bpmn2:targetRef>resPayload</bpmn2:targetRef>
-      </bpmn2:dataOutputAssociation>
-    </bpmn2:callActivity>
+      <bpmn2:incoming>_P2_F_HALT</bpmn2:incoming>
+      <bpmn2:outgoing>_P2_F_TIMEOUT_DEATH</bpmn2:outgoing>
+      <bpmn2:outgoing>_P2_F_TIMEOUT_TI</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
     <bpmn2:endEvent id="_P2_END_SUCCESS" name="End (Complete)">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -1303,9 +1163,6 @@ if (response != null && !response.isEmpty()) {
     <bpmndi:BPMNPlane id="_hw5XT1g5EfGoNpO8onZRMw" bpmnElement="prudential-claims-submission.pru-nigo-followup">
       <bpmndi:BPMNShape id="shape__P2_END_SUCCESS" bpmnElement="_P2_END_SUCCESS">
         <dc:Bounds height="56.0" width="56.0" x="1720.0" y="103.0"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__P2_N2B" bpmnElement="_P2_N2B">
-        <dc:Bounds height="80.0" width="120.0" x="564.0" y="151.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P2_END_ERROR_TERMINATE" bpmnElement="_P2_END_ERROR_TERMINATE">
         <dc:Bounds height="56.0" width="56.0" x="1740.0" y="195.0"/>
@@ -1340,11 +1197,11 @@ if (response != null && !response.isEmpty()) {
       <bpmndi:BPMNShape id="shape__P2_N9" bpmnElement="_P2_N9">
         <dc:Bounds height="80.0" width="120.0" x="1360.0" y="180.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__P2_XG_CLAIMTYPE" bpmnElement="_P2_XG_CLAIMTYPE">
-        <dc:Bounds height="56.0" width="56.0" x="460.0" y="103.0"/>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P2_N1" bpmnElement="_P2_N1">
         <dc:Bounds height="80.0" width="120.0" x="300.0" y="88.0"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__P2_N1B" bpmnElement="_P2_N1B">
+        <dc:Bounds height="80.0" width="120.0" x="450.0" y="88.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P2_N7" bpmnElement="_P2_N7">
         <dc:Bounds height="80.0" width="120.0" x="1120.0" y="88.0"/>
@@ -1364,22 +1221,12 @@ if (response != null && !response.isEmpty()) {
       <bpmndi:BPMNShape id="shape__P2_N4" bpmnElement="_P2_N4">
         <dc:Bounds height="80.0" width="120.0" x="800.0" y="88.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__P2_N2A" bpmnElement="_P2_N2A">
-        <dc:Bounds height="80.0" width="120.0" x="550.0" y="20.0"/>
+      <bpmndi:BPMNShape id="shape__P2_XG_TIMEOUT_TYPE" bpmnElement="_P2_XG_TIMEOUT_TYPE">
+        <dc:Bounds height="56.0" width="56.0" x="980.0" y="340.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="edge_shape__P2_XG_DOCS_to_shape__P2_END_SUCCESS" bpmnElement="_P2_F_DOCS_YES">
         <di:waypoint xsi:type="dc:Point" x="1330.0" y="128.0"/>
         <di:waypoint xsi:type="dc:Point" x="1720.0" y="131.0"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shape__P2_XG_CLAIMTYPE_to_shape__P2_N2B" bpmnElement="_P2_F_TI">
-        <di:waypoint xsi:type="dc:Point" x="485.0" y="153.0"/>
-        <di:waypoint xsi:type="dc:Point" x="485.0" y="190.0"/>
-        <di:waypoint xsi:type="dc:Point" x="564.0" y="191.0"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shape__P2_N2B_to_shape__P2_MERGE" bpmnElement="_P2_F_MERGE_2B">
-        <di:waypoint xsi:type="dc:Point" x="684.0" y="191.0"/>
-        <di:waypoint xsi:type="dc:Point" x="735.0" y="190.0"/>
-        <di:waypoint xsi:type="dc:Point" x="735.0" y="153.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__P2_XG_CONTINUE_to_shape__P2_END_ERROR_TERMINATE" bpmnElement="_P2_F_CLOSE_CLAIM">
         <di:waypoint xsi:type="dc:Point" x="1576.0" y="223.0"/>
@@ -1393,9 +1240,9 @@ if (response != null && !response.isEmpty()) {
         <di:waypoint xsi:type="dc:Point" x="1040.0" y="280.0"/>
         <di:waypoint xsi:type="dc:Point" x="1145.0" y="280.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shape__P2_XG_COUNT_to_shape__P2_N12" bpmnElement="_P2_F_HALT">
-        <di:waypoint xsi:type="dc:Point" x="1015.0" y="305.0"/>
-        <di:waypoint xsi:type="dc:Point" x="1018.0" y="415.0"/>
+      <bpmndi:BPMNEdge id="edge_shape__P2_XG_COUNT_to_shape__P2_XG_TIMEOUT_TYPE" bpmnElement="_P2_F_HALT">
+        <di:waypoint xsi:type="dc:Point" x="1018.0" y="311.0"/>
+        <di:waypoint xsi:type="dc:Point" x="1008.0" y="340.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__P2_N7_to_shape__P2_XG_DOCS" bpmnElement="_P2_F_STATUS_DONE">
         <di:waypoint xsi:type="dc:Point" x="1240.0" y="128.0"/>
@@ -1420,11 +1267,6 @@ if (response != null && !response.isEmpty()) {
         <di:waypoint xsi:type="dc:Point" x="735.0" y="-10.0"/>
         <di:waypoint xsi:type="dc:Point" x="735.0" y="103.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shape__P2_N2A_to_shape__P2_MERGE" bpmnElement="_P2_F_MERGE_2A">
-        <di:waypoint xsi:type="dc:Point" x="670.0" y="60.0"/>
-        <di:waypoint xsi:type="dc:Point" x="735.0" y="60.0"/>
-        <di:waypoint xsi:type="dc:Point" x="735.0" y="103.0"/>
-      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__P2_N11_to_shape__P2_MERGE" bpmnElement="_P2_F_LOOP">
         <di:waypoint xsi:type="dc:Point" x="1205.0" y="240.0"/>
         <di:waypoint xsi:type="dc:Point" x="1140.0" y="-30.0"/>
@@ -1443,14 +1285,21 @@ if (response != null && !response.isEmpty()) {
         <di:waypoint xsi:type="dc:Point" x="1078.0" y="455.0"/>
         <di:waypoint xsi:type="dc:Point" x="1145.0" y="455.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shape__P2_N1_to_shape__P2_XG_CLAIMTYPE" bpmnElement="_P2_F2">
+      <bpmndi:BPMNEdge id="edge_shape__P2_N1_to_shape__P2_N1B" bpmnElement="_P2_F2">
         <di:waypoint xsi:type="dc:Point" x="420.0" y="128.0"/>
-        <di:waypoint xsi:type="dc:Point" x="460.0" y="128.0"/>
+        <di:waypoint xsi:type="dc:Point" x="450.0" y="128.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shape__P2_XG_CLAIMTYPE_to_shape__P2_N2A" bpmnElement="_P2_F_DEATH">
-        <di:waypoint xsi:type="dc:Point" x="485.0" y="103.0"/>
-        <di:waypoint xsi:type="dc:Point" x="485.0" y="60.0"/>
-        <di:waypoint xsi:type="dc:Point" x="550.0" y="60.0"/>
+      <bpmndi:BPMNEdge id="edge_shape__P2_N1B_to_shape__P2_MERGE" bpmnElement="_P2_F2B">
+        <di:waypoint xsi:type="dc:Point" x="570.0" y="128.0"/>
+        <di:waypoint xsi:type="dc:Point" x="710.0" y="128.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape__P2_XG_TIMEOUT_TYPE_to_shape__P2_N12" bpmnElement="_P2_F_TIMEOUT_DEATH">
+        <di:waypoint xsi:type="dc:Point" x="1008.0" y="396.0"/>
+        <di:waypoint xsi:type="dc:Point" x="1018.0" y="415.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shape__P2_XG_TIMEOUT_TYPE_to_shape__P2_N9" bpmnElement="_P2_F_TIMEOUT_TI">
+        <di:waypoint xsi:type="dc:Point" x="1036.0" y="368.0"/>
+        <di:waypoint xsi:type="dc:Point" x="1360.0" y="220.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__P2_BOOTSTRAP_to_shape__P2_N1" bpmnElement="_P2_F1">
         <di:waypoint xsi:type="dc:Point" x="260.0" y="128.0"/>
@@ -1475,7 +1324,7 @@ if (response != null && !response.isEmpty()) {
       <bpsim:BPSimData>
         <bpsim:Scenario xsi:type="bpsim:Scenario" id="default" name="Simulationscenario">
           <bpsim:ScenarioParameters xsi:type="bpsim:ScenarioParameters"/>
-          <bpsim:ElementParameters xsi:type="bpsim:ElementParameters" elementRef="_P2_N2B" id="_hw5XUVg5EfGoNpO8onZRMw">
+          <bpsim:ElementParameters xsi:type="bpsim:ElementParameters" elementRef="_P2_N1B" id="_hw5XUVg5EfGoNpO8onZRMw_n1b">
             <bpsim:TimeParameters xsi:type="bpsim:TimeParameters">
               <bpsim:ProcessingTime xsi:type="bpsim:Parameter">
                 <bpsim:NormalDistribution mean="0.0" standardDeviation="0.0"/>
@@ -1683,26 +1532,6 @@ if (response != null && !response.isEmpty()) {
             </bpsim:CostParameters>
           </bpsim:ElementParameters>
           <bpsim:ElementParameters xsi:type="bpsim:ElementParameters" elementRef="_P2_N4" id="_hw5XXFg5EfGoNpO8onZRMw">
-            <bpsim:TimeParameters xsi:type="bpsim:TimeParameters">
-              <bpsim:ProcessingTime xsi:type="bpsim:Parameter">
-                <bpsim:NormalDistribution mean="0.0" standardDeviation="0.0"/>
-              </bpsim:ProcessingTime>
-            </bpsim:TimeParameters>
-            <bpsim:ResourceParameters xsi:type="bpsim:ResourceParameters">
-              <bpsim:Availability xsi:type="bpsim:Parameter">
-                <bpsim:FloatingParameter value="0.0"/>
-              </bpsim:Availability>
-              <bpsim:Quantity xsi:type="bpsim:Parameter">
-                <bpsim:FloatingParameter value="0.0"/>
-              </bpsim:Quantity>
-            </bpsim:ResourceParameters>
-            <bpsim:CostParameters xsi:type="bpsim:CostParameters">
-              <bpsim:UnitCost xsi:type="bpsim:Parameter">
-                <bpsim:FloatingParameter value="0.0"/>
-              </bpsim:UnitCost>
-            </bpsim:CostParameters>
-          </bpsim:ElementParameters>
-          <bpsim:ElementParameters xsi:type="bpsim:ElementParameters" elementRef="_P2_N2A" id="_hw5XXVg5EfGoNpO8onZRMw">
             <bpsim:TimeParameters xsi:type="bpsim:TimeParameters">
               <bpsim:ProcessingTime xsi:type="bpsim:Parameter">
                 <bpsim:NormalDistribution mean="0.0" standardDeviation="0.0"/>

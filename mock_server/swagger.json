@@ -1090,10 +1090,10 @@
         }
       }
     },
-    "/api/v1/claims/nigo/funding-notice": {
+    "/api/v1/claims/status": {
       "post": {
-        "summary": "19. Generate Funding Notice",
-        "description": "Generates Death Funding Requirements notice PDF.",
+        "summary": "19. Set Claim Status to Pending Requirements",
+        "description": "Sets the status of the claim to pending requirements.",
         "responses": {
           "200": {
             "description": "Success",
@@ -1105,7 +1105,7 @@
                     "success": {
                       "type": "boolean"
                     },
-                    "documentS3Key": {
+                    "status": {
                       "type": "string"
                     }
                   }
@@ -1121,60 +1121,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "piid": {
-                    "type": "string"
-                  },
                   "caseId": {
-                    "type": "string"
-                  },
-                  "noticeType": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/claims/nigo/standard-notice": {
-      "post": {
-        "summary": "20. Generate TI Standard Notice",
-        "description": "Generates TI Standard notice PDF.",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": {
-                      "type": "boolean"
-                    },
-                    "documentS3Key": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "piid": {
-                    "type": "string"
-                  },
-                  "caseId": {
-                    "type": "string"
-                  },
-                  "noticeType": {
                     "type": "string"
                   }
                 }

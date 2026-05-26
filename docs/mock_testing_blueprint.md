@@ -180,7 +180,7 @@ This tests the integration and suspension of the process when documents are miss
    * **Mock responds:** `{ "success": true, "allDocsVerified": false, "missingDocs": ["CERTIFIED_DEATH_CERTIFICATE"] }`
    * *BPM branches to NIGO Subprocess (`pru-nigo-followup`).*
 2. **`POST /api/v1/claims/nigo/send`** $\rightarrow$ Responds `{ "success": true }`
-3. **`POST /api/v1/claims/nigo/funding-notice`** $\rightarrow$ Responds `{ "success": true, "documentS3Key": "..." }`
+3. **`POST /api/v1/claims/status`** $\rightarrow$ Responds `{ "success": true, "status": "PENDING_REQUIREMENTS" }`
 4. **BPM enters Wait State:** Suspends execution on human task `Wait for Document Upload` inside the NIGO subprocess.
 
 ### 🔄 How to Resume & Complete Scenario 3:
@@ -190,6 +190,12 @@ This tests the integration and suspension of the process when documents are miss
    * **Mock responds:** `{ "success": true, "allDocsReceived": true }`
    * *BPM exits NIGO subprocess loop and re-enters the main flow.*
 4. **`POST /api/v1/claims/validate-policy`** $\rightarrow$ Responds validationPassed: true, and process resumes standard execution until completion!
+
+> [!NOTE]
+> **Loop Timeout Escalations:**
+> If documents are not uploaded and reminders continue:
+> * **DEATH claims:** After 4 follow-up reminders (limit of 4), the subprocess times out and routes to **Death Verification** (`_P2_N12` UpdateDeathVerification status / `_P2_N13` ExaminerDeathVerif user task).
+> * **TI claims:** After 1 follow-up reminder (limit of 1), the subprocess times out and routes directly to the **Examiner Partial Review** user task (`_P2_N9`).
 
 ---
 
@@ -449,9 +455,10 @@ Tests loop execution when a document check is updated but still has unresolved o
    * **Mock responds:** `{ "success": true, "allDocsVerified": false, "missingDocs": ["CERTIFIED_DEATH_CERTIFICATE"] }`
    * *BPM branches to NIGO Subprocess (`pru-nigo-followup`).*
 2. **`POST /api/v1/claims/nigo/send`** $\rightarrow$ Responds `{ "success": true }`
-3. **BPM enters Wait State:** Suspends execution waiting for the `Wait for Document Upload` human task.
-4. Complete the task in Business Central to simulate document upload.
-5. **`POST /api/v1/claims/nigo/update-status`**
+3. **`POST /api/v1/claims/status`** $\rightarrow$ Responds `{ "success": true, "status": "PENDING_REQUIREMENTS" }`
+4. **BPM enters Wait State:** Suspends execution waiting for the `Wait for Document Upload` human task.
+5. Complete the task in Business Central to simulate document upload.
+6. **`POST /api/v1/claims/nigo/update-status`**
    * **Mock responds:** `{ "success": true, "allDocsReceived": false }`
    * *BPM routes to `N9: ExaminerPartialReview` user task in the NIGO loop due to outstanding requirements.*
 

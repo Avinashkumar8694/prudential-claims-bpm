@@ -691,19 +691,11 @@ app.post('/api/v1/claims/nigo/send', (req, res) => {
   });
 });
 
-// 19. Generate Death Funding Requirements Notice
-app.post('/api/v1/claims/nigo/funding-notice', (req, res) => {
+// 19. Set Claim Status to Pending Requirements
+app.post('/api/v1/claims/status', (req, res) => {
   res.json({
     success: true,
-    documentS3Key: `s3://claims-vault/notices/funding-${Math.floor(1000 + Math.random() * 9000)}.pdf`
-  });
-});
-
-// 20. Generate TI Standard Notice
-app.post('/api/v1/claims/nigo/standard-notice', (req, res) => {
-  res.json({
-    success: true,
-    documentS3Key: `s3://claims-vault/notices/standard-ti-${Math.floor(1000 + Math.random() * 9000)}.pdf`
+    status: "PENDING_REQUIREMENTS"
   });
 });
 
