@@ -4,7 +4,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.kie.templates</groupId>
   <artifactId>prudential-claims-bpm</artifactId>
-  <version>1.0.5-SNAPSHOT</version>
+  <version>1.0.8-SNAPSHOT</version>
   <packaging>kjar</packaging>
   <name>prudential-claims-bpm</name>
   <description>prudential claims bpm</description>
