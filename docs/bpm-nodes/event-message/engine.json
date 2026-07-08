@@ -1,0 +1,6 @@
+{
+  "type": "catch",
+  "event": {
+    "message": "MSG"
+  }
+}

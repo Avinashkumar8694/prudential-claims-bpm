@@ -1,0 +1,18 @@
+{
+  "kind": "enumeration",
+  "model": {
+    "enums": {
+      "Claim.status": [
+        "NEW",
+        "REVIEW",
+        "HIGH",
+        "STANDARD",
+        "DONE"
+      ],
+      "Claim.type": [
+        "DEATH",
+        "TI"
+      ]
+    }
+  }
+}

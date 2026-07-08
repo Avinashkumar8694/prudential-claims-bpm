@@ -1,0 +1,7 @@
+{
+  "type": "catch",
+  "event": {
+    "condition": "return flag != null && flag;",
+    "lang": "java"
+  }
+}

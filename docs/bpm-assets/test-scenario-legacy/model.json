@@ -1,0 +1,20 @@
+{
+  "kind": "testScenarioLegacy",
+  "model": {
+    "xml": {
+      "name": "scenario",
+      "attrs": {},
+      "children": [
+        {
+          "name": "name",
+          "attrs": {},
+          "children": [],
+          "text": "Standard claim scenario",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

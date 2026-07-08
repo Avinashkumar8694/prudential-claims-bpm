@@ -1,0 +1,55 @@
+{
+  "kind": "dmn",
+  "model": {
+    "xml": {
+      "name": "definitions",
+      "attrs": {
+        "name": "Eligibility",
+        "namespace": "https://acme/dmn/eligibility"
+      },
+      "children": [
+        {
+          "name": "inputData",
+          "attrs": {
+            "id": "_amount",
+            "name": "amount"
+          },
+          "children": [
+            {
+              "name": "variable",
+              "attrs": {
+                "name": "amount",
+                "typeRef": "number"
+              },
+              "children": [],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "decision",
+          "attrs": {
+            "id": "_isEligible",
+            "name": "isEligible"
+          },
+          "children": [
+            {
+              "name": "literalExpression",
+              "attrs": {},
+              "children": [],
+              "text": "amount < 500000",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

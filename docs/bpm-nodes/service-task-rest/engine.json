@@ -1,0 +1,11 @@
+{
+  "type": "http",
+  "method": "POST",
+  "url": "/v1/claims/status",
+  "body": {
+    "status": "FOR_VERIFICATION"
+  },
+  "resultTo": {
+    "verifierId": "$.verifierId"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "kind": "drl",
+  "model": {
+    "package": "com.acme.rules",
+    "imports": [
+      "com.acme.model.Claim"
+    ],
+    "globals": [],
+    "rules": [
+      {
+        "name": "High value claim",
+        "attributes": [
+          "ruleflow-group \"classify\""
+        ],
+        "when": "$c : Claim( amount > 100000 )",
+        "then": "modify( $c ) { setStatus( \"HIGH\" ) };"
+      }
+    ]
+  }
+}

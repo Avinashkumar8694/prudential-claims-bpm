@@ -1,0 +1,18 @@
+{
+  "dataObjects": [
+    {
+      "id": "doc",
+      "name": "Document",
+      "type": "java.lang.Object",
+      "isCollection": false
+    }
+  ],
+  "dataStores": [
+    {
+      "id": "dsr",
+      "name": "Archive",
+      "dataStoreRef": "store1"
+    }
+  ],
+  "bpmn": "<bpmn2:dataObject id=\"doc\" name=\"Document\" itemSubjectRef=\"_docItem\"/> \u2026 <bpmn2:dataStoreReference id=\"dsr\" name=\"Archive\" dataStoreRef=\"store1\"/>"
+}

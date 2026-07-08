@@ -1,0 +1,20 @@
+{
+  "kind": "guidedRuleTemplate",
+  "model": {
+    "xml": {
+      "name": "templateModel",
+      "attrs": {},
+      "children": [
+        {
+          "name": "name",
+          "attrs": {},
+          "children": [],
+          "text": "Claim threshold template",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

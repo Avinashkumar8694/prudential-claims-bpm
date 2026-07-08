@@ -1,0 +1,31 @@
+{
+  "id": "_BOOT",
+  "type": "scriptTask",
+  "bpmnElement": "scriptTask",
+  "name": "Script_Bootstrap",
+  "position": {
+    "x": 260,
+    "y": 370,
+    "width": 110,
+    "height": 60
+  },
+  "incoming": [
+    "_f1"
+  ],
+  "outgoing": [
+    "_f2"
+  ],
+  "properties": {
+    "scriptFormat": "http://www.java.com/java",
+    "elementname": "Script_Bootstrap"
+  },
+  "script": "String url = System.getProperty(\"INTEGRATION_LAYER_URL\"); if (url==null||url.isEmpty()) url=\"http://localhost:3000\"; kcontext.setVariable(\"baseUrl\", url);",
+  "readsVars": [],
+  "writesVars": [
+    "baseUrl"
+  ],
+  "dataInputs": [],
+  "dataOutputs": [],
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:scriptTask id=\"_BOOT\" name=\"Script_Bootstrap\" scriptFormat=\"http://www.java.com/java\"><bpmn2:incoming>_f1</bpmn2:incoming><bpmn2:outgoing>_f2</bpmn2:outgoing><bpmn2:script><![CDATA[...]]></bpmn2:script></bpmn2:scriptTask>"
+}

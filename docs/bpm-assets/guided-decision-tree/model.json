@@ -1,0 +1,20 @@
+{
+  "kind": "guidedDecisionTree",
+  "model": {
+    "xml": {
+      "name": "GuidedDecisionTree",
+      "attrs": {},
+      "children": [
+        {
+          "name": "treeName",
+          "attrs": {},
+          "children": [],
+          "text": "Claim tree",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

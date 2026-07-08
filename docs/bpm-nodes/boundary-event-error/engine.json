@@ -1,0 +1,8 @@
+{
+  "type": "boundary",
+  "on": "_validate",
+  "event": {
+    "error": "CALL_ERR"
+  },
+  "interrupting": true
+}

@@ -1,0 +1,20 @@
+{
+  "kind": "guidedDecisionTable",
+  "model": {
+    "xml": {
+      "name": "decision-table52",
+      "attrs": {},
+      "children": [
+        {
+          "name": "tableName",
+          "attrs": {},
+          "children": [],
+          "text": "Claim classification",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

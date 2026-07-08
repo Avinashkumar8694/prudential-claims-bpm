@@ -1,0 +1,20 @@
+{
+  "kind": "guidedRule",
+  "model": {
+    "xml": {
+      "name": "rule",
+      "attrs": {},
+      "children": [
+        {
+          "name": "name",
+          "attrs": {},
+          "children": [],
+          "text": "Flag large claim",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

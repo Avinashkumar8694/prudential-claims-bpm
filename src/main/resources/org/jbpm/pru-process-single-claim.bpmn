@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_def287" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd http://www.omg.org/spec/DD/20100524/DC DC.xsd http://www.omg.org/spec/DD/20100524/DI DI.xsd " exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
+<bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
+<bpmn2:itemDefinition id="_claimIdItem" structureRef="String"/>
+<bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
+<bpmn2:itemDefinition id="_reqPayloadItem" structureRef="String"/>
+<bpmn2:itemDefinition id="_resPayloadItem" structureRef="String"/>
+<bpmn2:itemDefinition id="_maxRetryCountItem" structureRef="Integer"/>
+<bpmn2:itemDefinition id="_currentPolicyItem" structureRef="String"/>
+<bpmn2:itemDefinition id="_claimStpEligibleItem" structureRef="java.lang.Boolean"/>
+<bpmn2:itemDefinition id="_claimResultItem" structureRef="java.lang.Object"/>
+<bpmn2:itemDefinition id="___EVAL_AcceptCharsetInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_AcceptHeaderInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_AuthTypeInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_AuthUrlInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_ConnectTimeoutInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_ContentDataInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_ContentTypeInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_ContentTypeCharsetInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_HandleResponseErrorsInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_HeadersInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_MethodInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_PasswordInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_ReadTimeoutInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_ResultClassInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_UrlInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_UsernameInputXItem" structureRef=""/>
+<bpmn2:itemDefinition id="___EVAL_ResultOutputXItem" structureRef=""/>
+<bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
+
+  <bpmn2:process id="prudential-claims-submission.pru-process-single-claim" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-process-single-claim" isExecutable="true" processType="Public">
+<bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
+<bpmn2:property id="claimId" itemSubjectRef="_claimIdItem" name="claimId"/>
+<bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
+<bpmn2:property id="reqPayload" itemSubjectRef="_reqPayloadItem" name="reqPayload"/>
+<bpmn2:property id="resPayload" itemSubjectRef="_resPayloadItem" name="resPayload"/>
+<bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
+<bpmn2:property id="currentPolicy" itemSubjectRef="_currentPolicyItem" name="currentPolicy"/>
+<bpmn2:property id="claimStpEligible" itemSubjectRef="_claimStpEligibleItem" name="claimStpEligible"/>
+<bpmn2:property id="claimResult" itemSubjectRef="_claimResultItem" name="claimResult"/>
+<bpmn2:sequenceFlow id="_f1" sourceRef="_START" targetRef="_BOOT"></bpmn2:sequenceFlow>
+<bpmn2:sequenceFlow id="_f2" sourceRef="_BOOT" targetRef="_EVAL"></bpmn2:sequenceFlow>
+<bpmn2:sequenceFlow id="_f3" sourceRef="_EVAL" targetRef="_END"></bpmn2:sequenceFlow>
+<bpmn2:startEvent id="_START" name="Process Single Claim"><bpmn2:extensionElements><drools:metaData name="elementname"><drools:metaValue><![CDATA[Process Single Claim]]></drools:metaValue></drools:metaData></bpmn2:extensionElements><bpmn2:outgoing>_f1</bpmn2:outgoing></bpmn2:startEvent>
+<bpmn2:scriptTask id="_BOOT" name="Script_Bootstrap" scriptFormat="http://www.java.com/java"><bpmn2:extensionElements><drools:metaData name="elementname"><drools:metaValue><![CDATA[Script_Bootstrap]]></drools:metaValue></drools:metaData></bpmn2:extensionElements><bpmn2:incoming>_f1</bpmn2:incoming><bpmn2:outgoing>_f2</bpmn2:outgoing><bpmn2:script><![CDATA[String url = System.getProperty("INTEGRATION_LAYER_URL");
+if (url == null || url.isEmpty()) { url = System.getenv("INTEGRATION_LAYER_URL"); }
+if (url == null || url.isEmpty()) { url = "http://localhost:3000"; }
+kcontext.setVariable("baseUrl", url);
+System.out.println("[BPM][BOOTSTRAP] process=pru-process-single-claim | piid=" + kcontext.getProcessInstance().getId() + " | baseUrl=" + url);]]></bpmn2:script></bpmn2:scriptTask>
+<bpmn2:callActivity id="_EVAL" drools:independent="true" drools:waitForCompletion="true" name="Evaluate Claim (Fast Track / STP)" calledElement="prudential-claims-submission.pru-rest-executor"><bpmn2:extensionElements><drools:metaData name="elementname"><drools:metaValue><![CDATA[Evaluate Claim (Fast Track / STP)]]></drools:metaValue></drools:metaData><drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY] proc=pru-process-single-claim | piid="+kcontext.getProcessInstance().getId()+" | node=Evaluate Claim (Fast Track / STP)");
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("caseId", kcontext.getVariable("caseId"));
+json.putPOJO("claimId", kcontext.getVariable("claimId"));
+json.put("policyNumber", String.valueOf(kcontext.getVariable("currentPolicy")));
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script><drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String response = (String) kcontext.getVariable("resPayload");
+if (response != null && !response.isEmpty()) {
+  try {
+    com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);
+    boolean clear = root.path("isFastTrackRuleClear").asBoolean();
+    kcontext.setVariable("claimStpEligible", clear);
+    com.fasterxml.jackson.databind.node.ObjectNode cr = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+    cr.put("policyNumber", String.valueOf(kcontext.getVariable("currentPolicy")));
+    cr.put("claimStpEligible", clear);
+    kcontext.setVariable("claimResult", cr);
+  } catch(Exception e) { System.out.println("[BPM][EXIT][ERR] Evaluate Claim (Fast Track / STP) "+e.getMessage()); }
+}]]></drools:script></drools:onExit-script></bpmn2:extensionElements><bpmn2:incoming>_f2</bpmn2:incoming><bpmn2:outgoing>_f3</bpmn2:outgoing><bpmn2:ioSpecification id="_id264"><bpmn2:dataInput id="_EVAL_AcceptCharsetInputX" drools:dtype="" itemSubjectRef="___EVAL_AcceptCharsetInputXItem" name="AcceptCharset"/><bpmn2:dataInput id="_EVAL_AcceptHeaderInputX" drools:dtype="" itemSubjectRef="___EVAL_AcceptHeaderInputXItem" name="AcceptHeader"/><bpmn2:dataInput id="_EVAL_AuthTypeInputX" drools:dtype="" itemSubjectRef="___EVAL_AuthTypeInputXItem" name="AuthType"/><bpmn2:dataInput id="_EVAL_AuthUrlInputX" drools:dtype="" itemSubjectRef="___EVAL_AuthUrlInputXItem" name="AuthUrl"/><bpmn2:dataInput id="_EVAL_ConnectTimeoutInputX" drools:dtype="" itemSubjectRef="___EVAL_ConnectTimeoutInputXItem" name="ConnectTimeout"/><bpmn2:dataInput id="_EVAL_ContentDataInputX" drools:dtype="" itemSubjectRef="___EVAL_ContentDataInputXItem" name="ContentData"/><bpmn2:dataInput id="_EVAL_ContentTypeInputX" drools:dtype="" itemSubjectRef="___EVAL_ContentTypeInputXItem" name="ContentType"/><bpmn2:dataInput id="_EVAL_ContentTypeCharsetInputX" drools:dtype="" itemSubjectRef="___EVAL_ContentTypeCharsetInputXItem" name="ContentTypeCharset"/><bpmn2:dataInput id="_EVAL_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="___EVAL_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/><bpmn2:dataInput id="_EVAL_HeadersInputX" drools:dtype="" itemSubjectRef="___EVAL_HeadersInputXItem" name="Headers"/><bpmn2:dataInput id="_EVAL_MethodInputX" drools:dtype="" itemSubjectRef="___EVAL_MethodInputXItem" name="Method"/><bpmn2:dataInput id="_EVAL_PasswordInputX" drools:dtype="" itemSubjectRef="___EVAL_PasswordInputXItem" name="Password"/><bpmn2:dataInput id="_EVAL_ReadTimeoutInputX" drools:dtype="" itemSubjectRef="___EVAL_ReadTimeoutInputXItem" name="ReadTimeout"/><bpmn2:dataInput id="_EVAL_ResultClassInputX" drools:dtype="" itemSubjectRef="___EVAL_ResultClassInputXItem" name="ResultClass"/><bpmn2:dataInput id="_EVAL_UrlInputX" drools:dtype="" itemSubjectRef="___EVAL_UrlInputXItem" name="Url"/><bpmn2:dataInput id="_EVAL_UsernameInputX" drools:dtype="" itemSubjectRef="___EVAL_UsernameInputXItem" name="Username"/><bpmn2:dataOutput id="_EVAL_ResultOutputX" drools:dtype="" itemSubjectRef="___EVAL_ResultOutputXItem" name="Result"/><bpmn2:inputSet id="_id265"><bpmn2:dataInputRefs>_EVAL_AcceptCharsetInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_AcceptHeaderInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_AuthTypeInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_AuthUrlInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_ConnectTimeoutInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_ContentDataInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_ContentTypeInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_ContentTypeCharsetInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_HandleResponseErrorsInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_HeadersInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_MethodInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_PasswordInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_ReadTimeoutInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_ResultClassInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_UrlInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>_EVAL_UsernameInputX</bpmn2:dataInputRefs></bpmn2:inputSet><bpmn2:outputSet id="_id266"><bpmn2:dataOutputRefs>_EVAL_ResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet></bpmn2:ioSpecification><bpmn2:dataInputAssociation id="_id262"><bpmn2:sourceRef>reqPayload</bpmn2:sourceRef><bpmn2:targetRef>_EVAL_ContentDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation><bpmn2:dataInputAssociation id="_id267"><bpmn2:targetRef>_EVAL_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="_id268"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_id269"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_id270">_EVAL_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation><bpmn2:dataInputAssociation id="_id271"><bpmn2:targetRef>_EVAL_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="_id272"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_id273"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_id274">_EVAL_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation><bpmn2:dataInputAssociation id="_id275"><bpmn2:targetRef>_EVAL_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="_id276"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_id277"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_id278">_EVAL_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation><bpmn2:dataInputAssociation id="_id279"><bpmn2:targetRef>_EVAL_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="_id280"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_id281"><![CDATA[#{baseUrl}/v1/claims/check-fast-track-rule]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_id282">_EVAL_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation><bpmn2:dataOutputAssociation id="_id263"><bpmn2:sourceRef>_EVAL_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation></bpmn2:callActivity>
+<bpmn2:endEvent id="_END" name="End"><bpmn2:extensionElements><drools:metaData name="elementname"><drools:metaValue><![CDATA[End]]></drools:metaValue></drools:metaData></bpmn2:extensionElements><bpmn2:incoming>_f3</bpmn2:incoming></bpmn2:endEvent>
+<bpmn2:subProcess id="_GLOBAL_TERMINATE_SUBPROCESS" name="Global Terminate Subprocess" triggeredByEvent="true"><bpmn2:endEvent id="_END_TERMINATE_EVENT" name="Terminate Case"><bpmn2:incoming>_F_TERM</bpmn2:incoming><bpmn2:terminateEventDefinition id="_id285"/></bpmn2:endEvent><bpmn2:startEvent id="_START_TERMINATE_EVENT" name="Catch Terminate Error" isInterrupting="true"><bpmn2:outgoing>_F_TERM</bpmn2:outgoing><bpmn2:errorEventDefinition id="_id286" drools:erefname="TERMINATE_CASE" errorRef="TERMINATE_CASE"/></bpmn2:startEvent><bpmn2:sequenceFlow id="_F_TERM" sourceRef="_START_TERMINATE_EVENT" targetRef="_END_TERMINATE_EVENT"/></bpmn2:subProcess>
+  </bpmn2:process>
+  <bpmndi:BPMNDiagram id="_id288">
+    <bpmndi:BPMNPlane id="_id289" bpmnElement="prudential-claims-submission.pru-process-single-claim">
+<bpmndi:BPMNShape id="shape__START" bpmnElement="_START"><dc:Bounds height="40.0" width="40.0" x="80.0" y="230.0"/></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="shape__BOOT" bpmnElement="_BOOT"><dc:Bounds height="60.0" width="110.0" x="260.0" y="230.0"/></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="shape__EVAL" bpmnElement="_EVAL"><dc:Bounds height="60.0" width="160.0" x="440.0" y="230.0"/></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="shape__END" bpmnElement="_END"><dc:Bounds height="40.0" width="40.0" x="620.0" y="230.0"/></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="shape__GLOBAL_TERMINATE_SUBPROCESS" bpmnElement="_GLOBAL_TERMINATE_SUBPROCESS"><dc:Bounds height="120.0" width="300.0" x="80.0" y="980.0"/></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="shape__START_TERMINATE_EVENT" bpmnElement="_START_TERMINATE_EVENT"><dc:Bounds height="40.0" width="40.0" x="110.0" y="1020.0"/></bpmndi:BPMNShape>
+<bpmndi:BPMNShape id="shape__END_TERMINATE_EVENT" bpmnElement="_END_TERMINATE_EVENT"><dc:Bounds height="40.0" width="40.0" x="260.0" y="1020.0"/></bpmndi:BPMNShape>
+<bpmndi:BPMNEdge id="edge__f1" bpmnElement="_f1"><di:waypoint xsi:type="dc:Point" x="120.0" y="250.0"/><di:waypoint xsi:type="dc:Point" x="260.0" y="260.0"/></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="edge__f2" bpmnElement="_f2"><di:waypoint xsi:type="dc:Point" x="370.0" y="260.0"/><di:waypoint xsi:type="dc:Point" x="440.0" y="260.0"/></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="edge__f3" bpmnElement="_f3"><di:waypoint xsi:type="dc:Point" x="600.0" y="260.0"/><di:waypoint xsi:type="dc:Point" x="620.0" y="250.0"/></bpmndi:BPMNEdge>
+<bpmndi:BPMNEdge id="edge__F_TERM" bpmnElement="_F_TERM"><di:waypoint xsi:type="dc:Point" x="150.0" y="1040.0"/><di:waypoint xsi:type="dc:Point" x="260.0" y="1040.0"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>

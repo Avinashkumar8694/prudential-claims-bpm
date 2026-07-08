@@ -1,0 +1,6 @@
+{
+  "type": "throw",
+  "event": {
+    "escalation": "ESC"
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "id": "_SC_PERCLAIM",
+  "type": "callActivity",
+  "subtype": "multiInstance",
+  "bpmnElement": "callActivity",
+  "name": "Run Per Claim Evaluation (loop)",
+  "calledElement": "prudential-claims-submission.pru-process-single-claim",
+  "position": {
+    "x": 1700,
+    "y": 370,
+    "width": 170,
+    "height": 70
+  },
+  "incoming": [
+    "_f7"
+  ],
+  "outgoing": [
+    "_f8"
+  ],
+  "properties": {
+    "independent": false,
+    "waitForCompletion": true,
+    "elementname": "Run Per Claim Evaluation (loop)"
+  },
+  "multiInstance": {
+    "isSequential": false,
+    "loopDataInputRef": "IN_COLL",
+    "loopDataOutputRef": "OUT_COLL",
+    "inputDataItem": {
+      "name": "currentPolicy"
+    },
+    "outputDataItem": {
+      "name": "claimResult"
+    }
+  },
+  "dataInputs": [
+    {
+      "name": "IN_COLL",
+      "from": "variable",
+      "value": "applicablePolicies"
+    },
+    {
+      "name": "currentPolicy",
+      "from": "loopItem"
+    },
+    {
+      "name": "caseId",
+      "from": "variable",
+      "value": "caseId"
+    },
+    {
+      "name": "claimId",
+      "from": "variable",
+      "value": "claimId"
+    }
+  ],
+  "dataOutputs": [
+    {
+      "name": "OUT_COLL",
+      "to": "claimResults"
+    },
+    {
+      "name": "claimResult",
+      "from": "loopOutputItem"
+    }
+  ],
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:callActivity id=\"_SC_PERCLAIM\" ... calledElement=\"...pru-process-single-claim\"> <ioSpecification> IN_COLL,currentPolicy,caseId,claimId (in) / OUT_COLL,claimResult (out) </ioSpecification> <dataInputAssociation applicablePolicies->IN_COLL/> <dataInputAssociation caseId->caseId/> <dataInputAssociation claimId->claimId/> <dataOutputAssociation OUT_COLL->claimResults/> <multiInstanceLoopCharacteristics> <loopDataInputRef>IN_COLL</loopDataInputRef> <loopDataOutputRef>OUT_COLL</loopDataOutputRef> <inputDataItem name=currentPolicy/> <outputDataItem name=claimResult/> </multiInstanceLoopCharacteristics> </bpmn2:callActivity>"
+}

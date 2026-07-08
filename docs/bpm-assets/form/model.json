@@ -1,0 +1,20 @@
+{
+  "kind": "form",
+  "model": {
+    "json": {
+      "id": "review-form",
+      "name": "review",
+      "model": {
+        "className": "com.acme.model.Claim"
+      },
+      "fields": [
+        {
+          "id": "amount",
+          "label": "Claim amount",
+          "code": "DoubleBox",
+          "binding": "amount"
+        }
+      ]
+    }
+  }
+}

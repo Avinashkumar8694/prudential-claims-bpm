@@ -1,0 +1,58 @@
+{
+  "id": "_REST_TASK",
+  "type": "serviceTask",
+  "subtype": "rest",
+  "bpmnElement": "task",
+  "name": "REST Execution",
+  "workItem": "Rest",
+  "incoming": [
+    "_F_PRE_TO_REST"
+  ],
+  "outgoing": [
+    "_F2"
+  ],
+  "dataInputs": [
+    {
+      "name": "Url",
+      "from": "variable",
+      "value": "Url"
+    },
+    {
+      "name": "Method",
+      "from": "variable",
+      "value": "Method"
+    },
+    {
+      "name": "ContentData",
+      "from": "variable",
+      "value": "ContentData"
+    },
+    {
+      "name": "ContentType",
+      "from": "variable",
+      "value": "ContentType"
+    },
+    {
+      "name": "HandleResponseErrors",
+      "from": "variable",
+      "value": "HandleResponseErrors"
+    }
+  ],
+  "dataOutputs": [
+    {
+      "name": "Result",
+      "to": "Result"
+    }
+  ],
+  "boundaryEvents": [
+    {
+      "ref": "_B_ERROR",
+      "eventType": "error"
+    }
+  ],
+  "properties": {
+    "taskName": "Rest",
+    "elementname": "REST Execution"
+  },
+  "bpmn": "<bpmn2:task id=\"_REST_TASK\" drools:taskName=\"Rest\" name=\"REST Execution\"> ...ioSpecification(16 dataInputs + Result)... </bpmn2:task>"
+}

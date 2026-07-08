@@ -1,0 +1,10 @@
+{
+  "type": "boundary",
+  "on": "_await",
+  "event": {
+    "timer": {
+      "duration": "P30D"
+    }
+  },
+  "interrupting": true
+}

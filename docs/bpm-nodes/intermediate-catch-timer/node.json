@@ -1,0 +1,21 @@
+{
+  "id": "_TIMER_WAIT",
+  "type": "intermediateCatchEvent",
+  "eventType": "timer",
+  "bpmnElement": "intermediateCatchEvent",
+  "name": "Timer_1mWait",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "properties": {
+    "timeDuration": "PT1M",
+    "elementname": "Timer_1mWait"
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:intermediateCatchEvent id=\"_TIMER_WAIT\" name=\"Timer_1mWait\"><bpmn2:incoming>_in</bpmn2:incoming><bpmn2:outgoing>_out</bpmn2:outgoing><bpmn2:timerEventDefinition><bpmn2:timeDuration xsi:type=\"bpmn2:tFormalExpression\">PT1M</bpmn2:timeDuration></bpmn2:timerEventDefinition></bpmn2:intermediateCatchEvent>"
+}

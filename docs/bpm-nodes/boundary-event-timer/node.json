@@ -1,0 +1,32 @@
+{
+  "id": "_SC_TIMER",
+  "type": "boundaryEvent",
+  "eventType": "timer",
+  "bpmnElement": "boundaryEvent",
+  "name": "Day 30, Status = Pending",
+  "attachedTo": "_SC_AWAIT",
+  "cancelActivity": true,
+  "position": {
+    "x": 3140,
+    "y": 530,
+    "width": 36,
+    "height": 36
+  },
+  "incoming": [],
+  "outgoing": [
+    "_ftimer"
+  ],
+  "properties": {
+    "timeDuration": "PT1M",
+    "note": "PT1M is a test stand-in for P30D",
+    "elementname": "Day 30, Status = Pending"
+  },
+  "hostEffect": {
+    "hostKeepsHappyOutgoing": "Documents uploaded",
+    "addsEscalationExit": true,
+    "cancelsHostOnFire": true
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "bpmn": "<bpmn2:boundaryEvent id=\"_SC_TIMER\" drools:boundaryca=\"true\" name=\"Day 30, Status = Pending\" attachedToRef=\"_SC_AWAIT\"><bpmn2:outgoing>_ftimer</bpmn2:outgoing><bpmn2:timerEventDefinition><bpmn2:timeDuration xsi:type=\"bpmn2:tFormalExpression\">PT1M</bpmn2:timeDuration></bpmn2:timerEventDefinition></bpmn2:boundaryEvent>"
+}

@@ -1,0 +1,29 @@
+{
+  "type": "subprocess",
+  "nodes": [
+    {
+      "id": "s",
+      "type": "start"
+    },
+    {
+      "id": "t",
+      "type": "script",
+      "lang": "java",
+      "code": "\u2026"
+    },
+    {
+      "id": "e",
+      "type": "end"
+    }
+  ],
+  "flows": [
+    {
+      "from": "s",
+      "to": "t"
+    },
+    {
+      "from": "t",
+      "to": "e"
+    }
+  ]
+}

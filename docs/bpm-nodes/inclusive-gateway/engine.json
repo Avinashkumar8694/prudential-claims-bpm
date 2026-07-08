@@ -1,0 +1,5 @@
+{
+  "type": "gateway",
+  "mode": "inclusive",
+  "default": "fDefault"
+}

@@ -1,0 +1,7 @@
+# DSL — model
+```jsonc
+{ "kind": "dsl", "model": { "entries": [
+  { "scope": "when", "nl": "There is a claim over {amount}", "mapping": "$c : Claim( amount > {amount} )" },
+  { "scope": "then", "nl": "Set claim status to {status}",   "mapping": "modify( $c ) { setStatus( \"{status}\" ) };" } ] } }
+```
+`scope` ∈ `when` | `then` | `*` | `keyword`.

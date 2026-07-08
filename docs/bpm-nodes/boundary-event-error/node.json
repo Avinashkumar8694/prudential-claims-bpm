@@ -1,0 +1,32 @@
+{
+  "id": "_B_ERROR",
+  "type": "boundaryEvent",
+  "eventType": "error",
+  "bpmnElement": "boundaryEvent",
+  "name": "Catch REST Failure",
+  "attachedTo": "_REST_TASK",
+  "cancelActivity": true,
+  "position": {
+    "x": 500,
+    "y": 140,
+    "width": 56,
+    "height": 56
+  },
+  "incoming": [],
+  "outgoing": [
+    "_F3"
+  ],
+  "properties": {
+    "errorRef": "org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException",
+    "droolsErefname": "org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException",
+    "elementname": "Catch REST Failure"
+  },
+  "hostEffect": {
+    "hostKeepsSuccessOutgoing": true,
+    "addsAlternateExit": true,
+    "cancelsHostOnFire": true
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "bpmn": "<bpmn2:boundaryEvent id=\"_B_ERROR\" drools:boundaryca=\"true\" name=\"Catch REST Failure\" attachedToRef=\"_REST_TASK\"><bpmn2:outgoing>_F3</bpmn2:outgoing><bpmn2:errorEventDefinition drools:erefname=\"org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException\" errorRef=\"org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException\"/></bpmn2:boundaryEvent>"
+}

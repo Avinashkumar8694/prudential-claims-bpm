@@ -1,0 +1,17 @@
+{
+  "id": "_g",
+  "type": "eventBasedGateway",
+  "bpmnElement": "eventBasedGateway",
+  "name": "Event-Based Gateway",
+  "gatewayDirection": "Diverging",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_a",
+    "_b"
+  ],
+  "eventGatewayType": "Exclusive",
+  "instantiate": false,
+  "bpmn": "<bpmn2:eventBasedGateway id=\"_g\" name=\"Event-Based Gateway\" gatewayDirection=\"Diverging\"><bpmn2:incoming>_in</bpmn2:incoming><bpmn2:outgoing>_a</bpmn2:outgoing><bpmn2:outgoing>_b</bpmn2:outgoing></bpmn2:eventBasedGateway>"
+}

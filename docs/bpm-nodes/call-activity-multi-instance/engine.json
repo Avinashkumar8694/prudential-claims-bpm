@@ -1,0 +1,13 @@
+{
+  "type": "forEach",
+  "process": "com.acme.single",
+  "over": "applicablePolicies",
+  "as": "currentPolicy",
+  "collectInto": "claimResults",
+  "itemResult": "claimResult",
+  "parallel": true,
+  "pass": [
+    "caseId",
+    "claimId"
+  ]
+}

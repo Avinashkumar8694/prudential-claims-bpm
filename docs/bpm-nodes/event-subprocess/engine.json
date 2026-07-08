@@ -1,0 +1,8 @@
+{
+  "type": "subprocess",
+  "on": {
+    "error": "TERMINATE_CASE"
+  },
+  "nodes": [],
+  "flows": []
+}

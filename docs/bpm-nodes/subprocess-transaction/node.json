@@ -1,0 +1,16 @@
+{
+  "id": "_txn",
+  "type": "subProcess",
+  "subtype": "transaction",
+  "bpmnElement": "transaction",
+  "name": "Txn",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "nodes": [],
+  "flows": [],
+  "bpmn": "<bpmn2:transaction id=\"_txn\" name=\"Txn\">\u2026</bpmn2:transaction>"
+}

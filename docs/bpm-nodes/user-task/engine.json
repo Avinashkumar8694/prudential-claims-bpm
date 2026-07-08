@@ -1,0 +1,7 @@
+{
+  "type": "userTask",
+  "name": "Review",
+  "group": "Verifier",
+  "form": "review",
+  "skippable": false
+}

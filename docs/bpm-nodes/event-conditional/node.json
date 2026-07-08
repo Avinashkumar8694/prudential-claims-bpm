@@ -1,0 +1,15 @@
+{
+  "id": "_c",
+  "type": "intermediateCatchEvent",
+  "bpmnElement": "intermediateCatchEvent",
+  "eventType": "conditional",
+  "conditionExpr": "return x != null;",
+  "name": "When Ready",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "bpmn": "<bpmn2:intermediateCatchEvent id=\"_c\" name=\"When Ready\">\u2026<bpmn2:conditionalEventDefinition id=\"_d\"><bpmn2:condition xsi:type=\"bpmn2:tFormalExpression\" language=\"http://www.java.com/java\"><![CDATA[return x != null;]]></bpmn2:condition></bpmn2:conditionalEventDefinition></bpmn2:intermediateCatchEvent>"
+}

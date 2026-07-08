@@ -1,0 +1,35 @@
+{
+  "kind": "solver",
+  "model": {
+    "xml": {
+      "name": "solver",
+      "attrs": {},
+      "children": [
+        {
+          "name": "solutionClass",
+          "attrs": {},
+          "children": [],
+          "text": "com.acme.opt.ClaimAssignmentSolution",
+          "cdata": []
+        },
+        {
+          "name": "termination",
+          "attrs": {},
+          "children": [
+            {
+              "name": "secondsSpentLimit",
+              "attrs": {},
+              "children": [],
+              "text": "30",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "id": "_t",
+  "type": "receiveTask",
+  "bpmnElement": "receiveTask",
+  "name": "Receive Task",
+  "messageRef": "MSG",
+  "implementation": "##WebService",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "bpmn": "<bpmn2:receiveTask id=\"_t\" messageRef=\"MSG\" implementation=\"##WebService\" name=\"Receive Task\">\u2026</bpmn2:receiveTask>"
+}

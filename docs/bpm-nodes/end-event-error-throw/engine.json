@@ -1,0 +1,6 @@
+{
+  "type": "end",
+  "throw": {
+    "error": "TERMINATE_CASE"
+  }
+}

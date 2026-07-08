@@ -1,0 +1,13 @@
+{
+  "id": "_m",
+  "type": "manualTask",
+  "bpmnElement": "manualTask",
+  "name": "Manual",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "bpmn": "<bpmn2:manualTask id=\"_m\" name=\"Manual\"><bpmn2:incoming>_in</bpmn2:incoming><bpmn2:outgoing>_out</bpmn2:outgoing></bpmn2:manualTask>"
+}

@@ -1,0 +1,25 @@
+{
+  "id": "_END_CLOSE",
+  "type": "endEvent",
+  "subtype": "terminate",
+  "bpmnElement": "endEvent",
+  "name": "Closed",
+  "position": {
+    "x": 2420,
+    "y": 530,
+    "width": 40,
+    "height": 40
+  },
+  "incoming": [
+    "_fc4"
+  ],
+  "outgoing": [],
+  "properties": {
+    "elementname": "Closed"
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "scripts": {},
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:endEvent id=\"_END_CLOSE\" name=\"Closed\"><bpmn2:incoming>_fc4</bpmn2:incoming><bpmn2:terminateEventDefinition id=\"_id2\"/></bpmn2:endEvent>"
+}

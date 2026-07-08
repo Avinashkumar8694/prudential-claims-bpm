@@ -1,0 +1,15 @@
+{
+  "id": "_t",
+  "type": "sendTask",
+  "bpmnElement": "sendTask",
+  "name": "Send Task",
+  "messageRef": "MSG",
+  "implementation": "##WebService",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "bpmn": "<bpmn2:sendTask id=\"_t\" messageRef=\"MSG\" implementation=\"##WebService\" name=\"Send Task\">\u2026</bpmn2:sendTask>"
+}

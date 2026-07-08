@@ -1,0 +1,22 @@
+{
+  "kind": "testScenario",
+  "model": {
+    "xml": {
+      "name": "ScenarioSimulationModel",
+      "attrs": {
+        "version": "1.8"
+      },
+      "children": [
+        {
+          "name": "simulation",
+          "attrs": {},
+          "children": [],
+          "text": "",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "type": "call",
+  "process": "com.acme.child",
+  "inputs": {
+    "caseId": "$caseId"
+  },
+  "outputs": {
+    "result": "result"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "from": "_xg",
+  "to": "_calc",
+  "when": "return \"DEATH\".equals(claimType);",
+  "lang": "java"
+}

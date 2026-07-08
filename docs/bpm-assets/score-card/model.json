@@ -1,0 +1,27 @@
+{
+  "kind": "scoreCard",
+  "model": {
+    "xml": {
+      "name": "scoreCard",
+      "attrs": {},
+      "children": [
+        {
+          "name": "name",
+          "attrs": {},
+          "children": [],
+          "text": "Claim risk",
+          "cdata": []
+        },
+        {
+          "name": "fieldName",
+          "attrs": {},
+          "children": [],
+          "text": "riskScore",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

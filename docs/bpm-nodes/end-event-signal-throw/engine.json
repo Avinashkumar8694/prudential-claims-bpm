@@ -1,0 +1,6 @@
+{
+  "type": "end",
+  "throw": {
+    "signal": "PaymentProcess"
+  }
+}

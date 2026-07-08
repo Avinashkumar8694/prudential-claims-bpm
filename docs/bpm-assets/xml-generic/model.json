@@ -1,0 +1,20 @@
+{
+  "kind": "xml",
+  "model": {
+    "xml": {
+      "name": "root",
+      "attrs": {},
+      "children": [
+        {
+          "name": "child",
+          "attrs": {},
+          "children": [],
+          "text": "value",
+          "cdata": []
+        }
+      ],
+      "text": "",
+      "cdata": []
+    }
+  }
+}

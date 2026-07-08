@@ -1,0 +1,6 @@
+{
+  "type": "start",
+  "on": {
+    "signal": "StartSystemClaim"
+  }
+}

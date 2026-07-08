@@ -1,0 +1,8 @@
+{
+  "type": "catch",
+  "event": {
+    "timer": {
+      "duration": "PT5M"
+    }
+  }
+}

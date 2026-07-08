@@ -1,0 +1,46 @@
+{
+  "id": "_XG_OUT",
+  "type": "exclusiveGateway",
+  "bpmnElement": "exclusiveGateway",
+  "name": "Outcome",
+  "direction": "Diverging",
+  "position": {
+    "x": 2600,
+    "y": 380,
+    "width": 40,
+    "height": 40
+  },
+  "incoming": [
+    "_f9"
+  ],
+  "outgoing": [
+    "_fstp",
+    "_fpend",
+    "_fexam"
+  ],
+  "properties": {
+    "gatewayDirection": "Diverging",
+    "elementname": "Outcome"
+  },
+  "conditions": [
+    {
+      "flow": "_fstp",
+      "name": "STP",
+      "expr": "return \"STP\".equals(outcome);"
+    },
+    {
+      "flow": "_fpend",
+      "name": "Pending Requirement",
+      "expr": "return \"PENDING_REQ\".equals(outcome);"
+    },
+    {
+      "flow": "_fexam",
+      "name": "Refer to Examiner",
+      "expr": "return \"EXAMINER\".equals(outcome);"
+    }
+  ],
+  "dataInputs": [],
+  "dataOutputs": [],
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:exclusiveGateway id=\"_XG_OUT\" name=\"Outcome\" gatewayDirection=\"Diverging\"><bpmn2:incoming>_f9</bpmn2:incoming><bpmn2:outgoing>_fstp</bpmn2:outgoing><bpmn2:outgoing>_fpend</bpmn2:outgoing><bpmn2:outgoing>_fexam</bpmn2:outgoing></bpmn2:exclusiveGateway>"
+}

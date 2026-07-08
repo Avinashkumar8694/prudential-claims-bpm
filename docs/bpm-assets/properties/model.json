@@ -1,0 +1,9 @@
+{
+  "kind": "properties",
+  "model": {
+    "props": {
+      "review.title": "Review claim",
+      "review.amount": "Claim amount"
+    }
+  }
+}
