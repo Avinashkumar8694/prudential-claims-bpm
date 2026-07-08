@@ -1,5 +1,6 @@
 {
   "kind": "guidedDecisionTable",
+  "$note": "jBPM-side decision-table52 XML tree PRODUCED by decisionTableToGdst from the engine table in engine.json (bind omitted -> boundName defaults to \"claim\"). You author engine.json, not this.",
   "model": {
     "xml": {
       "name": "decision-table52",
@@ -10,6 +11,833 @@
           "attrs": {},
           "children": [],
           "text": "Claim classification",
+          "cdata": []
+        },
+        {
+          "name": "rowNumberCol",
+          "attrs": {},
+          "children": [
+            {
+              "name": "hideColumn",
+              "attrs": {},
+              "children": [],
+              "text": "false",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "descriptionCol",
+          "attrs": {},
+          "children": [
+            {
+              "name": "hideColumn",
+              "attrs": {},
+              "children": [],
+              "text": "false",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "metadataCols",
+          "attrs": {},
+          "children": [],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "attributeCols",
+          "attrs": {},
+          "children": [],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "conditionPatterns",
+          "attrs": {},
+          "children": [
+            {
+              "name": "Pattern52",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "factType",
+                  "attrs": {},
+                  "children": [],
+                  "text": "Claim",
+                  "cdata": []
+                },
+                {
+                  "name": "boundName",
+                  "attrs": {},
+                  "children": [],
+                  "text": "claim",
+                  "cdata": []
+                },
+                {
+                  "name": "isNegated",
+                  "attrs": {},
+                  "children": [],
+                  "text": "false",
+                  "cdata": []
+                },
+                {
+                  "name": "conditions",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "condition-column52",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "typedDefaultValue",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "valueString",
+                              "attrs": {},
+                              "children": [],
+                              "text": "",
+                              "cdata": []
+                            },
+                            {
+                              "name": "dataType",
+                              "attrs": {},
+                              "children": [],
+                              "text": "NUMERIC_DOUBLE",
+                              "cdata": []
+                            },
+                            {
+                              "name": "isOtherwise",
+                              "attrs": {},
+                              "children": [],
+                              "text": "false",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "hideColumn",
+                          "attrs": {},
+                          "children": [],
+                          "text": "false",
+                          "cdata": []
+                        },
+                        {
+                          "name": "width",
+                          "attrs": {},
+                          "children": [],
+                          "text": "-1",
+                          "cdata": []
+                        },
+                        {
+                          "name": "header",
+                          "attrs": {},
+                          "children": [],
+                          "text": "amount",
+                          "cdata": []
+                        },
+                        {
+                          "name": "constraintValueType",
+                          "attrs": {},
+                          "children": [],
+                          "text": "1",
+                          "cdata": []
+                        },
+                        {
+                          "name": "factField",
+                          "attrs": {},
+                          "children": [],
+                          "text": "amount",
+                          "cdata": []
+                        },
+                        {
+                          "name": "fieldType",
+                          "attrs": {},
+                          "children": [],
+                          "text": "Double",
+                          "cdata": []
+                        },
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": ">",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "condition-column52",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "typedDefaultValue",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "valueString",
+                              "attrs": {},
+                              "children": [],
+                              "text": "",
+                              "cdata": []
+                            },
+                            {
+                              "name": "dataType",
+                              "attrs": {},
+                              "children": [],
+                              "text": "STRING",
+                              "cdata": []
+                            },
+                            {
+                              "name": "isOtherwise",
+                              "attrs": {},
+                              "children": [],
+                              "text": "false",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "hideColumn",
+                          "attrs": {},
+                          "children": [],
+                          "text": "false",
+                          "cdata": []
+                        },
+                        {
+                          "name": "width",
+                          "attrs": {},
+                          "children": [],
+                          "text": "-1",
+                          "cdata": []
+                        },
+                        {
+                          "name": "header",
+                          "attrs": {},
+                          "children": [],
+                          "text": "region",
+                          "cdata": []
+                        },
+                        {
+                          "name": "constraintValueType",
+                          "attrs": {},
+                          "children": [],
+                          "text": "1",
+                          "cdata": []
+                        },
+                        {
+                          "name": "factField",
+                          "attrs": {},
+                          "children": [],
+                          "text": "region",
+                          "cdata": []
+                        },
+                        {
+                          "name": "fieldType",
+                          "attrs": {},
+                          "children": [],
+                          "text": "String",
+                          "cdata": []
+                        },
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": "==",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "actionCols",
+          "attrs": {},
+          "children": [
+            {
+              "name": "action-set-field-column52",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "typedDefaultValue",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "hideColumn",
+                  "attrs": {},
+                  "children": [],
+                  "text": "false",
+                  "cdata": []
+                },
+                {
+                  "name": "width",
+                  "attrs": {},
+                  "children": [],
+                  "text": "-1",
+                  "cdata": []
+                },
+                {
+                  "name": "header",
+                  "attrs": {},
+                  "children": [],
+                  "text": "status",
+                  "cdata": []
+                },
+                {
+                  "name": "boundName",
+                  "attrs": {},
+                  "children": [],
+                  "text": "claim",
+                  "cdata": []
+                },
+                {
+                  "name": "factField",
+                  "attrs": {},
+                  "children": [],
+                  "text": "status",
+                  "cdata": []
+                },
+                {
+                  "name": "type",
+                  "attrs": {},
+                  "children": [],
+                  "text": "String",
+                  "cdata": []
+                },
+                {
+                  "name": "update",
+                  "attrs": {},
+                  "children": [],
+                  "text": "false",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            },
+            {
+              "name": "action-set-field-column52",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "typedDefaultValue",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "hideColumn",
+                  "attrs": {},
+                  "children": [],
+                  "text": "false",
+                  "cdata": []
+                },
+                {
+                  "name": "width",
+                  "attrs": {},
+                  "children": [],
+                  "text": "-1",
+                  "cdata": []
+                },
+                {
+                  "name": "header",
+                  "attrs": {},
+                  "children": [],
+                  "text": "priority",
+                  "cdata": []
+                },
+                {
+                  "name": "boundName",
+                  "attrs": {},
+                  "children": [],
+                  "text": "claim",
+                  "cdata": []
+                },
+                {
+                  "name": "factField",
+                  "attrs": {},
+                  "children": [],
+                  "text": "priority",
+                  "cdata": []
+                },
+                {
+                  "name": "type",
+                  "attrs": {},
+                  "children": [],
+                  "text": "String",
+                  "cdata": []
+                },
+                {
+                  "name": "update",
+                  "attrs": {},
+                  "children": [],
+                  "text": "false",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "packageName",
+          "attrs": {},
+          "children": [],
+          "text": "com.acme.rules",
+          "cdata": []
+        },
+        {
+          "name": "tableFormat",
+          "attrs": {},
+          "children": [],
+          "text": "EXTENDED_ENTRY",
+          "cdata": []
+        },
+        {
+          "name": "data",
+          "attrs": {},
+          "children": [
+            {
+              "name": "list",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueNumeric",
+                      "attrs": {},
+                      "children": [],
+                      "text": "1",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "NUMERIC_INTEGER",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "5000",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "NUMERIC_DOUBLE",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STANDARD",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "P3",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            },
+            {
+              "name": "list",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueNumeric",
+                      "attrs": {},
+                      "children": [],
+                      "text": "2",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "NUMERIC_INTEGER",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "100000",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "NUMERIC_DOUBLE",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "US",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "HIGH",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "value",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "valueString",
+                      "attrs": {},
+                      "children": [],
+                      "text": "P1",
+                      "cdata": []
+                    },
+                    {
+                      "name": "dataType",
+                      "attrs": {},
+                      "children": [],
+                      "text": "STRING",
+                      "cdata": []
+                    },
+                    {
+                      "name": "isOtherwise",
+                      "attrs": {},
+                      "children": [],
+                      "text": "false",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
           "cdata": []
         }
       ],

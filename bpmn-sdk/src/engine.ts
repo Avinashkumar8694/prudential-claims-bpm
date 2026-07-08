@@ -105,11 +105,25 @@ export interface EngineDecision {
 }
 export interface EngineDecisionModel { name: string; namespace?: string; path?: string; decisions: EngineDecision[]; }
 
+// ---- Engine-native guided decision table (Business Central .gdst; compiles to DRL) ----
+// A TABULAR ruleset over one fact: condition columns (fact.field <op>), action columns (set fact.field),
+// and rows supplying the per-row values. The SDK synthesizes the decision-table52 XML.
+export type GdstOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte';
+export interface GdstCondition { field: string; op: GdstOp; type?: FeelType; }
+export interface GdstAction { field: string; type?: FeelType; }
+export interface GdstRow { when: Record<string, string | number | boolean>; then: Record<string, string | number | boolean>; }
+export interface EngineGuidedTable {
+  name: string; package?: string; path?: string;
+  fact: string; bind?: string;              // the fact type the table operates on (+ optional binding)
+  conditions: GdstCondition[]; actions: GdstAction[]; rows: GdstRow[];
+}
+
 export interface EngineProject {
   id?: string; gav?: Gav; deployment?: EngineDeployment; types?: EngineType[];
   assets?: Record<string, { kind: string; model: any } | string>;
   rulesets?: EngineRuleset[];   // simple engine rules -> generated .drl (SDK fills package/imports/DRL syntax)
   decisions?: EngineDecisionModel[];  // simple decision tables -> generated .dmn (SDK fills FEEL + DMN XML)
+  guidedTables?: EngineGuidedTable[]; // tabular rulesets -> generated .gdst (Business Central editor XML)
   processes: EngineProcess[];
 }
 
@@ -401,6 +415,58 @@ export function decisionToDmn(model: EngineDecisionModel, namespace?: string): {
   return { xml: el('definitions', { xmlns: 'http://www.omg.org/spec/DMN/20180521/MODEL/', id: `_defs_${clean(model.name)}`, name: model.name, namespace: ns }, children) };
 }
 
+// engine type -> Java field type / GDST dataType / operator symbol
+const GDST_OP: Record<GdstOp, string> = { eq: '==', ne: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=' };
+const GDST_JAVA: Record<string, string> = { string: 'String', number: 'Double', double: 'Double', float: 'Double', int: 'Integer', integer: 'Integer', long: 'Long', bool: 'Boolean', boolean: 'Boolean', date: 'java.util.Date' };
+const GDST_DATA: Record<string, string> = { string: 'STRING', number: 'NUMERIC_DOUBLE', double: 'NUMERIC_DOUBLE', float: 'NUMERIC_DOUBLE', int: 'NUMERIC_INTEGER', integer: 'NUMERIC_INTEGER', long: 'NUMERIC_INTEGER', bool: 'BOOLEAN', boolean: 'BOOLEAN', date: 'DATE' };
+const gdstJava = (t?: string) => GDST_JAVA[(t || 'string').toLowerCase()] || 'String';
+const gdstData = (t?: string) => GDST_DATA[(t || 'string').toLowerCase()] || 'STRING';
+
+/**
+ * Engine guided table -> a Business Central guided decision table (`decision-table52`, EXTENDED_ENTRY).
+ * Condition columns become `fact.field <op>`, action columns become `set fact.field`, each row supplies
+ * the per-cell values. It compiles to DRL in Business Central (row order = rule order). buildAsset
+ * ({kind:'guidedDecisionTable', model}) serialises the returned `{ xml }`.
+ */
+export function decisionTableToGdst(m: EngineGuidedTable, pkg = 'org.jbpm.rules', fieldTypes: Record<string, string> = {}): { xml: ElementNode } {
+  const bind = m.bind || m.fact.charAt(0).toLowerCase() + m.fact.slice(1);
+  // column type: explicit `type` wins, else look it up from the declared fact type's field, else string
+  const ct = (col: { field: string; type?: string }) => col.type || fieldTypes[col.field] || 'string';
+  const tdv = (dt: string) => el('typedDefaultValue', {}, [el('valueString', {}, [], ''), el('dataType', {}, [], dt), el('isOtherwise', {}, [], 'false')]);
+  const conditions = m.conditions.map((c) => el('condition-column52', {}, [
+    tdv(gdstData(ct(c))), el('hideColumn', {}, [], 'false'), el('width', {}, [], '-1'),
+    el('header', {}, [], c.field), el('constraintValueType', {}, [], '1'),
+    el('factField', {}, [], c.field), el('fieldType', {}, [], gdstJava(ct(c))), el('operator', {}, [], GDST_OP[c.op] || '=='),
+  ]));
+  const pattern = el('Pattern52', {}, [
+    el('factType', {}, [], m.fact), el('boundName', {}, [], bind), el('isNegated', {}, [], 'false'),
+    el('conditions', {}, conditions),
+  ]);
+  const actions = m.actions.map((a) => el('action-set-field-column52', {}, [
+    tdv(gdstData(ct(a))), el('hideColumn', {}, [], 'false'), el('width', {}, [], '-1'),
+    el('header', {}, [], a.field), el('boundName', {}, [], bind), el('factField', {}, [], a.field),
+    el('type', {}, [], gdstJava(ct(a))), el('update', {}, [], 'false'),
+  ]));
+  const cell = (v: string | number | boolean | undefined, dt: string) => el('value', {}, [el('valueString', {}, [], v == null ? '' : String(v)), el('dataType', {}, [], dt), el('isOtherwise', {}, [], 'false')]);
+  const rowNum = (n: number) => el('value', {}, [el('valueNumeric', {}, [], String(n)), el('dataType', {}, [], 'NUMERIC_INTEGER'), el('isOtherwise', {}, [], 'false')]);
+  const data = m.rows.map((r, i) => el('list', {}, [
+    rowNum(i + 1), cell('', 'STRING'),
+    ...m.conditions.map((c) => cell((r.when || {})[c.field], gdstData(ct(c)))),
+    ...m.actions.map((a) => cell((r.then || {})[a.field], gdstData(ct(a)))),
+  ]));
+  return { xml: el('decision-table52', {}, [
+    el('tableName', {}, [], m.name),
+    el('rowNumberCol', {}, [el('hideColumn', {}, [], 'false')]),
+    el('descriptionCol', {}, [el('hideColumn', {}, [], 'false')]),
+    el('metadataCols', {}), el('attributeCols', {}),
+    el('conditionPatterns', {}, [pattern]),
+    el('actionCols', {}, actions),
+    el('packageName', {}, [], pkg),
+    el('tableFormat', {}, [], 'EXTENDED_ENTRY'),
+    el('data', {}, data),
+  ]) };
+}
+
 /** Convert a whole engine project to an SDK Project (processes + kjar descriptor + generated .java). */
 export function fromEngineProject(ep: EngineProject): Project {
   // `package` on a type is optional — default it so engine JSON stays free of Java packaging.
@@ -434,6 +500,16 @@ export function fromEngineProject(ep: EngineProject): Project {
     const ns = dm.namespace || `https://${basePkg.replace(/\./g, '/')}/dmn/${dm.name}`;
     const path = dm.path || `src/main/resources/${dm.name}.dmn`;
     files[path] = buildAsset({ kind: 'dmn', model: decisionToDmn(dm, ns) });
+  }
+  // engine guided tables -> generated .gdst (Business Central decision-table52 XML)
+  for (const gt of ep.guidedTables || []) {
+    const pkg = gt.package || `${basePkg}.rules`;
+    const path = gt.path || `src/main/resources/${pkg.replace(/\./g, '/')}/${clean(gt.name)}.gdst`;
+    // column types are derived from the declared `fact` type's fields (columns need only name + op)
+    const declared = allTypes.find((t) => t.name === gt.fact);
+    const fieldTypes: Record<string, string> = {};
+    for (const f of declared?.fields || []) fieldTypes[f.name] = f.type;
+    files[path] = buildAsset({ kind: 'guidedDecisionTable', model: decisionTableToGdst(gt, pkg, fieldTypes) });
   }
 
   const dep = ep.deployment || {};

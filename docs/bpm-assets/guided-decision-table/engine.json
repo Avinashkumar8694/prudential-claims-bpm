@@ -1,25 +1,33 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/rules/classify.gdst": {
-      "kind": "guidedDecisionTable",
-      "model": {
-        "xml": {
-          "name": "decision-table52",
-          "attrs": {},
-          "children": [
-            {
-              "name": "tableName",
-              "attrs": {},
-              "children": [],
-              "text": "Claim classification",
-              "cdata": []
-            }
-          ],
-          "text": "",
-          "cdata": []
-        }
-      }
+  "types": [
+    {
+      "name": "Claim",
+      "fields": [
+        { "name": "amount", "type": "double" },
+        { "name": "region", "type": "string" },
+        { "name": "status", "type": "string" },
+        { "name": "priority", "type": "string" }
+      ]
     }
-  },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+  ],
+  "guidedTables": [
+    {
+      "name": "Claim classification",
+      "fact": "Claim",
+      "conditions": [
+        { "field": "amount", "op": "gt" },
+        { "field": "region", "op": "eq" }
+      ],
+      "actions": [
+        { "field": "status" },
+        { "field": "priority" }
+      ],
+      "rows": [
+        { "when": { "amount": 5000 },                    "then": { "status": "STANDARD", "priority": "P3" } },
+        { "when": { "amount": 100000, "region": "US" }, "then": { "status": "HIGH", "priority": "P1" } }
+      ]
+    }
+  ],
+
+  "$note": "The WHOLE thing you write (an EngineProject fragment). `Claim` is defined ONCE in `types` (same as DRL/DMN); the guided table just references it via `fact` and names its fields as columns — so `conditions`/`actions` need only `field` + `op`, and each column's `type` is DERIVED from Claim's fields (you can still override per column with an explicit `type`). Each `rows` entry is one rule row (when = condition cell values, then = action cell values). Optional per table: `bind` (internal rule var name; omit — defaults to lowercased fact). fromEngineProject generates the .java POJO for Claim AND the decision-table52 (EXTENDED_ENTRY) .gdst, which compiles to DRL in Business Central. Same logic is also expressible as a DRL ruleset (../drl) or DMN table (../dmn). See scenarios.md §0; model.json shows the jBPM-side XML tree."
 }

@@ -1,4 +1,9 @@
-# Guided Decision Table — model
+# Guided Decision Table — model (jBPM-side / escape hatch)
+
+> The `decision-table52` XML tree the SDK **produces** from an engine guided table
+> ([scenarios.md §0](scenarios.md)) and `parseAsset` recovers from an existing `.gdst`. Author the
+> engine table (fact + conditions + actions + rows) — hand-build this tree only for a guided table you
+> carry verbatim.
 
 `kind: "guidedDecisionTable"` uses the **generic XML tree** model (lossless, entity-safe, round-trip-stable):
 

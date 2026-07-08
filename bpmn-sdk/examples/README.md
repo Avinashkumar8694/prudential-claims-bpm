@@ -11,7 +11,8 @@ Author processes/rules in your own JavaScript BPM engine, then export a jBPM-dep
 | [`rules-runtime/`](rules-runtime/) | A reference **rule engine** that executes the engine ruleset on data (08–09) |
 | [`decisions/`](decisions/) | Engine **decision tables** → DMN + a reference DMN evaluator (10–11) |
 | [`data-objects/`](data-objects/) | Engine **types** → Java POJOs + a runtime schema helper (12) |
-| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `io`, `report` |
+| [`guided/`](guided/) | Engine **tabular ruleset** → Business Central guided decision table + evaluator (13) |
+| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `guided-table`, `io`, `report` |
 
 ```bash
 npm run build                                                      # compile the SDK once
@@ -74,6 +75,12 @@ Each project example writes a complete kjar under its own `out/` (git-ignored); 
   a `.java` POJO per type via `fromEngineProject` (nested declared types → FQNs, `list:true` →
   `java.util.List<…>`, package defaulted), and use the schema at runtime: `instantiate` (default
   object) + `validate` (field JS-type check). See `../../docs/bpm-assets/data-object/scenarios.md` §0.
+
+## guided/
+- **13-guided-decision-table** — author a Business Central **guided decision table** as a tabular
+  ruleset (fact + condition columns + action columns + rows), convert via `fromEngineProject` (→
+  `decision-table52` XML, which compiles to DRL in BC), and evaluate it on data with the reference
+  evaluator (`evaluateGuidedTable`). See `../../docs/bpm-assets/guided-decision-table/scenarios.md` §0.
 
 ## Verified
 Every example is covered by the test suite (`npm test`): projects re-parse/validate/round-trip and
