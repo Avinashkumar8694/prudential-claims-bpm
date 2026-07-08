@@ -5,7 +5,7 @@ export { parseProject, writeProject, walk } from './project.js';
 export { parseDescriptor, writeDescriptor, pomXml, deploymentXml, KMODULE_XML, PROJECT_IMPORTS, PROJECT_REPOSITORIES, parseWid, widMvel } from './scaffold.js';
 export { validateModel } from './validate.js';
 export { autowire } from './wire.js';
-export { fromEngine, fromEngineProject, toEngine, toEngineProject, makeTypeResolver, rulesToDrl, decisionToDmn, feelTest, feelResult, decisionTableToGdst } from './engine.js';
+export { fromEngine, fromEngineProject, toEngine, toEngineProject, makeTypeResolver, rulesToDrl, decisionToDmn, feelTest, feelResult, decisionTableToGdst, formToFrm } from './engine.js';
 export type {
   EngineProcess, EngineProject, EngineNode, EngineFlow, EngineVar, EngineType, EngineTypeField,
   EngineDeployment, Lang, HttpMethod, GatewayMode, EventDef, TimerSpec,
@@ -13,6 +13,7 @@ export type {
   EngineDecisionModel, EngineDecision, DecisionField, DecisionRule, InputTest, OutputResult,
   FeelType, HitPolicy, Aggregation,
   EngineGuidedTable, GdstCondition, GdstAction, GdstRow, GdstOp,
+  EngineForm, FormField, FormWidget,
   EngineStart, EngineEnd, EngineScript, EngineHttp, EngineCall, EngineForEach, EngineUserTask,
   EngineRule, EngineSend, EngineReceive, EngineManual, EngineGateway, EngineCatch, EngineThrow,
   EngineBoundary, EngineSubprocess, EngineRaw,

@@ -118,12 +118,20 @@ export interface EngineGuidedTable {
   conditions: GdstCondition[]; actions: GdstAction[]; rows: GdstRow[];
 }
 
+// ---- Engine-native form (user-task UI; the SDK synthesizes the Business Central .frm) ----
+// A form edits a data object: `type` names it, `fields` bind to its fields, and the widget is derived
+// from each field's type (override per field with `widget`).
+export type FormWidget = 'text' | 'textarea' | 'integer' | 'number' | 'decimal' | 'checkbox' | 'boolean' | 'dropdown' | 'select' | 'radio' | 'date';
+export interface FormField { bind: string; label?: string; widget?: FormWidget; required?: boolean; readOnly?: boolean; placeholder?: string; }
+export interface EngineForm { name: string; type?: string; path?: string; fields: FormField[]; }
+
 export interface EngineProject {
   id?: string; gav?: Gav; deployment?: EngineDeployment; types?: EngineType[];
   assets?: Record<string, { kind: string; model: any } | string>;
   rulesets?: EngineRuleset[];   // simple engine rules -> generated .drl (SDK fills package/imports/DRL syntax)
   decisions?: EngineDecisionModel[];  // simple decision tables -> generated .dmn (SDK fills FEEL + DMN XML)
   guidedTables?: EngineGuidedTable[]; // tabular rulesets -> generated .gdst (Business Central editor XML)
+  forms?: EngineForm[];         // user-task forms -> generated .frm (widget derived from field types)
   processes: EngineProcess[];
 }
 
@@ -467,6 +475,30 @@ export function decisionTableToGdst(m: EngineGuidedTable, pkg = 'org.jbpm.rules'
   ]) };
 }
 
+// friendly widget -> jBPM field code; and field-type -> derived code
+const WIDGET_CODE: Record<string, string> = { text: 'TextBox', textarea: 'TextArea', integer: 'IntegerBox', number: 'DoubleBox', decimal: 'DoubleBox', checkbox: 'CheckBox', boolean: 'CheckBox', dropdown: 'ListBox', select: 'ListBox', radio: 'RadioGroup', date: 'DatePicker' };
+const TYPE_CODE: Record<string, string> = { string: 'TextBox', int: 'IntegerBox', integer: 'IntegerBox', long: 'IntegerBox', double: 'DoubleBox', float: 'DoubleBox', number: 'DoubleBox', bool: 'CheckBox', boolean: 'CheckBox', date: 'DatePicker' };
+const humanize = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').replace(/^./, (c) => c.toUpperCase());
+
+/**
+ * Engine form -> a Business Central form definition (`.frm` JSON model). `type` -> model.className
+ * (via resolve), each field -> a bound input whose `code` is the explicit `widget` or one derived from
+ * the field's type (`fieldTypes`). buildAsset({kind:'form', model}) serialises the `{ json }`.
+ */
+export function formToFrm(form: EngineForm, fieldTypes: Record<string, string> = {}, resolve: (t: string) => string = (t) => t): { json: unknown } {
+  const fields = form.fields.map((f) => {
+    const code = f.widget ? (WIDGET_CODE[f.widget] || 'TextBox') : (TYPE_CODE[(fieldTypes[f.bind] || 'string').toLowerCase()] || 'TextBox');
+    const out: Record<string, unknown> = { id: f.bind, binding: f.bind, label: f.label || humanize(f.bind), code };
+    if (f.required) out.required = true;
+    if (f.readOnly) out.readOnly = true;
+    if (f.placeholder) out.placeHolder = f.placeholder;
+    return out;
+  });
+  const model: Record<string, unknown> = { name: form.name };
+  if (form.type) model.className = resolve(form.type);
+  return { json: { id: form.name, name: form.name, model, fields } };
+}
+
 /** Convert a whole engine project to an SDK Project (processes + kjar descriptor + generated .java). */
 export function fromEngineProject(ep: EngineProject): Project {
   // `package` on a type is optional — default it so engine JSON stays free of Java packaging.
@@ -510,6 +542,14 @@ export function fromEngineProject(ep: EngineProject): Project {
     const fieldTypes: Record<string, string> = {};
     for (const f of declared?.fields || []) fieldTypes[f.name] = f.type;
     files[path] = buildAsset({ kind: 'guidedDecisionTable', model: decisionTableToGdst(gt, pkg, fieldTypes) });
+  }
+  // engine forms -> generated .frm (user-task UI; widget derived from the bound type's field types)
+  for (const form of ep.forms || []) {
+    const path = form.path || `src/main/resources/forms/${form.name}.frm`;
+    const declared = allTypes.find((t) => t.name === form.type);
+    const fieldTypes: Record<string, string> = {};
+    for (const f of declared?.fields || []) fieldTypes[f.name] = f.type;
+    files[path] = buildAsset({ kind: 'form', model: formToFrm(form, fieldTypes, resolve) });
   }
 
   const dep = ep.deployment || {};

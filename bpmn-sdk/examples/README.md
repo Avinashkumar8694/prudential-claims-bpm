@@ -12,7 +12,8 @@ Author processes/rules in your own JavaScript BPM engine, then export a jBPM-dep
 | [`decisions/`](decisions/) | Engine **decision tables** → DMN + a reference DMN evaluator (10–11) |
 | [`data-objects/`](data-objects/) | Engine **types** → Java POJOs + a runtime schema helper (12) |
 | [`guided/`](guided/) | Engine **tabular ruleset** → Business Central guided decision table + evaluator (13) |
-| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `guided-table`, `io`, `report` |
+| [`forms/`](forms/) | Engine **form** (bound fields, derived widgets) → jBPM `.frm` + render/validate helper (14) |
+| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `guided-table`, `form`, `io`, `report` |
 
 ```bash
 npm run build                                                      # compile the SDK once
@@ -81,6 +82,12 @@ Each project example writes a complete kjar under its own `out/` (git-ignored); 
   ruleset (fact + condition columns + action columns + rows), convert via `fromEngineProject` (→
   `decision-table52` XML, which compiles to DRL in BC), and evaluate it on data with the reference
   evaluator (`evaluateGuidedTable`). See `../../docs/bpm-assets/guided-decision-table/scenarios.md` §0.
+
+## forms/
+- **14-form-to-frm** — author a user-task **form** in the engine model (a `type` + which fields to
+  show; widget derived from each field's type), convert via `fromEngineProject` (→ Business Central
+  `.frm` JSON, wired to a `userTask` node via `form:`), and use it at runtime: `renderModel` (UI model
+  with resolved widgets) + `validateSubmission` (required fields). See `../../docs/bpm-assets/form/scenarios.md` §0.
 
 ## Verified
 Every example is covered by the test suite (`npm test`): projects re-parse/validate/round-trip and
