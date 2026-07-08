@@ -10,7 +10,8 @@ Author processes/rules in your own JavaScript BPM engine, then export a jBPM-dep
 | [`engine-model/`](engine-model/) | The clean **engine model** → jBPM via `fromEngineProject` (07) |
 | [`rules-runtime/`](rules-runtime/) | A reference **rule engine** that executes the engine ruleset on data (08–09) |
 | [`decisions/`](decisions/) | Engine **decision tables** → DMN + a reference DMN evaluator (10–11) |
-| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `io`, `report` |
+| [`data-objects/`](data-objects/) | Engine **types** → Java POJOs + a runtime schema helper (12) |
+| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `io`, `report` |
 
 ```bash
 npm run build                                                      # compile the SDK once
@@ -67,6 +68,12 @@ Each project example writes a complete kjar under its own `out/` (git-ignored); 
 - **11-comprehensive-decision** — a model exercising **every** input-cell form (literal/any/set/
   `gt..lte`/`between`/`not`/`{feel}`) and hit policies (UNIQUE, COLLECT+SUM), then **evaluates it on
   data** with the reference evaluator. See `../../docs/bpm-assets/dmn/scenarios.md` §0.
+
+## data-objects/
+- **12-types-to-pojo** — declare data **types** in the engine model (name + fields, no Java), generate
+  a `.java` POJO per type via `fromEngineProject` (nested declared types → FQNs, `list:true` →
+  `java.util.List<…>`, package defaulted), and use the schema at runtime: `instantiate` (default
+  object) + `validate` (field JS-type check). See `../../docs/bpm-assets/data-object/scenarios.md` §0.
 
 ## Verified
 Every example is covered by the test suite (`npm test`): projects re-parse/validate/round-trip and

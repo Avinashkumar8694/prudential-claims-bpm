@@ -12,7 +12,7 @@ import type { ElementNode } from './xml.js';
 export type Lang = 'js' | 'java' | 'mvel';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
 export type GatewayMode = 'exclusive' | 'parallel' | 'inclusive' | 'event' | 'complex';
-export interface EngineTypeField { name: string; type: string; }
+export interface EngineTypeField { name: string; type: string; list?: boolean; }
 export interface EngineType { name: string; package?: string; fields?: EngineTypeField[]; }
 export interface EngineVar { name: string; type: string; }
 export interface EngineFlow { id?: string; from: string; to: string; when?: string; lang?: Lang; }
@@ -145,6 +145,15 @@ function javaFieldType(type: string, resolve: (t: string) => string): string {
   const t = type.toLowerCase();
   const map: Record<string, string> = { string: 'String', int: 'int', integer: 'int', long: 'long', double: 'double', float: 'double', number: 'double', bool: 'boolean', boolean: 'boolean', date: 'java.util.Date', list: 'java.util.List', array: 'java.util.List', map: 'java.util.Map', object: 'Object' };
   return map[t] || resolve(type);
+}
+// boxed element type for generics (Java can't hold primitives in List<...>)
+function boxedType(type: string, resolve: (t: string) => string): string {
+  const box: Record<string, string> = { string: 'String', int: 'Integer', integer: 'Integer', long: 'Long', double: 'Double', float: 'Double', number: 'Double', bool: 'Boolean', boolean: 'Boolean', date: 'java.util.Date', object: 'Object' };
+  return box[type.toLowerCase()] || resolve(type);
+}
+// full POJO field type honouring `list` (typed collection)
+function fieldJavaType(f: EngineTypeField, resolve: (t: string) => string): string {
+  return f.list ? `java.util.List<${boxedType(f.type, resolve)}>` : javaFieldType(f.type, resolve);
 }
 
 const langUri = (l?: Lang) => LANG_URI[l || 'java'] || LANG_URI.java;
@@ -410,7 +419,7 @@ export function fromEngineProject(ep: EngineProject): Project {
   for (const t of allTypes) {
     const key = fqn(t); if (seen.has(key)) continue; seen.add(key);
     const rel = 'src/main/java/' + (t.package || '').replace(/\./g, '/') + (t.package ? '/' : '') + `${t.name}.java`;
-    files[rel] = buildAsset({ kind: 'dataObject', model: { package: t.package, className: t.name, fields: (t.fields || []).map((f) => ({ name: f.name, type: javaFieldType(f.type, resolve) })) } });
+    files[rel] = buildAsset({ kind: 'dataObject', model: { package: t.package, className: t.name, fields: (t.fields || []).map((f) => ({ name: f.name, type: fieldJavaType(f, resolve) })) } });
   }
   // carry engine assets (structured -> buildAsset, or raw string)
   for (const [path, val] of Object.entries(ep.assets || {})) files[path] = typeof val === 'string' ? val : buildAsset(val as any);

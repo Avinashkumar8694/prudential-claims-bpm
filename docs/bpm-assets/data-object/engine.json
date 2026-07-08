@@ -1,23 +1,31 @@
 {
   "types": [
     {
-      "name": "Claim",
-      "package": "com.acme.model",
+      "name": "Address",
       "fields": [
-        {
-          "name": "id",
-          "type": "string"
-        },
-        {
-          "name": "amount",
-          "type": "double"
-        },
-        {
-          "name": "status",
-          "type": "string"
-        }
+        { "name": "city", "type": "string" },
+        { "name": "zip", "type": "string" }
+      ]
+    },
+    {
+      "name": "LineItem",
+      "fields": [
+        { "name": "sku", "type": "string" },
+        { "name": "qty", "type": "int" }
+      ]
+    },
+    {
+      "name": "Claim",
+      "fields": [
+        { "name": "id", "type": "string" },
+        { "name": "amount", "type": "double" },
+        { "name": "open", "type": "boolean" },
+        { "name": "address", "type": "Address" },
+        { "name": "items", "type": "LineItem", "list": true },
+        { "name": "tags", "type": "string", "list": true }
       ]
     }
   ],
-  "$note": "Declared as an engine TYPE (not a raw asset). fromEngineProject generates the .java and resolves the name to a Java FQN wherever jBPM needs it (variable structureRef, form className)."
+
+  "$note": "The WHOLE thing you write — nodejs-native type schemas. No Java, no package (defaulted to <process package>.model), no getters/setters. `type` is a primitive, another declared type NAME (nested object, e.g. Address), or a Java FQN; `list:true` makes it a typed collection. fromEngineProject generates a .java POJO per type and resolves the NAME to an FQN wherever jBPM needs one (variable structureRef, DRL import, form className, DMN type). You reference types by name everywhere. See scenarios.md §0; model.json shows the jBPM-side DataObjectModel POJO this produces."
 }
