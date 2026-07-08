@@ -1,23 +1,8 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/data/enums.enumeration": {
-      "kind": "enumeration",
-      "model": {
-        "enums": {
-          "Claim.status": [
-            "NEW",
-            "REVIEW",
-            "HIGH",
-            "STANDARD",
-            "DONE"
-          ],
-          "Claim.type": [
-            "DEATH",
-            "TI"
-          ]
-        }
-      }
-    }
-  },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+  "enumerations": [
+    { "type": "Claim", "field": "status", "values": ["NEW", "OPEN", "APPROVED", "REJECTED"] },
+    { "type": "Claim", "field": "type",   "values": ["DEATH", "TI"] }
+  ],
+
+  "$note": "The WHOLE thing you write — allowed values per data-object field. Each entry keys a `type` + `field` to its `values` (a picklist). No 'Fact.field' string keys, no quoting. fromEngineProject synthesizes the .enumeration file ('Claim.status' : ['NEW', ...]) at src/main/resources/enumerations.enumeration. It's the source of dropdown options: a form field bound to Claim.status, or a guided-table cell, renders as a picklist of these values (Business Central links them by the Type.field name). Use \"KEY=Label\" for a display label. See scenarios.md §0; model.json shows the jBPM-side map this produces."
 }

@@ -13,7 +13,8 @@ Author processes/rules in your own JavaScript BPM engine, then export a jBPM-dep
 | [`data-objects/`](data-objects/) | Engine **types** → Java POJOs + a runtime schema helper (12) |
 | [`guided/`](guided/) | Engine **tabular ruleset** → Business Central guided decision table + evaluator (13) |
 | [`forms/`](forms/) | Engine **form** (bound fields, derived widgets) → jBPM `.frm` + render/validate helper (14) |
-| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `guided-table`, `form`, `io`, `report` |
+| [`enumerations/`](enumerations/) | Engine **enums** (allowed field values) → `.enumeration` + options/validate helper (15) |
+| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `guided-table`, `form`, `enumeration`, `io`, `report` |
 
 ```bash
 npm run build                                                      # compile the SDK once
@@ -88,6 +89,13 @@ Each project example writes a complete kjar under its own `out/` (git-ignored); 
   show; widget derived from each field's type), convert via `fromEngineProject` (→ Business Central
   `.frm` JSON, wired to a `userTask` node via `form:`), and use it at runtime: `renderModel` (UI model
   with resolved widgets) + `validateSubmission` (required fields). See `../../docs/bpm-assets/form/scenarios.md` §0.
+
+## enumerations/
+- **15-enumerations** — declare **allowed values per field** in the engine model (`{ type, field,
+  values }`), generate the `.enumeration` file, and use them at runtime: `optionsFor` /
+  `labeledOptionsFor` (dropdown options, `"KEY=Label"` supported) + `isAllowed` (validate). Shows the
+  **pairing with forms** — a dropdown field's options come from the matching enumeration. See
+  `../../docs/bpm-assets/enumeration/scenarios.md` §0.
 
 ## Verified
 Every example is covered by the test suite (`npm test`): projects re-parse/validate/round-trip and

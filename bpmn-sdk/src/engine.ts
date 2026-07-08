@@ -125,6 +125,9 @@ export type FormWidget = 'text' | 'textarea' | 'integer' | 'number' | 'decimal' 
 export interface FormField { bind: string; label?: string; widget?: FormWidget; required?: boolean; readOnly?: boolean; placeholder?: string; }
 export interface EngineForm { name: string; type?: string; path?: string; fields: FormField[]; }
 
+// ---- Engine-native enumeration (allowed values per data-object field -> .enumeration) ----
+export interface EngineEnum { type: string; field: string; values: string[]; }
+
 export interface EngineProject {
   id?: string; gav?: Gav; deployment?: EngineDeployment; types?: EngineType[];
   assets?: Record<string, { kind: string; model: any } | string>;
@@ -132,6 +135,7 @@ export interface EngineProject {
   decisions?: EngineDecisionModel[];  // simple decision tables -> generated .dmn (SDK fills FEEL + DMN XML)
   guidedTables?: EngineGuidedTable[]; // tabular rulesets -> generated .gdst (Business Central editor XML)
   forms?: EngineForm[];         // user-task forms -> generated .frm (widget derived from field types)
+  enumerations?: EngineEnum[];  // allowed values per field -> generated .enumeration (dropdown options)
   processes: EngineProcess[];
 }
 
@@ -499,6 +503,13 @@ export function formToFrm(form: EngineForm, fieldTypes: Record<string, string> =
   return { json: { id: form.name, name: form.name, model, fields } };
 }
 
+/** Engine enums -> the jBPM `.enumeration` map ( 'Type.field' -> values ). */
+export function enumerationsToModel(enums: EngineEnum[]): { enums: Record<string, string[]> } {
+  const out: Record<string, string[]> = {};
+  for (const e of enums) out[`${e.type}.${e.field}`] = e.values;
+  return { enums: out };
+}
+
 /** Convert a whole engine project to an SDK Project (processes + kjar descriptor + generated .java). */
 export function fromEngineProject(ep: EngineProject): Project {
   // `package` on a type is optional — default it so engine JSON stays free of Java packaging.
@@ -550,6 +561,10 @@ export function fromEngineProject(ep: EngineProject): Project {
     const fieldTypes: Record<string, string> = {};
     for (const f of declared?.fields || []) fieldTypes[f.name] = f.type;
     files[path] = buildAsset({ kind: 'form', model: formToFrm(form, fieldTypes, resolve) });
+  }
+  // engine enumerations -> a single generated .enumeration (dropdown value lists)
+  if ((ep.enumerations || []).length) {
+    files['src/main/resources/enumerations.enumeration'] = buildAsset({ kind: 'enumeration', model: enumerationsToModel(ep.enumerations as EngineEnum[]) });
   }
 
   const dep = ep.deployment || {};
