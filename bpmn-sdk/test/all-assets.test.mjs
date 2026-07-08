@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseProject } from '../dist/index.mjs';
-import { buildAllAssetsProject, ASSET_FILES } from '../examples/05-all-assets-project.mjs';
+import { buildAllAssetsProject, ASSET_FILES } from '../examples/assets/05-all-assets-project.mjs';
 
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'assets-'));
 const { written } = buildAllAssetsProject(out);

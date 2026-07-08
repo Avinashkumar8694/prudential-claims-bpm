@@ -1,0 +1,22 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/rules/claims.dsl": {
+      "kind": "dsl",
+      "model": {
+        "entries": [
+          {
+            "scope": "when",
+            "nl": "There is a claim over {amount}",
+            "mapping": "$c : Claim( amount > {amount} )"
+          },
+          {
+            "scope": "then",
+            "nl": "Set claim status to {status}",
+            "mapping": "modify( $c ) { setStatus( \"{status}\" ) };"
+          }
+        ]
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

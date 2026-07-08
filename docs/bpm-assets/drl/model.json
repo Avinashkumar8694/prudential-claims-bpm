@@ -2,18 +2,27 @@
   "kind": "drl",
   "model": {
     "package": "com.acme.rules",
-    "imports": [
-      "com.acme.model.Claim"
+    "imports": ["com.acme.model.Claim"],
+    "globals": ["java.util.List approved"],
+    "functions": [
+      { "name": "calcFee", "returnType": "double", "params": [{ "type": "double", "name": "amount" }], "body": "return amount * 0.1;" }
     ],
-    "globals": [],
+    "declares": [
+      { "name": "Escalation", "fields": [{ "name": "claim", "type": "Claim" }] }
+    ],
+    "queries": [
+      { "name": "openClaims", "when": [{ "fact": "Claim", "bind": "$c", "constraints": [{ "field": "status", "op": "==", "value": "OPEN" }] }] }
+    ],
     "rules": [
       {
         "name": "High value claim",
-        "attributes": [
-          "ruleflow-group \"classify\""
+        "attrs": { "ruleflowGroup": "classify", "salience": 10 },
+        "when": [
+          { "fact": "Claim", "bind": "$c", "constraints": [{ "field": "amount", "op": ">", "value": 100000 }] }
         ],
-        "when": "$c : Claim( amount > 100000 )",
-        "then": "modify( $c ) { setStatus( \"HIGH\" ) };"
+        "then": [
+          { "modify": "$c", "set": { "status": "HIGH" } }
+        ]
       }
     ]
   }

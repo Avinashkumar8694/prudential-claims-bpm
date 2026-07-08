@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
 import { parseAsset } from '../dist/index.mjs';
-import { buildGeneratedAssetsProject, GENERATED } from '../examples/06-generate-assets.mjs';
+import { buildGeneratedAssetsProject, GENERATED } from '../examples/assets/06-generate-assets.mjs';
 
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'gen-'));
 const { written } = buildGeneratedAssetsProject(out);

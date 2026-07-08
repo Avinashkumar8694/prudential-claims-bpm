@@ -1,0 +1,27 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/tests/classify.scesim": {
+      "kind": "testScenario",
+      "model": {
+        "xml": {
+          "name": "ScenarioSimulationModel",
+          "attrs": {
+            "version": "1.8"
+          },
+          "children": [
+            {
+              "name": "simulation",
+              "attrs": {},
+              "children": [],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

@@ -5,9 +5,9 @@
 // Reality check: the SDK does not generate the *internal content* of Drools/DMN/scorecard/etc.
 // assets — those are authored artifacts compiled by the kie-maven-plugin. Here they are sample
 // files to show they are packaged into a single deployable project. See docs/bpm-project/asset-types.md.
-import { writeProject, validateModel, autowire } from '../dist/index.mjs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import path from 'node:path';
+import { writeProject, validateModel, autowire } from '../../dist/index.mjs';
+import { isMain, outDir as defaultOutDir } from '../functions/io.mjs';
+import { printWritten } from '../functions/report.mjs';
 
 const JS = 'http://www.javascript.com/javascript';
 const PKG = 'src/main/resources/com/acme';
@@ -232,8 +232,8 @@ export function buildAllAssetsProject(outDir) {
   return { outDir, written, project };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const outDir = process.argv[2] || path.join(path.dirname(fileURLToPath(import.meta.url)), 'out', 'assets');
+if (isMain(import.meta.url)) {
+  const outDir = defaultOutDir(import.meta.url, 'assets');
   const { written } = buildAllAssetsProject(outDir);
-  console.log(`Exported all-assets jBPM project to ${outDir} (${written.length} files):\n  ${written.join('\n  ')}`);
+  printWritten('all-assets jBPM project', outDir, written);
 }

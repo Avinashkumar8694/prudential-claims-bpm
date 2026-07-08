@@ -1,23 +1,27 @@
 {
   "kind": "dmn",
+  "$note": "jBPM-side DMN XML tree PRODUCED by decisionToDmn from the engine table in engine.json. You author engine.json, not this. buildAsset({kind:\"dmn\",model}) serialises it to .dmn text.",
   "model": {
     "xml": {
       "name": "definitions",
       "attrs": {
+        "xmlns": "http://www.omg.org/spec/DMN/20180521/MODEL/",
+        "id": "_defs_Eligibility",
         "name": "Eligibility",
-        "namespace": "https://acme/dmn/eligibility"
+        "namespace": "https://acme/dmn/Eligibility"
       },
       "children": [
         {
           "name": "inputData",
           "attrs": {
-            "id": "_amount",
+            "id": "_id_amount",
             "name": "amount"
           },
           "children": [
             {
               "name": "variable",
               "attrs": {
+                "id": "_var_amount",
                 "name": "amount",
                 "typeRef": "number"
               },
@@ -30,17 +34,283 @@
           "cdata": []
         },
         {
-          "name": "decision",
+          "name": "inputData",
           "attrs": {
-            "id": "_isEligible",
-            "name": "isEligible"
+            "id": "_id_region",
+            "name": "region"
           },
           "children": [
             {
-              "name": "literalExpression",
-              "attrs": {},
+              "name": "variable",
+              "attrs": {
+                "id": "_var_region",
+                "name": "region",
+                "typeRef": "string"
+              },
               "children": [],
-              "text": "amount < 500000",
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "decision",
+          "attrs": {
+            "id": "_dec_Eligibility",
+            "name": "Eligibility"
+          },
+          "children": [
+            {
+              "name": "variable",
+              "attrs": {
+                "id": "_dec_Eligibility_var",
+                "name": "Eligibility",
+                "typeRef": "string"
+              },
+              "children": [],
+              "text": "",
+              "cdata": []
+            },
+            {
+              "name": "informationRequirement",
+              "attrs": {
+                "id": "_dec_Eligibility_ir_amount"
+              },
+              "children": [
+                {
+                  "name": "requiredInput",
+                  "attrs": {
+                    "href": "#_id_amount"
+                  },
+                  "children": [],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            },
+            {
+              "name": "informationRequirement",
+              "attrs": {
+                "id": "_dec_Eligibility_ir_region"
+              },
+              "children": [
+                {
+                  "name": "requiredInput",
+                  "attrs": {
+                    "href": "#_id_region"
+                  },
+                  "children": [],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            },
+            {
+              "name": "decisionTable",
+              "attrs": {
+                "id": "_dec_Eligibility_dt",
+                "hitPolicy": "UNIQUE"
+              },
+              "children": [
+                {
+                  "name": "input",
+                  "attrs": {
+                    "id": "_dec_Eligibility_dt_in_amount",
+                    "label": "amount"
+                  },
+                  "children": [
+                    {
+                      "name": "inputExpression",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_ie_amount",
+                        "typeRef": "number"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "amount",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "input",
+                  "attrs": {
+                    "id": "_dec_Eligibility_dt_in_region",
+                    "label": "region"
+                  },
+                  "children": [
+                    {
+                      "name": "inputExpression",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_ie_region",
+                        "typeRef": "string"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "region",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "output",
+                  "attrs": {
+                    "id": "_dec_Eligibility_dt_out_tier",
+                    "name": "tier",
+                    "typeRef": "string"
+                  },
+                  "children": [],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "rule",
+                  "attrs": {
+                    "id": "_dec_Eligibility_dt_r0"
+                  },
+                  "children": [
+                    {
+                      "name": "inputEntry",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_r0_i_amount"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "> 100000",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "inputEntry",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_r0_i_region"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "\"US\"",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "outputEntry",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_r0_o_tier"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "\"HIGH\"",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "rule",
+                  "attrs": {
+                    "id": "_dec_Eligibility_dt_r1"
+                  },
+                  "children": [
+                    {
+                      "name": "inputEntry",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_r1_i_amount"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "[1..100000]",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "inputEntry",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_r1_i_region"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "-",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "outputEntry",
+                      "attrs": {
+                        "id": "_dec_Eligibility_dt_r1_o_tier"
+                      },
+                      "children": [
+                        {
+                          "name": "text",
+                          "attrs": {},
+                          "children": [],
+                          "text": "\"STANDARD\"",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
               "cdata": []
             }
           ],

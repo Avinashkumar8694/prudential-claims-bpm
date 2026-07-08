@@ -2,10 +2,15 @@
 
 Per-asset docs for the SDK's `parseAsset` / `buildAsset` codecs (structured JSON your engine can
 generate/edit, then serialize back to the file format). Same folder style as `../bpm-nodes/`:
-each asset has `usage_guide.md`, `model.md` (the JSON model), and `model.json` (a sample).
+each asset has `usage_guide.md`, `model.md` (the JSON model), `model.json` (a sample), and
+`engine.json` — how the asset appears in the **engine model** (`../engine-model/`):
+- **data objects** → declared as engine `types`; `fromEngineProject` generates the `.java` and
+  resolves the type name to a Java FQN (variable `structureRef`, form `className`);
+- **all other assets** → `EngineProject.assets` as `{ path: { kind, model } }`; `fromEngineProject`
+  runs `buildAsset(kind, model)` and writes the file into the kjar.
 
 See also: `../bpm-project/structured-assets.md` (overview) · `../bpm-project/asset-types.md`
-(what each asset is + how it ties to a process) · `../../bpmn-sdk/examples/06-generate-assets.mjs`.
+(what each asset is + how it ties to a process) · `../../bpmn-sdk/examples/assets/06-generate-assets.mjs`.
 
 ## Catalogue
 | Folder | Ext | kind | Model |

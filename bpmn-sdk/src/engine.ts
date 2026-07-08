@@ -1,0 +1,534 @@
+// Engine model <-> jBPM ProcessModel converter.
+// Your Node BPM engine authors the clean "engine model" (see docs/engine-model/); fromEngine maps it
+// to the SDK's jBPM ProcessModel, then serializeProcess/writeProject produce a kjar. Type *names*
+// are resolved to Java FQNs (structureRef / form className / rule facts) and .java POJOs are
+// generated from declared type schemas — so the engine never needs real Java classes.
+import type { ProcessModel, Node, Flow, Project, ProjectDescriptor, WorkItemHandler, EnvironmentEntry, Gav } from './types.js';
+import { autowire } from './wire.js';
+import { buildAsset, parseAsset, assetKind } from './assets.js';
+import type { DrlModel, DrlRule, RuleConstraint, RulePattern, LhsElement, RuleAction, RuleAttributes, ConstraintOp } from './assets.js';
+import type { ElementNode } from './xml.js';
+
+export type Lang = 'js' | 'java' | 'mvel';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
+export type GatewayMode = 'exclusive' | 'parallel' | 'inclusive' | 'event' | 'complex';
+export interface EngineTypeField { name: string; type: string; }
+export interface EngineType { name: string; package?: string; fields?: EngineTypeField[]; }
+export interface EngineVar { name: string; type: string; }
+export interface EngineFlow { id?: string; from: string; to: string; when?: string; lang?: Lang; }
+
+export interface TimerSpec { duration?: string; cycle?: string; date?: string; }
+/** An event trigger — exactly one of the fields is set (per position it's start/catch/throw/boundary). */
+export interface EventDef {
+  signal?: string; message?: string; error?: string; escalation?: string;
+  condition?: string; lang?: Lang; timer?: TimerSpec | string;
+}
+interface Base { id?: string; name?: string; }
+export interface EngineStart extends Base { type: 'start'; on?: EventDef; }
+export interface EngineEnd extends Base { type: 'end'; result?: 'terminate'; throw?: EventDef; }
+export interface EngineScript extends Base { type: 'script'; lang?: Lang; code: string; }
+export interface EngineHttp extends Base { type: 'http'; method?: HttpMethod; url: string; headers?: Record<string, string>; body?: Record<string, string | number | boolean>; resultTo?: Record<string, string>; }
+export interface EngineCall extends Base { type: 'call'; process: string; inputs?: Record<string, string>; outputs?: Record<string, string>; }
+export interface EngineForEach extends Base { type: 'forEach'; process: string; over: string; as?: string; collectInto?: string; itemResult?: string; parallel?: boolean; pass?: string[]; }
+export interface EngineUserTask extends Base { type: 'userTask'; group?: string; assignee?: string; form?: string; skippable?: boolean; }
+export interface EngineRule extends Base { type: 'rule'; ruleflowGroup?: string; dmn?: { namespace: string; model: string; decision: string }; }
+export interface EngineSend extends Base { type: 'send'; message: string; implementation?: string; }
+export interface EngineReceive extends Base { type: 'receive'; message: string; implementation?: string; }
+export interface EngineManual extends Base { type: 'manual'; }
+export interface EngineGateway extends Base { type: 'gateway'; mode: GatewayMode; default?: string; direction?: 'Diverging' | 'Converging'; }
+export interface EngineCatch extends Base { type: 'catch'; event: EventDef; }
+export interface EngineThrow extends Base { type: 'throw'; event: EventDef; }
+export interface EngineBoundary extends Base { type: 'boundary'; on: string; event: EventDef; interrupting?: boolean; }
+export interface EngineSubprocess extends Base { type: 'subprocess'; transaction?: boolean; on?: { error?: string }; nodes: EngineNode[]; flows: EngineFlow[]; }
+export interface EngineRaw extends Base { type: 'raw'; raw?: string; }
+export type EngineNode =
+  | EngineStart | EngineEnd | EngineScript | EngineHttp | EngineCall | EngineForEach | EngineUserTask
+  | EngineRule | EngineSend | EngineReceive | EngineManual | EngineGateway | EngineCatch | EngineThrow
+  | EngineBoundary | EngineSubprocess | EngineRaw;
+export interface EngineProcess {
+  id: string; name?: string; package?: string;
+  types?: EngineType[]; vars?: EngineVar[];
+  lanes?: { id?: string; name?: string; nodes: string[] }[];
+  data?: { id?: string; name?: string; type?: string; collection?: boolean }[];
+  signals?: string[]; errors?: string[]; messages?: string[]; escalations?: string[];
+  nodes: EngineNode[]; flows: EngineFlow[];
+}
+export interface EngineDeployment { runtime?: string; env?: Record<string, string>; handlers?: string[]; }
+
+// ---- Engine-native rules (simple; the SDK synthesizes all the Drools/jBPM detail) ----
+// You write facts by NAME, conditions as field/op/value, actions as set/insert/delete/call.
+// No package, no Java FQNs, no `modify($c)`, no `ruleflow-group` — fromEngineProject fills those in:
+// fact names -> imported FQNs (via the project type registry), `group` -> ruleflow-group + .drl path.
+export type CondOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'notIn'
+  | 'contains' | 'notContains' | 'matches' | 'memberOf';
+export type CondValue = string | number | boolean | Array<string | number | boolean>;
+export interface CondRef { ref: string; }   // reference a bound fact/field: "claim.id" -> $claim.id
+// A field condition: a bare literal (== ), a bare array (in), a {ref} (== a bound var), or {op: value|ref|array}.
+export type WhereSpec = CondValue | CondRef | Partial<Record<CondOp, CondValue | CondRef>>;
+export interface EngineWhen {
+  fact: string;                 // simple type name (resolved to an FQN + import by the SDK)
+  as?: string;                  // binding name WITHOUT '$'; reference it in `then` (SDK emits `$name`)
+  where?: Record<string, WhereSpec>;   // field -> literal (eq) | array (in) | {ref} | {op: value|ref}
+  exists?: boolean;             // false = fact must NOT exist; true = must exist (unbound); omit = normal match
+  not?: boolean;                // alias of `exists: false`
+}
+export type EngineThen =
+  | { set: string; fields: Record<string, string | number | boolean> }       // update a matched fact's fields
+  | { insert: string; fields?: Record<string, string | number | boolean> }   // create+insert a new fact (by name)
+  | { delete: string }                                                        // remove a matched fact
+  | { call: string; args?: Array<string | number | boolean> };               // invoke a helper/global
+export interface EngineRuleDef { name: string; priority?: number; noLoop?: boolean; when: EngineWhen[]; then: EngineThen[]; }
+export interface EngineRuleset { group: string; package?: string; path?: string; rules: EngineRuleDef[]; }
+
+// ---- Engine-native decisions (DMN decision tables; the SDK synthesizes the DMN 1.2 XML) ----
+// You author a table: inputs, outputs, and rules (when: per-input test, then: per-output result).
+// No FEEL syntax, no DMN XML, no namespaces — decisionToDmn / fromEngineProject fill those in.
+export type FeelType = 'number' | 'string' | 'boolean' | 'date' | 'time' | 'dateTime' | 'any';
+export type HitPolicy = 'UNIQUE' | 'FIRST' | 'ANY' | 'PRIORITY' | 'COLLECT' | 'RULE ORDER' | 'OUTPUT ORDER';
+export type Aggregation = 'SUM' | 'MIN' | 'MAX' | 'COUNT';
+export interface DecisionField { name: string; type?: FeelType; }
+// one cell test in a rule's `when` (compiled to a FEEL unary test)
+export type InputTest =
+  | string | number | boolean                                   // equals a literal ("-" = any)
+  | Array<string | number | boolean>                            // in-list (disjunction)
+  | { gt: number | string } | { gte: number | string } | { lt: number | string } | { lte: number | string }
+  | { between: [number | string, number | string] }            // inclusive range [a..b]
+  | { in: Array<string | number | boolean> }
+  | { not: string | number | boolean | Array<string | number | boolean> }
+  | { any: true }                                               // matches anything (FEEL `-`)
+  | { feel: string };                                           // raw FEEL escape hatch
+export type OutputResult = string | number | boolean | { feel: string };
+export interface DecisionRule { when: Record<string, InputTest>; then: Record<string, OutputResult>; }
+export interface EngineDecision {
+  name: string; hitPolicy?: HitPolicy; aggregation?: Aggregation;   // aggregation only with hitPolicy COLLECT
+  inputs: DecisionField[]; outputs: DecisionField[]; rules: DecisionRule[];
+}
+export interface EngineDecisionModel { name: string; namespace?: string; path?: string; decisions: EngineDecision[]; }
+
+export interface EngineProject {
+  id?: string; gav?: Gav; deployment?: EngineDeployment; types?: EngineType[];
+  assets?: Record<string, { kind: string; model: any } | string>;
+  rulesets?: EngineRuleset[];   // simple engine rules -> generated .drl (SDK fills package/imports/DRL syntax)
+  decisions?: EngineDecisionModel[];  // simple decision tables -> generated .dmn (SDK fills FEEL + DMN XML)
+  processes: EngineProcess[];
+}
+
+const PRIM: Record<string, string> = {
+  string: 'String', int: 'Integer', integer: 'Integer', long: 'java.lang.Long',
+  double: 'java.lang.Double', float: 'java.lang.Double', number: 'java.lang.Double',
+  bool: 'java.lang.Boolean', boolean: 'java.lang.Boolean', object: 'java.lang.Object',
+  list: 'java.util.List', array: 'java.util.List', map: 'java.util.Map', date: 'java.util.Date',
+};
+const LANG_URI: Record<string, string> = {
+  js: 'http://www.javascript.com/javascript', java: 'http://www.java.com/java', mvel: 'http://www.mvel.org/2.0',
+};
+const HANDLER_ID: Record<string, string> = {
+  Rest: 'new org.jbpm.process.workitem.rest.RESTWorkItemHandler(classLoader)',
+  WebService: 'new org.jbpm.process.workitem.webservice.WebServiceWorkItemHandler(ksession)',
+  Email: 'new org.jbpm.process.workitem.email.EmailWorkItemHandler()',
+};
+const fqn = (t: EngineType) => (t.package ? t.package + '.' : '') + t.name;
+
+/** name -> Java FQN. Primitives map to boxed jBPM structureRefs; declared type names -> FQN. */
+export function makeTypeResolver(types: EngineType[] = []): (type: string) => string {
+  const idx: Record<string, EngineType> = {};
+  for (const t of types) idx[t.name] = t;
+  return (type: string): string => {
+    if (!type) return 'java.lang.Object';
+    const p = PRIM[type.toLowerCase()]; if (p) return p;
+    if (idx[type]) return fqn(idx[type]);
+    return type; // already an FQN or unknown -> passthrough
+  };
+}
+// Java field type (unboxed where natural) for generated POJOs
+function javaFieldType(type: string, resolve: (t: string) => string): string {
+  const t = type.toLowerCase();
+  const map: Record<string, string> = { string: 'String', int: 'int', integer: 'int', long: 'long', double: 'double', float: 'double', number: 'double', bool: 'boolean', boolean: 'boolean', date: 'java.util.Date', list: 'java.util.List', array: 'java.util.List', map: 'java.util.Map', object: 'Object' };
+  return map[t] || resolve(type);
+}
+
+const langUri = (l?: Lang) => LANG_URI[l || 'java'] || LANG_URI.java;
+const jstr = (v: any) => JSON.stringify(String(v)); // Java string literal
+
+function setEvent(nd: Node, ev: any): void {
+  if (!ev) { nd.eventType = 'none'; return; }
+  if (ev.signal) { nd.eventType = 'signal'; nd.signalName = ev.signal; }
+  else if (ev.message) { nd.eventType = 'message'; nd.messageRef = ev.message; }
+  else if (ev.error) { nd.eventType = 'error'; nd.errorRef = ev.error; }
+  else if (ev.escalation) { nd.eventType = 'escalation'; nd.escalationRef = ev.escalation; }
+  else if (ev.condition) { nd.eventType = 'conditional'; nd.conditionExpr = ev.condition; nd.conditionExprLanguage = langUri(ev.lang); }
+  else if (ev.timer) { nd.eventType = 'timer'; if (ev.timer.cycle) nd.timeCycle = ev.timer.cycle; else if (ev.timer.date) nd.timeDate = ev.timer.date; else nd.timeDuration = ev.timer.duration || ev.timer; }
+  else nd.eventType = 'none';
+}
+
+function pathExpr(jp: string): string {
+  const parts = jp.replace(/^\$\.?/, '').split('.').filter(Boolean);
+  return 'root' + parts.map((p) => `.path("${p}")`).join('');
+}
+function accessor(structureRef: string): (e: string) => string {
+  switch (structureRef) {
+    case 'String': return (e) => `${e}.asText()`;
+    case 'java.lang.Boolean': return (e) => `${e}.asBoolean()`;
+    case 'Integer': return (e) => `${e}.asInt()`;
+    case 'java.lang.Long': return (e) => `${e}.asLong()`;
+    case 'java.lang.Double': return (e) => `${e}.asDouble()`;
+    default: return (e) => e; // Object/List/Map -> keep the JsonNode
+  }
+}
+
+/** Convert one engine process to a jBPM ProcessModel. */
+export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): ProcessModel {
+  const resolve = makeTypeResolver([...(sharedTypes || []), ...(ep.types || [])]);
+  const varType: Record<string, string> = {};
+  const variables = (ep.vars || []).map((v) => { const sr = resolve(v.type); varType[v.name] = sr; return { name: v.name, type: sr }; });
+  const ensure = (name: string, sr: string) => { if (!variables.some((x) => x.name === name)) { variables.push({ name, type: sr }); varType[name] = sr; } };
+
+  const sig = new Set(ep.signals || []); const err = new Set(ep.errors || []);
+  const msg = new Set(ep.messages || []); const esc = new Set(ep.escalations || []);
+
+  const conv = (n: EngineNode): Node => {
+    const base: Node = { id: n.id!, type: 'raw', name: n.name };
+    switch (n.type) {
+      case 'start': { const nd: Node = { ...base, type: 'startEvent' }; setEvent(nd, n.on); nd.subtype = nd.eventType; if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); return nd; }
+      case 'end': {
+        const nd: Node = { ...base, type: 'endEvent' };
+        if (n.result === 'terminate') { nd.subtype = 'terminate'; nd.eventType = 'terminate'; }
+        else if (n.throw) { setEvent(nd, n.throw); nd.subtype = nd.eventType === 'signal' ? 'signalThrow' : nd.eventType === 'error' ? 'errorThrow' : nd.eventType; if (nd.signalName) sig.add(nd.signalName); if (nd.errorRef) err.add(nd.errorRef); if (nd.escalationRef) esc.add(nd.escalationRef); }
+        else { nd.subtype = 'none'; nd.eventType = 'none'; }
+        return nd;
+      }
+      case 'script': return { ...base, type: 'scriptTask', script: n.code, scriptFormat: langUri(n.lang) };
+      case 'http': {
+        ensure('reqPayload', 'String'); ensure('resPayload', 'String'); ensure('baseUrl', 'String');
+        const entry = 'com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\n'
+          + 'json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));\n'
+          + Object.entries(n.body || {}).map(([k, v]) =>
+            (typeof v === 'string' && v.startsWith('$')) ? `json.putPOJO("${k}", kcontext.getVariable("${v.slice(1)}"));\n`
+              : `json.put("${k}", ${typeof v === 'number' || typeof v === 'boolean' ? v : jstr(v)});\n`).join('')
+          + 'kcontext.setVariable("reqPayload", json.toString());';
+        const sets = Object.entries(n.resultTo || {}).map(([vn, jp]) => `    kcontext.setVariable("${vn}", ${accessor(varType[vn] || 'java.lang.Object')(pathExpr(jp as string))});\n`).join('');
+        const exit = 'String response = (String) kcontext.getVariable("resPayload");\n'
+          + 'if (response != null && !response.isEmpty()) { try {\n'
+          + '  com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);\n'
+          + sets + '} catch(Exception e) {} }';
+        return { ...base, type: 'callActivity', subtype: 'rest', url: n.url, method: n.method || 'POST', onEntry: entry, onExit: exit };
+      }
+      case 'call': return { ...base, type: 'callActivity', subtype: 'reusable', calledElement: n.process,
+        dataInputs: Object.entries(n.inputs || {}).map(([k, v]) => ({ name: k, value: String(v).replace(/^\$/, '') })),
+        dataOutputs: Object.entries(n.outputs || {}).map(([k, v]) => ({ name: k, to: String(v) })) };
+      case 'forEach': return { ...base, type: 'callActivity', subtype: 'multiInstance', calledElement: n.process,
+        multiInstance: { isSequential: n.parallel === false, collectionIn: n.over, collectionOut: n.collectInto || `${n.over}Results`, itemVar: n.as || 'item', itemOutVar: n.itemResult || 'itemResult', passthru: n.pass || [] } };
+      case 'userTask': return { ...base, type: 'userTask', taskName: n.form || n.name, group: n.group || n.assignee || 'user', skippable: n.skippable !== false };
+      case 'rule': return { ...base, type: 'businessRuleTask', ruleFlowGroup: n.ruleflowGroup, implementation: n.dmn ? 'http://www.jboss.org/drools/dmn' : '##unspecified' };
+      case 'send': { if (n.message) msg.add(n.message); return { ...base, type: 'sendTask', messageRef: n.message, implementation: n.implementation || '##WebService' }; }
+      case 'receive': { if (n.message) msg.add(n.message); return { ...base, type: 'receiveTask', messageRef: n.message, implementation: n.implementation || 'Other' }; }
+      case 'manual': return { ...base, type: 'manualTask' };
+      case 'gateway': { const map: Record<string, Node['type']> = { exclusive: 'exclusiveGateway', parallel: 'parallelGateway', inclusive: 'inclusiveGateway', event: 'eventBasedGateway', complex: 'complexGateway' }; return { ...base, type: map[n.mode] || 'exclusiveGateway', gatewayDirection: n.direction || 'Diverging', default: n.default }; }
+      case 'catch': { const nd: Node = { ...base, type: 'intermediateCatchEvent' }; setEvent(nd, n.event); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); return nd; }
+      case 'throw': { const nd: Node = { ...base, type: 'intermediateThrowEvent' }; setEvent(nd, n.event); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); if (nd.escalationRef) esc.add(nd.escalationRef); return nd; }
+      case 'boundary': { const nd: Node = { ...base, type: 'boundaryEvent', attachedTo: n.on, cancelActivity: n.interrupting !== false }; setEvent(nd, n.event); if (nd.errorRef) err.add(nd.errorRef); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); if (nd.escalationRef) esc.add(nd.escalationRef); return nd; }
+      case 'subprocess': {
+        const nd: Node = { ...base, type: 'subProcess', subtype: n.transaction ? 'transaction' : (n.on ? 'event' : 'embedded') };
+        if (n.on && n.on.error) { nd.error = n.on.error; err.add(n.on.error); }
+        nd.nodes = (n.nodes || []).map(conv);
+        nd.flows = (n.flows || []).map(convFlow);
+        return nd;
+      }
+      default: return { ...base, type: 'raw', bpmnLocal: n.type, raw: n.raw || `<!-- ${n.type} -->` };
+    }
+  };
+  const convFlow = (f: EngineFlow): Flow => ({ id: f.id || `${f.from}__${f.to}`, sourceRef: f.from, targetRef: f.to, ...(f.when ? { condition: f.when, conditionLanguage: langUri(f.lang) } : {}) });
+
+  const nodes = ep.nodes.map(conv);
+  const flows = ep.flows.map(convFlow);
+
+  const model: ProcessModel = {
+    id: ep.id, name: ep.name || ep.id, packageName: ep.package || 'org.jbpm', processType: 'Public', isExecutable: true,
+    declarations: {
+      signals: [...sig].map((n) => ({ id: `_sig_${n}`, name: n })),
+      errors: [...err].map((n) => ({ id: n, errorCode: n })),
+      messages: [...msg].map((n) => ({ id: n, name: n })),
+      escalations: [...esc].map((n) => ({ id: n, escalationCode: n, name: n })),
+    },
+    variables,
+    dataObjects: (ep.data || []).map((d, i) => ({ id: d.id || d.name || `data${i}`, name: d.name, type: d.type ? resolve(d.type) : undefined, isCollection: d.collection })),
+    lanes: (ep.lanes || []).map((l, i) => ({ id: l.id || `lane${i}`, name: l.name, flowNodeRefs: l.nodes })),
+    nodes, flows,
+  };
+  return autowire(model);
+}
+
+// friendly condition op -> DRL operator
+const COND_OP: Record<CondOp, ConstraintOp> = {
+  eq: '==', ne: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=',
+  in: 'in', notIn: 'not in', contains: 'contains', notContains: 'not contains',
+  matches: 'matches', memberOf: 'memberOf',
+};
+const isLiteral = (v: unknown) => v === null || ['string', 'number', 'boolean'].includes(typeof v);
+const isRef = (v: unknown): v is CondRef => !!v && typeof v === 'object' && 'ref' in (v as object);
+const toDrlVar = (r: string) => '$' + r.replace(/^\$/, '');   // "claim.id" -> "$claim.id"
+const capF = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+// one `where` field entry -> one or more DRL constraints
+function whereConstraints(field: string, spec: WhereSpec): RuleConstraint[] {
+  if (isLiteral(spec)) return [{ field, op: '==', value: spec as string | number | boolean }];
+  if (Array.isArray(spec)) return [{ field, op: 'in', value: spec }];
+  if (isRef(spec)) return [{ field, op: '==', var: toDrlVar(spec.ref) }];
+  // {op: value|ref} — possibly several ops on the same field (e.g. { gte:1, lte:10 })
+  return Object.entries(spec as Record<string, CondValue | CondRef>).map(([op, val]) => {
+    const drlOp = COND_OP[op as CondOp] || '==';
+    if (isRef(val)) return { field, op: drlOp, var: toDrlVar(val.ref) };
+    return { field, op: drlOp, value: val as CondValue };
+  });
+}
+
+/**
+ * Simple engine ruleset -> jBPM DrlModel. The SDK fills everything jBPM-specific: `resolve` maps fact
+ * NAMES to FQNs (and those become `import`s), `pkg` is the rule package, `rs.group` becomes each rule's
+ * `ruleflow-group`, and field/op/value + set/insert/delete/call become DRL patterns/actions. The engine
+ * JSON stays free of packages, FQNs and Drools syntax.
+ */
+export function rulesToDrl(rs: EngineRuleset, resolve: (t: string) => string = (t) => t, pkg = 'org.jbpm.rules'): DrlModel {
+  const facts = new Set<string>();
+  const rules: DrlRule[] = rs.rules.map((r) => {
+    const when: LhsElement[] = r.when.map((w) => {
+      facts.add(w.fact);
+      const constraints: RuleConstraint[] = Object.entries(w.where || {}).flatMap(([f, spec]) => whereConstraints(f, spec));
+      const pattern: RulePattern = { fact: w.fact, ...(w.as ? { bind: '$' + w.as } : {}), constraints };
+      if (w.not || w.exists === false) return { not: pattern };   // must NOT exist -> `not Fact(...)`
+      if (w.exists === true) return { exists: pattern };           // must exist (unbound) -> `exists Fact(...)`
+      return pattern;                                              // normal match (+ bind via `as`)
+    });
+    const then: RuleAction[] = r.then.map((a): RuleAction => {
+      if ('set' in a) return { modify: '$' + a.set, set: a.fields };
+      if ('delete' in a) return { delete: '$' + a.delete };
+      if ('call' in a) return { call: a.call, args: a.args };
+      // insert: create a new fact by name (imported), optionally set fields
+      facts.add(a.insert);
+      const simple = a.insert.split('.').pop() as string;
+      if (!a.fields || !Object.keys(a.fields).length) return { insert: `new ${simple}()` };
+      const v = '$' + simple.charAt(0).toLowerCase() + simple.slice(1);
+      const setters = Object.entries(a.fields)
+        .map(([f, val]) => `${v}.set${capF(f)}(${typeof val === 'string' ? JSON.stringify(val) : val});`).join(' ');
+      return { raw: `${simple} ${v} = new ${simple}(); ${setters} insert(${v});` };
+    });
+    const attrs: RuleAttributes = { ruleflowGroup: rs.group };
+    if (r.priority != null) attrs.salience = r.priority;   // engine "priority" -> Drools salience
+    if (r.noLoop != null) attrs.noLoop = r.noLoop;
+    return { name: r.name, attrs, when, then };
+  });
+  const imports = [...facts].map(resolve).filter((f) => f.includes('.')).sort();
+  return { package: pkg, imports, globals: [], rules };
+}
+
+// engine field type -> FEEL typeRef ('' = leave untyped)
+const FEEL_TYPE: Record<string, string> = {
+  number: 'number', int: 'number', integer: 'number', long: 'number', double: 'number', float: 'number',
+  string: 'string', bool: 'boolean', boolean: 'boolean', date: 'date', time: 'time',
+  dateTime: 'date and time', datetime: 'date and time', any: '', object: '',
+};
+const feelType = (t?: string) => (t ? (FEEL_TYPE[t] ?? t) : '');
+const feelLit = (v: string | number | boolean) => typeof v === 'string' ? `"${v}"` : String(v);
+/** one engine InputTest -> a FEEL unary test (the text of a decision-table input entry). */
+export function feelTest(test: InputTest): string {
+  if (test === '-' || (test && typeof test === 'object' && 'any' in test)) return '-';
+  if (Array.isArray(test)) return test.map(feelLit).join(', ');
+  if (test === null || typeof test !== 'object') return feelLit(test as string | number | boolean);
+  if ('feel' in test) return test.feel;
+  if ('gt' in test) return `> ${feelLit(test.gt)}`;
+  if ('gte' in test) return `>= ${feelLit(test.gte)}`;
+  if ('lt' in test) return `< ${feelLit(test.lt)}`;
+  if ('lte' in test) return `<= ${feelLit(test.lte)}`;
+  if ('between' in test) return `[${feelLit(test.between[0])}..${feelLit(test.between[1])}]`;
+  if ('in' in test) return test.in.map(feelLit).join(', ');
+  if ('not' in test) return `not(${Array.isArray(test.not) ? test.not.map(feelLit).join(', ') : feelLit(test.not)})`;
+  return '-';
+}
+/** one engine OutputResult -> a FEEL literal/expression (the text of an output entry). */
+export function feelResult(r: OutputResult): string {
+  if (r !== null && typeof r === 'object' && 'feel' in r) return r.feel;
+  return feelLit(r as string | number | boolean);
+}
+const el = (name: string, attrs: Record<string, string> = {}, children: ElementNode[] = [], text = ''): ElementNode => ({ name, attrs, children, text, cdata: [] });
+const clean = (s: string) => s.replace(/[^\w.-]/g, '_');
+
+/**
+ * Simple engine decision model -> a jBPM/Kogito DMN 1.2 document (as the `{ xml }` asset model).
+ * Synthesizes definitions/inputData/informationRequirement/decisionTable, compiles each cell to FEEL,
+ * maps types to FEEL typeRefs, and sets hitPolicy/aggregation. buildAsset({kind:'dmn', model}) serialises.
+ */
+export function decisionToDmn(model: EngineDecisionModel, namespace?: string): { xml: ElementNode } {
+  const ns = namespace || model.namespace || `https://neutrinos/dmn/${model.name}`;
+  const inputMap = new Map<string, string>();
+  for (const d of model.decisions) for (const inp of d.inputs) if (!inputMap.has(inp.name)) inputMap.set(inp.name, feelType(inp.type));
+  const children: ElementNode[] = [];
+  for (const [name, typeRef] of inputMap) {
+    children.push(el('inputData', { id: `_id_${clean(name)}`, name }, [
+      el('variable', { id: `_var_${clean(name)}`, name, ...(typeRef ? { typeRef } : {}) }),
+    ]));
+  }
+  for (const d of model.decisions) {
+    const decId = `_dec_${clean(d.name)}`;
+    const infoReqs = d.inputs.map((inp) => el('informationRequirement', { id: `${decId}_ir_${clean(inp.name)}` }, [
+      el('requiredInput', { href: `#_id_${clean(inp.name)}` }),
+    ]));
+    const dt = `${decId}_dt`;
+    const inputsX = d.inputs.map((inp) => el('input', { id: `${dt}_in_${clean(inp.name)}`, label: inp.name }, [
+      el('inputExpression', { id: `${dt}_ie_${clean(inp.name)}`, ...(feelType(inp.type) ? { typeRef: feelType(inp.type) } : {}) }, [el('text', {}, [], inp.name)]),
+    ]));
+    const outputsX = d.outputs.map((o) => el('output', { id: `${dt}_out_${clean(o.name)}`, name: o.name, ...(feelType(o.type) ? { typeRef: feelType(o.type) } : {}) }));
+    const rulesX = d.rules.map((r, i) => el('rule', { id: `${dt}_r${i}` }, [
+      ...d.inputs.map((inp) => el('inputEntry', { id: `${dt}_r${i}_i_${clean(inp.name)}` }, [el('text', {}, [], feelTest(inp.name in r.when ? r.when[inp.name] : '-'))])),
+      ...d.outputs.map((o) => el('outputEntry', { id: `${dt}_r${i}_o_${clean(o.name)}` }, [el('text', {}, [], o.name in r.then ? feelResult(r.then[o.name]) : '')])),
+    ]));
+    const dtAttrs: Record<string, string> = { id: dt, hitPolicy: d.hitPolicy || 'UNIQUE' };
+    if (d.aggregation && d.hitPolicy === 'COLLECT') dtAttrs.aggregation = d.aggregation;
+    const decVarType = d.outputs.length === 1 ? feelType(d.outputs[0].type) : '';
+    children.push(el('decision', { id: decId, name: d.name }, [
+      el('variable', { id: `${decId}_var`, name: d.name, ...(decVarType ? { typeRef: decVarType } : {}) }),
+      ...infoReqs,
+      el('decisionTable', dtAttrs, [...inputsX, ...outputsX, ...rulesX]),
+    ]));
+  }
+  return { xml: el('definitions', { xmlns: 'http://www.omg.org/spec/DMN/20180521/MODEL/', id: `_defs_${clean(model.name)}`, name: model.name, namespace: ns }, children) };
+}
+
+/** Convert a whole engine project to an SDK Project (processes + kjar descriptor + generated .java). */
+export function fromEngineProject(ep: EngineProject): Project {
+  // `package` on a type is optional — default it so engine JSON stays free of Java packaging.
+  const basePkg = ep.processes[0]?.package || 'org.jbpm';
+  const modelPkg = `${basePkg}.model`;
+  const fill = (ts?: EngineType[]) => (ts || []).map((t) => (t.package ? t : { ...t, package: modelPkg }));
+  const epTypes = fill(ep.types);
+  const filledProcesses = ep.processes.map((p) => ({ ...p, types: fill(p.types) }));
+  const allTypes = [...epTypes, ...filledProcesses.flatMap((p) => p.types || [])];
+  const resolve = makeTypeResolver(allTypes);
+  const processes = filledProcesses.map((p) => fromEngine(p, epTypes));
+
+  const files: Record<string, string> = {};
+  // generate a .java POJO for every declared type
+  const seen = new Set<string>();
+  for (const t of allTypes) {
+    const key = fqn(t); if (seen.has(key)) continue; seen.add(key);
+    const rel = 'src/main/java/' + (t.package || '').replace(/\./g, '/') + (t.package ? '/' : '') + `${t.name}.java`;
+    files[rel] = buildAsset({ kind: 'dataObject', model: { package: t.package, className: t.name, fields: (t.fields || []).map((f) => ({ name: f.name, type: javaFieldType(f.type, resolve) })) } });
+  }
+  // carry engine assets (structured -> buildAsset, or raw string)
+  for (const [path, val] of Object.entries(ep.assets || {})) files[path] = typeof val === 'string' ? val : buildAsset(val as any);
+  // simple engine rulesets -> generated .drl (SDK synthesizes package/imports/ruleflow-group/DRL syntax)
+  for (const rs of ep.rulesets || []) {
+    const pkg = rs.package || `${basePkg}.rules`;
+    const path = rs.path || `src/main/resources/${pkg.replace(/\./g, '/')}/${rs.group}.drl`;
+    files[path] = buildAsset({ kind: 'drl', model: rulesToDrl(rs, resolve, pkg) });
+  }
+  // simple engine decisions -> generated .dmn (SDK synthesizes FEEL + DMN XML + namespace)
+  for (const dm of ep.decisions || []) {
+    const ns = dm.namespace || `https://${basePkg.replace(/\./g, '/')}/dmn/${dm.name}`;
+    const path = dm.path || `src/main/resources/${dm.name}.dmn`;
+    files[path] = buildAsset({ kind: 'dmn', model: decisionToDmn(dm, ns) });
+  }
+
+  const dep = ep.deployment || {};
+  const descriptor: ProjectDescriptor = {
+    gav: ep.gav,
+    deployment: {
+      runtimeStrategy: dep.runtime || 'SINGLETON',
+      workItemHandlers: (dep.handlers || ['Rest']).map((name): WorkItemHandler => ({ name, resolver: 'mvel', identifier: HANDLER_ID[name] || `new ${name}()` })),
+      environmentEntries: Object.entries(dep.env || {}).map(([name, v]): EnvironmentEntry => ({ name, resolver: 'mvel', identifier: `"${v}"` })),
+    },
+    files,
+  };
+  return { root: ep.id || '.', descriptor, processes };
+}
+
+// Scaffolding files handled by gav/deployment (not surfaced as engine assets)
+const SCAFFOLD_FILES = new Set([
+  'pom.xml', 'src/main/resources/META-INF/kmodule.xml', 'src/main/resources/META-INF/persistence.xml',
+  'src/main/resources/META-INF/kie-deployment-descriptor.xml', 'project.imports', 'project.repositories',
+]);
+const JAVA_TO_ENGINE: Record<string, string> = {
+  String: 'string', int: 'int', integer: 'int', long: 'long', double: 'double', float: 'double',
+  boolean: 'bool', Boolean: 'bool', 'java.util.List': 'list', 'java.util.Map': 'map', 'java.util.Date': 'date', Object: 'object',
+};
+
+/**
+ * Reverse of fromEngineProject: a jBPM Project -> engine model, recovering assets as STRUCTURED
+ * engine models (via parseAsset) and .java data objects as engine `types` (best-effort).
+ */
+export function toEngineProject(project: Project): EngineProject {
+  const files = (project.descriptor && project.descriptor.files) || {};
+  const types: EngineType[] = [];
+  const assets: Record<string, { kind: string; model: any }> = {};
+  for (const [p, content] of Object.entries(files)) {
+    if (SCAFFOLD_FILES.has(p)) continue;
+    const kind = assetKind(p);
+    if (kind === 'dataObject') {
+      const a = parseAsset(p, content);
+      types.push({ name: a.model.className, package: a.model.package, fields: (a.model.fields || []).map((f: any) => ({ name: f.name, type: JAVA_TO_ENGINE[f.type] || f.type })) });
+    } else {
+      assets[p] = parseAsset(p, content) as { kind: string; model: any };
+    }
+  }
+  const dep = (project.descriptor && project.descriptor.deployment) || {};
+  return {
+    id: project.root,
+    gav: project.descriptor && project.descriptor.gav,
+    deployment: {
+      runtime: dep.runtimeStrategy,
+      env: Object.fromEntries((dep.environmentEntries || []).map((e) => [e.name, e.identifier.replace(/^"|"$/g, '')])),
+      handlers: (dep.workItemHandlers || []).map((h) => h.name),
+    },
+    types,
+    assets,
+    processes: project.processes.map(toEngine),
+  };
+}
+
+// ---- reverse (best-effort): jBPM ProcessModel -> engine model ----
+const SR_TO_ENGINE: Record<string, string> = { String: 'string', Integer: 'int', 'java.lang.Long': 'long', 'java.lang.Double': 'double', 'java.lang.Boolean': 'bool', 'java.lang.Object': 'object', 'java.util.List': 'list', 'java.util.Map': 'map', 'java.util.Date': 'date' };
+const dialectToLang = (u?: string): Lang => u && u.includes('javascript') ? 'js' : u && u.includes('mvel') ? 'mvel' : 'java';
+
+export function toEngine(m: ProcessModel): EngineProcess {
+  const ev = (n: Node) => n.eventType === 'signal' ? { signal: n.signalName } : n.eventType === 'message' ? { message: n.messageRef }
+    : n.eventType === 'error' ? { error: n.errorRef } : n.eventType === 'escalation' ? { escalation: n.escalationRef }
+      : n.eventType === 'timer' ? { timer: { duration: n.timeDuration, cycle: n.timeCycle, date: n.timeDate } }
+        : n.eventType === 'conditional' ? { condition: n.conditionExpr, lang: dialectToLang(n.conditionExprLanguage) } : undefined;
+  const gwMode: Record<string, string> = { exclusiveGateway: 'exclusive', parallelGateway: 'parallel', inclusiveGateway: 'inclusive', eventBasedGateway: 'event', complexGateway: 'complex' };
+  // toEngine is a best-effort reverse: jBPM fields may be undefined and don't always satisfy the
+  // strict EngineNode union (e.g. an http node with no reversible url), so the builder returns `any`.
+  const conv = (n: Node): any => {
+    const b: EngineNode = { id: n.id, type: 'raw', name: n.name };
+    switch (n.type) {
+      case 'startEvent': return { ...b, type: 'start', ...(ev(n) ? { on: ev(n) } : {}) };
+      case 'endEvent': return n.eventType === 'terminate' || n.subtype === 'terminate' ? { ...b, type: 'end', result: 'terminate' } : { ...b, type: 'end', ...(ev(n) ? { throw: ev(n) } : {}) };
+      case 'scriptTask': return { ...b, type: 'script', lang: dialectToLang(n.scriptFormat), code: n.script };
+      case 'userTask': return { ...b, type: 'userTask', name: n.name, group: n.group, form: n.taskName };
+      case 'businessRuleTask': return { ...b, type: 'rule', ruleflowGroup: n.ruleFlowGroup };
+      case 'sendTask': return { ...b, type: 'send', message: n.messageRef };
+      case 'receiveTask': return { ...b, type: 'receive', message: n.messageRef };
+      case 'manualTask': return { ...b, type: 'manual', name: n.name };
+      case 'exclusiveGateway': case 'parallelGateway': case 'inclusiveGateway': case 'eventBasedGateway': case 'complexGateway':
+        return { ...b, type: 'gateway', mode: gwMode[n.type], default: n.default };
+      case 'intermediateCatchEvent': return { ...b, type: 'catch', event: ev(n) };
+      case 'intermediateThrowEvent': return { ...b, type: 'throw', event: ev(n) };
+      case 'boundaryEvent': return { ...b, type: 'boundary', on: n.attachedTo, event: ev(n), interrupting: n.cancelActivity };
+      case 'subProcess': return { ...b, type: 'subprocess', transaction: n.subtype === 'transaction' || undefined, on: n.error ? { error: n.error } : undefined, nodes: (n.nodes || []).map(conv), flows: (n.flows || []).map((f) => ({ id: f.id, from: f.sourceRef, to: f.targetRef, ...(f.condition ? { when: f.condition, lang: dialectToLang(f.conditionLanguage) } : {}) })) };
+      case 'callActivity':
+        if (n.subtype === 'multiInstance' && n.multiInstance) return { ...b, type: 'forEach', process: n.calledElement, over: n.multiInstance.collectionIn, as: n.multiInstance.itemVar, collectInto: n.multiInstance.collectionOut, itemResult: n.multiInstance.itemOutVar, parallel: !n.multiInstance.isSequential, pass: n.multiInstance.passthru };
+        if (n.subtype === 'rest') return { ...b, type: 'http', method: n.method, url: n.url }; // body/resultTo not reversed
+        return { ...b, type: 'call', process: n.calledElement };
+      default: return { ...b, type: 'raw', raw: n.raw };
+    }
+  };
+  return {
+    id: m.id, name: m.name, package: m.packageName,
+    vars: (m.variables || []).map((v) => ({ name: v.name, type: SR_TO_ENGINE[v.type] || v.type })),
+    signals: (m.declarations?.signals || []).map((s) => s.name),
+    errors: (m.declarations?.errors || []).map((e) => e.id),
+    messages: (m.declarations?.messages || []).map((x) => x.id),
+    escalations: (m.declarations?.escalations || []).map((x) => x.id),
+    lanes: (m.lanes || []).map((l) => ({ id: l.id, name: l.name, nodes: l.flowNodeRefs })),
+    data: (m.dataObjects || []).map((d) => ({ id: d.id, name: d.name, type: d.type ? (SR_TO_ENGINE[d.type] || d.type) : undefined, collection: d.isCollection })),
+    nodes: m.nodes.map(conv),
+    flows: m.flows.map((f) => ({ id: f.id, from: f.sourceRef, to: f.targetRef, ...(f.condition ? { when: f.condition, lang: dialectToLang(f.conditionLanguage) } : {}) })),
+  };
+}

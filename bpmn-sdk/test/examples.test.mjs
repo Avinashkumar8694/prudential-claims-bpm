@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseBpmn, serializeProcess, validateModel } from '../dist/index.mjs';
-import { buildBasicProject } from '../examples/01-basic-jbpm-project.mjs';
-import { buildComplexProject } from '../examples/02-complex-js-project.mjs';
+import { buildBasicProject } from '../examples/jbpm-project/01-basic-jbpm-project.mjs';
+import { buildComplexProject } from '../examples/jbpm-project/02-complex-js-project.mjs';
 
 function tmp(p) { return fs.mkdtempSync(path.join(os.tmpdir(), p)); }
 function findBpmn(dir) {

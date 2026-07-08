@@ -5,8 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseProject, validateModel } from '../dist/index.mjs';
-import { buildAllAssetsProject } from '../examples/05-all-assets-project.mjs';
-import { buildComplexProject } from '../examples/02-complex-js-project.mjs';
+import { buildAllAssetsProject } from '../examples/assets/05-all-assets-project.mjs';
+import { buildComplexProject } from '../examples/jbpm-project/02-complex-js-project.mjs';
 
 test('generated project -> JSON: parseProject reads back the exported kjar', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'gen2json-'));

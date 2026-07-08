@@ -5,12 +5,28 @@ export { parseProject, writeProject, walk } from './project.js';
 export { parseDescriptor, writeDescriptor, pomXml, deploymentXml, KMODULE_XML, PROJECT_IMPORTS, PROJECT_REPOSITORIES, parseWid, widMvel } from './scaffold.js';
 export { validateModel } from './validate.js';
 export { autowire } from './wire.js';
+export { fromEngine, fromEngineProject, toEngine, toEngineProject, makeTypeResolver, rulesToDrl, decisionToDmn, feelTest, feelResult } from './engine.js';
+export type {
+  EngineProcess, EngineProject, EngineNode, EngineFlow, EngineVar, EngineType, EngineTypeField,
+  EngineDeployment, Lang, HttpMethod, GatewayMode, EventDef, TimerSpec,
+  EngineRuleset, EngineRuleDef, EngineWhen, EngineThen, CondOp, CondValue, CondRef, WhereSpec,
+  EngineDecisionModel, EngineDecision, DecisionField, DecisionRule, InputTest, OutputResult,
+  FeelType, HitPolicy, Aggregation,
+  EngineStart, EngineEnd, EngineScript, EngineHttp, EngineCall, EngineForEach, EngineUserTask,
+  EngineRule, EngineSend, EngineReceive, EngineManual, EngineGateway, EngineCatch, EngineThrow,
+  EngineBoundary, EngineSubprocess, EngineRaw,
+} from './engine.js';
 export {
   assetKind, parseAsset, buildAsset,
   parseProperties, writeProperties, parseEnumeration, writeEnumeration,
   parseDsl, writeDsl, parseDataObject, writeDataObject, parseDrl, writeDrl, parseForm, writeForm,
+  compileConstraint, compilePattern, compileLhs, compileAction, compileFunction, compileDeclare, compileQuery,
 } from './assets.js';
-export type { AssetKind, Asset, DslEntry, JavaField, DataObjectModel, DrlRule, DrlModel } from './assets.js';
+export type {
+  AssetKind, Asset, DslEntry, JavaField, DataObjectModel, DrlRule, DrlModel,
+  ConstraintOp, RuleConstraint, RulePattern, LhsElement, RuleAction, RhsValue, RuleAttributes,
+  DrlParam, DrlFunction, DrlDeclare, DrlDeclareField, DrlQuery,
+} from './assets.js';
 export * as constants from './constants.js';
 export type {
   ProcessModel, Project, Node, NodeType, EventType, Flow, Variable, Declarations,

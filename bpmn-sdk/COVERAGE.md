@@ -65,6 +65,7 @@ Each is ~20–40 lines mirroring an existing case. Ask and these can be added.
 | Generate a **complete deployable kjar** from JSON (pom, kmodule, deployment descriptor, .bpmn)? | **Yes** (via `writeProject` + `descriptor`) |
 | Round-trip rules/decisions/Java/forms (`.drl`/`.dmn`/`.java`/`.frm`) and the `.wid`? | **Yes** — auto-captured verbatim into `descriptor.files`; `.wid` also parsed to a model + generatable from JSON |
 | Get **structured JSON** for asset types (edit/generate them)? | **Yes** — `parseAsset`/`buildAsset`: generic XML tree for DMN/guided/scorecard/tests/solver; typed models for DRL/Java/properties/enumeration/DSL/wid/forms (round-trip-stable; DRL/Java best-effort) |
+| Author in a **clean engine model** and convert to jBPM? | **Yes** — `fromEngine`/`fromEngineProject` (+ `toEngine` reverse); type *names* resolve to Java FQNs and generate POJOs (`makeTypeResolver`). See `docs/engine-model/`. |
 | Preserve scripts, script dialects, conditions, variables, DI? | **Yes** |
 | Preserve node types the SDK doesn't model? | **Yes**, verbatim via `raw` |
 | Author the common BPMN node set from scratch via clean JSON? | **Yes** — all gateways, tasks, message/escalation/conditional events, sub-processes, data objects, lanes are first-class |

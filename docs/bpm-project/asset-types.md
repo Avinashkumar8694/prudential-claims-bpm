@@ -63,7 +63,7 @@ keyed by its path in the kjar:
 
 ## What each asset is, how it's used, and where to see real content
 Realistic samples of all of these (same `Claim` domain) are in
-`../../bpmn-sdk/examples/05-all-assets-project.mjs` (`ASSET_FILES`), exported into a single kjar.
+`../../bpmn-sdk/examples/assets/05-all-assets-project.mjs` (`ASSET_FILES`), exported into a single kjar.
 
 - **Data Object (`.java`)** — a POJO fact/data type. *Used as* a process-variable `type` (its FQN,
   e.g. `com.acme.model.Claim`) and as a rule fact. Sample: `Claim` with `id/amount/status`.

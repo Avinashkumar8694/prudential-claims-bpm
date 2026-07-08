@@ -1,0 +1,23 @@
+{
+  "types": [
+    {
+      "name": "Claim",
+      "package": "com.acme.model",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string"
+        },
+        {
+          "name": "amount",
+          "type": "double"
+        },
+        {
+          "name": "status",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "$note": "Declared as an engine TYPE (not a raw asset). fromEngineProject generates the .java and resolves the name to a Java FQN wherever jBPM needs it (variable structureRef, form className)."
+}

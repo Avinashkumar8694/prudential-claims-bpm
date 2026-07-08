@@ -1,0 +1,23 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/data/enums.enumeration": {
+      "kind": "enumeration",
+      "model": {
+        "enums": {
+          "Claim.status": [
+            "NEW",
+            "REVIEW",
+            "HIGH",
+            "STANDARD",
+            "DONE"
+          ],
+          "Claim.type": [
+            "DEATH",
+            "TI"
+          ]
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { parseAsset, buildAsset, assetKind } from '../dist/index.mjs';
-import { ASSET_FILES } from '../examples/05-all-assets-project.mjs';
+import { parseAsset, buildAsset, assetKind, compilePattern, compileAction, writeDrl } from '../dist/index.mjs';
+import { ASSET_FILES } from '../examples/assets/05-all-assets-project.mjs';
 
 // build(parse(x)) must be idempotent and re-parse to an equal model (structured, stable round-trip)
 function assertStable(path, content) {
@@ -72,4 +72,52 @@ test('properties / enumeration / dsl / wid typed models', () => {
   assert.deepStrictEqual(enums['Claim.type'], ['DEATH', 'TI']);
   const dsl = parseAsset('c.dsl', ASSET_FILES['src/main/resources/com/acme/rules/claims.dsl']).model.entries;
   assert.ok(dsl.some((e) => e.scope === 'when') && dsl.some((e) => e.scope === 'then'));
+});
+
+test('structured rule model — patterns/actions compile to DRL', () => {
+  // LHS pattern: bind + fact + constraints -> `$c : Claim( amount > 100000, status == "NEW" )`
+  assert.strictEqual(
+    compilePattern({ fact: 'Claim', bind: '$c', constraints: [{ field: 'amount', op: '>', value: 100000 }, { field: 'status', op: '==', value: 'NEW' }] }),
+    '$c : Claim( amount > 100000, status == "NEW" )');
+  // fact with no bind / no constraints
+  assert.strictEqual(compilePattern({ fact: 'Claim' }), 'Claim(  )');
+  // RHS actions
+  assert.strictEqual(compileAction({ modify: '$c', set: { status: 'HIGH', reviewed: true } }),
+    'modify( $c ) { setStatus( "HIGH" ), setReviewed( true ) }');
+  assert.strictEqual(compileAction({ update: '$c', set: { status: 'LOW' } }), '$c.setStatus( "LOW" ); update( $c );');
+  assert.strictEqual(compileAction({ retract: '$c' }), 'retract( $c );');
+  assert.strictEqual(compileAction({ insert: 'new Flag($c)' }), 'insert( new Flag($c) );');
+  assert.strictEqual(compileAction({ raw: 'System.out.println($c);' }), 'System.out.println($c);');
+});
+
+test('buildAsset(drl) accepts structured when/then and emits real DRL', () => {
+  const drl = buildAsset({ kind: 'drl', model: {
+    package: 'com.acme.rules', imports: ['com.acme.model.Claim'], globals: [],
+    rules: [{
+      name: 'High value claim', attributes: ['ruleflow-group "classify"'],
+      when: [{ fact: 'Claim', bind: '$c', constraints: [{ field: 'amount', op: '>', value: 100000 }] }],
+      then: [{ modify: '$c', set: { status: 'HIGH' } }],
+    }],
+  } });
+  assert.ok(drl.includes('rule "High value claim"'), 'rule name');
+  assert.ok(drl.includes('ruleflow-group "classify"'), 'attribute');
+  assert.ok(drl.includes('$c : Claim( amount > 100000 )'), 'compiled LHS pattern');
+  assert.ok(drl.includes('modify( $c ) { setStatus( "HIGH" ) }'), 'compiled RHS action');
+  // parsing the generated DRL back yields the same rule name (raw when/then on the way back)
+  const back = parseAsset('classify.drl', drl);
+  assert.strictEqual(back.model.rules[0].name, 'High value claim');
+});
+
+test('structured and raw when/then produce identical DRL', () => {
+  const structured = writeDrl({ imports: [], globals: [], rules: [{
+    name: 'R', attributes: [],
+    when: [{ fact: 'Claim', bind: '$c', constraints: [{ field: 'amount', op: '>=', value: 500 }] }],
+    then: [{ modify: '$c', set: { flag: true } }],
+  }] });
+  const raw = writeDrl({ imports: [], globals: [], rules: [{
+    name: 'R', attributes: [],
+    when: '$c : Claim( amount >= 500 )',
+    then: 'modify( $c ) { setFlag( true ) }',
+  }] });
+  assert.strictEqual(structured, raw, 'structured model compiles to the same text as hand-written DRL');
 });

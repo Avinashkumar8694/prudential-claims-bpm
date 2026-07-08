@@ -1,0 +1,14 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/properties": {
+      "kind": "properties",
+      "model": {
+        "props": {
+          "review.title": "Review claim",
+          "review.amount": "Claim amount"
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

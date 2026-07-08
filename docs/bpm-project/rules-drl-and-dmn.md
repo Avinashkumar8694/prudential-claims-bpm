@@ -51,11 +51,23 @@ Only if a process contains a `businessRuleTask`. The processes in *this* project
 tasks and gateways, not rules — so there are currently **no** `.drl`/`.dmn` files.
 
 ## How the SDK handles them
-`.drl`/`.dmn` are **not** generated from JSON (they're authored rule/decision assets). The SDK
-models the `businessRuleTask` node (ruleFlowGroup/implementation) so the BPMN wiring is first-class,
-but the rule/decision **file content** must be supplied verbatim via `descriptor.files` (e.g.
-`descriptor.files["src/main/resources/com/acme/rules/validate.drl"] = "<drl text>"`) or added to the
-project directly. The `kie-maven-plugin` compiles them on build. See `descriptor-and-extra-files.md`.
+The SDK models the `businessRuleTask` node (ruleFlowGroup/implementation) so the BPMN wiring is
+first-class, **and** it generates the rule/decision files from structured JSON via the asset codecs
+(`parseAsset`/`buildAsset`, `docs/bpm-assets/drl` + `dmn`):
+
+- **DRL** — `{ kind:"drl", model:{ package, imports, globals, rules } }`. Each rule's `when`/`then`
+  may be **raw Drools text** or a **structured model** the SDK compiles:
+  - `when: RulePattern[]` — `{ fact, bind?, constraints:[{field,op,value}] }` → `$c : Claim( amount > 100000 )`
+    (`op` ∈ `== != > >= < <= contains matches memberOf in`).
+  - `then: RuleAction[]` — `{modify,set}` / `{update,set}` / `{retract}` / `{insert}` / `{raw}`
+    → `modify( $c ) { setStatus( "HIGH" ) }`, etc.
+  Both forms emit identical DRL, so the same JSON both executes in a Node-native rule engine and
+  `buildAsset`s to a real `.drl`.
+- **DMN** — `{ kind:"dmn", model:{ xml } }`, a lossless XML tree you can traverse/edit/generate.
+
+You can still supply file content verbatim via `descriptor.files[...]` if you'd rather hand-author it.
+Either way the `kie-maven-plugin` compiles them on build. See `structured-assets.md` and
+`descriptor-and-extra-files.md`.
 
 ## Sources
 - jBPM Processes (business rule task) — https://docs.jbpm.org/7.0.0.Beta1/jbpm-docs/html/ch07.html

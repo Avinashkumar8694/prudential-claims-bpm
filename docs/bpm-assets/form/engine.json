@@ -1,0 +1,25 @@
+{
+  "assets": {
+    "src/main/resources/forms/review.frm": {
+      "kind": "form",
+      "model": {
+        "json": {
+          "id": "review-form",
+          "name": "review",
+          "model": {
+            "className": "com.acme.model.Claim"
+          },
+          "fields": [
+            {
+              "id": "amount",
+              "label": "Claim amount",
+              "code": "DoubleBox",
+              "binding": "amount"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

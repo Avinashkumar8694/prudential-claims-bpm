@@ -1,0 +1,25 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/rules/tree.gdt": {
+      "kind": "guidedDecisionTree",
+      "model": {
+        "xml": {
+          "name": "GuidedDecisionTree",
+          "attrs": {},
+          "children": [
+            {
+              "name": "treeName",
+              "attrs": {},
+              "children": [],
+              "text": "Claim tree",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

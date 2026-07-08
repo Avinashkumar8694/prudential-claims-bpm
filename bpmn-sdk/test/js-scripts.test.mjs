@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseBpmn, serializeProcess } from '../dist/index.mjs';
-import { buildJsProject, CLASSIFY_JS, BOOT_JS, NOTIFY_JS, COND_HIGH_JS, COND_OTHER_JS } from '../examples/04-js-scripts.mjs';
+import { buildJsProject, CLASSIFY_JS, BOOT_JS, NOTIFY_JS, COND_HIGH_JS, COND_OTHER_JS } from '../examples/jbpm-project/04-js-scripts.mjs';
 
 const JS = 'http://www.javascript.com/javascript';
 const out = fs.mkdtempSync(path.join(os.tmpdir(), 'js-'));

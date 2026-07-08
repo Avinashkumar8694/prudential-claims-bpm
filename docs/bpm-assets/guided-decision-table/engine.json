@@ -1,0 +1,25 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/rules/classify.gdst": {
+      "kind": "guidedDecisionTable",
+      "model": {
+        "xml": {
+          "name": "decision-table52",
+          "attrs": {},
+          "children": [
+            {
+              "name": "tableName",
+              "attrs": {},
+              "children": [],
+              "text": "Claim classification",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

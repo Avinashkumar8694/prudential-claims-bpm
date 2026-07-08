@@ -1,0 +1,32 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/scoring/risk.scgd": {
+      "kind": "scoreCard",
+      "model": {
+        "xml": {
+          "name": "scoreCard",
+          "attrs": {},
+          "children": [
+            {
+              "name": "name",
+              "attrs": {},
+              "children": [],
+              "text": "Claim risk",
+              "cdata": []
+            },
+            {
+              "name": "fieldName",
+              "attrs": {},
+              "children": [],
+              "text": "riskScore",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

@@ -1,9 +1,8 @@
 // Example 6 — GENERATE Business Central assets from structured JSON with the SDK's codecs,
 // then package them into a deployable kjar. This is the "my engine emits a model, SDK writes the
 // file" workflow: parseAsset (file -> JSON) / buildAsset (JSON -> file). See docs/bpm-assets/.
-import { buildAsset, parseAsset, writeProject } from '../dist/index.mjs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import path from 'node:path';
+import { buildAsset, parseAsset, writeProject } from '../../dist/index.mjs';
+import { isMain, outDir as defaultOutDir } from '../functions/io.mjs';
 
 const PKG = 'src/main/resources/com/acme';
 
@@ -71,8 +70,8 @@ export function buildGeneratedAssetsProject(outDir) {
   return { outDir, written };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const outDir = process.argv[2] || path.join(path.dirname(fileURLToPath(import.meta.url)), 'out', 'generated');
+if (isMain(import.meta.url)) {
+  const outDir = defaultOutDir(import.meta.url, 'generated');
   const { written } = buildGeneratedAssetsProject(outDir);
   console.log(`Generated assets from JSON + exported project to ${outDir} (${written.length} files)`);
   // demo the reverse: parse one back to structured JSON

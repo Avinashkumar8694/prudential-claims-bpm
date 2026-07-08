@@ -2,7 +2,7 @@
 
 > Per-asset docs (folder-per-asset, like `../bpm-nodes/`): **[`../bpm-assets/`](../bpm-assets/)** —
 > each has `usage_guide.md`, `model.md`, and a sample `model.json`. Working example:
-> `../../bpmn-sdk/examples/06-generate-assets.mjs`.
+> `../../bpmn-sdk/examples/assets/06-generate-assets.mjs`.
 
 Beyond carrying assets as verbatim text, the SDK exposes **structured JSON codecs** so your engine can
 **generate and edit** every asset type programmatically, then serialize back to the on-disk format.

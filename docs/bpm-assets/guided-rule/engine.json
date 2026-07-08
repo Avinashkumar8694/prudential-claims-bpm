@@ -1,0 +1,25 @@
+{
+  "assets": {
+    "src/main/resources/com/acme/rules/flag-large.rdrl": {
+      "kind": "guidedRule",
+      "model": {
+        "xml": {
+          "name": "rule",
+          "attrs": {},
+          "children": [
+            {
+              "name": "name",
+              "attrs": {},
+              "children": [],
+              "text": "Flag large claim",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        }
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

@@ -3,9 +3,9 @@
 //
 // The JS runs server-side in the KIE engine (Nashorn on JDK 8/11, GraalVM JS on JDK 15+). It has
 // direct access to process variables and `kcontext`. See docs/bpm-nodes/_scripting-reference.md.
-import { writeProject, validateModel, autowire } from '../dist/index.mjs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import path from 'node:path';
+import { writeProject, validateModel, autowire } from '../../dist/index.mjs';
+import { isMain, outDir as defaultOutDir } from '../functions/io.mjs';
+import { printWritten } from '../functions/report.mjs';
 
 const JS = 'http://www.javascript.com/javascript';
 
@@ -70,8 +70,8 @@ export function buildJsProject(outDir) {
   return { outDir, written, project };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const outDir = process.argv[2] || path.join(path.dirname(fileURLToPath(import.meta.url)), 'out', 'js');
+if (isMain(import.meta.url)) {
+  const outDir = defaultOutDir(import.meta.url, 'js');
   const { written } = buildJsProject(outDir);
-  console.log(`Exported JS-scripted jBPM project to ${outDir}:\n  ${written.join('\n  ')}`);
+  printWritten('JS-scripted jBPM project', outDir, written);
 }

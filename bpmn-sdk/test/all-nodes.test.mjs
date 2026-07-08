@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseBpmn, serializeProcess, validateModel } from '../dist/index.mjs';
-import { buildAllNodesProject } from '../examples/03-all-nodes-project.mjs';
+import { buildAllNodesProject } from '../examples/jbpm-project/03-all-nodes-project.mjs';
 
 function findBpmn(dir) {
   const out = [];

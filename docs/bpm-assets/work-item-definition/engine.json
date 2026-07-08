@@ -1,0 +1,26 @@
+{
+  "assets": {
+    "global/WorkDefinitions.wid": {
+      "kind": "workItemDefinition",
+      "model": {
+        "definitions": [
+          {
+            "name": "Rest",
+            "displayName": "REST",
+            "category": "Communication",
+            "icon": "defaultresticon.png",
+            "defaultHandler": "mvel: new org.jbpm.process.workitem.rest.RESTWorkItemHandler(classLoader)",
+            "parameters": {
+              "Url": "StringDataType",
+              "Method": "StringDataType"
+            },
+            "results": {
+              "Result": "ObjectDataType"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+}

@@ -3,9 +3,9 @@
 // This is the core use case: your own JS-based BPM designer produces a ProcessModel (JSON);
 // the SDK exports it to jBPM-compatible BPMN + a deployable kjar (pom, kmodule, deployment
 // descriptor). `mvn clean install` on the output builds a kjar you can deploy to a KIE server.
-import { writeProject, validateModel } from '../dist/index.mjs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import path from 'node:path';
+import { writeProject, validateModel } from '../../dist/index.mjs';
+import { isMain, outDir as defaultOutDir } from '../functions/io.mjs';
+import { printWritten } from '../functions/report.mjs';
 
 /** A small end-to-end claims process, built the way your engine would emit it. */
 export function buildBasicProject(outDir) {
@@ -72,8 +72,8 @@ export function buildBasicProject(outDir) {
 }
 
 // runnable directly: `node examples/01-basic-jbpm-project.mjs [outDir]`
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const outDir = process.argv[2] || path.join(path.dirname(fileURLToPath(import.meta.url)), 'out', 'basic');
+if (isMain(import.meta.url)) {
+  const outDir = defaultOutDir(import.meta.url, 'basic');
   const { written } = buildBasicProject(outDir);
-  console.log(`Exported jBPM project to ${outDir}:\n  ${written.join('\n  ')}`);
+  printWritten('basic jBPM project', outDir, written);
 }

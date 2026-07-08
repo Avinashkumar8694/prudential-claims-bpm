@@ -10,9 +10,8 @@
 //
 // `autowire` derives each node's incoming/outgoing from the flow list (recursing sub-processes),
 // so we only declare flows — no hand-maintained incoming/outgoing arrays.
-import { writeProject, validateModel, autowire } from '../dist/index.mjs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import path from 'node:path';
+import { writeProject, validateModel, autowire } from '../../dist/index.mjs';
+import { isMain, outDir as defaultOutDir } from '../functions/io.mjs';
 
 const JS = 'http://www.javascript.com/javascript';
 // give every node (and nested node) a non-overlapping position for a readable diagram
@@ -190,8 +189,8 @@ export function buildAllNodesProject(outDir) {
   return { outDir, written, project };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const outDir = process.argv[2] || path.join(path.dirname(fileURLToPath(import.meta.url)), 'out', 'coverage');
+if (isMain(import.meta.url)) {
+  const outDir = defaultOutDir(import.meta.url, 'coverage');
   const { written, project } = buildAllNodesProject(outDir);
   console.log(`Exported ${project.processes.length}-process coverage project to ${outDir} (${written.length} files)`);
 }
