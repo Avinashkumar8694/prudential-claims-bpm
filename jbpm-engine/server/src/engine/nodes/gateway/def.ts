@@ -7,7 +7,7 @@ export const def: NodeDef = {
     { key: 'gw-inclusive', label: 'Inclusive Gateway', category: 'Gateways', icon: '○', color: '#f59e0b', engineType: 'gateway', defaults: { type: 'gateway', mode: 'inclusive' } },
     { key: 'gw-event', label: 'Event Gateway', category: 'Gateways', icon: '◇', color: '#f59e0b', engineType: 'gateway', defaults: { type: 'gateway', mode: 'event' } },
   ],
-  ports: { in: true, out: true },   // diverging → many out; converging → many in
+  ports: {} /* gateway: unlimited (fan in or out) */,   // diverging → many out; converging → many in
   schema: [GENERAL, { title: 'Gateway', fields: [
     { key: 'mode', label: 'Mode', widget: 'select', options: ['exclusive', 'parallel', 'inclusive', 'event', 'complex'] },
     { key: 'direction', label: 'Direction', widget: 'select', options: ['Diverging', 'Converging'] },

@@ -2,7 +2,7 @@ import { type NodeDef, GENERAL } from '../def-types.ts';
 export const def: NodeDef = {
   engineType: 'forEach',
   palette: [{ key: 'forEach', label: 'Multi-Instance', category: 'Sub-process', icon: '⇶', color: '#4f46e5', engineType: 'forEach', defaults: { type: 'forEach', process: '', over: 'items' } }],
-  ports: { in: true, out: true },
+  ports: { maxIn: 1, maxOut: 1 },
   schema: [GENERAL, { title: 'Multi-instance', fields: [
     { key: 'process', label: 'Process id / key', widget: 'text' },
     { key: 'over', label: 'Collection variable', widget: 'text', placeholder: 'applicablePolicies' },

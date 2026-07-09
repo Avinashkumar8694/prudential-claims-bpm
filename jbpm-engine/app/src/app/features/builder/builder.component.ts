@@ -84,19 +84,19 @@ const NW = 190, NH = 66;
 
           @for (n of nodes(); track n.id) {
             <div class="node" [class.sel]="selNode()?.id===n.id" [class.linking]="linkFrom()===n.id"
-                 [class.droptarget]="linkFrom() && linkFrom()!==n.id && portsFor(n.type).in"
+                 [class.droptarget]="linkFrom() && linkFrom()!==n.id && hasIn(n.type)"
                  [class.has-err]="hasErr(n.id)" [class.has-warn]="!hasErr(n.id) && hasWarn(n.id)"
                  [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="NW"
                  (pointerdown)="startDrag($event, n)" (pointerup)="onNodePointerUp($event, n)" (click)="selectNode($event, n)">
               @if (hasErr(n.id)) { <span class="nmark err" title="Has errors">!</span> }
               @else if (hasWarn(n.id)) { <span class="nmark warn" title="Has warnings">!</span> }
-              @if (portsFor(n.type).in) { <span class="port in" title="Incoming"></span> }
+              @if (hasIn(n.type)) { <span class="port in" title="Incoming"></span> }
               <span class="chip" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>
               <div class="ninfo">
                 <div class="ntitle">{{ n.name || labelFor(n) }}</div>
                 <div class="ntype">{{ typeLabel(n) }}</div>
               </div>
-              @if (portsFor(n.type).out) { <span class="port out" title="Drag to a target node to connect" (pointerdown)="startLink($event, n)" (click)="$event.stopPropagation()"></span> }
+              @if (hasOut(n.type)) { <span class="port out" title="Drag to a target node to connect" (pointerdown)="startLink($event, n)" (click)="$event.stopPropagation()"></span> }
               @if (selNode()?.id===n.id) {
                 <button class="ndel" (pointerdown)="$event.stopPropagation()" (click)="del($event, n)" title="Delete">🗑</button>
               }
@@ -425,14 +425,26 @@ export class BuilderComponent {
     clear(); this.markDirty();
   }
   // per-node config from the backend catalog (single source of truth for ports + property schema)
-  portsFor(type: string) { return this.catalog()?.ports?.[type] || { in: true, out: true }; }
+  portsFor(type: string) { return this.catalog()?.ports?.[type] || {}; }
+  hasIn(type: string) { return this.portsFor(type).maxIn !== 0; }    // input port unless maxIn is 0
+  hasOut(type: string) { return this.portsFor(type).maxOut !== 0; }  // output port unless maxOut is 0
   schemaFor(type: string) { return this.catalog()?.schemas?.[type] || []; }
 
-  /** Connection validity derived from each node type's declared ports (config-driven, matches backend). */
+  /** Connection validity from each node type's declared ports + cardinality (matches the backend). */
   canConnect(from: CNode, to: CNode): { ok: boolean; reason?: string } {
-    if (!this.portsFor(from.type).out) return { ok: false, reason: `A ${from.type} has no outgoing connection` };
-    if (!this.portsFor(to.type).in) return { ok: false, reason: `A ${to.type} has no incoming connection` };
+    const fp = this.portsFor(from.type), tp = this.portsFor(to.type);
+    if (fp.maxOut === 0) return { ok: false, reason: `A ${from.type} has no outgoing connection` };
+    if (tp.maxIn === 0) return { ok: false, reason: `A ${to.type} has no incoming connection` };
     if (this.edges().some((e) => e.from === from.id && e.to === to.id)) return { ok: false, reason: 'That connection already exists' };
+    const outCount = this.edges().filter((e) => e.from === from.id).length;
+    const inCount = this.edges().filter((e) => e.to === to.id).length;
+    if (fp.maxOut != null && outCount >= fp.maxOut) return { ok: false, reason: `A ${from.type} allows only ${fp.maxOut} outgoing connection${fp.maxOut === 1 ? '' : 's'}` };
+    if (tp.maxIn != null && inCount >= tp.maxIn) return { ok: false, reason: `A ${to.type} allows only ${tp.maxIn} incoming connection${tp.maxIn === 1 ? '' : 's'}` };
+    // a gateway is diverging (1→many) OR converging (many→1), never both (mixed)
+    if (from.type === 'gateway' && this.edges().filter((e) => e.to === from.id).length > 1 && outCount >= 1)
+      return { ok: false, reason: 'A converging gateway (many→1) cannot also branch out — use a separate gateway' };
+    if (to.type === 'gateway' && this.edges().filter((e) => e.from === to.id).length > 1 && inCount >= 1)
+      return { ok: false, reason: 'A diverging gateway (1→many) cannot also merge in — use a separate gateway' };
     return { ok: true };
   }
   onEdgeChange(_e: CEdge) { this.markDirty(); }

@@ -2,7 +2,7 @@ import { type NodeDef, GENERAL } from '../def-types.ts';
 export const def: NodeDef = {
   engineType: 'rule',
   palette: [{ key: 'rule', label: 'Business Rule', category: 'Tasks', icon: '📐', color: '#ea580c', engineType: 'rule', defaults: { type: 'rule', ruleflowGroup: 'group' } }],
-  ports: { in: true, out: true },
+  ports: { maxIn: 1, maxOut: 1 },
   schema: [GENERAL, { title: 'DRL rules', fields: [
     { key: 'ruleflowGroup', label: 'Ruleflow group', widget: 'text', placeholder: 'classify' },
   ] }, { title: 'DMN (alternative)', fields: [

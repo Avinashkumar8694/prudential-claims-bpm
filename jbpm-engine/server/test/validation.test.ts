@@ -70,6 +70,30 @@ test('flow-direction: no connection out of end, into start, or into boundary', a
   assert.ok(dir.every((p) => p.severity === 'error'));
 });
 
+test('connection-cardinality: tasks are 1-in/1-out; gateways may fan; no mixed gateway', async () => {
+  // a script task with two outgoing → error; a gateway diverging (1→2) → ok
+  const r = validateProcess(proc(
+    [{ id: 's', type: 'start' }, { id: 'sc', type: 'script', code: 'x' }, { id: 'gw', type: 'gateway', mode: 'exclusive' },
+     { id: 'a', type: 'manual' }, { id: 'b', type: 'manual' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 'sc' },
+     { id: 'f2', from: 'sc', to: 'gw' }, { id: 'f2b', from: 'sc', to: 'a' },   // script has 2 outgoing → invalid
+     { id: 'f3', from: 'gw', to: 'a' }, { id: 'f4', from: 'gw', to: 'b' },      // gateway 1→2 → ok
+     { id: 'f5', from: 'a', to: 'e' }, { id: 'f6', from: 'b', to: 'e' }]));
+  const card = r.problems.filter((p) => p.rule === 'connection-cardinality');
+  assert.ok(card.some((p) => p.nodeId === 'sc'), 'script with 2 outgoing flagged');
+  assert.ok(!card.some((p) => p.nodeId === 'gw'), 'gateway diverging is allowed');
+});
+
+test('connection-cardinality: a mixed gateway (many→many) is an error', async () => {
+  const r = validateProcess(proc(
+    [{ id: 's', type: 'start' }, { id: 'a', type: 'manual' }, { id: 'gw', type: 'gateway', mode: 'parallel' },
+     { id: 'x', type: 'manual' }, { id: 'y', type: 'manual' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 'a' }, { id: 'f2', from: 'a', to: 'gw' }, { id: 'f3', from: 's', to: 'gw' },   // 2 in
+     { id: 'f4', from: 'gw', to: 'x' }, { id: 'f5', from: 'gw', to: 'y' },   // 2 out → mixed
+     { id: 'f6', from: 'x', to: 'e' }, { id: 'f7', from: 'y', to: 'e' }]));
+  assert.ok(r.problems.some((p) => p.rule === 'connection-cardinality' && p.nodeId === 'gw' && /diverging|converging/.test(p.message)));
+});
+
 test('publish is blocked when the process has validation errors', async () => {
   const store = new MemoryStore(); let n = 0;
   const ctx = makeContext({ store, tenantId: 't1', clock: fakeClock().clock, newId: () => `id${++n}` });

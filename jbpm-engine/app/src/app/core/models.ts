@@ -29,7 +29,7 @@ export interface NodeSpec {
 }
 export interface UiField { key: string; label: string; widget: string; options?: string[]; placeholder?: string; help?: string; }
 export interface UiSection { title: string; fields: UiField[]; }
-export interface Ports { in: boolean; out: boolean; }
+export interface Ports { maxIn?: number; maxOut?: number; }   // 0 = none, n = that many, undefined = unlimited
 export interface Catalog {
   categories: string[];
   nodes: NodeSpec[];

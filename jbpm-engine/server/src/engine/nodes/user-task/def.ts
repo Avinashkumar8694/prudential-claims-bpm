@@ -2,7 +2,7 @@ import { type NodeDef, GENERAL } from '../def-types.ts';
 export const def: NodeDef = {
   engineType: 'userTask',
   palette: [{ key: 'userTask', label: 'User Task', category: 'Tasks', icon: '👤', color: '#2563eb', engineType: 'userTask', defaults: { type: 'userTask', name: 'User Task', group: 'user' } }],
-  ports: { in: true, out: true },
+  ports: { maxIn: 1, maxOut: 1 },
   schema: [GENERAL, { title: 'Assignment', fields: [
     { key: 'group', label: 'Group / role', widget: 'text', placeholder: 'examiners' },
     { key: 'assignee', label: 'Assignee (specific user)', widget: 'text' },

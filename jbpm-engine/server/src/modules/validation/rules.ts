@@ -89,8 +89,21 @@ export const RULES: Rule[] = [
     for (const f of c.flows) {
       const from = c.byId.get(f.from); const to = c.byId.get(f.to);
       const fromDef = from && NODE_DEF_BY_TYPE[from.type]; const toDef = to && NODE_DEF_BY_TYPE[to.type];
-      if (fromDef && !fromDef.ports.out) out.push(P('flow-direction', 'error', `"${label(from!)}" (${from!.type}) has no outgoing connection point`, { flowId: f.id, nodeId: from!.id }));
-      if (toDef && !toDef.ports.in) out.push(P('flow-direction', 'error', `"${label(to!)}" (${to!.type}) has no incoming connection point`, { flowId: f.id, nodeId: to!.id }));
+      if (fromDef && fromDef.ports.maxOut === 0) out.push(P('flow-direction', 'error', `"${label(from!)}" (${from!.type}) has no outgoing connection point`, { flowId: f.id, nodeId: from!.id }));
+      if (toDef && toDef.ports.maxIn === 0) out.push(P('flow-direction', 'error', `"${label(to!)}" (${to!.type}) has no incoming connection point`, { flowId: f.id, nodeId: to!.id }));
+    }
+    return out;
+  } },
+
+  { id: 'connection-cardinality', description: 'Nodes must respect max in/out; only gateways branch/merge', run: (c) => {
+    const out: Problem[] = [];
+    for (const n of c.nodes) {
+      const def = NODE_DEF_BY_TYPE[n.type]; if (!def) continue;
+      const din = (c.incoming.get(n.id!) || []).length, dout = (c.outgoing.get(n.id!) || []).length;
+      const { maxIn, maxOut } = def.ports;
+      if (maxOut != null && dout > maxOut) out.push(P('connection-cardinality', 'error', `"${label(n)}" (${n.type}) allows at most ${maxOut} outgoing connection${maxOut === 1 ? '' : 's'} (has ${dout})`, { nodeId: n.id }));
+      if (maxIn != null && din > maxIn) out.push(P('connection-cardinality', 'error', `"${label(n)}" (${n.type}) allows at most ${maxIn} incoming connection${maxIn === 1 ? '' : 's'} (has ${din})`, { nodeId: n.id }));
+      if (n.type === 'gateway' && din > 1 && dout > 1) out.push(P('connection-cardinality', 'error', `Gateway "${label(n)}" must be diverging (1→many) or converging (many→1), not both`, { nodeId: n.id }));
     }
     return out;
   } },

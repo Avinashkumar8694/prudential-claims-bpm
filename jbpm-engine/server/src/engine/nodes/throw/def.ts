@@ -4,7 +4,7 @@ export const def: NodeDef = {
   palette: [
     { key: 'throw-signal', label: 'Throw Signal', category: 'Events', icon: '📣', color: '#7c3aed', engineType: 'throw', defaults: { type: 'throw', event: { signal: 'Go' } } },
   ],
-  ports: { in: true, out: true },
+  ports: { maxIn: 1, maxOut: 1 },
   schema: [GENERAL, { title: 'Event', fields: [
     { key: 'event', label: 'Throw', widget: 'event', options: ['signal', 'message', 'escalation'] },
   ] }],

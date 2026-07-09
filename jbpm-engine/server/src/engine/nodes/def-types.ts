@@ -14,11 +14,10 @@ export interface PaletteEntry {
   engineType: string; defaults: Record<string, unknown>;
 }
 
-/** Connection points a node exposes (self-contained BPMN wiring rules). */
-export interface Ports {
-  in: boolean;    // accepts an incoming sequence flow (target) — false for start & boundary
-  out: boolean;   // has an outgoing sequence flow (source) — false for end
-}
+/** How many connections a node accepts on each side (self-contained BPMN wiring rule).
+ *  maxIn/maxOut: 0 = none, a number = that many, undefined = unlimited (gateways).
+ *  A node has an input port when maxIn !== 0, and an output port when maxOut !== 0. */
+export interface Ports { maxIn?: number; maxOut?: number; }
 
 export interface NodeDef {
   engineType: string;      // the EngineNode.type this folder implements
