@@ -68,6 +68,13 @@ export class InstanceService {
     return this.engine.fireTimerJob(inst, dep, job.nodeId, job.tokenId);
   }
 
+  /** Fire a due start-timer/cron job → begin a new instance on the scheduled deployment+process. */
+  async startScheduled(job: TimerJob): Promise<Instance> {
+    const dep = await this.deployments.get(job.deploymentId!);
+    if (dep.status !== 'active') throw conflict('scheduled deployment is no longer active');
+    return this.engine.start(dep, {}, 'timer', { processId: job.processId });
+  }
+
   async abort(id: string, actor: string): Promise<Instance> {
     const i = await this.get(id);
     if (i.status === 'completed' || i.status === 'aborted') return i;

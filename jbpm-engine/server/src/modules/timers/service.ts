@@ -4,6 +4,7 @@ import type { AppContext } from '../../context.ts';
 import { Collections, type TimerJob } from '../../domain.ts';
 import { InstanceService } from '../instances/service.ts';
 import type { EngineEvent } from '../../engine/execution-engine.ts';
+import { computeDue } from '../../engine/duration.ts';
 
 export class TimerService {
   private instances: InstanceService;
@@ -18,9 +19,24 @@ export class TimerService {
     for (const job of due) {
       job.status = 'fired'; job.fired += 1;
       await this.repo().put(job);
-      try { await this.instances.fireTimer(job); }
-      catch { /* token already gone / instance finished — ignore */ }
+      try {
+        if (job.kind === 'start') {
+          await this.instances.startScheduled(job);
+          // recurring start (cron/cycle) → schedule the next occurrence
+          if (job.cycle) await this.reschedule(job, nowIso);
+        } else {
+          await this.instances.fireTimer(job);
+        }
+      } catch { /* token gone / instance finished / deployment inactive — ignore */ }
     }
     return due.length;
+  }
+
+  private async reschedule(job: TimerJob, nowIso: string): Promise<void> {
+    const next: TimerJob = {
+      ...job, id: this.ctx.newId(), status: 'scheduled', fired: 0,
+      dueAt: computeDue({ cycle: job.cycle }, nowIso),
+    };
+    await this.repo().put(next);
   }
 }

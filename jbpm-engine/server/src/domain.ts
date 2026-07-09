@@ -78,9 +78,11 @@ export interface Task extends Entity {
 
 export interface TimerJob extends Entity {
   id: string; tenantId: string; instanceId: string; tokenId: string; nodeId: string;
-  kind: 'duration' | 'cycle' | 'date';
+  kind: 'duration' | 'cycle' | 'date' | 'start';
   dueAt: string; cycle?: string; fired: number;
   status: 'scheduled' | 'fired' | 'cancelled';
+  // kind 'start' (timer/cron start event): begin a new instance instead of resuming a token.
+  deploymentId?: string; processId?: string;
 }
 
 export interface AuditEvent extends Entity {

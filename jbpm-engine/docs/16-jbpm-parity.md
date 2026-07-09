@@ -75,7 +75,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 | Signal / message to instance | `/instances/:id/signal` + broadcast | ✅ | test 12; E2E |
 | Retry / suspend / resume / abort | all present | ✅ | test 13; E2E |
 | Related instances (parent/children) | `/instances/:id/related` | ✅ | test 11; E2E |
-| Timers / async jobs | durable TimerJob + scheduler (catch-timer) | 🟡 | test 17; E2E (boundary/start timer + cron pending) |
+| Timers / async jobs | durable TimerJob + scheduler: catch, boundary, **start-timer & recurring cron** | ✅ | engine-timers/-boundary-timer/-start-timer tests |
 
 ## G. Human tasks
 | jBPM | This engine | Status | Evidence |
@@ -108,7 +108,6 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 - ✅ Connection **direction + cardinality** (per-node maxIn/maxOut); **ends-at-end** validation.
 
 ## Not yet (tracked in the checklist)
-- **start-timer (cron)** scheduled starts.
 - **Decision-tree & scorecard** runtime; richer **DRL**.
 - **Auth/RBAC enforcement**, multi-tenant admin, **secrets encryption**, **Postgres** store.
 - **Asset editors**, **task inbox UI**, **live canvas WS redraw**, **compensation**, **automated UI e2e** (Playwright).

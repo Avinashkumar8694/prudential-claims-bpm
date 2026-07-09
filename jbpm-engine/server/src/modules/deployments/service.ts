@@ -1,13 +1,15 @@
 // Deployments: immutable runnable snapshots of a published version, labeled with tags, grouped by
 // environment. Exactly one deployment is ACTIVE per (workflow, environment). See docs/09.
 import type { AppContext } from '../../context.ts';
-import { Collections, type Deployment, type Version } from '../../domain.ts';
+import { Collections, type Deployment, type TimerJob, type Version } from '../../domain.ts';
 import { conflict, notFound, validation } from '../../infra/errors.ts';
+import { computeDue } from '../../engine/duration.ts';
 
 export class DeploymentService {
   constructor(private ctx: AppContext) {}
   private dp() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
   private ve() { return this.ctx.store.repo<Version>(Collections.versions); }
+  private tm() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
 
   async get(id: string): Promise<Deployment> {
     const d = await this.dp().get(id);
@@ -68,7 +70,39 @@ export class DeploymentService {
     d.status = 'active'; d.undeployedAt = undefined;
     await this.dp().put(d);
     await this.ctx.audit({ actor, kind: 'deployment.activated', workflowId: d.workflowId, deploymentId: id, data: { environment: d.environment } });
+    await this.syncStartTimers(d);
     return d;
+  }
+
+  /**
+   * Reconcile start-timer / cron scheduled starts for (workflow, environment): cancel every scheduled
+   * start job in that scope, then schedule a fresh job per timer-triggered start node of whichever
+   * deployment is currently active. Called on activate/undeploy/archive so exactly the live
+   * deployment's schedule runs. `changed` names the (workflow, environment) scope to reconcile.
+   */
+  private async syncStartTimers(changed: Deployment): Promise<void> {
+    const scope = await this.dp().query((x) =>
+      x.tenantId === this.ctx.tenantId && x.workflowId === changed.workflowId && x.environment === changed.environment);
+    const ids = new Set(scope.map((x) => x.id));
+    const stale = await this.tm().query((t) => t.kind === 'start' && t.status === 'scheduled' && ids.has(t.deploymentId || ''));
+    for (const t of stale) { t.status = 'cancelled'; await this.tm().put(t); }
+    const active = scope.find((x) => x.status === 'active');
+    if (!active) return;
+    const now = this.ctx.clock();
+    for (const p of active.engine?.processes || []) {
+      for (const n of p.nodes || []) {
+        if (n.type !== 'start') continue;
+        const spec = (n as any).on?.timer ?? (n as any).timer;   // ISO duration/date or { cycle: 'R/PT1H' }
+        if (!spec) continue;
+        const cycle = typeof spec === 'object' ? spec.cycle : (typeof spec === 'string' && spec.startsWith('R') ? spec : undefined);
+        const job: TimerJob = {
+          id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: '', tokenId: '', nodeId: n.id!,
+          kind: 'start', dueAt: computeDue(cycle ? { cycle } : spec, now), cycle, fired: 0, status: 'scheduled',
+          deploymentId: active.id, processId: p.id,
+        };
+        await this.tm().put(job);
+      }
+    }
   }
 
   async rollback(environment: string, toDeploymentId: string, actor: string): Promise<Deployment> {
@@ -82,6 +116,7 @@ export class DeploymentService {
     d.status = 'inactive'; d.undeployedAt = this.ctx.clock();
     await this.dp().put(d);
     await this.ctx.audit({ actor, kind: 'deployment.undeployed', workflowId: d.workflowId, deploymentId: id });
+    await this.syncStartTimers(d);   // no longer active → cancels its scheduled starts
     return d;
   }
 
@@ -90,6 +125,7 @@ export class DeploymentService {
     d.status = 'archived'; d.archivedAt = this.ctx.clock();
     await this.dp().put(d);
     await this.ctx.audit({ actor, kind: 'deployment.archived', workflowId: d.workflowId, deploymentId: id });
+    await this.syncStartTimers(d);
     return d;
   }
 

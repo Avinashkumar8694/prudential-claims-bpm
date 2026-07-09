@@ -4,9 +4,11 @@ export const def: NodeDef = {
   palette: [
     { key: 'start', label: 'Start', category: 'Events', icon: '▶', color: '#16a34a', engineType: 'start', defaults: { type: 'start', name: 'Start' } },
     { key: 'start-signal', label: 'Start (Signal)', category: 'Events', icon: '📡', color: '#16a34a', engineType: 'start', defaults: { type: 'start', on: { signal: 'Start' } } },
+    { key: 'start-timer', label: 'Start (Timer)', category: 'Events', icon: '⏰', color: '#16a34a', engineType: 'start', defaults: { type: 'start', on: { timer: 'R/PT1H' } } },
   ],
   ports: { maxIn: 0, maxOut: 1 },   // start: exactly one outgoing
   schema: [GENERAL, { title: 'Trigger', fields: [
     { key: 'on', label: 'Start trigger', widget: 'event', options: ['none', 'signal', 'message', 'timer', 'condition'], help: 'How instances of this process are started' },
+    { key: 'on.timer', label: 'Timer / cron', widget: 'text', help: 'ISO duration (PT1H), date, or recurring cycle (R/PT1H). The active deployment auto-starts instances on schedule.' },
   ] }],
 };
