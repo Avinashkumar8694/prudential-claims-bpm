@@ -1,34 +1,13 @@
 // Token-based interpreter over the SDK engine JSON. See docs/08-execution-engine.md.
 // Deterministic core (clock/newId injected). Persists the instance after runToQuiescence.
 import type { AppContext } from '../context.ts';
-import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.ts';
+import { Collections, type Deployment, type Instance, type NodeVisit, type TimerJob } from '../domain.ts';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
-import { runScript, evalCondition } from './sandbox.ts';
-import { evaluateDmn, evaluateRules } from './decisioning.ts';
-import { computeDue } from './duration.ts';
-import { config } from '../infra/config.ts';
-
-interface HandlerResult {
-  vars?: Record<string, unknown>;
-  wait?: Token['waitFor'];
-  end?: 'complete' | 'terminate' | 'error';
-  next?: string[];        // explicit target node ids (else follow outgoing flows)
-  consume?: boolean;      // remove token without spawning (e.g. join not yet satisfied)
-  outcome?: string;
-  error?: string;
-  errorCode?: string;     // BPMN-style error code for error-boundary routing
-}
+import { NODE_HANDLERS, type HandlerCtx, type HandlerResult } from './nodes/index.ts';
 
 // Error codes the Node runtime raises (documented in docs/14-error-handling.md); user codes also allowed.
 export const ENGINE_ERRORS = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'] as const;
 const ERROR_VAR = 'errorInfo';   // { code, node, message } bound when an error is caught
-
-/** Tiny JSONPath-ish reader for HTTP resultTo mapping: "$.a.b" / "a.b". */
-function jsonPath(obj: any, path: string): unknown {
-  if (obj == null) return undefined;
-  const parts = path.replace(/^\$\.?/, '').split('.').filter(Boolean);
-  return parts.reduce((c: any, p) => (c == null ? c : c[p]), obj);
-}
 
 export type EngineEvent =
   | { kind: 'instance.started' | 'instance.updated' | 'instance.completed' | 'instance.failed'; instanceId: string }
@@ -43,7 +22,6 @@ export class ExecutionEngine {
     private resolveCalled?: (processId: string) => Promise<{ dep: Deployment; processId: string } | undefined>,
   ) {}
   private inst() { return this.ctx.store.repo<Instance>(Collections.instances); }
-  private tasks() { return this.ctx.store.repo<Task>(Collections.tasks); }
   private deps() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
 
   // ---- process graph helpers ----
@@ -249,158 +227,22 @@ export class ExecutionEngine {
     return this.outgoing(p, node.id!).map((f) => f.to);
   }
 
-  // ---- node handlers ----
+  // ---- node dispatch ----
+  // Each node type's backend logic lives in src/engine/nodes/<type>/handler.ts (see NODE_HANDLERS).
+  // The engine builds a HandlerCtx (node + instance state + capabilities) and runs the handler.
   private async handle(node: EngineNode, inst: Instance, p: EngineProcess, joins: Record<string, Set<string>>, dep: Deployment): Promise<HandlerResult> {
-    switch (node.type) {
-      case 'start': return {};
-      case 'http': {
-        // Service (REST) task — performs a real HTTP call; failures raise SERVICE_ERROR (catchable).
-        const n = node as any;
-        const baseUrl = (dep.env && dep.env['INTEGRATION_LAYER_URL']) || config.integrationBaseUrl;
-        const url = /^https?:\/\//.test(n.url || '') ? n.url : `${baseUrl}${n.url || ''}`;
-        const method = String(n.method || 'POST').toUpperCase();
-        const body: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(n.body || {})) body[k] = (typeof v === 'string' && v.startsWith('$')) ? inst.variables[v.slice(1)] : v;
-        try {
-          const res = await fetch(url, {
-            method,
-            headers: { 'content-type': 'application/json', ...(n.headers || {}) },
-            ...(method === 'GET' || method === 'HEAD' ? {} : { body: JSON.stringify(body) }),
-          });
-          if (!res.ok) return { error: `HTTP ${res.status} from ${url}`, errorCode: 'SERVICE_ERROR' };
-          const text = await res.text();
-          let json: any; try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
-          const vars: Record<string, unknown> = {};
-          for (const [varName, path] of Object.entries(n.resultTo || {})) vars[varName] = jsonPath(json, String(path));
-          return { vars, outcome: `HTTP ${res.status}` };
-        } catch (e) {
-          return { error: `service call failed: ${(e as Error).message}`, errorCode: 'SERVICE_ERROR' };
-        }
-      }
-      case 'end': {
-        if ((node as any).result === 'terminate') return { end: 'terminate' };
-        if ((node as any).throw?.error) return { end: 'error', outcome: 'error-throw' };
-        return { end: 'complete' };
-      }
-      case 'manual': return {};
-      case 'script': {
-        const n = node as any;
-        if (n.lang && n.lang !== 'js') return { outcome: 'skipped-nonjs' };
-        const vars = { ...inst.variables };
-        try { runScript(n.code || '', vars, config.scriptTimeoutMs); }
-        catch (e) { return { error: `script failed: ${(e as Error).message}`, errorCode: 'SCRIPT_ERROR' }; }
-        return { vars };
-      }
-      case 'rule': {
-        // Business rule task — evaluate a DMN decision or a DRL ruleflow-group over the variables.
-        const n = node as any;
-        try {
-          if (n.dmn) return { vars: evaluateDmn(dep.engine, n.dmn, inst.variables), outcome: 'dmn' };
-          if (n.ruleflowGroup) return { vars: evaluateRules(dep.engine, n.ruleflowGroup, inst.variables), outcome: `rules:${n.ruleflowGroup}` };
-          return {};
-        } catch (e) { return { error: `rule evaluation failed: ${(e as Error).message}`, errorCode: 'RULE_ERROR' }; }
-      }
-      case 'gateway': return this.gateway(node as any, inst, p, joins);
-      case 'userTask': {
-        const n = node as any;
-        const task: Task = {
-          id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: inst.id,
-          tokenId: inst.tokens.find((t) => t.nodeId === node.id)!.id, nodeId: node.id!,
-          name: n.name || n.form || 'Task', formName: n.form, group: n.group || n.assignee,
-          status: 'created', inputs: {}, createdAt: this.ctx.clock(),
-        };
-        this.tasks().put(task);
-        this.emit({ kind: 'task.created', instanceId: inst.id, taskId: task.id });
-        return { wait: { kind: 'task', ref: task.id } };
-      }
-      case 'receive': return { wait: { kind: 'message', ref: (node as any).message } };
-      case 'catch': {
-        const ev = (node as any).event || {};
-        if (ev.timer) return { wait: { kind: 'timer', ref: node.id, dueAt: computeDue(ev.timer, this.ctx.clock()) } };
-        if (ev.message) return { wait: { kind: 'message', ref: ev.message } };
-        if (ev.signal) return { wait: { kind: 'signal', ref: ev.signal } };
-        return { wait: { kind: 'condition', ref: node.id } };
-      }
-      case 'throw': { const ev = (node as any).event || {}; const name = ev.signal || ev.message || ev.escalation; if (name) await this.broadcast(name); return { outcome: name ? `threw:${name}` : 'throw' }; }
-      case 'send': { const n = node as any; if (n.message) await this.broadcast(n.message); return { outcome: n.message ? `sent:${n.message}` : 'send' }; }
-      case 'forEach': {
-        // Multi-instance: run the child process once per item in `over` (v1: sequential, synchronous
-        // children); collect each `itemResult` into `collectInto`. Per-item human tasks: follow-up.
-        const n = node as any;
-        if (!this.resolveCalled || !n.process) return {};
-        const resolved = await this.resolveCalled(n.process);
-        if (!resolved) return { outcome: 'mi-process-not-deployed' };
-        const items = Array.isArray(inst.variables[n.over]) ? (inst.variables[n.over] as any[]) : [];
-        const parentToken = inst.tokens.find((t) => t.nodeId === node.id)!;
-        const results: unknown[] = [];
-        for (const item of items) {
-          const childVars: Record<string, unknown> = {};
-          for (const v of (n.pass || [])) childVars[v] = inst.variables[v];
-          if (n.as) childVars[n.as] = item;
-          const child = await this.startChild(resolved.dep, resolved.processId, childVars, inst.startedBy, inst.id, parentToken.id);
-          if (child.status === 'completed' && n.itemResult) results.push(child.variables[n.itemResult]);
-        }
-        return { vars: n.collectInto ? { [n.collectInto]: results } : {}, outcome: `multiInstance:${items.length}` };
-      }
-      case 'call': {
-        const n = node as any;
-        if (!this.resolveCalled || !n.process) return {};
-        const resolved = await this.resolveCalled(n.process);
-        if (!resolved) return { outcome: 'called-process-not-deployed' };   // graceful passthrough
-        const token = inst.tokens.find((t) => t.nodeId === node.id)!;
-        const childVars: Record<string, unknown> = {};
-        for (const [cv, spec] of Object.entries(n.inputs || {})) {
-          childVars[cv] = typeof spec === 'string' && spec.startsWith('$') ? inst.variables[spec.slice(1)] : spec;
-        }
-        const child = await this.startChild(resolved.dep, resolved.processId, childVars, inst.startedBy, inst.id, token.id);
-        if (child.status === 'completed') {
-          const vars: Record<string, unknown> = {};
-          for (const [pv, cv] of Object.entries(n.outputs || {})) vars[pv] = child.variables[cv as string];
-          return { vars, outcome: `called:${child.id}` };
-        }
-        return { wait: { kind: 'child', ref: child.id }, outcome: `called:${child.id}` };   // parent waits for the child
-      }
-      case 'subprocess': {
-        // embedded: inline the child start into the parent scope (best-effort v1: run nested to its end)
-        return {};
-      }
-      // boundary tokens (error-catch) reach here when raised → follow the recovery flow
-      default: return {};
-    }
-  }
-
-  private gateway(node: any, inst: Instance, p: EngineProcess, joins: Record<string, Set<string>>): HandlerResult {
-    const outs = this.outgoing(p, node.id);
-    const ins = this.incoming(p, node.id);
-    const converging = ins.length > 1 && outs.length <= 1;
-
-    if (converging && (node.mode === 'parallel' || node.mode === 'inclusive')) {
-      // join: wait until a token has arrived via each incoming flow
-      const set = (joins[node.id] ||= new Set<string>());
-      set.add(String(inst.history.filter((h) => h.nodeId === node.id).length)); // count arrivals
-      const arrived = inst.history.filter((h) => h.nodeId === node.id).length;
-      if (arrived < ins.length) return { consume: true, outcome: `join ${arrived}/${ins.length}` };
-      joins[node.id] = new Set();
-      return { next: outs.map((f) => f.to), outcome: 'join-complete' };
-    }
-
-    switch (node.mode) {
-      case 'parallel': return { next: outs.map((f) => f.to), outcome: 'fork' };
-      case 'inclusive': {
-        const taken = outs.filter((f) => f.id === node.default || evalCondition(f.when, f.lang, inst.variables));
-        const chosen = taken.length ? taken : outs.filter((f) => f.id === node.default);
-        return { next: chosen.map((f) => f.to), outcome: 'inclusive' };
-      }
-      case 'event': return { consume: true, outcome: 'event-gateway-wait' }; // downstream catches carry the wait
-      case 'complex':
-      case 'exclusive':
-      default: {
-        const match = outs.find((f) => f.when && evalCondition(f.when, f.lang, inst.variables));
-        const def = outs.find((f) => f.id === node.default) || outs.find((f) => !f.when);
-        const chosen = match || def;
-        return { next: chosen ? [chosen.to] : [], outcome: match ? 'conditional' : 'default' };
-      }
-    }
+    const h = NODE_HANDLERS[node.type];
+    if (!h) return {};   // e.g. 'boundary' — spawned by the error router, then follows its outgoing flow
+    const c: HandlerCtx = {
+      node, inst, proc: p, dep, app: this.ctx, joins,
+      outgoing: (id) => this.outgoing(p, id),
+      incoming: (id) => this.incoming(p, id),
+      emit: (e) => this.emit(e),
+      startChild: (d, pid, vars, tok) => this.startChild(d, pid, vars, inst.startedBy, inst.id, tok),
+      broadcast: (name) => this.broadcast(name),
+      resolveCalled: this.resolveCalled,
+    };
+    return h(c);
   }
 
   // ---- resume (wait states) ----
