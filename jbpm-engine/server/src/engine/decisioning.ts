@@ -85,3 +85,44 @@ export function evaluateRules(engine: EngineProject, group: string, vars: Vars):
   }
   return changed;
 }
+
+// ---- Guided decision tree (SDK → .gdt) ----
+// A tree of nodes: each internal node examines one field and descends into the first branch whose
+// `match` test passes; every node may carry `output` vars applied on the way down. Leaf outputs win.
+// Model: { name, fact?, root: TreeNode }  TreeNode = { test?:{field}, branches?:[{match, then}], output? }
+export function evaluateDecisionTree(engine: EngineProject, name: string, vars: Vars): Vars {
+  const tree = ((engine as any).decisionTrees || []).find((t: any) => t.name === name);
+  if (!tree) throw new Error(`decision tree "${name}" not found`);
+  const fact: any = tree.fact && vars[tree.fact] && typeof vars[tree.fact] === 'object' ? vars[tree.fact] : vars;
+  const out: Vars = {};
+  let node: any = tree.root;
+  let guard = 0;
+  while (node && guard++ < 1000) {
+    if (node.output) Object.assign(out, node.output);
+    const field = node.test?.field;
+    if (!field || !Array.isArray(node.branches) || !node.branches.length) break;
+    const hit = node.branches.find((b: any) => testMatch(fact?.[field], b.match));
+    if (!hit) break;
+    node = hit.then;
+  }
+  return out;
+}
+
+// ---- Scorecard (SDK → .scgd) ----
+// Additive scoring: score = baseline + Σ points of the first matching attribute per characteristic.
+// Model: { name, fact?, baseline, target, characteristics: [{ field, attributes: [{ match, points, reason? }] }] }
+export function evaluateScorecard(engine: EngineProject, name: string, vars: Vars): Vars {
+  const sc = ((engine as any).scorecards || []).find((s: any) => s.name === name);
+  if (!sc) throw new Error(`scorecard "${name}" not found`);
+  const fact: any = sc.fact && vars[sc.fact] && typeof vars[sc.fact] === 'object' ? vars[sc.fact] : vars;
+  const target = sc.target || 'score';
+  let score = Number(sc.baseline) || 0;
+  const reasons: string[] = [];
+  for (const ch of sc.characteristics || []) {
+    const attr = (ch.attributes || []).find((a: any) => testMatch(fact?.[ch.field], a.match));
+    if (attr) { score += Number(attr.points) || 0; if (attr.reason) reasons.push(String(attr.reason)); }
+  }
+  const out: Vars = { [target]: score };
+  if (reasons.length) out[`${target}Reasons`] = reasons;
+  return out;
+}

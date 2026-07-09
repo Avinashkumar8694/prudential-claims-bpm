@@ -9,5 +9,8 @@ export const def: NodeDef = {
     { key: 'dmn.namespace', label: 'DMN namespace', widget: 'text' },
     { key: 'dmn.model', label: 'DMN model name', widget: 'text' },
     { key: 'dmn.decision', label: 'Decision name', widget: 'text' },
+  ] }, { title: 'Decision tree / scorecard (alternative)', fields: [
+    { key: 'decisionTree', label: 'Decision tree name', widget: 'text', help: 'Evaluate a guided decision tree asset' },
+    { key: 'scorecard', label: 'Scorecard name', widget: 'text', help: 'Evaluate a scorecard asset (writes its target score)' },
   ] }],
 };

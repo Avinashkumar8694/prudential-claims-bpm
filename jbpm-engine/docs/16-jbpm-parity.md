@@ -47,7 +47,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 |---|---|---|---|
 | DMN decision tables (hit policies) | FIRST/UNIQUE/ANY/COLLECT + input tests | ✅ | test 14 |
 | DRL rules (ruleflow-group) | basic condition→action over variables | 🟡 | test 15 |
-| Guided decision table / tree / scorecard | modelled (assets) + SDK export | 🟡 | assets; runtime pending |
+| Guided decision table / tree / scorecard | table (DMN) + **tree traversal** + **additive scorecard** evaluated at runtime | ✅ | engine-decisioning test |
 
 ## E. Deployment / KIE
 | jBPM (KIE server, kjar) | This engine | Status | Evidence |
@@ -108,9 +108,8 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 - ✅ Connection **direction + cardinality** (per-node maxIn/maxOut); **ends-at-end** validation.
 
 ## Not yet (tracked in the checklist)
-- **Decision-tree & scorecard** runtime; richer **DRL**.
 - **Auth/RBAC enforcement**, multi-tenant admin, **secrets encryption**, **Postgres** store.
-- **Asset editors**, **task inbox UI**, **live canvas WS redraw**, **compensation**, **automated UI e2e** (Playwright).
+- **Asset editors**, **task inbox UI**, **compensation**, **automated UI e2e** (Playwright).
 
 ## How to reproduce
 ```bash
