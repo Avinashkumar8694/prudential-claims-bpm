@@ -4,6 +4,7 @@ import type { AppContext } from '../context.js';
 import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type Token } from '../domain.js';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.js';
 import { runScript, evalCondition } from './sandbox.js';
+import { evaluateDmn, evaluateRules } from './decisioning.js';
 import { config } from '../infra/config.js';
 
 interface HandlerResult {
@@ -268,6 +269,15 @@ export class ExecutionEngine {
         try { runScript(n.code || '', vars, config.scriptTimeoutMs); }
         catch (e) { return { error: `script failed: ${(e as Error).message}`, errorCode: 'SCRIPT_ERROR' }; }
         return { vars };
+      }
+      case 'rule': {
+        // Business rule task — evaluate a DMN decision or a DRL ruleflow-group over the variables.
+        const n = node as any;
+        try {
+          if (n.dmn) return { vars: evaluateDmn(dep.engine, n.dmn, inst.variables), outcome: 'dmn' };
+          if (n.ruleflowGroup) return { vars: evaluateRules(dep.engine, n.ruleflowGroup, inst.variables), outcome: `rules:${n.ruleflowGroup}` };
+          return {};
+        } catch (e) { return { error: `rule evaluation failed: ${(e as Error).message}`, errorCode: 'RULE_ERROR' }; }
       }
       case 'gateway': return this.gateway(node as any, inst, p, joins);
       case 'userTask': {
