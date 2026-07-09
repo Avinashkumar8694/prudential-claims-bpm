@@ -109,7 +109,8 @@ const NW = 190, NH = 66;
               <p>Drag a node from the palette onto the canvas, then hover a node and use its right dot to connect to another.</p>
             </div>
           }
-          @if (linkFrom()) { <div class="hint-bar">Click a target node’s left dot to connect — or click empty space to cancel.</div> }
+          @if (linkError()) { <div class="hint-bar err">⛔ {{ linkError() }}</div> }
+          @else if (linkFrom()) { <div class="hint-bar">Click the target node to connect — or click empty space to cancel.</div> }
         </main>
 
         <!-- PROPERTIES -->
@@ -206,16 +207,19 @@ const NW = 190, NH = 66;
     .node .chip { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 11px; color: #fff; font-size: 16px; font-weight: 600; }
     .ninfo { min-width: 0; } .ntitle { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ntype { font-size: 11px; color: var(--muted); }
-    .port { position: absolute; top: 50%; width: 13px; height: 13px; border-radius: 50%; background: #fff; border: 2px solid #b6bdca; transform: translateY(-50%); cursor: crosshair; }
-    .port:hover { border-color: var(--primary); background: #eae6ff; }
-    .port.in { left: -7px; } .port.out { right: -7px; }
+    .port { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #b6bdca; transform: translateY(-50%); cursor: crosshair; z-index: 3; }
+    .port:hover { border-color: var(--primary); background: #eae6ff; transform: translateY(-50%) scale(1.25); }
+    .port.out { right: -9px; box-shadow: 0 0 0 3px rgba(91,61,245,.08); }
+    .port.in { left: -9px; }
+    .node:hover .port.out { border-color: var(--primary); }
     .ndel { position: absolute; top: -12px; right: 8px; width: 26px; height: 26px; border-radius: 7px; border: 1px solid var(--border); background: #fff; cursor: pointer; box-shadow: var(--shadow-card); }
     .ndel:hover { background: #fdeaea; border-color: #f3b4b4; }
 
     .empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: var(--muted); max-width: 340px; }
     .empty-ic { width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 16px; background: #fff; border: 1px dashed #cbd2e0; display: grid; place-items: center; font-size: 26px; color: #b6bdca; }
     .empty h3 { margin: 6px 0; color: var(--text); }
-    .hint-bar { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #fff; padding: 7px 14px; border-radius: 999px; font-size: 12px; box-shadow: var(--shadow-pop); }
+    .hint-bar { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--primary); color: #fff; padding: 7px 14px; border-radius: 999px; font-size: 12px; box-shadow: var(--shadow-pop); z-index: 10; }
+    .hint-bar.err { background: var(--red); }
 
     .props { width: 320px; background: var(--surface); border-left: 1px solid var(--border); padding: 16px; overflow-y: auto; }
     .props-h { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 14px; font-size: 14px; }
@@ -257,6 +261,7 @@ export class BuilderComponent {
   selNode = signal<CNode | null>(null);
   selEdge = signal<string | null>(null);
   linkFrom = signal<string | null>(null);
+  linkError = signal<string>('');
   saveState = signal<'saved' | 'saving' | 'dirty'>('saved');
   validationMsg = signal<string>(''); validOk = signal(false);
   showVars = signal(false);
@@ -385,20 +390,32 @@ export class BuilderComponent {
   onUp() { if (this.drag?.moved) this.markDirty(); this.drag = null; }
 
   // ---- selection ----
-  selectNode(ev: Event, n: CNode) { ev.stopPropagation(); if (this.linkFrom()) return; this.selNode.set(n); this.selEdge.set(null); }
+  // while linking, clicking any node completes the connection to it; otherwise it selects.
+  selectNode(ev: Event, n: CNode) { ev.stopPropagation(); if (this.linkFrom()) { this.completeLink(n); return; } this.selNode.set(n); this.selEdge.set(null); }
   selectEdge(ev: Event, e: CEdge) { ev.stopPropagation(); this.selEdge.set(e.id); this.selNode.set(null); }
-  bgClick() { this.linkFrom.set(null); this.selNode.set(null); this.selEdge.set(null); }
+  bgClick() { this.linkFrom.set(null); this.linkError.set(''); this.selNode.set(null); this.selEdge.set(null); }
   edgeById(id: string) { return this.edges().find((e) => e.id === id); }
 
-  // ---- connect ----
-  startLink(ev: Event, n: CNode) { ev.stopPropagation(); this.linkFrom.set(n.id); this.selNode.set(null); }
-  endLink(ev: Event, n: CNode) {
-    ev.stopPropagation();
-    const from = this.linkFrom();
-    if (!from || from === n.id) { this.linkFrom.set(null); return; }
-    if (this.edges().some((e) => e.from === from && e.to === n.id)) { this.linkFrom.set(null); return; }
-    this.edges.set([...this.edges(), { id: `e${this.idc++}_${from}_${n.id}`, from, to: n.id }]);
+  // ---- connect (jBPM sequence-flow rules) ----
+  startLink(ev: Event, n: CNode) { ev.stopPropagation(); this.linkError.set(''); this.linkFrom.set(n.id); this.selNode.set(null); }
+  endLink(ev: Event, n: CNode) { ev.stopPropagation(); if (this.linkFrom()) this.completeLink(n); }
+  private completeLink(to: CNode) {
+    const fromId = this.linkFrom(); if (!fromId) return;
+    if (fromId === to.id) { this.linkFrom.set(null); return; }
+    const from = this.nodes().find((x) => x.id === fromId);
+    if (!from) { this.linkFrom.set(null); return; }
+    const check = this.canConnect(from, to);
+    if (!check.ok) { this.linkError.set(check.reason!); this.linkFrom.set(null); setTimeout(() => this.linkError.set(''), 3500); return; }
+    this.edges.set([...this.edges(), { id: `e${this.idc++}_${fromId}_${to.id}`, from: fromId, to: to.id }]);
     this.linkFrom.set(null); this.markDirty();
+  }
+  /** BPMN/jBPM sequence-flow validity for a source→target. */
+  canConnect(from: CNode, to: CNode): { ok: boolean; reason?: string } {
+    if (from.type === 'end') return { ok: false, reason: 'End events have no outgoing connection' };
+    if (to.type === 'start') return { ok: false, reason: 'Start events have no incoming connection' };
+    if (to.type === 'boundary') return { ok: false, reason: 'An error/boundary catch attaches to its host node, not via a connection' };
+    if (this.edges().some((e) => e.from === from.id && e.to === to.id)) return { ok: false, reason: 'That connection already exists' };
+    return { ok: true };
   }
   onEdgeChange(_e: CEdge) { this.markDirty(); }
 

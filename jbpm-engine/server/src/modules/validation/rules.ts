@@ -83,6 +83,17 @@ export const RULES: Rule[] = [
     return out;
   } },
 
+  { id: 'flow-direction', description: 'Connections must respect BPMN direction rules', run: (c) => {
+    const out: Problem[] = [];
+    for (const f of c.flows) {
+      const from = c.byId.get(f.from); const to = c.byId.get(f.to);
+      if (from && from.type === 'end') out.push(P('flow-direction', 'error', `Connection out of end "${label(from)}" is not allowed (end events have no outgoing)`, { flowId: f.id, nodeId: from.id }));
+      if (to && to.type === 'start') out.push(P('flow-direction', 'error', `Connection into start "${label(to)}" is not allowed (start events have no incoming)`, { flowId: f.id, nodeId: to.id }));
+      if (to && to.type === 'boundary') out.push(P('flow-direction', 'error', `Connection into boundary/error catch "${label(to)}" is not allowed (it attaches to a host node)`, { flowId: f.id, nodeId: to.id }));
+    }
+    return out;
+  } },
+
   { id: 'start-connections', description: 'Start has one+ outgoing and no incoming', run: (c) => {
     const out: Problem[] = [];
     for (const n of c.starts) { const d = deg(c, n.id!);

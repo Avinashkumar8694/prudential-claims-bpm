@@ -57,6 +57,19 @@ test('unreachable island is an error; user-task without assignment warns', () =>
   assert.ok(r.warnings.some((p) => p.rule === 'usertask-assignment'));
 });
 
+test('flow-direction: no connection out of end, into start, or into boundary', async () => {
+  const r = validateProcess(proc(
+    [{ id: 's', type: 'start' }, { id: 't', type: 'manual' }, { id: 'e', type: 'end' },
+     { id: 'b', type: 'boundary', on: ['t'], event: { error: '*' } }],
+    [{ id: 'f1', from: 's', to: 't' }, { id: 'f2', from: 't', to: 'e' },
+     { id: 'bad1', from: 'e', to: 't' },   // out of end
+     { id: 'bad2', from: 't', to: 's' },   // into start
+     { id: 'bad3', from: 't', to: 'b' }]));  // into boundary
+  const dir = r.problems.filter((p) => p.rule === 'flow-direction');
+  assert.strictEqual(dir.length, 3, JSON.stringify(dir));
+  assert.ok(dir.every((p) => p.severity === 'error'));
+});
+
 test('publish is blocked when the process has validation errors', async () => {
   const store = new MemoryStore(); let n = 0;
   const ctx = makeContext({ store, tenantId: 't1', clock: fakeClock().clock, newId: () => `id${++n}` });

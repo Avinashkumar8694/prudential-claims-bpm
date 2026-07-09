@@ -24,6 +24,7 @@ engine model. Implemented as a **rules module** on both sides:
 | `single-start` | warning | multiple start events | prefer one start |
 | `unique-ids` | error | duplicate node id | node ids unique |
 | `flow-endpoints` | error | dangling sequence flow | every connection links two existing nodes; self-loop warned |
+| `flow-direction` | error | invalid sequence-flow direction | no connection **out of an end**, **into a start**, or **into a boundary/error-catch** (mirrors the builder's connect rules) |
 | `start-connections` | error | start must have outgoing, no incoming | start out ≥1, in = 0 |
 | `end-connections` | error | end must have incoming, no outgoing | end in ≥1, out = 0 |
 | `node-connected` | error | "node is not connected" | activities/gateways/events have both an incoming and an outgoing (boundary needs an outgoing handler path); **catches floating nodes** |
