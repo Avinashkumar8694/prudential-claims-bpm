@@ -17,6 +17,7 @@ import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.t
 import { exportKjar } from '../modules/export/service.ts';
 import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
+import { openapiSpec, swaggerHtml } from './openapi.ts';
 import { hub } from '../infra/ws-hub.ts';
 
 const ctxOf = (req: Request): AppContext => (req as any).ctx;
@@ -25,6 +26,10 @@ const emit = hub.engineEmit;
 
 export function buildRoutes(): Router {
   const r = Router();
+
+  // --- API docs: OpenAPI spec + Swagger UI (jBPM-style) ---
+  r.get('/openapi.json', (_req, res) => res.json(openapiSpec));
+  r.get('/docs', (_req, res) => res.type('html').send(swaggerHtml));
 
   // --- catalog: the UI gets the node list + per-node config (palette, ports, property schema) here ---
   r.get('/catalog/nodes', (_req, res) => res.json({

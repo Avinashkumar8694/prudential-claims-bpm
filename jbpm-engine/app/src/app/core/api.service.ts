@@ -64,6 +64,26 @@ export class ApiService {
   abort(id: string): Observable<Instance> { return this.http.post<Instance>(`${base}/instances/${id}/abort`, {}); }
 
   // tasks
-  listTasks(): Observable<Task[]> { return this.http.get<List<Task>>(`${base}/tasks`).pipe(map((r) => r.items)); }
+  listTasks(filter?: { assignee?: string; group?: string; status?: string }): Observable<Task[]> { return this.http.get<List<Task>>(`${base}/tasks`, { params: (filter || {}) as any }).pipe(map((r) => r.items)); }
+  claimTask(id: string): Observable<Task> { return this.http.post<Task>(`${base}/tasks/${id}/claim`, {}); }
+  releaseTask(id: string): Observable<Task> { return this.http.post<Task>(`${base}/tasks/${id}/release`, {}); }
   completeTask(id: string, outputs: Record<string, unknown>): Observable<Task> { return this.http.post<Task>(`${base}/tasks/${id}/complete`, { outputs }); }
+
+  // query / task-admin / analytics (docs/17)
+  queryUsers(): Observable<UserRow[]> { return this.http.get<List<UserRow>>(`${base}/query/users`).pipe(map((r) => r.items)); }
+  userTasks(user: string, status?: string): Observable<Task[]> { return this.http.get<List<Task>>(`${base}/query/users/${user}/tasks`, { params: status ? { status } : {} }).pipe(map((r) => r.items)); }
+  userTasksCompleted(user: string): Observable<Task[]> { return this.http.get<List<Task>>(`${base}/query/users/${user}/tasks/completed`).pipe(map((r) => r.items)); }
+  groupTasks(group: string, status?: string): Observable<Task[]> { return this.http.get<List<Task>>(`${base}/query/groups/${group}/tasks`, { params: status ? { status } : {} }).pipe(map((r) => r.items)); }
+  processDefinitions(): Observable<ProcessDef[]> { return this.http.get<List<ProcessDef>>(`${base}/query/process-definitions`).pipe(map((r) => r.items)); }
+  processSignals(processId: string): Observable<{ processId: string; listensFor: string[]; throws: string[] }> { return this.http.get<any>(`${base}/query/process-definitions/${processId}/signals`); }
+  analyticsSummary(): Observable<Summary> { return this.http.get<Summary>(`${base}/query/analytics/summary`); }
+  analyticsTasks(): Observable<TaskAnalytics> { return this.http.get<TaskAnalytics>(`${base}/query/analytics/tasks`); }
+  analyticsProcesses(): Observable<ProcessAnalytics> { return this.http.get<ProcessAnalytics>(`${base}/query/analytics/processes`); }
 }
+
+export interface UserRow { user: string; groups: string[]; startedInstances: number; openTasks: number; completedTasks: number; }
+export interface ProcessDef { processId: string; name: string; version?: string; environment: string; nodes: number; instances: { total: number; active: number }; }
+export interface DurStats { count: number; avgMs: number; minMs: number; maxMs: number; }
+export interface Summary { instances: { total: number; byStatus: Record<string, number> }; tasks: { total: number; byStatus: Record<string, number> }; deployments: { total: number; active: number }; jobs: { scheduled: number; fired: number }; }
+export interface TaskAnalytics { byTask: (DurStats & { name: string })[]; byAssignee: (DurStats & { user: string })[]; openByStatus: Record<string, number>; }
+export interface ProcessAnalytics { byProcess: (DurStats & { processId: string })[]; byStatus: Record<string, number>; }

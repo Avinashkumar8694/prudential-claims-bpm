@@ -3,6 +3,13 @@
 Research of the jBPM KIE-Server + Business Central REST surface (the Swagger the user referenced) and
 what this engine exposes, with the gaps we close in the `queries` module.
 
+## Interactive API docs (Swagger)
+- **`GET /api/openapi.json`** — the full OpenAPI 3.0 spec (58 paths, tagged by area) authored in
+  `server/src/http/openapi.ts`.
+- **`GET /api/docs`** — Swagger UI (try-it-out enabled), the same experience as jBPM's KIE-Server Swagger.
+- A conformance test (`test/openapi.test.ts`) keeps the spec honest: every documented path+method must be
+  a real route and every route must be documented, and all `$ref`s must resolve.
+
 ## What jBPM exposes (the relevant families)
 - **Process definitions** — list all deployed defs, by container, variables, subprocesses, referenced signals.
 - **Process instances** — list/filter (status, var, container, correlation, initiator, date), node instances
