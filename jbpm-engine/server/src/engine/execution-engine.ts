@@ -29,6 +29,15 @@ export class ExecutionEngine {
   /** The process (definition) an instance runs — selected by its processId, else the first. */
   private pick(dep: Deployment, processId?: string): EngineProcess {
     const list = dep.engine.processes || [];
+    // Embedded sub-process: a composite id "parentProcess::nodeId" resolves to a synthetic process
+    // built from that subprocess node's own nodes/flows, so it runs as a nested instance.
+    if (processId && processId.includes('::')) {
+      const [parentId, nodeId] = processId.split('::');
+      const parent = list.find((x) => x.id === parentId) || list[0];
+      const sub = parent?.nodes.find((n) => n.id === nodeId) as any;
+      if (!sub) throw new Error('embedded sub-process not found');
+      return { id: processId, name: sub.name || 'Sub-process', nodes: sub.nodes || [], flows: sub.flows || [] } as EngineProcess;
+    }
     const p = (processId && list.find((x) => x.id === processId)) || list[0];
     if (!p) throw new Error('deployment has no process');
     return p;
@@ -142,8 +151,11 @@ export class ExecutionEngine {
     const pdep = await this.deps().get(parent.deploymentId);
     if (!pdep) return;
     const callNode = this.pick(pdep, parent.processId).nodes.find((n) => n.id === token.nodeId) as any;
-    const vars: Record<string, unknown> = {};
-    for (const [pv, cv] of Object.entries(callNode?.outputs || {})) vars[pv] = child.variables[cv as string];
+    // Embedded sub-process shares the parent's variable scope → merge all child vars back.
+    // Call activity is an isolated scope → map only the declared outputs.
+    let vars: Record<string, unknown> = {};
+    if (callNode?.type === 'subprocess') vars = { ...child.variables };
+    else for (const [pv, cv] of Object.entries(callNode?.outputs || {})) vars[pv] = child.variables[cv as string];
     await this.resumeToken(parent, pdep, token.id, vars);
   }
 

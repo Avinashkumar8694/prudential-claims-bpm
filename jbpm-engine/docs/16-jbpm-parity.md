@@ -31,7 +31,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 | Call activity (reusable) | child instance + I/O mapping + related | ✅ | test 11; E2E |
 | Multi-instance | child per item, collect results | ✅ (v1 sequential) | test 10; E2E |
 | Send / Receive | broadcast + wait | ✅ | test 9 |
-| Embedded / transaction sub-process | modelled; nested execution | ⛔ | handler passthrough |
+| Embedded / transaction sub-process | nested instance over the node's own graph; shared variable scope; waits/resumes | ✅ | engine-subprocess test (sync + waiting) |
 | Manual task, Data object, Lanes | modelled | ✅ / 🟡 | nodes; lanes P1 |
 
 ## C. Error handling
@@ -108,7 +108,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 - ✅ Connection **direction + cardinality** (per-node maxIn/maxOut); **ends-at-end** validation.
 
 ## Not yet (tracked in the checklist)
-- Embedded/transaction **sub-process execution**; **start-timer (cron)** scheduled starts.
+- **start-timer (cron)** scheduled starts.
 - **Decision-tree & scorecard** runtime; richer **DRL**.
 - **Auth/RBAC enforcement**, multi-tenant admin, **secrets encryption**, **Postgres** store.
 - **Asset editors**, **task inbox UI**, **live canvas WS redraw**, **compensation**, **automated UI e2e** (Playwright).
