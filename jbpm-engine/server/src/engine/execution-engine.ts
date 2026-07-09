@@ -26,34 +26,36 @@ export class ExecutionEngine {
     private ctx: AppContext,
     private emit: (e: EngineEvent) => void = () => {},
     /** resolve a called process id -> its active deployment (enables call-activity child instances) */
-    private resolveCalled?: (processId: string) => Promise<Deployment | undefined>,
+    private resolveCalled?: (processId: string) => Promise<{ dep: Deployment; processId: string } | undefined>,
   ) {}
   private inst() { return this.ctx.store.repo<Instance>(Collections.instances); }
   private tasks() { return this.ctx.store.repo<Task>(Collections.tasks); }
   private deps() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
 
   // ---- process graph helpers ----
-  private proc(inst: Instance, dep: Deployment): EngineProcess {
-    const p = dep.engine.processes?.[0];
+  /** The process (definition) an instance runs — selected by its processId, else the first. */
+  private pick(dep: Deployment, processId?: string): EngineProcess {
+    const list = dep.engine.processes || [];
+    const p = (processId && list.find((x) => x.id === processId)) || list[0];
     if (!p) throw new Error('deployment has no process');
     return p;
   }
+  private proc(inst: Instance, dep: Deployment): EngineProcess { return this.pick(dep, inst.processId); }
   private nodeMap(p: EngineProcess) { return new Map(p.nodes.map((n) => [n.id!, n])); }
   private outgoing(p: EngineProcess, nodeId: string): EngineFlow[] { return p.flows.filter((f) => f.from === nodeId); }
   private incoming(p: EngineProcess, nodeId: string): EngineFlow[] { return p.flows.filter((f) => f.to === nodeId); }
 
   // ---- lifecycle ----
-  async start(dep: Deployment, variables: Record<string, unknown>, actor: string, correlationKey?: string): Promise<Instance> {
-    const p = dep.engine.processes?.[0];
-    if (!p) throw new Error('deployment has no process');
+  async start(dep: Deployment, variables: Record<string, unknown>, actor: string, opts: { processId?: string; correlationKey?: string } = {}): Promise<Instance> {
+    const p = this.pick(dep, opts.processId);
     const startNode = p.nodes.find((n) => n.type === 'start') || p.nodes[0];
     if (!startNode) throw new Error('process has no start node');
     const now = this.ctx.clock();
     const seed: Record<string, unknown> = {};
     for (const v of p.vars || []) seed[v.name] = undefined;
     const inst: Instance = {
-      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId,
-      correlationKey, status: 'running', variables: { ...seed, ...variables },
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId, processId: p.id,
+      correlationKey: opts.correlationKey, status: 'running', variables: { ...seed, ...variables },
       tokens: [{ id: this.ctx.newId(), nodeId: startNode.id!, state: 'active', enteredAt: now }],
       history: [], startedAt: now, startedBy: actor,
     };
@@ -124,20 +126,19 @@ export class ExecutionEngine {
     if (!token) return;
     const pdep = await this.deps().get(parent.deploymentId);
     if (!pdep) return;
-    const callNode = pdep.engine.processes?.[0]?.nodes.find((n) => n.id === token.nodeId) as any;
+    const callNode = this.pick(pdep, parent.processId).nodes.find((n) => n.id === token.nodeId) as any;
     const vars: Record<string, unknown> = {};
     for (const [pv, cv] of Object.entries(callNode?.outputs || {})) vars[pv] = child.variables[cv as string];
     await this.resumeToken(parent, pdep, token.id, vars);
   }
 
   /** Start a child process instance linked to a parent token (call activity). */
-  private async startChild(dep: Deployment, vars: Record<string, unknown>, actor: string, parentInstanceId: string, parentTokenId: string): Promise<Instance> {
-    const p = dep.engine.processes?.[0];
-    if (!p) throw new Error('called deployment has no process');
+  private async startChild(dep: Deployment, processId: string, vars: Record<string, unknown>, actor: string, parentInstanceId: string, parentTokenId: string): Promise<Instance> {
+    const p = this.pick(dep, processId);
     const startNode = p.nodes.find((n) => n.type === 'start') || p.nodes[0];
     const now = this.ctx.clock();
     const child: Instance = {
-      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId,
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId, processId: p.id,
       status: 'running', variables: { ...vars },
       tokens: [{ id: this.ctx.newId(), nodeId: startNode!.id!, state: 'active', enteredAt: now }],
       history: [], startedAt: now, startedBy: actor, parentInstanceId, parentTokenId,
@@ -217,14 +218,14 @@ export class ExecutionEngine {
       case 'call': {
         const n = node as any;
         if (!this.resolveCalled || !n.process) return {};
-        const childDep = await this.resolveCalled(n.process);
-        if (!childDep) return { outcome: 'called-process-not-deployed' };   // graceful passthrough
+        const resolved = await this.resolveCalled(n.process);
+        if (!resolved) return { outcome: 'called-process-not-deployed' };   // graceful passthrough
         const token = inst.tokens.find((t) => t.nodeId === node.id)!;
         const childVars: Record<string, unknown> = {};
         for (const [cv, spec] of Object.entries(n.inputs || {})) {
           childVars[cv] = typeof spec === 'string' && spec.startsWith('$') ? inst.variables[spec.slice(1)] : spec;
         }
-        const child = await this.startChild(childDep, childVars, inst.startedBy, inst.id, token.id);
+        const child = await this.startChild(resolved.dep, resolved.processId, childVars, inst.startedBy, inst.id, token.id);
         if (child.status === 'completed') {
           const vars: Record<string, unknown> = {};
           for (const [pv, cv] of Object.entries(n.outputs || {})) vars[pv] = child.variables[cv as string];

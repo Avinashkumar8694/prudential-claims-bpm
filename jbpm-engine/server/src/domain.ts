@@ -55,6 +55,7 @@ export interface Token {
 export interface NodeVisit { tokenId: string; nodeId: string; type: string; enteredAt: string; exitedAt?: string; outcome?: string; }
 export interface Instance extends Entity {
   id: string; tenantId: string; deploymentId: string; workflowId: string;
+  processId?: string;              // which process (definition) in the deployment this instance runs
   correlationKey?: string;
   status: InstanceStatus;
   variables: Record<string, unknown>;

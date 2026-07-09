@@ -63,6 +63,20 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [ ] e2e (Playwright); Docker/compose; CI pipeline
 - [ ] a11y (WCAG 2.1 AA) + i18n + theming polish
 
+## Phase 7 — Projects, multi-process, assets & operations (see [13](./13-projects-and-operations.md))
+- [x] script is always JavaScript (no language option; conditions are js)
+- [x] backend: `Instance.processId`; start an instance by `processId`; graph uses the instance's process
+- [x] backend: call-activity `resolveCalled` searches all processes across active deployments
+- [x] backend: `processes` module — list/add/rename/remove/get/save a process inside the project draft
+- [x] backend: `/deployments/:id/definitions` (process definitions per version)
+- [x] UI: relabel Workflows → Projects; project list
+- [x] UI: project detail with tabs (Processes / Variables / Assets / Rules / Settings / Deployments / Instances)
+- [x] UI: builder opens a selected process by id; header Test + Deploy
+- [ ] backend+UI: `assets` module — list/add asset entries (forms/DRL/DMN/tables/…) + `asset-ref` validation rule
+- [ ] backend+UI: cron/scheduled starts per process (`CronService` + settings + scheduler)
+- [ ] UI: per-asset editors (form builder, DRL/DMN/table editors) — Phase 8
+- [ ] tasks/definitions/instances views scoped per version + Test dry-run flow
+
 ## Definition of done (per module)
 - [ ] Model + service + router + zod DTOs
 - [ ] Unit tests (service) + integration test (API)

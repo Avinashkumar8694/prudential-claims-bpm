@@ -10,23 +10,25 @@ export class InstanceService {
   private deployments: DeploymentService;
   constructor(private ctx: AppContext, emit: (e: EngineEvent) => void = () => {}) {
     this.deployments = new DeploymentService(ctx);
-    // resolve a called process id -> its active deployment (for call-activity child instances)
-    const resolveCalled = async (processId: string): Promise<Deployment | undefined> => {
-      const found = await this.ctx.store.repo<Deployment>(Collections.deployments).query((d) =>
-        d.tenantId === this.ctx.tenantId && d.status === 'active' &&
-        (d.engine?.processes?.[0]?.id === processId || d.engine?.id === processId));
-      return found[0];
+    // resolve a called process id -> its active deployment + the matching process (any process, any active deployment)
+    const resolveCalled = async (processId: string): Promise<{ dep: Deployment; processId: string } | undefined> => {
+      const deps = await this.ctx.store.repo<Deployment>(Collections.deployments).query((d) => d.tenantId === this.ctx.tenantId && d.status === 'active');
+      for (const dep of deps) {
+        const p = (dep.engine?.processes || []).find((x) => x.id === processId);
+        if (p) return { dep, processId: p.id! };
+      }
+      return undefined;
     };
     this.engine = new ExecutionEngine(ctx, emit, resolveCalled);
   }
   private repo() { return this.ctx.store.repo<Instance>(Collections.instances); }
 
-  async start(input: { workflowId: string; environment?: string; deploymentId?: string; variables?: Record<string, unknown>; correlationKey?: string }, actor: string): Promise<Instance> {
+  async start(input: { workflowId: string; processId?: string; environment?: string; deploymentId?: string; variables?: Record<string, unknown>; correlationKey?: string }, actor: string): Promise<Instance> {
     let dep: Deployment;
     if (input.deploymentId) dep = await this.deployments.get(input.deploymentId);
     else dep = await this.deployments.resolveActive(input.workflowId, input.environment || 'prod');
     if (dep.status === 'archived') throw conflict('cannot start on an archived deployment');
-    return this.engine.start(dep, input.variables || {}, actor, input.correlationKey);
+    return this.engine.start(dep, input.variables || {}, actor, { processId: input.processId, correlationKey: input.correlationKey });
   }
 
   async get(id: string): Promise<Instance> {
@@ -107,7 +109,7 @@ export class InstanceService {
   async graph(id: string) {
     const inst = await this.get(id);
     const dep = await this.deployments.get(inst.deploymentId);
-    const p = dep.engine.processes?.[0];
+    const p = (dep.engine.processes || []).find((x) => x.id === inst.processId) || dep.engine.processes?.[0];
     return { nodes: p?.nodes || [], flows: p?.flows || [], diagram: this.engine.diagramState(inst) };
   }
 }

@@ -59,8 +59,7 @@ import { NODE_SCHEMA, type Field, type Section } from './node-schema';
                   @case ('error') { <input class="mt" placeholder="Error code" [ngModel]="val(f.key + '.error')" (ngModelChange)="set(f.key + '.error', $event)" /> }
                   @case ('escalation') { <input class="mt" placeholder="Escalation code" [ngModel]="val(f.key + '.escalation')" (ngModelChange)="set(f.key + '.escalation', $event)" /> }
                   @case ('condition') {
-                    <input class="mt" placeholder="Condition expression" [ngModel]="val(f.key + '.condition')" (ngModelChange)="set(f.key + '.condition', $event)" />
-                    <select class="mt" [ngModel]="val(f.key + '.lang') || 'js'" (ngModelChange)="set(f.key + '.lang', $event)"><option>js</option><option>java</option><option>mvel</option></select>
+                    <input class="mt" placeholder="Condition expression (JavaScript)" [ngModel]="val(f.key + '.condition')" (ngModelChange)="set(f.key + '.condition', $event); set(f.key + '.lang', 'js')" />
                   }
                   @case ('timer') {
                     <input class="mt" placeholder="Duration e.g. PT5M / P1D" [ngModel]="val(f.key + '.timer.duration')" (ngModelChange)="set(f.key + '.timer.duration', $event)" />

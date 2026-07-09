@@ -10,6 +10,7 @@ import { VersionService } from '../modules/versions/service.js';
 import { DeploymentService } from '../modules/deployments/service.js';
 import { InstanceService } from '../modules/instances/service.js';
 import { TaskService } from '../modules/tasks/service.js';
+import { ProcessService } from '../modules/processes/service.js';
 import { NODE_REGISTRY, CATEGORIES } from '../modules/catalog/registry.js';
 import { fromEngineProject } from '../sdk/index.js';
 import { ValidationService } from '../modules/validation/service.js';
@@ -36,6 +37,14 @@ export function buildRoutes(): Router {
   r.delete('/workflows/:id', asyncHandler(async (req, res) => { await new WorkflowService(ctxOf(req)).archive(req.params.id, actorOf(req)); res.status(204).end(); }));
   r.put('/workflows/:id/permissions', asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).setPermissions(req.params.id, req.body, actorOf(req)))));
   r.put('/workflows/:id/variables', asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).setVariables(req.params.id, req.body, actorOf(req)))));
+
+  // --- processes within a project ---
+  r.get('/workflows/:id/processes', asyncHandler(async (req, res) => res.json({ items: await new ProcessService(ctxOf(req)).list(req.params.id) })));
+  r.post('/workflows/:id/processes', asyncHandler(async (req, res) => res.status(201).json(await new ProcessService(ctxOf(req)).add(req.params.id, req.body?.name, actorOf(req)))));
+  r.get('/workflows/:id/processes/:pid', asyncHandler(async (req, res) => res.json(await new ProcessService(ctxOf(req)).getProcess(req.params.id, req.params.pid))));
+  r.put('/workflows/:id/processes/:pid', asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).saveProcess(req.params.id, req.params.pid, req.body?.process || req.body, actorOf(req)); res.json({ ok: true }); }));
+  r.patch('/workflows/:id/processes/:pid', asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).rename(req.params.id, req.params.pid, req.body?.name, actorOf(req)); res.json({ ok: true }); }));
+  r.delete('/workflows/:id/processes/:pid', asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).remove(req.params.id, req.params.pid, actorOf(req)); res.status(204).end(); }));
 
   // --- branches ---
   r.get('/workflows/:id/branches', asyncHandler(async (req, res) => res.json({ items: await new BranchService(ctxOf(req)).listByWorkflow(req.params.id) })));
@@ -66,6 +75,10 @@ export function buildRoutes(): Router {
   r.get('/deployments/:id/export', asyncHandler(async (req, res) => {
     const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
     res.json(fromEngineProject(d.engine).descriptor);
+  }));
+  r.get('/deployments/:id/definitions', asyncHandler(async (req, res) => {
+    const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
+    res.json({ items: (d.engine.processes || []).map((p) => ({ id: p.id, name: p.name || p.id, nodes: (p.nodes || []).length, startable: (p.nodes || []).some((n) => n.type === 'start') })) });
   }));
 
   // --- instances (runtime) ---

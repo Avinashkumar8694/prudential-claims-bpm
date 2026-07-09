@@ -32,9 +32,8 @@ export const NODE_SCHEMA: Record<string, Section[]> = {
     { key: 'throw', label: 'Throw event', widget: 'event', options: ['none', 'signal', 'error', 'escalation', 'message'] },
   ] }],
 
-  script: [GENERAL, { title: 'Script', fields: [
-    { key: 'lang', label: 'Language', widget: 'select', options: ['js', 'java', 'mvel'], help: 'Only js executes in the Node runtime; java/mvel are preserved for jBPM export' },
-    { key: 'code', label: 'Script body', widget: 'code', placeholder: 'kcontext.setVariable("x", 1);' },
+  script: [GENERAL, { title: 'Script (JavaScript)', fields: [
+    { key: 'code', label: 'Script body', widget: 'code', placeholder: 'kcontext.setVariable("x", 1);', help: 'Runs as JavaScript against kcontext (getVariable/setVariable).' },
   ] }],
 
   http: [GENERAL, { title: 'Request', fields: [
