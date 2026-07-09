@@ -4,8 +4,8 @@
 import type { AppContext } from '../../context.js';
 import { Collections, type Branch, type Version } from '../../domain.js';
 import type { EngineProject } from '../../sdk/index.js';
-import { validateEngineProcess } from '../../sdk/index.js';
 import { conflict, notFound, validation } from '../../infra/errors.js';
+import { ValidationService } from '../validation/service.js';
 
 export interface DiffResult {
   nodes: { added: string[]; removed: string[]; changed: string[] };
@@ -58,10 +58,13 @@ export class VersionService {
     return version;
   }
 
-  /** Freeze a draft and open a new draft head that continues from it. */
+  /** Freeze a draft and open a new draft head that continues from it. Blocks on validation errors. */
   async publish(id: string, actor: string, label?: string): Promise<{ published: Version; newDraft: Version }> {
     const v = await this.mine(id);
     if (v.state === 'published') throw conflict('version already published');
+    const proc = v.engine.processes?.[0];
+    if (!proc) throw validation('version has no process');
+    new ValidationService().assertValid(proc, 'publish');   // no invalid/unconnected process is published
     v.state = 'published'; v.label = label ?? v.label;
     await this.ve().put(v);
 
@@ -81,7 +84,7 @@ export class VersionService {
     const v = await this.mine(id);
     const proc = v.engine.processes?.[0];
     if (!proc) throw validation('version has no process');
-    return validateEngineProcess(proc);
+    return new ValidationService().validate(proc);
   }
 
   async diff(aId: string, bId: string): Promise<DiffResult> {

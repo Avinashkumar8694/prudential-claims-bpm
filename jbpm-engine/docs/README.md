@@ -31,6 +31,7 @@ with zero Java/KIE server required, and a one-click escape hatch to export to re
 | 09 | [Deployment, Branching & Versioning](./09-deployment-branching-versioning.md) | Branch/version/tag model + lifecycle |
 | 10 | [Checklist](./10-checklist.md) | Implementation checklist (tracked) |
 | 11 | [Roadmap](./11-roadmap.md) | Phased delivery plan |
+| 12 | [Validation Rules](./12-validation-rules.md) | Process validation rules (jBPM-equivalent) + enforcement |
 
 ## Tech stack (decided)
 

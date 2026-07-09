@@ -18,7 +18,7 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [ ] canvas: @foblex/flow integration, drag-drop, connect, select, delete
 - [ ] engine JSON ↔ canvas mapping layer + autosave draft
 - [ ] properties panel schema-form (start/end/script/userTask/gateway)
-- [ ] validation surfacing (footer + inline) via `validateModel`
+- [x] validation module (server rules + UI Problems panel); errors block publish/deploy; node markers; see [12](./12-validation-rules.md)
 - [ ] header dialogs: Variables, User Permissions; branch/version switcher
 
 ## Phase 2 — Execution engine (core)

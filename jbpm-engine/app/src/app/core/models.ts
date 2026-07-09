@@ -29,6 +29,9 @@ export interface NodeSpec {
 }
 export interface Catalog { categories: string[]; nodes: NodeSpec[]; }
 
+export interface Problem { rule: string; severity: 'error' | 'warning'; message: string; nodeId?: string; flowId?: string; }
+export interface ValidationResult { ok: boolean; errors: Problem[]; warnings: Problem[]; problems: Problem[]; }
+
 export interface Task {
   id: string; instanceId: string; nodeId: string; name: string; formName?: string;
   group?: string; assignee?: string; status: string; createdAt: string;

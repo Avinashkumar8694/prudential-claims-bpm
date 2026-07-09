@@ -2,8 +2,9 @@ import { Component, ElementRef, HostListener, computed, inject, signal, viewChil
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
-import type { Catalog, NodeSpec, Version, Workflow } from '../../core/models';
+import type { Catalog, NodeSpec, Problem, Version, Workflow } from '../../core/models';
 import { PropertiesPanelComponent } from './properties-panel.component';
+import { ProblemsPanelComponent } from './problems-panel.component';
 
 // A canvas node is just an engine node with x/y layout coords stored alongside (ignored by the SDK).
 interface CNode { id: string; type: string; name?: string; x: number; y: number; [k: string]: any; }
@@ -24,7 +25,7 @@ const NW = 190, NH = 66;
 @Component({
   selector: 'app-builder',
   standalone: true,
-  imports: [FormsModule, RouterLink, PropertiesPanelComponent],
+  imports: [FormsModule, RouterLink, PropertiesPanelComponent, ProblemsPanelComponent],
   template: `
     <div class="builder">
       <!-- HEADER -->
@@ -42,7 +43,8 @@ const NW = 190, NH = 66;
         <span class="divider"></span>
         <button class="icon-btn" (click)="autoLayout()" title="Auto-layout">▦</button>
         <button class="btn" (click)="run()">▷ Run</button>
-        <button class="btn primary" (click)="deploy()">Deploy</button>
+        <button class="btn primary" (click)="deploy()" [disabled]="errorCount() > 0"
+                [title]="errorCount() > 0 ? 'Fix ' + errorCount() + ' validation error(s) before deploying' : 'Publish + deploy to prod'">Deploy</button>
       </header>
 
       <div class="body">
@@ -82,8 +84,11 @@ const NW = 190, NH = 66;
 
           @for (n of nodes(); track n.id) {
             <div class="node" [class.sel]="selNode()?.id===n.id" [class.linking]="linkFrom()===n.id"
+                 [class.has-err]="hasErr(n.id)" [class.has-warn]="!hasErr(n.id) && hasWarn(n.id)"
                  [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="NW"
                  (pointerdown)="startDrag($event, n)" (click)="selectNode($event, n)">
+              @if (hasErr(n.id)) { <span class="nmark err" title="Has errors">!</span> }
+              @else if (hasWarn(n.id)) { <span class="nmark warn" title="Has warnings">!</span> }
               <span class="port in" title="Connect into" (pointerdown)="$event.stopPropagation()" (click)="endLink($event, n)"></span>
               <span class="chip" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>
               <div class="ninfo">
@@ -130,6 +135,8 @@ const NW = 190, NH = 66;
           }
         </aside>
       </div>
+
+      <app-problems-panel [problems]="problems()" [errorCount]="errorCount()" [warnCount]="warnCount()" (pick)="pickProblem($event)"></app-problems-panel>
 
       @if (showVars()) {
         <div class="modal-bg" (click)="closeVars()">
@@ -192,6 +199,9 @@ const NW = 190, NH = 66;
     .node:hover { box-shadow: var(--shadow-pop); }
     .node.sel { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(91,61,245,.18), var(--shadow-card); }
     .node.linking { border-color: var(--primary); }
+    .node.has-err { border-color: #f0a5a5; } .node.has-warn { border-color: #f0cf8a; }
+    .nmark { position: absolute; top: -9px; left: -9px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #fff; box-shadow: var(--shadow-card); z-index: 2; }
+    .nmark.err { background: var(--red); } .nmark.warn { background: #d97706; }
     .node .chip { width: 40px; height: 40px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 11px; color: #fff; font-size: 16px; font-weight: 600; }
     .ninfo { min-width: 0; } .ntitle { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ntype { font-size: 11px; color: var(--muted); }
@@ -255,8 +265,26 @@ export class BuilderComponent {
   private pointer = { x: 0, y: 0 };
   private drag: { id: string; offX: number; offY: number; moved: boolean } | null = null;
 
+  problems = signal<Problem[]>([]);
+  errorCount = computed(() => this.problems().filter((p) => p.severity === 'error').length);
+  warnCount = computed(() => this.problems().filter((p) => p.severity === 'warning').length);
+  private errIds = computed(() => new Set(this.problems().filter((p) => p.severity === 'error' && p.nodeId).map((p) => p.nodeId!)));
+  private warnIds = computed(() => new Set(this.problems().filter((p) => p.severity === 'warning' && p.nodeId).map((p) => p.nodeId!)));
   cats = computed(() => this.catalog()?.categories ?? []);
   saveLabel = computed(() => ({ saved: 'Saved', saving: 'Saving…', dirty: 'Unsaved' }[this.saveState()]));
+
+  hasErr(id: string) { return this.errIds().has(id); }
+  hasWarn(id: string) { return this.warnIds().has(id); }
+  private runValidate() {
+    if (!this.wf()) return;
+    this.api.validateProcess(this.buildEngine().processes[0]).subscribe((r) => this.problems.set(r.problems));
+  }
+  pickProblem(id: string) {
+    const n = this.nodes().find((x) => x.id === id);
+    if (n) { this.selNode.set(n); this.selEdge.set(null); return; }
+    const e = this.edges().find((x) => x.id === id);
+    if (e) { this.selEdge.set(e.id); this.selNode.set(null); }
+  }
 
   constructor() {
     const id = this.route.snapshot.paramMap.get('id')!;
@@ -292,6 +320,7 @@ export class BuilderComponent {
     this.nodes.set(cn);
     this.edges.set((proc.flows || []).map((f: any, i: number) => ({ id: f.id || `e${i}_${f.from}_${f.to}`, from: f.from, to: f.to, when: f.when, lang: f.lang })));
     this.saveState.set('saved');
+    this.runValidate();
   }
 
   private buildEngine() {
@@ -421,7 +450,7 @@ export class BuilderComponent {
   markDirty() {
     this.saveState.set('dirty');
     clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => this.save(), 800);
+    this.saveTimer = setTimeout(() => { this.save(); this.runValidate(); }, 800);
   }
   saveNow() { clearTimeout(this.saveTimer); this.save(); }
   private save() {
@@ -449,6 +478,7 @@ export class BuilderComponent {
     });
   }
   deploy() {
+    if (this.errorCount() > 0) { alert(`Fix ${this.errorCount()} validation error(s) before deploying.`); return; }
     this.saveNow();
     setTimeout(() => this.api.publish(this.versionId, 'ui').subscribe((p: any) => {
       this.api.deploy(p.published.id, { environment: 'prod', activate: true }).subscribe((d) => {

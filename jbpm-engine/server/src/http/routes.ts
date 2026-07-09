@@ -12,6 +12,7 @@ import { InstanceService } from '../modules/instances/service.js';
 import { TaskService } from '../modules/tasks/service.js';
 import { NODE_REGISTRY, CATEGORIES } from '../modules/catalog/registry.js';
 import { fromEngineProject } from '../sdk/index.js';
+import { ValidationService } from '../modules/validation/service.js';
 import { hub } from '../infra/ws-hub.js';
 
 const ctxOf = (req: Request): AppContext => (req as any).ctx;
@@ -23,6 +24,9 @@ export function buildRoutes(): Router {
 
   // --- catalog (palette / property schemas) ---
   r.get('/catalog/nodes', (_req, res) => res.json({ categories: CATEGORIES, nodes: NODE_REGISTRY }));
+
+  // --- validation (validate an in-progress engine process, no save) ---
+  r.post('/validate', (req, res) => res.json(new ValidationService().validate((req.body?.engine?.processes?.[0]) || req.body?.process || req.body)));
 
   // --- workflows ---
   r.get('/workflows', asyncHandler(async (req, res) => res.json({ items: await new WorkflowService(ctxOf(req)).list() })));

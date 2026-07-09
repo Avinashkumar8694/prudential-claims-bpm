@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import type { Branch, Catalog, Deployment, Instance, Task, Version, Workflow } from './models';
+import type { Branch, Catalog, Deployment, Instance, Task, ValidationResult, Version, Workflow } from './models';
 
 const base = '/api';
 type List<T> = { items: T[] };
@@ -26,7 +26,8 @@ export class ApiService {
   listVersions(branchId: string): Observable<Version[]> { return this.http.get<List<Version>>(`${base}/branches/${branchId}/versions`).pipe(map((r) => r.items)); }
   saveDraft(branchId: string, engine: any, message?: string): Observable<Version> { return this.http.post<Version>(`${base}/branches/${branchId}/versions`, { engine, message }); }
   publish(versionId: string, label?: string): Observable<any> { return this.http.post(`${base}/versions/${versionId}/publish`, { label }); }
-  validate(versionId: string): Observable<{ ok: boolean; errors: string[]; warnings: string[] }> { return this.http.post<any>(`${base}/versions/${versionId}/validate`, {}); }
+  validate(versionId: string): Observable<ValidationResult> { return this.http.post<ValidationResult>(`${base}/versions/${versionId}/validate`, {}); }
+  validateProcess(process: any): Observable<ValidationResult> { return this.http.post<ValidationResult>(`${base}/validate`, { process }); }
 
   // deployments
   deploy(versionId: string, body: { environment: string; tags?: string[]; env?: Record<string, string>; activate?: boolean }): Observable<Deployment> { return this.http.post<Deployment>(`${base}/versions/${versionId}/deploy`, body); }
