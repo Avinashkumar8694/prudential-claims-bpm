@@ -1,4 +1,9 @@
-# Guided Rule — model
+# Guided Rule — model (jBPM-side / escape hatch)
+
+> The `RuleModel` `.rdrl` XML the SDK **produces** from an engine guided rule
+> ([scenarios.md §0](scenarios.md)) — best-effort (well-formed; BC-load not verified) — and `parseAsset`
+> recovers. Author `guidedRules: [{ name, when, then }]` (same as a DRL ruleset rule); hand-build this
+> XML only for a rule you carry verbatim.
 
 `kind: "guidedRule"` uses the **generic XML tree** model (lossless, entity-safe, round-trip-stable):
 

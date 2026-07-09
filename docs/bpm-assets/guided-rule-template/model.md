@@ -1,4 +1,9 @@
-# Guided Rule Template — model
+# Guided Rule Template — model (jBPM-side / escape hatch)
+
+> The `TemplateModel` `.template` XML the SDK **produces** from an engine template
+> ([scenarios.md §0](scenarios.md)) — best-effort (well-formed; BC-load not verified) — and `parseAsset`
+> recovers. Author `guidedRuleTemplates: [{ name, when, then, rows }]`; hand-build this XML only for a
+> template you carry verbatim.
 
 `kind: "guidedRuleTemplate"` uses the **generic XML tree** model (lossless, entity-safe, round-trip-stable):
 

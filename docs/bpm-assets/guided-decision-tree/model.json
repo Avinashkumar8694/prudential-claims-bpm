@@ -1,5 +1,6 @@
 {
   "kind": "guidedDecisionTree",
+  "$note": "jBPM-side GuidedDecisionTree XML PRODUCED by decisionTreeToGdt from the engine tree in engine.json (best-effort; well-formed, BC-load not verified). You author engine.json, not this.",
   "model": {
     "xml": {
       "name": "GuidedDecisionTree",
@@ -9,7 +10,377 @@
           "name": "treeName",
           "attrs": {},
           "children": [],
-          "text": "Claim tree",
+          "text": "Claim triage",
+          "cdata": []
+        },
+        {
+          "name": "root",
+          "attrs": {
+            "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.TypeNodeImpl"
+          },
+          "children": [
+            {
+              "name": "className",
+              "attrs": {},
+              "children": [],
+              "text": "com.acme.model.Claim",
+              "cdata": []
+            },
+            {
+              "name": "children",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "node",
+                  "attrs": {
+                    "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ConstraintNodeImpl"
+                  },
+                  "children": [
+                    {
+                      "name": "className",
+                      "attrs": {},
+                      "children": [],
+                      "text": "com.acme.model.Claim",
+                      "cdata": []
+                    },
+                    {
+                      "name": "fieldName",
+                      "attrs": {},
+                      "children": [],
+                      "text": "amount",
+                      "cdata": []
+                    },
+                    {
+                      "name": "operator",
+                      "attrs": {},
+                      "children": [],
+                      "text": ">",
+                      "cdata": []
+                    },
+                    {
+                      "name": "value",
+                      "attrs": {
+                        "class": "java.lang.Double"
+                      },
+                      "children": [],
+                      "text": "100000",
+                      "cdata": []
+                    },
+                    {
+                      "name": "children",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "node",
+                          "attrs": {
+                            "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ActionUpdateNodeImpl"
+                          },
+                          "children": [
+                            {
+                              "name": "className",
+                              "attrs": {},
+                              "children": [],
+                              "text": "com.acme.model.Claim",
+                              "cdata": []
+                            },
+                            {
+                              "name": "fieldValues",
+                              "attrs": {},
+                              "children": [
+                                {
+                                  "name": "fieldValue",
+                                  "attrs": {
+                                    "class": "org.drools.workbench.models.guided.dtree.shared.model.values.impl.ActionFieldValueImpl"
+                                  },
+                                  "children": [
+                                    {
+                                      "name": "fieldName",
+                                      "attrs": {},
+                                      "children": [],
+                                      "text": "priority",
+                                      "cdata": []
+                                    },
+                                    {
+                                      "name": "value",
+                                      "attrs": {
+                                        "class": "java.lang.String"
+                                      },
+                                      "children": [],
+                                      "text": "HIGH",
+                                      "cdata": []
+                                    }
+                                  ],
+                                  "text": "",
+                                  "cdata": []
+                                }
+                              ],
+                              "text": "",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "node",
+                  "attrs": {
+                    "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ConstraintNodeImpl"
+                  },
+                  "children": [
+                    {
+                      "name": "className",
+                      "attrs": {},
+                      "children": [],
+                      "text": "com.acme.model.Claim",
+                      "cdata": []
+                    },
+                    {
+                      "name": "fieldName",
+                      "attrs": {},
+                      "children": [],
+                      "text": "amount",
+                      "cdata": []
+                    },
+                    {
+                      "name": "operator",
+                      "attrs": {},
+                      "children": [],
+                      "text": "<=",
+                      "cdata": []
+                    },
+                    {
+                      "name": "value",
+                      "attrs": {
+                        "class": "java.lang.Double"
+                      },
+                      "children": [],
+                      "text": "100000",
+                      "cdata": []
+                    },
+                    {
+                      "name": "children",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "node",
+                          "attrs": {
+                            "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ConstraintNodeImpl"
+                          },
+                          "children": [
+                            {
+                              "name": "className",
+                              "attrs": {},
+                              "children": [],
+                              "text": "com.acme.model.Claim",
+                              "cdata": []
+                            },
+                            {
+                              "name": "fieldName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "region",
+                              "cdata": []
+                            },
+                            {
+                              "name": "operator",
+                              "attrs": {},
+                              "children": [],
+                              "text": "==",
+                              "cdata": []
+                            },
+                            {
+                              "name": "value",
+                              "attrs": {
+                                "class": "java.lang.String"
+                              },
+                              "children": [],
+                              "text": "US",
+                              "cdata": []
+                            },
+                            {
+                              "name": "children",
+                              "attrs": {},
+                              "children": [
+                                {
+                                  "name": "node",
+                                  "attrs": {
+                                    "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ActionUpdateNodeImpl"
+                                  },
+                                  "children": [
+                                    {
+                                      "name": "className",
+                                      "attrs": {},
+                                      "children": [],
+                                      "text": "com.acme.model.Claim",
+                                      "cdata": []
+                                    },
+                                    {
+                                      "name": "fieldValues",
+                                      "attrs": {},
+                                      "children": [
+                                        {
+                                          "name": "fieldValue",
+                                          "attrs": {
+                                            "class": "org.drools.workbench.models.guided.dtree.shared.model.values.impl.ActionFieldValueImpl"
+                                          },
+                                          "children": [
+                                            {
+                                              "name": "fieldName",
+                                              "attrs": {},
+                                              "children": [],
+                                              "text": "priority",
+                                              "cdata": []
+                                            },
+                                            {
+                                              "name": "value",
+                                              "attrs": {
+                                                "class": "java.lang.String"
+                                              },
+                                              "children": [],
+                                              "text": "STANDARD",
+                                              "cdata": []
+                                            }
+                                          ],
+                                          "text": "",
+                                          "cdata": []
+                                        }
+                                      ],
+                                      "text": "",
+                                      "cdata": []
+                                    }
+                                  ],
+                                  "text": "",
+                                  "cdata": []
+                                }
+                              ],
+                              "text": "",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "node",
+                          "attrs": {
+                            "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ConstraintNodeImpl"
+                          },
+                          "children": [
+                            {
+                              "name": "className",
+                              "attrs": {},
+                              "children": [],
+                              "text": "com.acme.model.Claim",
+                              "cdata": []
+                            },
+                            {
+                              "name": "fieldName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "region",
+                              "cdata": []
+                            },
+                            {
+                              "name": "operator",
+                              "attrs": {},
+                              "children": [],
+                              "text": "==",
+                              "cdata": []
+                            },
+                            {
+                              "name": "value",
+                              "attrs": {
+                                "class": "java.lang.String"
+                              },
+                              "children": [],
+                              "text": "EU",
+                              "cdata": []
+                            },
+                            {
+                              "name": "children",
+                              "attrs": {},
+                              "children": [
+                                {
+                                  "name": "node",
+                                  "attrs": {
+                                    "class": "org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ActionUpdateNodeImpl"
+                                  },
+                                  "children": [
+                                    {
+                                      "name": "className",
+                                      "attrs": {},
+                                      "children": [],
+                                      "text": "com.acme.model.Claim",
+                                      "cdata": []
+                                    },
+                                    {
+                                      "name": "fieldValues",
+                                      "attrs": {},
+                                      "children": [
+                                        {
+                                          "name": "fieldValue",
+                                          "attrs": {
+                                            "class": "org.drools.workbench.models.guided.dtree.shared.model.values.impl.ActionFieldValueImpl"
+                                          },
+                                          "children": [
+                                            {
+                                              "name": "fieldName",
+                                              "attrs": {},
+                                              "children": [],
+                                              "text": "priority",
+                                              "cdata": []
+                                            },
+                                            {
+                                              "name": "value",
+                                              "attrs": {
+                                                "class": "java.lang.String"
+                                              },
+                                              "children": [],
+                                              "text": "REVIEW",
+                                              "cdata": []
+                                            }
+                                          ],
+                                          "text": "",
+                                          "cdata": []
+                                        }
+                                      ],
+                                      "text": "",
+                                      "cdata": []
+                                    }
+                                  ],
+                                  "text": "",
+                                  "cdata": []
+                                }
+                              ],
+                              "text": "",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
           "cdata": []
         }
       ],

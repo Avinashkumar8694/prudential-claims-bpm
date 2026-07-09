@@ -1,4 +1,9 @@
-# Guided Decision Tree — model
+# Guided Decision Tree — model (jBPM-side / escape hatch)
+
+> The `GuidedDecisionTree` XML the SDK **produces** from an engine tree
+> ([scenarios.md §0](scenarios.md)) — best-effort (well-formed; BC-load not verified) — and `parseAsset`
+> recovers. Author the engine tree (`fact` + recursive `root`); hand-build this XML only for a tree you
+> carry verbatim.
 
 `kind: "guidedDecisionTree"` uses the **generic XML tree** model (lossless, entity-safe, round-trip-stable):
 

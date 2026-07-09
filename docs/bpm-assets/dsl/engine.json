@@ -1,22 +1,8 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/rules/claims.dsl": {
-      "kind": "dsl",
-      "model": {
-        "entries": [
-          {
-            "scope": "when",
-            "nl": "There is a claim over {amount}",
-            "mapping": "$c : Claim( amount > {amount} )"
-          },
-          {
-            "scope": "then",
-            "nl": "Set claim status to {status}",
-            "mapping": "modify( $c ) { setStatus( \"{status}\" ) };"
-          }
-        ]
-      }
-    }
-  },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+  "dsl": [
+    { "scope": "when", "nl": "a high value claim", "mapping": "Claim( amount > 100000 )" },
+    { "scope": "then", "nl": "flag it as {level}", "mapping": "flag($c, \"{level}\");" }
+  ],
+
+  "$note": "The WHOLE thing you write — natural-language phrase -> DRL mappings on the EngineProject. `scope` = when|then|*|keyword; `nl` = the phrase ({name} captures a value); `mapping` = the DRL it expands to ({name} substituted). fromEngineProject emits src/main/resources/dsl/definitions.dsl. It's authoring sugar for GUIDED rules — for engine-authored rules, write DRL directly via a ruleset (../drl). See scenarios.md §0; model.json shows the jBPM-side .dsl this produces."
 }

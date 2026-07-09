@@ -203,6 +203,8 @@ export interface ProjectDescriptor {
   workDefinitions?: WorkItemDefinition[];
   /** verbatim asset files (relative path -> content): pom.xml, kmodule.xml, .wid, .drl, .dmn, .java, .frm, … */
   files?: Record<string, string>;
+  /** binary files (relative path -> base64) — images, spreadsheets, etc. — carried byte-for-byte */
+  binaryFiles?: Record<string, string>;
 }
 
 export interface Project {

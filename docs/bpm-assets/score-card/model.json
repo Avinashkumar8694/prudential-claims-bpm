@@ -1,8 +1,9 @@
 {
   "kind": "scoreCard",
+  "$note": "jBPM-side ScoreCardModel .scgd XML PRODUCED by scorecardToScgd from the engine scorecard in engine.json (best-effort; well-formed, BC-load not verified). You author engine.json, not this.",
   "model": {
     "xml": {
-      "name": "scoreCard",
+      "name": "ScoreCardModel",
       "attrs": {},
       "children": [
         {
@@ -13,10 +14,301 @@
           "cdata": []
         },
         {
+          "name": "factName",
+          "attrs": {},
+          "children": [],
+          "text": "com.acme.model.Claim",
+          "cdata": []
+        },
+        {
           "name": "fieldName",
           "attrs": {},
           "children": [],
           "text": "riskScore",
+          "cdata": []
+        },
+        {
+          "name": "initialScore",
+          "attrs": {},
+          "children": [],
+          "text": "100",
+          "cdata": []
+        },
+        {
+          "name": "useReasonCodes",
+          "attrs": {},
+          "children": [],
+          "text": "false",
+          "cdata": []
+        },
+        {
+          "name": "characteristics",
+          "attrs": {},
+          "children": [
+            {
+              "name": "Characteristic",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "name",
+                  "attrs": {},
+                  "children": [],
+                  "text": "amount",
+                  "cdata": []
+                },
+                {
+                  "name": "factName",
+                  "attrs": {},
+                  "children": [],
+                  "text": "com.acme.model.Claim",
+                  "cdata": []
+                },
+                {
+                  "name": "field",
+                  "attrs": {},
+                  "children": [],
+                  "text": "amount",
+                  "cdata": []
+                },
+                {
+                  "name": "dataType",
+                  "attrs": {},
+                  "children": [],
+                  "text": "Double",
+                  "cdata": []
+                },
+                {
+                  "name": "attributes",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "Attribute",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": "<",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [],
+                          "text": "1000",
+                          "cdata": []
+                        },
+                        {
+                          "name": "partialScore",
+                          "attrs": {},
+                          "children": [],
+                          "text": "0",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "Attribute",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": "in",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [],
+                          "text": "1000..100000",
+                          "cdata": []
+                        },
+                        {
+                          "name": "partialScore",
+                          "attrs": {},
+                          "children": [],
+                          "text": "10",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "Attribute",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": ">=",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [],
+                          "text": "100000",
+                          "cdata": []
+                        },
+                        {
+                          "name": "partialScore",
+                          "attrs": {},
+                          "children": [],
+                          "text": "30",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            },
+            {
+              "name": "Characteristic",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "name",
+                  "attrs": {},
+                  "children": [],
+                  "text": "region",
+                  "cdata": []
+                },
+                {
+                  "name": "factName",
+                  "attrs": {},
+                  "children": [],
+                  "text": "com.acme.model.Claim",
+                  "cdata": []
+                },
+                {
+                  "name": "field",
+                  "attrs": {},
+                  "children": [],
+                  "text": "region",
+                  "cdata": []
+                },
+                {
+                  "name": "dataType",
+                  "attrs": {},
+                  "children": [],
+                  "text": "String",
+                  "cdata": []
+                },
+                {
+                  "name": "attributes",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "Attribute",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": "=",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [],
+                          "text": "US",
+                          "cdata": []
+                        },
+                        {
+                          "name": "partialScore",
+                          "attrs": {},
+                          "children": [],
+                          "text": "5",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "Attribute",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": "=",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [],
+                          "text": "BLOCKED",
+                          "cdata": []
+                        },
+                        {
+                          "name": "partialScore",
+                          "attrs": {},
+                          "children": [],
+                          "text": "50",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "Attribute",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "operator",
+                          "attrs": {},
+                          "children": [],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "partialScore",
+                          "attrs": {},
+                          "children": [],
+                          "text": "20",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
           "cdata": []
         }
       ],

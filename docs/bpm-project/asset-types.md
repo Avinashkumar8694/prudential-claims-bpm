@@ -31,7 +31,6 @@ Legend — **SDK**: `modeled` (first-class JSON model) · `verbatim` (carried in
 | Guided Score Card | Decision | `.scgd` | scorecard model | verbatim |
 | Package | Others | (namespace) | groups assets | n/a — set `packageName` on the process |
 | Score Card (Spreadsheet) | Decision | `.sxls` / `.xls` | scorecard as spreadsheet | **binary** |
-| Solver configuration | Optimization | `*.solver.xml` | OptaPlanner solver config | verbatim |
 | Test Scenario | Decision | `.scesim` | rule/decision test scenarios | verbatim |
 | Test Scenario (Legacy) | Decision | `.scenario` | legacy test scenarios | verbatim |
 | Work Item definition | Others | `.wid` | work-item palette definitions | **modeled** (`descriptor.workDefinitions`) + verbatim |
@@ -89,8 +88,6 @@ Realistic samples of all of these (same `Claim` domain) are in
   run by the Test Scenario runner at build/CI.
 - **Form (`.frm`/`.form`)** — the UI for a **user task** (or process start). Sample binds fields to
   the `Claim` model; referenced by the task's form key.
-- **Solver configuration (`*.solver.xml`)** — an OptaPlanner solver (solution/entity classes, score
-  DRL, termination) for optimization problems.
 - **Work Item definition (`.wid`)** — the modeler palette entry + parameter contract for a **service
   task**. Modeled by the SDK (`descriptor.workDefinitions`) — see `work-definitions-wid.md`.
 - **Global Variable(s)** — globals shared with rules; declared in `kmodule.xml`/rules, not a file.

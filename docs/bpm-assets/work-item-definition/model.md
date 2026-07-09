@@ -1,4 +1,7 @@
-# Work Item Definition — model
+# Work Item Definition — model (jBPM-side)
+
+> The `.wid` model the SDK **produces** from engine `workItems` ([scenarios.md §0](scenarios.md)).
+> Author `workItems: [{ name, parameters, results }]` — this is the generated MVEL form.
 
 ```jsonc
 { "kind": "workItemDefinition", "model": { "definitions": [

@@ -1,25 +1,33 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/rules/tree.gdt": {
-      "kind": "guidedDecisionTree",
-      "model": {
-        "xml": {
-          "name": "GuidedDecisionTree",
-          "attrs": {},
-          "children": [
-            {
-              "name": "treeName",
-              "attrs": {},
-              "children": [],
-              "text": "Claim tree",
-              "cdata": []
-            }
-          ],
-          "text": "",
-          "cdata": []
-        }
+  "types": [
+    {
+      "name": "Claim",
+      "fields": [
+        { "name": "amount", "type": "double" },
+        { "name": "region", "type": "string" },
+        { "name": "priority", "type": "string" }
+      ]
+    }
+  ],
+  "decisionTrees": [
+    {
+      "name": "Claim triage",
+      "fact": "Claim",
+      "root": {
+        "field": "amount",
+        "branches": [
+          { "op": "gt", "value": 100000, "then": [ { "set": "priority", "value": "HIGH" } ] },
+          { "op": "lte", "value": 100000, "then": {
+            "field": "region",
+            "branches": [
+              { "op": "eq", "value": "US", "then": [ { "set": "priority", "value": "STANDARD" } ] },
+              { "op": "eq", "value": "EU", "then": [ { "set": "priority", "value": "REVIEW" } ] }
+            ]
+          } }
+        ]
       }
     }
-  },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+  ],
+
+  "$note": "The WHOLE thing you write — a recursive decision tree over one `fact`. A NODE tests a `field`; each `branches` entry {op,value,then} is a path (first match wins); `then` is either action leaves [{set,value}] or a nested node. Column/value types are derived from the declared `fact`. fromEngineProject generates the Business Central .gdt XML (best-effort — well-formed, BC-load not verified). The runtime evaluator (functions/decision-tree.mjs) executes this tree directly. Since a tree compiles to DRL, the executable path is also a DRL ruleset (../drl). See scenarios.md §0."
 }

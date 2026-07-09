@@ -11,10 +11,12 @@ Author processes/rules in your own JavaScript BPM engine, then export a jBPM-dep
 | [`rules-runtime/`](rules-runtime/) | A reference **rule engine** that executes the engine ruleset on data (08–09) |
 | [`decisions/`](decisions/) | Engine **decision tables** → DMN + a reference DMN evaluator (10–11) |
 | [`data-objects/`](data-objects/) | Engine **types** → Java POJOs + a runtime schema helper (12) |
-| [`guided/`](guided/) | Engine **tabular ruleset** → Business Central guided decision table + evaluator (13) |
+| [`guided/`](guided/) | Engine **guided decision table** (13), **decision tree** (17), **guided rule** (18), **rule template** (19), **score card** (20) → Business Central editor XML + evaluators |
 | [`forms/`](forms/) | Engine **form** (bound fields, derived widgets) → jBPM `.frm` + render/validate helper (14) |
 | [`enumerations/`](enumerations/) | Engine **enums** (allowed field values) → `.enumeration` + options/validate helper (15) |
-| [`functions/`](functions/) | Reusable helper modules imported by the examples — `rule-engine`, `dmn-engine`, `data-object`, `guided-table`, `form`, `enumeration`, `io`, `report` |
+| [`project-assets/`](project-assets/) | Build-time config — **work-item definitions**, **DSL**, **i18n messages** (16) |
+| [`tests/`](tests/) | Engine **test scenarios** → `.scesim` + a case runner that executes in Node (21) |
+| [`functions/`](functions/) | Reusable helpers — `rule-engine`, `dmn-engine`, `data-object`, `guided-table`, `decision-tree`, `rule-template`, `form`, `enumeration`, `properties`, `io`, `report` |
 
 ```bash
 npm run build                                                      # compile the SDK once
@@ -83,6 +85,19 @@ Each project example writes a complete kjar under its own `out/` (git-ignored); 
   ruleset (fact + condition columns + action columns + rows), convert via `fromEngineProject` (→
   `decision-table52` XML, which compiles to DRL in BC), and evaluate it on data with the reference
   evaluator (`evaluateGuidedTable`). See `../../docs/bpm-assets/guided-decision-table/scenarios.md` §0.
+- **17-decision-tree** — author a guided **decision tree** (recursive `{ field, branches:[{op,value,then}] }`
+  over one fact), generate the `.gdt` (best-effort XML), and evaluate it on data with
+  `evaluateDecisionTree` (first matching branch per node → leaf or recurse). See
+  `../../docs/bpm-assets/guided-decision-tree/scenarios.md` §0.
+- **18-guided-rule** — author a **guided rule** (one rule, same `when`/`then` as a DRL ruleset rule),
+  generate the `.rdrl` (best-effort XML), and execute it with the **same rule engine** (`run`, wrapped
+  as a one-rule ruleset). See `../../docs/bpm-assets/guided-rule/scenarios.md` §0.
+- **19-guided-rule-template** — author a **rule template** (skeleton with `{params}` + a data grid),
+  generate the `.template` (best-effort XML), and execute it by **expanding** each row into a rule
+  (`expandTemplate`) and running the rule engine. See `../../docs/bpm-assets/guided-rule-template/scenarios.md` §0.
+- **20-scorecard** — author a **score card** (baseline + per-field bins), generate the `.scgd`
+  (best-effort XML), and compute scores with `evaluateScorecard` (baseline + first matching bin per
+  characteristic). See `../../docs/bpm-assets/score-card/scenarios.md` §0.
 
 ## forms/
 - **14-form-to-frm** — author a user-task **form** in the engine model (a `type` + which fields to
@@ -96,6 +111,17 @@ Each project example writes a complete kjar under its own `out/` (git-ignored); 
   `labeledOptionsFor` (dropdown options, `"KEY=Label"` supported) + `isAllowed` (validate). Shows the
   **pairing with forms** — a dropdown field's options come from the matching enumeration. See
   `../../docs/bpm-assets/enumeration/scenarios.md` §0.
+
+## project-assets/
+- **16-project-assets** — the build-time "supporting" assets declared on an `EngineProject`: **work-item
+  definitions** (custom service-task types → `WorkDefinitions.wid`), **DSL** (natural-language → DRL
+  mappings → `.dsl`), and **i18n messages** (labels keyed by locale → `messages[_<locale>].properties`,
+  with a runtime `resolve`). See `../../docs/bpm-assets/{work-item-definition,dsl,properties}/`.
+
+## tests/
+- **21-test-scenario** — author test cases (`{ given, expect }`) for a decision, **run them in Node**
+  against the reference evaluator (real pass/fail — your test harness), and generate the jBPM `.scesim`
+  (`mvn test` runs it too). See `../../docs/bpm-assets/test-scenario/scenarios.md` §0.
 
 ## Verified
 Every example is covered by the test suite (`npm test`): projects re-parse/validate/round-trip and

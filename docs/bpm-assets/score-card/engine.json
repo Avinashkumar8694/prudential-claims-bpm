@@ -1,32 +1,34 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/scoring/risk.scgd": {
-      "kind": "scoreCard",
-      "model": {
-        "xml": {
-          "name": "scoreCard",
-          "attrs": {},
-          "children": [
-            {
-              "name": "name",
-              "attrs": {},
-              "children": [],
-              "text": "Claim risk",
-              "cdata": []
-            },
-            {
-              "name": "fieldName",
-              "attrs": {},
-              "children": [],
-              "text": "riskScore",
-              "cdata": []
-            }
-          ],
-          "text": "",
-          "cdata": []
-        }
-      }
+  "types": [
+    {
+      "name": "Claim",
+      "fields": [
+        { "name": "amount", "type": "double" },
+        { "name": "region", "type": "string" },
+        { "name": "riskScore", "type": "int" }
+      ]
     }
-  },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+  ],
+  "scorecards": [
+    {
+      "name": "Claim risk",
+      "fact": "Claim",
+      "score": "riskScore",
+      "baseline": 100,
+      "characteristics": [
+        { "field": "amount", "bands": [
+          { "when": { "lt": 1000 }, "points": 0 },
+          { "when": { "between": [1000, 100000] }, "points": 10 },
+          { "when": { "gte": 100000 }, "points": 30 }
+        ] },
+        { "field": "region", "bands": [
+          { "when": "US", "points": 5 },
+          { "when": "BLOCKED", "points": 50 },
+          { "points": 20 }
+        ] }
+      ]
+    }
+  ],
+
+  "$note": "The WHOLE thing you write — an additive scoring model over one `fact`. `baseline` is the starting score; each characteristic (a `field`) adds the `points` of its first matching `band`. A band is { when?, points }; `when` uses the SAME condition grammar as everywhere else — a bare literal (eq), or {eq|ne|gt|gte|lt|lte: value}, or {between:[a,b]}; omit `when` for a catch-all (put it last). The total is written to the `score` field. fromEngineProject generates the Business Central .scgd (ScoreCardModel XML — best-effort: well-formed, BC-load not verified). Runtime: evaluateScorecard sums baseline + matched bands and sets the score field (functions/scorecard.mjs). Since it's additive scoring, a DRL ruleset (a rule per band) is the guaranteed-executable path. Field types derived from the declared fact. See scenarios.md §0."
 }

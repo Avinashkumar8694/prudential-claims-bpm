@@ -1,4 +1,9 @@
-# Guided Score Card — model
+# Guided Score Card — model (jBPM-side / escape hatch)
+
+> The `ScoreCardModel` `.scgd` XML the SDK **produces** from an engine scorecard
+> ([scenarios.md §0](scenarios.md)) — best-effort (well-formed; BC-load not verified) — and `parseAsset`
+> recovers. Author `scorecards: [{ fact, score, baseline?, characteristics }]`; hand-build this XML only
+> for a scorecard you carry verbatim.
 
 `kind: "scoreCard"` uses the **generic XML tree** model (lossless, entity-safe, round-trip-stable):
 

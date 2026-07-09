@@ -1,5 +1,11 @@
 # Guided Rule Template — usage guide
 
+**Author** `guidedRuleTemplates: [{ name, when, then, rows }]` on your `EngineProject`
+([scenarios.md §0](scenarios.md)) — a rule skeleton with `{param}` values + rows; `fromEngineProject`
+generates the `.template`. Execute it by expanding (`examples/functions/rule-template.mjs`
+`expandTemplate` → the rule engine). The `.template` XML is best-effort; a DMN/guided decision table
+(`../dmn`, `../guided-decision-table`) or DRL ruleset (`../drl`) is the guaranteed-executable path.
+
 ## 1. Details
 Extension `.template`, SDK asset `kind: "guidedRuleTemplate"`. A guided rule with placeholders (`@{param}`) + a data table; generates many rules.
 

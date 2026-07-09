@@ -3,10 +3,10 @@
 // to the SDK's jBPM ProcessModel, then serializeProcess/writeProject produce a kjar. Type *names*
 // are resolved to Java FQNs (structureRef / form className / rule facts) and .java POJOs are
 // generated from declared type schemas — so the engine never needs real Java classes.
-import type { ProcessModel, Node, Flow, Project, ProjectDescriptor, WorkItemHandler, EnvironmentEntry, Gav } from './types.js';
+import type { ProcessModel, Node, Flow, Project, ProjectDescriptor, WorkItemHandler, EnvironmentEntry, Gav, WorkItemDefinition } from './types.js';
 import { autowire } from './wire.js';
 import { buildAsset, parseAsset, assetKind } from './assets.js';
-import type { DrlModel, DrlRule, RuleConstraint, RulePattern, LhsElement, RuleAction, RuleAttributes, ConstraintOp } from './assets.js';
+import type { DrlModel, DrlRule, RuleConstraint, RulePattern, LhsElement, RuleAction, RuleAttributes, ConstraintOp, DslEntry } from './assets.js';
 import type { ElementNode } from './xml.js';
 
 export type Lang = 'js' | 'java' | 'mvel';
@@ -118,6 +118,45 @@ export interface EngineGuidedTable {
   conditions: GdstCondition[]; actions: GdstAction[]; rows: GdstRow[];
 }
 
+// ---- Engine-native guided rule (Business Central .rdrl; ONE rule authored like a DRL ruleset rule) ----
+// `when`/`then` are the exact DRL-ruleset shapes (EngineWhen/EngineThen), executed by the same rule engine.
+export interface EngineGuidedRule {
+  name: string; package?: string; path?: string; priority?: number; noLoop?: boolean;
+  when: EngineWhen[]; then: EngineThen[];
+}
+
+// ---- Engine-native guided rule template (Business Central .template; a rule skeleton + a data grid) ----
+// `when`/`then` values may be "{param}" placeholders; each `rows` entry fills them -> one rule per row.
+export interface EngineGuidedRuleTemplate {
+  name: string; package?: string; path?: string; priority?: number; noLoop?: boolean;
+  when: EngineWhen[]; then: EngineThen[]; rows: Record<string, string | number | boolean>[];
+}
+
+// ---- Engine-native score card (Business Central .scgd; additive scoring; compiles to DRL) ----
+// baseline + Σ (first matching band's points, per characteristic) -> the `score` field.
+// A band's `when` is the same condition grammar as DRL `where`: bare literal (eq), {op:value}, {between}.
+export type ScoreMatch = string | number | boolean | { between: [number, number] } | Partial<Record<GdstOp, string | number | boolean>>;
+export interface ScoreBand { when?: ScoreMatch; points: number; }   // no `when` = catch-all
+export interface ScoreCharacteristic { field: string; bands: ScoreBand[]; }
+export interface EngineScorecard {
+  name: string; package?: string; path?: string;
+  fact: string; score: string; baseline?: number; characteristics: ScoreCharacteristic[];
+}
+
+// ---- Engine-native test scenario (Business Central .scesim; JUnit-for-rules/decisions) ----
+// Each case pins `given` inputs and asserts `expect` outputs for the `target` decision/ruleset. The
+// cases run directly in Node (against the reference evaluators) AND generate the jBPM .scesim.
+export interface TestCase { name?: string; given: Record<string, string | number | boolean>; expect: Record<string, string | number | boolean>; }
+export interface EngineTestSuite { name: string; path?: string; target: string; cases: TestCase[]; }
+
+// ---- Engine-native guided decision tree (Business Central .gdt; compiles to DRL) ----
+// A recursive tree over ONE fact: each node tests a `field`; each branch (op + value) leads to either
+// action leaves (set fields) or a nested node. First matching branch per node wins.
+export interface GdtAction { set: string; value: string | number | boolean; }
+export interface GdtBranch { op: GdstOp; value: string | number | boolean; then: GdtNode | GdtAction[]; }
+export interface GdtNode { field: string; branches: GdtBranch[]; }
+export interface EngineDecisionTree { name: string; package?: string; path?: string; fact: string; root: GdtNode; }
+
 // ---- Engine-native form (user-task UI; the SDK synthesizes the Business Central .frm) ----
 // A form edits a data object: `type` names it, `fields` bind to its fields, and the widget is derived
 // from each field's type (override per field with `widget`).
@@ -134,8 +173,16 @@ export interface EngineProject {
   rulesets?: EngineRuleset[];   // simple engine rules -> generated .drl (SDK fills package/imports/DRL syntax)
   decisions?: EngineDecisionModel[];  // simple decision tables -> generated .dmn (SDK fills FEEL + DMN XML)
   guidedTables?: EngineGuidedTable[]; // tabular rulesets -> generated .gdst (Business Central editor XML)
+  guidedRules?: EngineGuidedRule[];   // single rules -> generated .rdrl (Business Central editor XML)
+  guidedRuleTemplates?: EngineGuidedRuleTemplate[]; // rule templates + rows -> generated .template
+  scorecards?: EngineScorecard[];     // additive scoring models -> generated .scgd
+  tests?: EngineTestSuite[];          // given/expect cases -> generated .scesim (and runnable in Node)
+  decisionTrees?: EngineDecisionTree[]; // decision trees -> generated .gdt (Business Central editor XML)
   forms?: EngineForm[];         // user-task forms -> generated .frm (widget derived from field types)
   enumerations?: EngineEnum[];  // allowed values per field -> generated .enumeration (dropdown options)
+  workItems?: WorkItemDefinition[];             // custom service-task types -> global/WorkDefinitions.wid
+  dsl?: DslEntry[];             // domain language mappings -> generated .dsl (rule readability)
+  messages?: Record<string, Record<string, string>>;   // i18n: locale -> key/value -> messages[_<locale>].properties
   processes: EngineProcess[];
 }
 
@@ -152,7 +199,25 @@ const HANDLER_ID: Record<string, string> = {
   Rest: 'new org.jbpm.process.workitem.rest.RESTWorkItemHandler(classLoader)',
   WebService: 'new org.jbpm.process.workitem.webservice.WebServiceWorkItemHandler(ksession)',
   Email: 'new org.jbpm.process.workitem.email.EmailWorkItemHandler()',
+  Log: 'new org.jbpm.process.instance.impl.demo.SystemOutWorkItemHandler()',
 };
+// jBPM's standard built-in work items — the SDK includes these definitions + registers their handlers
+// automatically, so you never author them (declare only CUSTOM work items via EngineProject.workItems).
+export const DEFAULT_WORK_ITEMS: WorkItemDefinition[] = [
+  { name: 'Rest', displayName: 'REST', category: 'Communication', icon: 'defaultresticon.png',
+    defaultHandler: 'mvel: new org.jbpm.process.workitem.rest.RESTWorkItemHandler(classLoader)',
+    parameters: { Url: 'String', Method: 'String', ContentType: 'String', ContentData: 'String', ConnectTimeout: 'String', ReadTimeout: 'String', Username: 'String', Password: 'String' },
+    results: { Result: 'Object', Status: 'Integer' } },
+  { name: 'Email', displayName: 'Email', category: 'Communication', icon: 'defaultemailicon.png',
+    defaultHandler: 'mvel: new org.jbpm.process.workitem.email.EmailWorkItemHandler()',
+    parameters: { From: 'String', To: 'String', Subject: 'String', Body: 'String', Cc: 'String', Bcc: 'String' }, results: {} },
+  { name: 'WebService', displayName: 'WS', category: 'Communication', icon: 'defaultservicenodeicon.png',
+    defaultHandler: 'mvel: new org.jbpm.process.workitem.webservice.WebServiceWorkItemHandler(ksession)',
+    parameters: { Endpoint: 'String', Namespace: 'String', Interface: 'String', Operation: 'String', Parameter: 'Object', Mode: 'String' }, results: { Result: 'Object' } },
+  { name: 'Log', displayName: 'Log', category: 'Log', icon: 'defaultlogicon.png',
+    defaultHandler: 'mvel: new org.jbpm.process.instance.impl.demo.SystemOutWorkItemHandler()',
+    parameters: { Message: 'String' }, results: {} },
+];
 const fqn = (t: EngineType) => (t.package ? t.package + '.' : '') + t.name;
 
 /** name -> Java FQN. Primitives map to boxed jBPM structureRefs; declared type names -> FQN. */
@@ -479,6 +544,158 @@ export function decisionTableToGdst(m: EngineGuidedTable, pkg = 'org.jbpm.rules'
   ]) };
 }
 
+// guided decision tree node class FQNs (XStream) — emitted as `class="…"` attrs for a stable parse
+const GDT_TYPE = 'org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.TypeNodeImpl';
+const GDT_CONSTRAINT = 'org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ConstraintNodeImpl';
+const GDT_ACTION = 'org.drools.workbench.models.guided.dtree.shared.model.nodes.impl.ActionUpdateNodeImpl';
+const GDT_FIELDVAL = 'org.drools.workbench.models.guided.dtree.shared.model.values.impl.ActionFieldValueImpl';
+const GDT_JAVA: Record<string, string> = { string: 'java.lang.String', number: 'java.lang.Double', double: 'java.lang.Double', float: 'java.lang.Double', int: 'java.lang.Integer', integer: 'java.lang.Integer', long: 'java.lang.Long', bool: 'java.lang.Boolean', boolean: 'java.lang.Boolean' };
+const gdtJava = (t?: string) => GDT_JAVA[(t || 'string').toLowerCase()] || 'java.lang.String';
+
+/**
+ * Engine decision tree -> a Business Central guided decision tree (`GuidedDecisionTree` XML). Each node
+ * tests a field; each branch (op+value) becomes a constraint node whose children are either an action
+ * (set-field) leaf or nested constraints. Best-effort XML (well-formed; BC-load not verified). It
+ * compiles to DRL in Business Central. buildAsset({kind:'guidedDecisionTree', model}) serialises it.
+ */
+export function decisionTreeToGdt(tree: EngineDecisionTree, fieldTypes: Record<string, string> = {}, resolve: (t: string) => string = (t) => t): { xml: ElementNode } {
+  const fqn = resolve(tree.fact);
+  const actionNode = (actions: GdtAction[]): ElementNode => el('node', { class: GDT_ACTION }, [
+    el('className', {}, [], fqn),
+    el('fieldValues', {}, actions.map((a) => el('fieldValue', { class: GDT_FIELDVAL }, [
+      el('fieldName', {}, [], a.set), el('value', { class: gdtJava(fieldTypes[a.set]) }, [], String(a.value)),
+    ]))),
+  ]);
+  const compileNode = (node: GdtNode): ElementNode[] => node.branches.map((b) => el('node', { class: GDT_CONSTRAINT }, [
+    el('className', {}, [], fqn),
+    el('fieldName', {}, [], node.field),
+    el('operator', {}, [], GDST_OP[b.op] || '=='),
+    el('value', { class: gdtJava(fieldTypes[node.field]) }, [], String(b.value)),
+    el('children', {}, Array.isArray(b.then) ? [actionNode(b.then)] : compileNode(b.then)),
+  ]));
+  return { xml: el('GuidedDecisionTree', {}, [
+    el('treeName', {}, [], tree.name),
+    el('root', { class: GDT_TYPE }, [el('className', {}, [], fqn), el('children', {}, compileNode(tree.root))]),
+  ]) };
+}
+
+/**
+ * Engine guided rule -> a Business Central guided rule (`RuleModel` `.rdrl` XML): fact patterns with
+ * field constraints (LHS) + set/insert/delete actions (RHS), from the same `when`/`then` a DRL ruleset
+ * rule uses. Best-effort XML (well-formed; BC-load not verified) — it compiles to DRL in BC, and the
+ * same rule engine executes it. buildAsset({kind:'guidedRule', model}) serialises it.
+ */
+export function ruleToRdrl(rule: EngineGuidedRule, fieldTypes: Record<string, string> = {}): { xml: ElementNode } {
+  const RM = 'org.drools.workbench.models.datamodel.rule.';
+  const jType = (f: string) => GDST_JAVA[(fieldTypes[f] || 'string').toLowerCase()] || 'String';
+  const attrs: ElementNode[] = [];
+  if (rule.priority != null) attrs.push(el('attribute', {}, [el('name', {}, [], 'salience'), el('value', {}, [], String(rule.priority))]));
+  if (rule.noLoop) attrs.push(el('attribute', {}, [el('name', {}, [], 'no-loop'), el('value', {}, [], 'true')]));
+
+  const fieldConstraint = (c: { field: string; op?: string; value?: unknown; var?: string }): ElementNode => el('fieldConstraint', { class: RM + 'SingleFieldConstraint' }, [
+    el('fieldName', {}, [], c.field), el('fieldType', {}, [], jType(c.field)), el('operator', {}, [], c.op || '=='),
+    ...('var' in c ? [el('value', {}, [], '$' + String(c.var).replace(/^\$/, '')), el('constraintValueType', {}, [], '5')]
+      : [el('value', {}, [], String(c.value)), el('constraintValueType', {}, [], '1')]),
+  ]);
+  const factPattern = (w: EngineWhen): ElementNode => {
+    const cons = Object.entries(w.where || {}).flatMap(([f, spec]) => whereConstraints(f, spec))
+      .filter((c) => 'op' in c) as Array<{ field: string; op: string; value?: unknown; var?: string }>;
+    return el('fact', { class: RM + 'FactPattern' }, [
+      el('factType', {}, [], w.fact),
+      ...(w.as ? [el('boundName', {}, [], w.as)] : []),
+      el('constraintList', {}, [el('constraints', {}, cons.map(fieldConstraint))]),
+    ]);
+  };
+  const lhs = (rule.when || []).map((w) => (w.not || w.exists === false)
+    ? el('fact', { class: RM + 'CompositeFactPattern', type: 'not' }, [factPattern(w)])   // best-effort negation
+    : factPattern(w));
+
+  const fieldValues = (obj: Record<string, string | number | boolean>) => Object.entries(obj).map(([f, v]) =>
+    el('fieldValue', { class: RM + 'ActionFieldValue' }, [el('field', {}, [], f), el('value', {}, [], String(v)), el('type', {}, [], jType(f))]));
+  const rhs = (rule.then || []).map((a): ElementNode => {
+    if ('set' in a) return el('action', { class: RM + 'ActionSetField' }, [el('variable', {}, [], a.set), el('fieldValues', {}, fieldValues(a.fields))]);
+    if ('insert' in a) return el('action', { class: RM + 'ActionInsertFact' }, [el('factType', {}, [], a.insert), ...(a.fields ? [el('fieldValues', {}, fieldValues(a.fields))] : [])]);
+    if ('delete' in a) return el('action', { class: RM + 'ActionRetractFact' }, [el('variableName', {}, [], a.delete)]);
+    return el('action', { class: RM + 'FreeFormLine' }, [el('text', {}, [], 'call' in a ? `${a.call}(${(a.args || []).map((x) => JSON.stringify(x)).join(', ')});` : '')]);
+  });
+
+  return { xml: el('rule', {}, [
+    el('name', {}, [], rule.name), el('modelVersion', {}, [], '1.0'),
+    el('attributes', {}, attrs), el('lhs', {}, lhs), el('rhs', {}, rhs),
+  ]) };
+}
+
+/**
+ * Engine guided rule template -> a Business Central guided rule template (`TemplateModel` `.template`
+ * XML): the rule skeleton (reusing ruleToRdrl — `{param}` values pass through as markers) + the
+ * parameter columns + the data rows. Best-effort XML (well-formed; BC-load not verified). It expands to
+ * N DRL rules in BC; the runtime `expandTemplate` does the same for a Node engine.
+ */
+export function templateToTemplateXml(tmpl: EngineGuidedRuleTemplate, fieldTypes: Record<string, string> = {}): { xml: ElementNode } {
+  const skeleton = ruleToRdrl({ name: tmpl.name, priority: tmpl.priority, noLoop: tmpl.noLoop, when: tmpl.when, then: tmpl.then }, fieldTypes).xml;
+  const params = [...new Set(tmpl.rows.flatMap((r) => Object.keys(r)))];
+  const tableColumns = el('tableColumns', {}, params.map((p) => el('tableColumn', {}, [], p)));
+  const rows = el('rows', {}, tmpl.rows.map((r) => el('row', {}, params.map((p) => el('cell', {}, [], r[p] == null ? '' : String(r[p]))))));
+  return { xml: el('templateModel', {}, [...skeleton.children, tableColumns, rows]) };
+}
+
+/**
+ * Engine scorecard -> a Business Central guided score card (`ScoreCardModel` `.scgd` XML): the score
+ * field + initial score + a Characteristic per field, each with Attribute bins (operator/value ->
+ * partialScore). Best-effort XML (well-formed; BC-load not verified). It compiles to DRL in BC; the
+ * runtime `evaluateScorecard` computes the same total. buildAsset({kind:'scoreCard', model}) serialises.
+ */
+const SCGD_OP: Record<GdstOp, string> = { eq: '=', ne: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=' };
+export function scorecardToScgd(sc: EngineScorecard, fieldTypes: Record<string, string> = {}, resolve: (t: string) => string = (t) => t): { xml: ElementNode } {
+  const fqn = resolve(sc.fact);
+  const bandAttr = (band: ScoreBand): ElementNode => {
+    let operator = ''; let value = '';
+    const w = band.when;
+    if (w === undefined) { /* catch-all: empty operator */ }
+    else if (typeof w !== 'object') { operator = '='; value = String(w); }               // bare literal (eq)
+    else if ('between' in w) { operator = 'in'; value = `${w.between[0]}..${w.between[1]}`; }
+    else { const [op, val] = Object.entries(w)[0]; operator = SCGD_OP[op as GdstOp] || '='; value = String(val); }
+    return el('Attribute', {}, [el('operator', {}, [], operator), el('value', {}, [], value), el('partialScore', {}, [], String(band.points))]);
+  };
+  const characteristics = sc.characteristics.map((ch) => el('Characteristic', {}, [
+    el('name', {}, [], ch.field), el('factName', {}, [], fqn), el('field', {}, [], ch.field),
+    el('dataType', {}, [], gdstJava(fieldTypes[ch.field])), el('attributes', {}, ch.bands.map(bandAttr)),
+  ]));
+  return { xml: el('ScoreCardModel', {}, [
+    el('name', {}, [], sc.name), el('factName', {}, [], fqn), el('fieldName', {}, [], sc.score),
+    el('initialScore', {}, [], String(sc.baseline || 0)), el('useReasonCodes', {}, [], 'false'),
+    el('characteristics', {}, characteristics),
+  ]) };
+}
+
+/**
+ * Engine test suite -> a Business Central test scenario (`ScenarioSimulationModel` `.scesim` XML): GIVEN
+ * columns per input + EXPECT columns per output, then one Scenario row per case. Best-effort XML
+ * (well-formed; BC-load not verified). The cases also run directly in Node (functions/test-scenario.mjs).
+ */
+export function testSuiteToScesim(suite: EngineTestSuite): { xml: ElementNode } {
+  const givenKeys = [...new Set(suite.cases.flatMap((c) => Object.keys(c.given)))];
+  const expectKeys = [...new Set(suite.cases.flatMap((c) => Object.keys(c.expect)))];
+  const factMappings = [
+    ...givenKeys.map((k) => el('FactMapping', {}, [el('type', {}, [], 'GIVEN'), el('factName', {}, [], k)])),
+    ...expectKeys.map((k) => el('FactMapping', {}, [el('type', {}, [], 'EXPECT'), el('factName', {}, [], k)])),
+  ];
+  const scenarios = suite.cases.map((c, i) => el('Scenario', {}, [
+    el('name', {}, [], c.name || `case ${i + 1}`),
+    el('values', {}, [
+      ...givenKeys.map((k) => el('value', {}, [el('factName', {}, [], k), el('raw', {}, [], c.given[k] == null ? '' : String(c.given[k]))])),
+      ...expectKeys.map((k) => el('value', {}, [el('factName', {}, [], k), el('raw', {}, [], c.expect[k] == null ? '' : String(c.expect[k]))])),
+    ]),
+  ]));
+  return { xml: el('ScenarioSimulationModel', { version: '1.8' }, [
+    el('simulation', {}, [
+      el('scesimModelDescriptor', {}, [el('factMappings', {}, factMappings)]),
+      el('scenarios', {}, scenarios),
+    ]),
+    el('settings', {}, [el('target', {}, [], suite.target)]),
+  ]) };
+}
+
 // friendly widget -> jBPM field code; and field-type -> derived code
 const WIDGET_CODE: Record<string, string> = { text: 'TextBox', textarea: 'TextArea', integer: 'IntegerBox', number: 'DoubleBox', decimal: 'DoubleBox', checkbox: 'CheckBox', boolean: 'CheckBox', dropdown: 'ListBox', select: 'ListBox', radio: 'RadioGroup', date: 'DatePicker' };
 const TYPE_CODE: Record<string, string> = { string: 'TextBox', int: 'IntegerBox', integer: 'IntegerBox', long: 'IntegerBox', double: 'DoubleBox', float: 'DoubleBox', number: 'DoubleBox', bool: 'CheckBox', boolean: 'CheckBox', date: 'DatePicker' };
@@ -554,6 +771,45 @@ export function fromEngineProject(ep: EngineProject): Project {
     for (const f of declared?.fields || []) fieldTypes[f.name] = f.type;
     files[path] = buildAsset({ kind: 'guidedDecisionTable', model: decisionTableToGdst(gt, pkg, fieldTypes) });
   }
+  // engine guided rules -> generated .rdrl (Business Central RuleModel XML)
+  for (const rule of ep.guidedRules || []) {
+    const pkg = rule.package || `${basePkg}.rules`;
+    const path = rule.path || `src/main/resources/${pkg.replace(/\./g, '/')}/${clean(rule.name)}.rdrl`;
+    const fieldTypes: Record<string, string> = {};
+    for (const w of rule.when || []) { const d = allTypes.find((t) => t.name === w.fact); for (const f of d?.fields || []) fieldTypes[f.name] = f.type; }
+    files[path] = buildAsset({ kind: 'guidedRule', model: ruleToRdrl(rule, fieldTypes) });
+  }
+  // engine guided rule templates -> generated .template (Business Central TemplateModel XML)
+  for (const tmpl of ep.guidedRuleTemplates || []) {
+    const pkg = tmpl.package || `${basePkg}.rules`;
+    const path = tmpl.path || `src/main/resources/${pkg.replace(/\./g, '/')}/${clean(tmpl.name)}.template`;
+    const fieldTypes: Record<string, string> = {};
+    for (const w of tmpl.when || []) { const d = allTypes.find((t) => t.name === w.fact); for (const f of d?.fields || []) fieldTypes[f.name] = f.type; }
+    files[path] = buildAsset({ kind: 'guidedRuleTemplate', model: templateToTemplateXml(tmpl, fieldTypes) });
+  }
+  // engine scorecards -> generated .scgd (Business Central ScoreCardModel XML)
+  for (const sc of ep.scorecards || []) {
+    const pkg = sc.package || `${basePkg}.rules`;
+    const path = sc.path || `src/main/resources/${pkg.replace(/\./g, '/')}/${clean(sc.name)}.scgd`;
+    const declared = allTypes.find((t) => t.name === sc.fact);
+    const fieldTypes: Record<string, string> = {};
+    for (const f of declared?.fields || []) fieldTypes[f.name] = f.type;
+    files[path] = buildAsset({ kind: 'scoreCard', model: scorecardToScgd(sc, fieldTypes, resolve) });
+  }
+  // engine test suites -> generated .scesim (test resources; also runnable in Node)
+  for (const suite of ep.tests || []) {
+    const path = suite.path || `src/test/resources/${clean(suite.name)}.scesim`;
+    files[path] = buildAsset({ kind: 'testScenario', model: testSuiteToScesim(suite) });
+  }
+  // engine decision trees -> generated .gdt (Business Central GuidedDecisionTree XML)
+  for (const tree of ep.decisionTrees || []) {
+    const pkg = tree.package || `${basePkg}.rules`;
+    const path = tree.path || `src/main/resources/${pkg.replace(/\./g, '/')}/${clean(tree.name)}.gdt`;
+    const declared = allTypes.find((t) => t.name === tree.fact);
+    const fieldTypes: Record<string, string> = {};
+    for (const f of declared?.fields || []) fieldTypes[f.name] = f.type;
+    files[path] = buildAsset({ kind: 'guidedDecisionTree', model: decisionTreeToGdt(tree, fieldTypes, resolve) });
+  }
   // engine forms -> generated .frm (user-task UI; widget derived from the bound type's field types)
   for (const form of ep.forms || []) {
     const path = form.path || `src/main/resources/forms/${form.name}.frm`;
@@ -566,15 +822,30 @@ export function fromEngineProject(ep: EngineProject): Project {
   if ((ep.enumerations || []).length) {
     files['src/main/resources/enumerations.enumeration'] = buildAsset({ kind: 'enumeration', model: enumerationsToModel(ep.enumerations as EngineEnum[]) });
   }
+  // engine DSL entries -> a generated .dsl (rule readability sugar)
+  if ((ep.dsl || []).length) {
+    files['src/main/resources/dsl/definitions.dsl'] = buildAsset({ kind: 'dsl', model: { entries: ep.dsl } });
+  }
+  // engine i18n messages (keyed by locale) -> generated .properties files; the SDK owns the filenames
+  for (const [locale, entries] of Object.entries(ep.messages || {})) {
+    const suffix = locale === 'default' ? '' : `_${locale}`;
+    files[`src/main/resources/messages${suffix}.properties`] = buildAsset({ kind: 'properties', model: { props: entries } });
+  }
 
   const dep = ep.deployment || {};
+  // batteries-included: always ship jBPM's standard work-item definitions + register their handlers.
+  // Custom `workItems` extend/override by name; extra `deployment.handlers` are added on top.
+  const custom = ep.workItems || [];
+  const workDefinitions = [...DEFAULT_WORK_ITEMS.filter((d) => !custom.some((c) => c.name === d.name)), ...custom];
+  const handlerNames = [...new Set([...workDefinitions.map((w) => w.name), ...(dep.handlers || [])])];
   const descriptor: ProjectDescriptor = {
     gav: ep.gav,
     deployment: {
       runtimeStrategy: dep.runtime || 'SINGLETON',
-      workItemHandlers: (dep.handlers || ['Rest']).map((name): WorkItemHandler => ({ name, resolver: 'mvel', identifier: HANDLER_ID[name] || `new ${name}()` })),
+      workItemHandlers: handlerNames.map((name): WorkItemHandler => ({ name, resolver: 'mvel', identifier: HANDLER_ID[name] || `new ${name}()` })),
       environmentEntries: Object.entries(dep.env || {}).map(([name, v]): EnvironmentEntry => ({ name, resolver: 'mvel', identifier: `"${v}"` })),
     },
+    workDefinitions,      // -> global/WorkDefinitions.wid (defaults + any custom)
     files,
   };
   return { root: ep.id || '.', descriptor, processes };

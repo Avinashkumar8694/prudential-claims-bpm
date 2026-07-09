@@ -1,5 +1,11 @@
 # Guided Rule — usage guide
 
+**Author** `guidedRules: [{ name, when, then }]` on your `EngineProject`
+([scenarios.md §0](scenarios.md)) — the same `when`/`then` as a DRL ruleset rule; `fromEngineProject`
+generates the `.rdrl`. Execute it at runtime with the existing rule engine
+(`examples/functions/rule-engine.mjs`, wrapped as a one-rule ruleset). The `.rdrl` XML is best-effort;
+a DRL ruleset (`../drl`) is the guaranteed-executable alternative.
+
 ## 1. Details
 Extension `.rdrl`, SDK asset `kind: "guidedRule"`. A single rule authored in BC's guided editor.
 

@@ -1,5 +1,9 @@
 # Work Item Definition — usage guide
 
+**Author** engine `workItems: [{ name, parameters, results, … }]` on your `EngineProject`
+([scenarios.md §0](scenarios.md)); `fromEngineProject` emits `global/WorkDefinitions.wid`. The jBPM-side
+codec below (`parseWid`/`widMvel`) is for reading/writing the raw `.wid`.
+
 ## 1. Details
 Extension `.wid`, SDK asset `kind: "workItemDefinition"` (also modelled as `descriptor.workDefinitions`).
 Defines a service-task palette entry + parameter contract.

@@ -26,8 +26,6 @@ See also: `../bpm-project/structured-assets.md` (overview) · `../bpm-project/as
 | `score-card` | `.scgd` | `scoreCard` | generic XML tree |
 | `test-scenario` | `.scesim` | `testScenario` | generic XML tree |
 | `test-scenario-legacy` | `.scenario` | `testScenarioLegacy` | generic XML tree |
-| `solver` | `*.solver.xml` | `solver` | generic XML tree |
-| `xml-generic` | `.xml` | `xml` | generic XML tree |
 | `form` | `.frm`/`.form` | `form` | JSON or XML tree |
 | `data-object` | `.java` | `dataObject` | typed (package/class/fields) |
 | `work-item-definition` | `.wid` | `workItemDefinition` | typed (definitions) |

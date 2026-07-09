@@ -1,25 +1,25 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/rules/flag-large.rdrl": {
-      "kind": "guidedRule",
-      "model": {
-        "xml": {
-          "name": "rule",
-          "attrs": {},
-          "children": [
-            {
-              "name": "name",
-              "attrs": {},
-              "children": [],
-              "text": "Flag large claim",
-              "cdata": []
-            }
-          ],
-          "text": "",
-          "cdata": []
-        }
-      }
+  "types": [
+    {
+      "name": "Claim",
+      "fields": [
+        { "name": "amount", "type": "double" },
+        { "name": "status", "type": "string" },
+        { "name": "priority", "type": "string" }
+      ]
     }
-  },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+  ],
+  "guidedRules": [
+    {
+      "name": "High value open claim",
+      "when": [
+        { "fact": "Claim", "as": "c", "where": { "amount": { "gt": 100000 }, "status": "OPEN" } }
+      ],
+      "then": [
+        { "set": "c", "fields": { "priority": "HIGH" } }
+      ]
+    }
+  ],
+
+  "$note": "The WHOLE thing you write — ONE rule, authored with the EXACT same when/then vocabulary as a DRL ruleset rule (see ../drl scenarios §0). `Claim` is defined once in `types`; field/value types are derived from it. fromEngineProject generates the Business Central .rdrl (RuleModel XML — best-effort: well-formed, BC-load not verified). Runtime: the SAME rule engine executes it (a guided rule IS a rule). Since it compiles to DRL, emitting a DRL ruleset instead is the guaranteed-executable path. Optional: `priority` (-> salience), `noLoop`. See scenarios.md §0."
 }

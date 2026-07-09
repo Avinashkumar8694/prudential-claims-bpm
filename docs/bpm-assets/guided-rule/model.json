@@ -1,5 +1,6 @@
 {
   "kind": "guidedRule",
+  "$note": "jBPM-side RuleModel .rdrl XML PRODUCED by ruleToRdrl from the engine guided rule in engine.json (best-effort; well-formed, BC-load not verified). You author engine.json, not this.",
   "model": {
     "xml": {
       "name": "rule",
@@ -9,7 +10,223 @@
           "name": "name",
           "attrs": {},
           "children": [],
-          "text": "Flag large claim",
+          "text": "High value open claim",
+          "cdata": []
+        },
+        {
+          "name": "modelVersion",
+          "attrs": {},
+          "children": [],
+          "text": "1.0",
+          "cdata": []
+        },
+        {
+          "name": "attributes",
+          "attrs": {},
+          "children": [],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "lhs",
+          "attrs": {},
+          "children": [
+            {
+              "name": "fact",
+              "attrs": {
+                "class": "org.drools.workbench.models.datamodel.rule.FactPattern"
+              },
+              "children": [
+                {
+                  "name": "factType",
+                  "attrs": {},
+                  "children": [],
+                  "text": "Claim",
+                  "cdata": []
+                },
+                {
+                  "name": "boundName",
+                  "attrs": {},
+                  "children": [],
+                  "text": "c",
+                  "cdata": []
+                },
+                {
+                  "name": "constraintList",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "constraints",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "fieldConstraint",
+                          "attrs": {
+                            "class": "org.drools.workbench.models.datamodel.rule.SingleFieldConstraint"
+                          },
+                          "children": [
+                            {
+                              "name": "fieldName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "amount",
+                              "cdata": []
+                            },
+                            {
+                              "name": "fieldType",
+                              "attrs": {},
+                              "children": [],
+                              "text": "Double",
+                              "cdata": []
+                            },
+                            {
+                              "name": "operator",
+                              "attrs": {},
+                              "children": [],
+                              "text": ">",
+                              "cdata": []
+                            },
+                            {
+                              "name": "value",
+                              "attrs": {},
+                              "children": [],
+                              "text": "100000",
+                              "cdata": []
+                            },
+                            {
+                              "name": "constraintValueType",
+                              "attrs": {},
+                              "children": [],
+                              "text": "1",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "fieldConstraint",
+                          "attrs": {
+                            "class": "org.drools.workbench.models.datamodel.rule.SingleFieldConstraint"
+                          },
+                          "children": [
+                            {
+                              "name": "fieldName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "status",
+                              "cdata": []
+                            },
+                            {
+                              "name": "fieldType",
+                              "attrs": {},
+                              "children": [],
+                              "text": "String",
+                              "cdata": []
+                            },
+                            {
+                              "name": "operator",
+                              "attrs": {},
+                              "children": [],
+                              "text": "==",
+                              "cdata": []
+                            },
+                            {
+                              "name": "value",
+                              "attrs": {},
+                              "children": [],
+                              "text": "OPEN",
+                              "cdata": []
+                            },
+                            {
+                              "name": "constraintValueType",
+                              "attrs": {},
+                              "children": [],
+                              "text": "1",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "rhs",
+          "attrs": {},
+          "children": [
+            {
+              "name": "action",
+              "attrs": {
+                "class": "org.drools.workbench.models.datamodel.rule.ActionSetField"
+              },
+              "children": [
+                {
+                  "name": "variable",
+                  "attrs": {},
+                  "children": [],
+                  "text": "c",
+                  "cdata": []
+                },
+                {
+                  "name": "fieldValues",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "fieldValue",
+                      "attrs": {
+                        "class": "org.drools.workbench.models.datamodel.rule.ActionFieldValue"
+                      },
+                      "children": [
+                        {
+                          "name": "field",
+                          "attrs": {},
+                          "children": [],
+                          "text": "priority",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [],
+                          "text": "HIGH",
+                          "cdata": []
+                        },
+                        {
+                          "name": "type",
+                          "attrs": {},
+                          "children": [],
+                          "text": "String",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
           "cdata": []
         }
       ],

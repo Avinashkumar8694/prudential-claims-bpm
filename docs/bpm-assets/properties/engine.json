@@ -1,14 +1,14 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/properties": {
-      "kind": "properties",
-      "model": {
-        "props": {
-          "review.title": "Review claim",
-          "review.amount": "Claim amount"
-        }
-      }
+  "messages": {
+    "default": {
+      "review.title": "Review claim",
+      "review.amount": "Claim amount"
+    },
+    "fr": {
+      "review.title": "Examiner la demande",
+      "review.amount": "Montant de la demande"
     }
   },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+
+  "$note": "The WHOLE thing you write — i18n labels keyed by LOCALE, not by file path. `default` is the base bundle; each `<locale>` (fr, es, …) is a locale bundle. No kjar paths, no filename conventions. fromEngineProject generates the .properties files and owns their names: locale default -> src/main/resources/messages.properties, locale fr -> messages_fr.properties. Runtime: resolve(messages, key, locale) with fallback to default (functions/properties.mjs). Arbitrary non-i18n config .properties -> carry verbatim via `assets`. See scenarios.md §0; model.json shows the jBPM-side per-file model."
 }

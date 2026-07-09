@@ -1,5 +1,6 @@
 {
   "kind": "testScenario",
+  "$note": "jBPM-side ScenarioSimulationModel .scesim XML PRODUCED by testSuiteToScesim from the engine tests in engine.json (best-effort; well-formed, BC-load not verified). You author engine.json (and run the cases in Node), not this.",
   "model": {
     "xml": {
       "name": "ScenarioSimulationModel",
@@ -10,7 +11,292 @@
         {
           "name": "simulation",
           "attrs": {},
-          "children": [],
+          "children": [
+            {
+              "name": "scesimModelDescriptor",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "factMappings",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "FactMapping",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "type",
+                          "attrs": {},
+                          "children": [],
+                          "text": "GIVEN",
+                          "cdata": []
+                        },
+                        {
+                          "name": "factName",
+                          "attrs": {},
+                          "children": [],
+                          "text": "amount",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    },
+                    {
+                      "name": "FactMapping",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "type",
+                          "attrs": {},
+                          "children": [],
+                          "text": "EXPECT",
+                          "cdata": []
+                        },
+                        {
+                          "name": "factName",
+                          "attrs": {},
+                          "children": [],
+                          "text": "tier",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            },
+            {
+              "name": "scenarios",
+              "attrs": {},
+              "children": [
+                {
+                  "name": "Scenario",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "name",
+                      "attrs": {},
+                      "children": [],
+                      "text": "high value",
+                      "cdata": []
+                    },
+                    {
+                      "name": "values",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "factName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "amount",
+                              "cdata": []
+                            },
+                            {
+                              "name": "raw",
+                              "attrs": {},
+                              "children": [],
+                              "text": "250000",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "factName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "tier",
+                              "cdata": []
+                            },
+                            {
+                              "name": "raw",
+                              "attrs": {},
+                              "children": [],
+                              "text": "HIGH",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "Scenario",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "name",
+                      "attrs": {},
+                      "children": [],
+                      "text": "standard",
+                      "cdata": []
+                    },
+                    {
+                      "name": "values",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "factName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "amount",
+                              "cdata": []
+                            },
+                            {
+                              "name": "raw",
+                              "attrs": {},
+                              "children": [],
+                              "text": "3000",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "factName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "tier",
+                              "cdata": []
+                            },
+                            {
+                              "name": "raw",
+                              "attrs": {},
+                              "children": [],
+                              "text": "STANDARD",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                },
+                {
+                  "name": "Scenario",
+                  "attrs": {},
+                  "children": [
+                    {
+                      "name": "name",
+                      "attrs": {},
+                      "children": [],
+                      "text": "zero (edge)",
+                      "cdata": []
+                    },
+                    {
+                      "name": "values",
+                      "attrs": {},
+                      "children": [
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "factName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "amount",
+                              "cdata": []
+                            },
+                            {
+                              "name": "raw",
+                              "attrs": {},
+                              "children": [],
+                              "text": "0",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        },
+                        {
+                          "name": "value",
+                          "attrs": {},
+                          "children": [
+                            {
+                              "name": "factName",
+                              "attrs": {},
+                              "children": [],
+                              "text": "tier",
+                              "cdata": []
+                            },
+                            {
+                              "name": "raw",
+                              "attrs": {},
+                              "children": [],
+                              "text": "NONE",
+                              "cdata": []
+                            }
+                          ],
+                          "text": "",
+                          "cdata": []
+                        }
+                      ],
+                      "text": "",
+                      "cdata": []
+                    }
+                  ],
+                  "text": "",
+                  "cdata": []
+                }
+              ],
+              "text": "",
+              "cdata": []
+            }
+          ],
+          "text": "",
+          "cdata": []
+        },
+        {
+          "name": "settings",
+          "attrs": {},
+          "children": [
+            {
+              "name": "target",
+              "attrs": {},
+              "children": [],
+              "text": "Eligibility",
+              "cdata": []
+            }
+          ],
           "text": "",
           "cdata": []
         }

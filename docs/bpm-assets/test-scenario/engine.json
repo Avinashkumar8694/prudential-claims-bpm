@@ -1,27 +1,33 @@
 {
-  "assets": {
-    "src/main/resources/com/acme/tests/classify.scesim": {
-      "kind": "testScenario",
-      "model": {
-        "xml": {
-          "name": "ScenarioSimulationModel",
-          "attrs": {
-            "version": "1.8"
-          },
-          "children": [
-            {
-              "name": "simulation",
-              "attrs": {},
-              "children": [],
-              "text": "",
-              "cdata": []
-            }
-          ],
-          "text": "",
-          "cdata": []
+  "decisions": [
+    {
+      "name": "ClaimDecisions",
+      "decisions": [
+        {
+          "name": "Eligibility",
+          "hitPolicy": "UNIQUE",
+          "inputs": [{ "name": "amount", "type": "number" }],
+          "outputs": [{ "name": "tier", "type": "string" }],
+          "rules": [
+            { "when": { "amount": { "gt": 100000 } }, "then": { "tier": "HIGH" } },
+            { "when": { "amount": { "between": [1, 100000] } }, "then": { "tier": "STANDARD" } },
+            { "when": { "amount": { "lte": 0 } }, "then": { "tier": "NONE" } }
+          ]
         }
-      }
+      ]
     }
-  },
-  "$note": "Placed in EngineProject.assets; fromEngineProject runs buildAsset(kind, model) and writes it into the kjar at this path."
+  ],
+  "tests": [
+    {
+      "name": "Eligibility",
+      "target": "Eligibility",
+      "cases": [
+        { "name": "high value",  "given": { "amount": 250000 }, "expect": { "tier": "HIGH" } },
+        { "name": "standard",    "given": { "amount": 3000 },   "expect": { "tier": "STANDARD" } },
+        { "name": "zero (edge)", "given": { "amount": 0 },      "expect": { "tier": "NONE" } }
+      ]
+    }
+  ],
+
+  "$note": "The WHOLE thing you write — test cases for a decision/ruleset. `target` names what's under test (here the Eligibility decision, defined above). Each case PINS `given` inputs and asserts `expect` outputs. For a Node engine these cases RUN in Node against the reference evaluators (real pass/fail — this is your test harness), AND fromEngineProject emits the jBPM .scesim so `mvn test` runs them too. The .scesim XML is best-effort (well-formed, BC-load not verified). Test scenarios verify a decision/rule, not the process flow. See scenarios.md §0."
 }

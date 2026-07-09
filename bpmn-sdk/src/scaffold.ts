@@ -17,33 +17,22 @@ const DD_PATH = 'src/main/resources/META-INF/kie-deployment-descriptor.xml';
 // Extra assets that must round-trip verbatim (rules, decisions, Java handlers, forms, icons, …).
 // Text-based Business Central / Drools / OptaPlanner assets that must round-trip verbatim.
 // (Binary assets — .xls/.xlsx decision-table & score-card spreadsheets — are not text-captured.)
-const ASSET_EXTS = [
-  '.drl',          // DRL rules file
-  '.dmn',          // DMN decision model
-  '.dsl',          // DSL definition
-  '.enumeration',  // Enumeration (data enums)
-  '.rdrl', '.rdslr', // Guided Rule (+ DSL-based)
-  '.template',     // Guided Rule Template
-  '.gdst',         // Guided Decision Table
-  '.gdt',          // Guided Decision Tree
-  '.scgd',         // Guided Score Card
-  '.scesim',       // Test Scenario (new)
-  '.scenario',     // Test Scenario (legacy)
-  '.form', '.frm', // Forms
-  '.java',         // Data Object POJO / custom work-item handler
-  '.wid',          // Work Item definition
-  '.properties',   // i18n / config
-];
 const SKIP_DIRS = new Set(['node_modules', 'target', '.git', 'dist', 'bpmn-sdk', '.mvn']);
-const isAsset = (name: string) => ASSET_EXTS.includes(path.extname(name).toLowerCase()) || name.endsWith('.solver.xml');
+// binary files can't round-trip as UTF-8 text, so they're the only things NOT captured; everything
+// else (rules, decisions, forms, java, wid, properties, AND any arbitrary .xml/.md/.json/config/…)
+// is carried verbatim so a jBPM project round-trips losslessly, never dropping a file.
+const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.otf', '.eot', '.zip', '.jar', '.gz', '.tar', '.class', '.xls', '.xlsx', '.sxls', '.pdf', '.so', '.dll']);
 
-function collectAssets(dir: string, projectDir: string, out: Record<string, string>): void {
+function collectAssets(dir: string, projectDir: string, out: Record<string, string>, bin: Record<string, string>): void {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) collectAssets(path.join(dir, e.name), projectDir, out); continue; }
-    if (!isAsset(e.name)) continue;
+    if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) collectAssets(path.join(dir, e.name), projectDir, out, bin); continue; }
+    const ext = path.extname(e.name).toLowerCase();
+    if (ext === '.bpmn' || ext === '.bpmn2') continue;     // processes — captured separately
     const rel = path.relative(projectDir, path.join(dir, e.name));
-    if (SCAFFOLD_FILES.includes(rel) || rel === DD_PATH) continue; // already handled elsewhere
-    out[rel] = fs.readFileSync(path.join(dir, e.name), 'utf8');
+    if (SCAFFOLD_FILES.includes(rel) || rel === DD_PATH) continue; // handled elsewhere
+    const abs = path.join(dir, e.name);
+    if (BINARY_EXTS.has(ext)) bin[rel] = fs.readFileSync(abs).toString('base64');   // binaries -> base64
+    else out[rel] = fs.readFileSync(abs, 'utf8');                                   // everything else -> text
   }
 }
 
@@ -132,14 +121,15 @@ export function parseDescriptor(projectDir: string): ProjectDescriptor {
     const abs = path.join(projectDir, rel);
     if (fs.existsSync(abs)) files[rel] = fs.readFileSync(abs, 'utf8');
   }
-  // capture extra text assets (rules, decisions, Java handlers, forms, extra .wid) so they round-trip
-  collectAssets(projectDir, projectDir, files);
+  // capture extra assets so they round-trip: text verbatim, binaries as base64 (nothing is dropped)
+  const binaryFiles: Record<string, string> = {};
+  collectAssets(projectDir, projectDir, files, binaryFiles);
   const gav = files['pom.xml'] ? readGav(files['pom.xml']) : undefined;
   const ddAbs = path.join(projectDir, DD_PATH);
   const deployment = fs.existsSync(ddAbs) ? readDeployment(fs.readFileSync(ddAbs, 'utf8')) : undefined;
   const widText = files['global/WorkDefinitions.wid'];
   const workDefinitions = widText ? parseWid(widText) : undefined;
-  return { gav, deployment, workDefinitions, files };
+  return { gav, deployment, workDefinitions, files, ...(Object.keys(binaryFiles).length ? { binaryFiles } : {}) };
 }
 
 // ---- templates (for from-scratch generation) ----
@@ -244,6 +234,13 @@ export function writeDescriptor(descriptor: ProjectDescriptor | undefined, proje
 
   // 1) verbatim captured files (rules, java, forms, wid, …) except the deployment descriptor
   for (const [rel, content] of Object.entries(files)) if (rel !== DD_PATH) put(rel, content);
+  // 1b) binary files (base64 -> bytes), carried byte-for-byte
+  for (const [rel, b64] of Object.entries(desc.binaryFiles || {})) {
+    const abs = path.join(projectDir, rel);
+    fs.mkdirSync(path.dirname(abs), { recursive: true });
+    fs.writeFileSync(abs, Buffer.from(b64, 'base64'));
+    written.push(rel);
+  }
 
   // 2) generate what's missing
   if (!files['pom.xml'] && desc.gav) put('pom.xml', pomXml(desc.gav));

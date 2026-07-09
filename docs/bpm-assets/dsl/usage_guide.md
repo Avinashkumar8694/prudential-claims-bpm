@@ -1,5 +1,9 @@
 # DSL definition — usage guide
 
+**Author** engine `dsl: [{ scope, nl, mapping }]` on your `EngineProject` ([scenarios.md §0](scenarios.md));
+`fromEngineProject` emits `src/main/resources/dsl/definitions.dsl`. For engine-authored rules write DRL
+directly via a ruleset (`../drl`); DSL is sugar for guided rules.
+
 ## 1. Details
 Extension `.dsl`, SDK asset `kind: "dsl"`. Maps natural-language phrases to DRL (used by `.rdslr`).
 

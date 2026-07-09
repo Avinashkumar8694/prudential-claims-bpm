@@ -1,5 +1,6 @@
 {
   "kind": "properties",
+  "$note": "jBPM-side per-file model. The engine authors `messages` keyed by LOCALE (engine.json); the SDK produces one .properties file per locale (messages.properties, messages_fr.properties). This shows the default bundle.",
   "model": {
     "props": {
       "review.title": "Review claim",
