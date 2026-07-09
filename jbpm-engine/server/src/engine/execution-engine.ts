@@ -1,10 +1,11 @@
 // Token-based interpreter over the SDK engine JSON. See docs/08-execution-engine.md.
 // Deterministic core (clock/newId injected). Persists the instance after runToQuiescence.
 import type { AppContext } from '../context.js';
-import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type Token } from '../domain.js';
+import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.js';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.js';
 import { runScript, evalCondition } from './sandbox.js';
 import { evaluateDmn, evaluateRules } from './decisioning.js';
+import { computeDue } from './duration.js';
 import { config } from '../infra/config.js';
 
 interface HandlerResult {
@@ -104,7 +105,16 @@ export class ExecutionEngine {
         visit.outcome = result.outcome || (result.wait ? 'waiting' : result.end || (result.error ? 'error' : 'done'));
         this.emit({ kind: 'node.exited', instanceId: inst.id, nodeId: node.id!, tokenId: token.id });
 
-        if (result.wait) { token.state = 'waiting'; token.waitFor = result.wait; continue; }
+        if (result.wait) {
+          token.state = 'waiting'; token.waitFor = result.wait;
+          if (result.wait.kind === 'timer' && result.wait.dueAt) {
+            await this.ctx.store.repo<TimerJob>(Collections.timers).put({
+              id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: inst.id, tokenId: token.id, nodeId: node.id!,
+              kind: 'duration', dueAt: result.wait.dueAt, fired: 0, status: 'scheduled',
+            });
+          }
+          continue;
+        }
         if (result.error) {
           this.removeToken(inst, token.id);
           const code = result.errorCode || 'RUNTIME_ERROR';
@@ -295,7 +305,7 @@ export class ExecutionEngine {
       case 'receive': return { wait: { kind: 'message', ref: (node as any).message } };
       case 'catch': {
         const ev = (node as any).event || {};
-        if (ev.timer) return { wait: { kind: 'timer', ref: node.id } };
+        if (ev.timer) return { wait: { kind: 'timer', ref: node.id, dueAt: computeDue(ev.timer, this.ctx.clock()) } };
         if (ev.message) return { wait: { kind: 'message', ref: ev.message } };
         if (ev.signal) return { wait: { kind: 'signal', ref: ev.signal } };
         return { wait: { kind: 'condition', ref: node.id } };

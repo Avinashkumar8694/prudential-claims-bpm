@@ -35,7 +35,8 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] call activity → linked child instances + parent-resume with output mapping
 - [x] node re-trigger (retry a node / replay); suspend/resume; abort
 - [x] instance ops UI: list → detail (diagram highlight, variables, history), related-instance switching, signal, re-trigger
-- [ ] timers: catch-timer, boundary-timer, delay + durable scheduler
+- [x] timers: catch-timer + durable scheduler (TimerJob + TimerService.tick, wired in index.ts); ISO duration/cycle
+- [ ] timers: boundary-timer + start-timer (cron) firing (needs host-active tracking / scheduled instance creation)
 - [ ] boundary events (interrupting + non-interrupting)
 - [ ] forEach (multiple child instances)
 - [ ] task inbox UI + form render/validate
