@@ -1,0 +1,57 @@
+/* Design tokens — tuned to the reference screenshots (docs/06-ui-spec.md §6). */
+:root {
+  --primary: #5b3df5;
+  --primary-600: #4c30d6;
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --border: #e6e8ef;
+  --text: #1f2430;
+  --muted: #6b7280;
+  --green: #16a34a;
+  --blue: #2563eb;
+  --purple: #7c3aed;
+  --orange: #ea580c;
+  --amber: #f59e0b;
+  --red: #dc2626;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-card: 0 2px 8px rgba(16, 24, 40, .08);
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, .16);
+  --header-h: 56px;
+  --footer-h: 32px;
+  --sidenav-w: 264px;
+  --panel-w: 320px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: var(--font); color: var(--text); background: var(--bg); font-size: 14px; }
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; }
+
+.btn {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: var(--radius-sm); padding: 6px 12px; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { background: #f8f9fc; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--primary-600); }
+.btn.ghost { border-color: transparent; background: transparent; }
+
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #eef0f6; color: var(--muted); }
+.badge.active { background: #e7f7ee; color: var(--green); }
+.badge.inactive { background: #f1f2f6; color: var(--muted); }
+.badge.archived { background: #fdeaea; color: var(--red); }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-card); }
+
+table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: var(--radius); overflow: hidden; }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 13px; }
+th { color: var(--muted); font-weight: 600; background: #fafbfd; }
+tr:last-child td { border-bottom: none; }
+
+.muted { color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: center; }
+.spacer { flex: 1; }

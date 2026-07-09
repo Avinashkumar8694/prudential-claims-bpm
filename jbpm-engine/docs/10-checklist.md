@@ -9,8 +9,8 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] `server/` scaffold: package.json, tsconfig, config, Express app, `/api/health`
 - [x] `server/` SDK wrapper (`src/sdk`) re-exporting `@neutrinos/bpmn-sdk` + runtime evaluators
 - [x] `server/` store: `Repository<T>` + `FileStore`
-- [x] `app/` Angular scaffold: header, sidenav, canvas placeholder, footer, routing
-- [ ] `npm install` clean at root; `npm run dev` boots both (documented; run locally)
+- [x] `app/` Angular scaffold: sidenav, builder header + palette + canvas placeholder, footer, routing (builds clean)
+- [x] `npm install` verified for both workspaces; server boots + `/api/health` OK; app `ng build` OK
 
 ## Phase 1 — Authoring foundation
 - [x] modules: `workflows`, `branches`, `versions` — model + service + router + tests
@@ -25,9 +25,9 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] `engine/` step loop + token model + persistence hooks
 - [x] handlers: start, end, manual, script(js), sequence-flow, gateway(exclusive, parallel)
 - [x] `instances` module + REST (start, get, history, diagram-state)
-- [ ] WS hub + realtime events
-- [ ] instance detail view + live canvas highlight
-- [ ] sandbox for js scripts + flow conditions
+- [~] WS hub built + engine events emitted; UI consumption pending
+- [~] instance detail view (variables + history timeline) done; live canvas highlight pending
+- [x] sandbox for js scripts + flow conditions (node:vm; isolated-vm hardening in Phase 6)
 
 ## Phase 3 — Human & async work
 - [ ] handlers: userTask (+ Task service), receive/send (+ SignalBus), catch/throw
