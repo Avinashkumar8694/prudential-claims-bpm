@@ -31,8 +31,8 @@ await check('health + catalog (nodes/schemas/ports via API)', async () => {
   const h = await api('GET', '/health'); if (!h.ok) throw new Error('unhealthy');
   const c = await api('GET', '/catalog/nodes');
   if (!c.nodes.length || !Object.keys(c.schemas).length) throw new Error('catalog incomplete');
-  if (c.ports.start.in !== false || c.ports.start.out !== true) throw new Error('start ports wrong');
-  if (c.ports.end.out !== false) throw new Error('end ports wrong');
+  if (c.ports.start.maxIn !== 0 || c.ports.start.maxOut !== 1) throw new Error('start ports wrong: ' + JSON.stringify(c.ports.start));
+  if (c.ports.end.maxOut !== 0) throw new Error('end ports wrong: ' + JSON.stringify(c.ports.end));
 });
 
 // 1. validation gate: invalid (orphan) blocks publish
