@@ -75,6 +75,8 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] UI: relabel Workflows → Projects; project list
 - [x] UI: project detail with tabs (Processes / Variables / Assets / Rules / Settings / Deployments / Instances)
 - [x] UI: builder opens a selected process by id; header Test + Deploy
+- [x] structure: per-node folders `server/src/engine/nodes/<type>/handler.ts` + registry (backend logic per node); per-asset folders `server/src/assets/<kind>/def.ts` + registry
+- [ ] structure: co-locate UI node design (palette def + property schema) per node (currently app node-schema.ts + server catalog)
 - [x] backend+UI: `assets` module — list/add asset entries (forms/DRL/DMN/tables/…) in the project draft; Assets & Rules tabs
 - [ ] validation `asset-ref` rule (node references an existing asset)
 - [x] error handling: Error Catch node (boundary + global `*`), error taxonomy, runtime routing, validation, UI multi-select, SDK export expansion — see [14](./14-error-handling.md)
