@@ -30,6 +30,7 @@ engine model. Implemented as a **rules module** on both sides:
 | `end-connections` | error | end must have incoming, no outgoing | end in ≥1, out = 0 |
 | `node-connected` | error | "node is not connected" | activities/gateways/events have both an incoming and an outgoing (boundary needs an outgoing handler path); **catches floating nodes** |
 | `reachable` | error | unreachable node | every edged node is reachable from a start (catches disconnected islands) |
+| `ends-at-end` | error | dead-end / endless path | every reachable node must be able to **reach an End** — no orphan leftovers, dead-ends, or loops that never terminate; a process ends on an End only |
 | `boundary-host` | error | boundary not attached | `boundary.on` references an existing host node |
 | `node-config` | error | task/gateway missing config | script has code; http has url; call/forEach has process (+ collection); rule has ruleflowGroup or DMN; send/receive has message; gateway has mode |
 | `event-trigger` | error | event with no definition | catch/throw/boundary define a trigger; timers have duration/cycle/date |

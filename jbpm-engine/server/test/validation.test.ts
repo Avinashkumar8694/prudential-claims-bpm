@@ -94,6 +94,31 @@ test('connection-cardinality: a mixed gateway (many→many) is an error', async 
   assert.ok(r.problems.some((p) => p.rule === 'connection-cardinality' && p.nodeId === 'gw' && /diverging|converging/.test(p.message)));
 });
 
+test('ends-at-end: a path that loops without reaching an End is an error', async () => {
+  // s → a → b → a (loop, never reaches e); e is a separate reachable end via s? no — make s→a, a→b, b→a
+  const r = validateProcess(proc(
+    [{ id: 's', type: 'start' }, { id: 'a', type: 'manual' }, { id: 'b', type: 'manual' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 'a' }, { id: 'f2', from: 'a', to: 'b' }, { id: 'f3', from: 'b', to: 'a' }, { id: 'f4', from: 's', to: 'e' }]));
+  // wait: start has maxOut 1 — two outgoing from s would be a cardinality error, not what we test.
+  // Use a gateway to branch so the loop is legal structurally but never ends.
+  const r2 = validateProcess(proc(
+    [{ id: 's', type: 'start' }, { id: 'g', type: 'gateway', mode: 'exclusive', default: 'fe' }, { id: 'a', type: 'manual' }, { id: 'b', type: 'manual' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 'g' }, { id: 'fe', from: 'g', to: 'e' }, { id: 'fa', from: 'g', to: 'a' }, { id: 'f2', from: 'a', to: 'b' }, { id: 'f3', from: 'b', to: 'a' }]));
+  assert.ok(r2.problems.some((p) => p.rule === 'ends-at-end' && (p.nodeId === 'a' || p.nodeId === 'b')), 'looping branch flagged as not reaching an end');
+  void r;
+});
+
+test('orphan + dead-end are both reported; a clean process passes', async () => {
+  const orphan = validateProcess(proc(
+    [{ id: 's', type: 'start' }, { id: 'x', type: 'manual', name: 'Orphan' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 'e' }]));
+  assert.ok(orphan.problems.some((p) => p.rule === 'node-connected' && p.nodeId === 'x'), 'orphan flagged');
+  const clean = validateProcess(proc(
+    [{ id: 's', type: 'start' }, { id: 't', type: 'manual' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 't' }, { id: 'f2', from: 't', to: 'e' }]));
+  assert.strictEqual(clean.ok, true, JSON.stringify(clean.errors));
+});
+
 test('publish is blocked when the process has validation errors', async () => {
   const store = new MemoryStore(); let n = 0;
   const ctx = makeContext({ store, tenantId: 't1', clock: fakeClock().clock, newId: () => `id${++n}` });

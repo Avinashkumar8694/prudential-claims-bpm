@@ -149,6 +149,20 @@ export const RULES: Rule[] = [
     return out;
   } },
 
+  { id: 'ends-at-end', description: 'Every path must terminate at an end event (no dead-ends / endless loops)', run: (c) => {
+    if (!c.ends.length) return [];   // 'end-exists' already reports the missing end
+    // reverse-reachability: which nodes can reach an end? (walk backwards over incoming flows from ends)
+    const reachesEnd = new Set<string>();
+    const q = c.ends.map((n) => n.id!);
+    while (q.length) { const id = q.shift()!; if (reachesEnd.has(id) || !c.byId.has(id)) continue; reachesEnd.add(id); for (const f of c.incoming.get(id) || []) q.push(f.from); }
+    const out: Problem[] = [];
+    for (const n of c.nodes) {
+      if (isEnd(n) || isEventSub(n)) continue;
+      if (c.reachable.has(n.id!) && !reachesEnd.has(n.id!)) out.push(P('ends-at-end', 'error', `"${label(n)}" does not lead to an end event — every process path must finish at an End`, { nodeId: n.id }));
+    }
+    return out;
+  } },
+
   { id: 'boundary-host', description: 'Error/boundary catch must attach to existing node(s) or all (*)', run: (c) => {
     const out: Problem[] = [];
     for (const n of c.nodes) if (isBoundary(n)) {
