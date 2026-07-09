@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
 import type { Catalog, NodeSpec, Version, Workflow } from '../../core/models';
+import { PropertiesPanelComponent } from './properties-panel.component';
 
 // A canvas node is just an engine node with x/y layout coords stored alongside (ignored by the SDK).
 interface CNode { id: string; type: string; name?: string; x: number; y: number; [k: string]: any; }
@@ -23,7 +24,7 @@ const NW = 190, NH = 66;
 @Component({
   selector: 'app-builder',
   standalone: true,
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, PropertiesPanelComponent],
   template: `
     <div class="builder">
       <!-- HEADER -->
@@ -37,7 +38,7 @@ const NW = 190, NH = 66;
         <span class="savestate" [class.dirty]="saveState()==='dirty'">{{ saveLabel() }}</span>
         <button class="btn" (click)="saveNow()">Update</button>
         <button class="btn ghost">User Permissions</button>
-        <button class="btn ghost">Variables</button>
+        <button class="btn ghost" (click)="openVars()">Variables ({{ wf()?.variables?.length || 0 }})</button>
         <span class="divider"></span>
         <button class="icon-btn" (click)="autoLayout()" title="Auto-layout">▦</button>
         <button class="btn" (click)="run()">▷ Run</button>
@@ -110,35 +111,8 @@ const NW = 190, NH = 66;
         <aside class="props">
           @if (selNode(); as n) {
             <div class="props-h"><span class="chip sm" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>{{ typeLabel(n) }}</div>
-            <label class="fld"><span>Name</span><input [(ngModel)]="n.name" (ngModelChange)="markDirty()" /></label>
             <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
-
-            @switch (n.type) {
-              @case ('script') {
-                <label class="fld"><span>Language</span>
-                  <select [(ngModel)]="n['lang']" (ngModelChange)="markDirty()"><option value="js">js</option><option value="java">java</option><option value="mvel">mvel</option></select></label>
-                <label class="fld"><span>Code</span><textarea rows="6" [(ngModel)]="n['code']" (ngModelChange)="markDirty()"></textarea></label>
-              }
-              @case ('http') {
-                <label class="fld"><span>Method</span>
-                  <select [(ngModel)]="n['method']" (ngModelChange)="markDirty()"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option><option>PATCH</option></select></label>
-                <label class="fld"><span>URL</span><input [(ngModel)]="n['url']" (ngModelChange)="markDirty()" placeholder="/v1/…" /></label>
-              }
-              @case ('userTask') {
-                <label class="fld"><span>Group / role</span><input [(ngModel)]="n['group']" (ngModelChange)="markDirty()" /></label>
-                <label class="fld"><span>Form name</span><input [(ngModel)]="n['form']" (ngModelChange)="markDirty()" /></label>
-              }
-              @case ('rule') {
-                <label class="fld"><span>Ruleflow group</span><input [(ngModel)]="n['ruleflowGroup']" (ngModelChange)="markDirty()" /></label>
-              }
-              @case ('gateway') {
-                <label class="fld"><span>Mode</span>
-                  <select [(ngModel)]="n['mode']" (ngModelChange)="markDirty()"><option>exclusive</option><option>parallel</option><option>inclusive</option><option>event</option><option>complex</option></select></label>
-              }
-              @case ('send') { <label class="fld"><span>Message</span><input [(ngModel)]="n['message']" (ngModelChange)="markDirty()" /></label> }
-              @case ('receive') { <label class="fld"><span>Message</span><input [(ngModel)]="n['message']" (ngModelChange)="markDirty()" /></label> }
-              @case ('call') { <label class="fld"><span>Called process</span><input [(ngModel)]="n['process']" (ngModelChange)="markDirty()" /></label> }
-            }
+            <app-properties-panel [node]="n" (changed)="markDirty()"></app-properties-panel>
             <button class="btn danger full" (click)="del($event, n)">Delete node</button>
           } @else if (selEdge()) {
             <div class="props-h">Connection</div>
@@ -156,6 +130,28 @@ const NW = 190, NH = 66;
           }
         </aside>
       </div>
+
+      @if (showVars()) {
+        <div class="modal-bg" (click)="closeVars()">
+          <div class="modal" (click)="$event.stopPropagation()">
+            <div class="modal-h"><span>Process Variables</span><button class="x" (click)="closeVars()">✕</button></div>
+            <div class="modal-body">
+              <p class="hint">Typed data the process carries. Referenced from scripts (kcontext), conditions, and data mappings.</p>
+              @for (v of wf()!.variables; track $index) {
+                <div class="vrow">
+                  <input placeholder="name" [(ngModel)]="v.name" (ngModelChange)="markDirty()" />
+                  <select [(ngModel)]="v.type" (ngModelChange)="markDirty()">
+                    <option>string</option><option>int</option><option>long</option><option>double</option><option>bool</option><option>date</option><option>object</option><option>list</option><option>map</option>
+                  </select>
+                  <button class="x" (click)="rmVar($index)">✕</button>
+                </div>
+              }
+              @if (!wf()!.variables.length) { <p class="muted">No variables yet.</p> }
+              <button class="add" (click)="addVar()">+ add variable</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -223,6 +219,19 @@ const NW = 190, NH = 66;
     .valid.ok { background: #e7f7ee; color: var(--green); }
     .btn.full { width: 100%; justify-content: center; margin-top: 8px; }
     .btn.danger { color: var(--red); border-color: #f3b4b4; } .btn.danger:hover { background: #fdeaea; }
+
+    .modal-bg { position: fixed; inset: 0; background: rgba(16,24,40,.4); display: grid; place-items: center; z-index: 50; }
+    .modal { background: #fff; border-radius: 14px; width: 480px; max-width: 92vw; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
+    .modal-h { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; }
+    .modal-h .x { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); }
+    .modal-body { padding: 16px 18px; overflow: auto; }
+    .vrow { display: flex; gap: 8px; margin-bottom: 8px; }
+    .vrow input { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+    .vrow select { flex: 0 0 120px; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+    .vrow .x { flex: 0 0 auto; width: 32px; border: 1px solid var(--border); background: #fff; border-radius: 8px; cursor: pointer; color: var(--muted); }
+    .vrow .x:hover { background: #fdeaea; color: var(--red); }
+    .modal-body .add { border: 1px dashed var(--border); background: #fff; border-radius: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: var(--muted); margin-top: 6px; }
+    .modal-body .add:hover { border-color: var(--primary); color: var(--primary); }
   `],
 })
 export class BuilderComponent {
@@ -239,6 +248,7 @@ export class BuilderComponent {
   linkFrom = signal<string | null>(null);
   saveState = signal<'saved' | 'saving' | 'dirty'>('saved');
   validationMsg = signal<string>(''); validOk = signal(false);
+  showVars = signal(false);
   name = ''; q = '';
   NW = NW;
   private branchId = ''; private versionId = ''; private idc = 0; private saveTimer: any;
@@ -389,6 +399,16 @@ export class BuilderComponent {
     const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = this.pointer.x, y2 = this.pointer.y;
     const dx = Math.max(40, Math.abs(x2 - x1) / 2);
     return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+  }
+
+  // ---- process variables ----
+  openVars() { const w = this.wf(); if (w && !w.variables) w.variables = []; this.showVars.set(true); }
+  addVar() { this.wf()!.variables.push({ name: '', type: 'string' }); this.markDirty(); }
+  rmVar(i: number) { this.wf()!.variables.splice(i, 1); this.markDirty(); }
+  closeVars() {
+    this.showVars.set(false);
+    const w = this.wf(); if (w) this.api.updateWorkflow(w.id, { variables: w.variables.filter((v) => v.name.trim()) }).subscribe();
+    this.saveNow();
   }
 
   autoLayout() {
