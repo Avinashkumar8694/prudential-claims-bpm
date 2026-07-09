@@ -13,7 +13,7 @@ import { TaskService } from '../modules/tasks/service.ts';
 import { ProcessService } from '../modules/processes/service.ts';
 import { AssetsService } from '../modules/assets/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
-import { fromEngineProject } from '../sdk/index.ts';
+import { exportKjar } from '../modules/export/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { hub } from '../infra/ws-hub.ts';
 
@@ -77,7 +77,7 @@ export function buildRoutes(): Router {
   r.post('/versions/:id/deploy', asyncHandler(async (req, res) => res.status(201).json(await new DeploymentService(ctxOf(req)).deploy(req.params.id, req.body, actorOf(req)))));
   r.get('/versions/:id/export', asyncHandler(async (req, res) => {
     const v = await new VersionService(ctxOf(req)).get(req.params.id);
-    res.json(fromEngineProject(v.engine).descriptor);
+    res.json(exportKjar(v.engine));
   }));
 
   // --- deployments ---
@@ -90,7 +90,7 @@ export function buildRoutes(): Router {
   r.post('/deployments/:id/archive', asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).archive(req.params.id, actorOf(req)))));
   r.get('/deployments/:id/export', asyncHandler(async (req, res) => {
     const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
-    res.json(fromEngineProject(d.engine).descriptor);
+    res.json(exportKjar(d.engine));
   }));
   r.get('/deployments/:id/definitions', asyncHandler(async (req, res) => {
     const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
