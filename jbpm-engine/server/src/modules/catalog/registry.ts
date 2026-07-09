@@ -24,8 +24,8 @@ export const NODE_REGISTRY: NodeSpec[] = [
   { key: 'catch-timer', label: 'Timer', category: 'Events', icon: '⏱', color: '#7c3aed', engineType: 'catch', defaults: { type: 'catch', event: { timer: { duration: 'PT5M' } } }, docFolder: 'intermediate-catch-timer' },
   { key: 'catch-message', label: 'Catch Message', category: 'Events', icon: '✉', color: '#7c3aed', engineType: 'catch', defaults: { type: 'catch', event: { message: 'Msg' } }, docFolder: 'event-message' },
   { key: 'throw-signal', label: 'Throw Signal', category: 'Events', icon: '📣', color: '#7c3aed', engineType: 'throw', defaults: { type: 'throw', event: { signal: 'Go' } }, docFolder: 'intermediate-throw-event' },
-  { key: 'boundary-timer', label: 'Boundary Timer', category: 'Events', icon: '⏰', color: '#7c3aed', engineType: 'boundary', defaults: { type: 'boundary', on: '', event: { timer: { duration: 'P1D' } }, interrupting: false }, docFolder: 'boundary-event-timer' },
-  { key: 'boundary-error', label: 'Boundary Error', category: 'Events', icon: '⚠', color: '#7c3aed', engineType: 'boundary', defaults: { type: 'boundary', on: '', event: { error: 'ERR' }, interrupting: true }, docFolder: 'boundary-event-error' },
+  { key: 'error-catch', label: 'Error Catch', category: 'Events', icon: '⚠', color: '#dc2626', engineType: 'boundary', defaults: { type: 'boundary', name: 'Error catch', on: [], event: { error: '*' }, interrupting: true }, docFolder: 'boundary-event-error' },
+  { key: 'boundary-timer', label: 'Timer Catch', category: 'Events', icon: '⏰', color: '#7c3aed', engineType: 'boundary', defaults: { type: 'boundary', name: 'Timer', on: [], event: { timer: { duration: 'P1D' } }, interrupting: false }, docFolder: 'boundary-event-timer' },
 
   // Tasks
   { key: 'userTask', label: 'User Task', category: 'Tasks', icon: '👤', color: '#2563eb', engineType: 'userTask', defaults: { type: 'userTask', name: 'User Task', group: 'user' }, docFolder: 'user-task' },

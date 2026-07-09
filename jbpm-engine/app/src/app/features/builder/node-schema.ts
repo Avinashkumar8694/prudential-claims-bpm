@@ -5,7 +5,7 @@
 
 export type Widget =
   | 'text' | 'number' | 'bool' | 'select' | 'code' | 'textarea'
-  | 'keyval' | 'stringlist' | 'event' | 'timer';
+  | 'keyval' | 'stringlist' | 'event' | 'timer' | 'nodes';
 
 export interface Field {
   key: string;                 // supports dotted paths, e.g. "on.signal", "dmn.namespace"
@@ -110,10 +110,10 @@ export const NODE_SCHEMA: Record<string, Section[]> = {
     { key: 'event', label: 'Throw', widget: 'event', options: ['signal', 'message', 'escalation'] },
   ] }],
 
-  boundary: [GENERAL, { title: 'Boundary', fields: [
-    { key: 'on', label: 'Attached to node id', widget: 'text' },
-    { key: 'interrupting', label: 'Interrupting (cancels host)', widget: 'bool' },
-    { key: 'event', label: 'Trigger', widget: 'event', options: ['timer', 'error', 'message', 'signal', 'escalation', 'condition'] },
+  boundary: [GENERAL, { title: 'Error / boundary catch', fields: [
+    { key: 'on', label: 'Catch from', widget: 'nodes', help: 'Pick node(s) to catch (boundary), or “All nodes” for a process-wide handler. Connect this node’s outgoing flow to the recovery path.' },
+    { key: 'event', label: 'Trigger', widget: 'event', options: ['error', 'timer', 'message', 'signal', 'escalation', 'condition'] },
+    { key: 'interrupting', label: 'Interrupting (cancel the caught activity)', widget: 'bool' },
   ] }],
 
   subprocess: [GENERAL, { title: 'Sub-process', fields: [

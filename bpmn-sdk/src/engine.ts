@@ -38,7 +38,9 @@ export interface EngineManual extends Base { type: 'manual'; }
 export interface EngineGateway extends Base { type: 'gateway'; mode: GatewayMode; default?: string; direction?: 'Diverging' | 'Converging'; }
 export interface EngineCatch extends Base { type: 'catch'; event: EventDef; }
 export interface EngineThrow extends Base { type: 'throw'; event: EventDef; }
-export interface EngineBoundary extends Base { type: 'boundary'; on: string; event: EventDef; interrupting?: boolean; }
+// on: host node id, a list of host ids, or '*' (all activities = process-wide error handler).
+// On export a multi/global error-catch expands to one BPMN boundary event per host activity.
+export interface EngineBoundary extends Base { type: 'boundary'; on: string | string[]; event: EventDef; interrupting?: boolean; }
 export interface EngineSubprocess extends Base { type: 'subprocess'; transaction?: boolean; on?: { error?: string }; nodes: EngineNode[]; flows: EngineFlow[]; }
 export interface EngineRaw extends Base { type: 'raw'; raw?: string; }
 export type EngineNode =
@@ -326,7 +328,7 @@ export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): P
       case 'gateway': { const map: Record<string, Node['type']> = { exclusive: 'exclusiveGateway', parallel: 'parallelGateway', inclusive: 'inclusiveGateway', event: 'eventBasedGateway', complex: 'complexGateway' }; return { ...base, type: map[n.mode] || 'exclusiveGateway', gatewayDirection: n.direction || 'Diverging', default: n.default }; }
       case 'catch': { const nd: Node = { ...base, type: 'intermediateCatchEvent' }; setEvent(nd, n.event); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); return nd; }
       case 'throw': { const nd: Node = { ...base, type: 'intermediateThrowEvent' }; setEvent(nd, n.event); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); if (nd.escalationRef) esc.add(nd.escalationRef); return nd; }
-      case 'boundary': { const nd: Node = { ...base, type: 'boundaryEvent', attachedTo: n.on, cancelActivity: n.interrupting !== false }; setEvent(nd, n.event); if (nd.errorRef) err.add(nd.errorRef); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); if (nd.escalationRef) esc.add(nd.escalationRef); return nd; }
+      case 'boundary': { const host = Array.isArray(n.on) ? (n.on.find((h) => h !== '*') ?? n.on[0]) : n.on; const nd: Node = { ...base, type: 'boundaryEvent', attachedTo: host, cancelActivity: n.interrupting !== false }; setEvent(nd, n.event); if (nd.errorRef) err.add(nd.errorRef); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); if (nd.escalationRef) esc.add(nd.escalationRef); return nd; }
       case 'subprocess': {
         const nd: Node = { ...base, type: 'subProcess', subtype: n.transaction ? 'transaction' : (n.on ? 'event' : 'embedded') };
         if (n.on && n.on.error) { nd.error = n.on.error; err.add(n.on.error); }
@@ -341,6 +343,28 @@ export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): P
 
   const nodes = ep.nodes.map(conv);
   const flows = ep.flows.map(convFlow);
+
+  // Expand a multi-host / global (*) error-catch into one BPMN boundary event per host activity
+  // (BPMN boundaries attach to a single activity). Each clone shares the catch's outgoing (recovery) flow.
+  const ACTIVITY = new Set<Node['type']>(['scriptTask', 'userTask', 'businessRuleTask', 'sendTask', 'receiveTask', 'manualTask', 'callActivity', 'subProcess']);
+  const activityIds = () => nodes.filter((x) => ACTIVITY.has(x.type)).map((x) => x.id);
+  for (const en of ep.nodes) {
+    if (en.type !== 'boundary') continue;
+    const on = (en as EngineBoundary).on;
+    const list = Array.isArray(on) ? on : [on];
+    const isGlobal = list.includes('*');
+    const outFlows = flows.filter((f) => f.sourceRef === en.id);
+    const recovery = new Set(outFlows.map((f) => f.targetRef));   // don't attach a global catch to its own recovery path
+    const hosts = (isGlobal ? activityIds().filter((id) => !recovery.has(id)) : list.filter((h) => h && h !== '*')) as string[];
+    if (hosts.length === 0 || (!isGlobal && hosts.length <= 1)) continue;
+    const orig = nodes.find((x) => x.id === en.id!)!;
+    orig.attachedTo = hosts[0];
+    for (let i = 1; i < hosts.length; i++) {
+      const cloneId = `${en.id}_${i}`;
+      nodes.push({ ...orig, id: cloneId, attachedTo: hosts[i] });
+      for (const f of outFlows) flows.push({ ...f, id: `${f.id}_${i}`, sourceRef: cloneId });
+    }
+  }
 
   const model: ProcessModel = {
     id: ep.id, name: ep.name || ep.id, packageName: ep.package || 'org.jbpm', processType: 'Public', isExecutable: true,

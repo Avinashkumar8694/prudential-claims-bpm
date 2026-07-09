@@ -14,7 +14,12 @@ interface HandlerResult {
   consume?: boolean;      // remove token without spawning (e.g. join not yet satisfied)
   outcome?: string;
   error?: string;
+  errorCode?: string;     // BPMN-style error code for error-boundary routing
 }
+
+// Error codes the Node runtime raises (documented in docs/14-error-handling.md); user codes also allowed.
+export const ENGINE_ERRORS = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'] as const;
+const ERROR_VAR = 'errorInfo';   // { code, node, message } bound when an error is caught
 
 export type EngineEvent =
   | { kind: 'instance.started' | 'instance.updated' | 'instance.completed' | 'instance.failed'; instanceId: string }
@@ -82,17 +87,29 @@ export class ExecutionEngine {
         inst.history.push(visit);
         this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: node.id!, tokenId: token.id });
 
-        const result = await this.handle(node, inst, p, joins);
+        let result: HandlerResult;
+        try { result = await this.handle(node, inst, p, joins); }
+        catch (e) { result = { error: (e as Error).message, errorCode: 'RUNTIME_ERROR' }; }
 
         if (result.vars) Object.assign(inst.variables, result.vars);
         visit.exitedAt = this.ctx.clock();
-        visit.outcome = result.outcome || (result.wait ? 'waiting' : result.end || 'done');
+        visit.outcome = result.outcome || (result.wait ? 'waiting' : result.end || (result.error ? 'error' : 'done'));
         this.emit({ kind: 'node.exited', instanceId: inst.id, nodeId: node.id!, tokenId: token.id });
 
         if (result.wait) { token.state = 'waiting'; token.waitFor = result.wait; continue; }
-        if (result.error) { inst.status = 'failed'; inst.error = { nodeId: node.id!, message: result.error, at: this.ctx.clock() }; break; }
+        if (result.error) {
+          this.removeToken(inst, token.id);
+          const code = result.errorCode || 'RUNTIME_ERROR';
+          if (this.raiseError(inst, p, node.id!, code, result.error)) continue;   // routed to an error catch
+          inst.status = 'failed'; inst.error = { nodeId: node.id!, message: result.error, at: this.ctx.clock() }; break;
+        }
         if (result.end === 'terminate') { inst.tokens = []; inst.status = 'completed'; break; }
-        if (result.end === 'error') { inst.status = 'failed'; inst.error = { nodeId: node.id!, message: 'error end reached', at: this.ctx.clock() }; break; }
+        if (result.end === 'error') {
+          this.removeToken(inst, token.id);
+          const code = (node as any).throw?.error || 'ERROR';
+          if (this.raiseError(inst, p, node.id!, code, `error end: ${code}`)) continue;
+          inst.status = 'failed'; inst.error = { nodeId: node.id!, message: `unhandled error end (${code})`, at: this.ctx.clock() }; break;
+        }
         // consume current token, then spawn successors
         this.removeToken(inst, token.id);
         if (result.end === 'complete' || result.consume) { /* no successors */ }
@@ -170,6 +187,35 @@ export class ExecutionEngine {
 
   private removeToken(inst: Instance, tokenId: string) { inst.tokens = inst.tokens.filter((t) => t.id !== tokenId); }
 
+  // ---- error handling: route a raised error to a matching error-catch (boundary) node ----
+  /** on: string | string[]; '*' = all nodes (process-global). Normalize to a list. */
+  private onList(n: EngineNode): string[] { const on = (n as any).on; return Array.isArray(on) ? on : (on ? [on] : []); }
+  private isErrorCatch(n: EngineNode): boolean { const e = (n as any).event; return n.type === 'boundary' && e && Object.prototype.hasOwnProperty.call(e, 'error'); }
+  private isCatchAll(n: EngineNode): boolean { const e = (n as any).event?.error; return e === '' || e === '*' || e == null || String(e).toUpperCase() === 'ANY'; }
+
+  /** Find the best error-catch for (failing node, code): node-specific+code → node+any → global+code → global+any. */
+  private findErrorHandler(p: EngineProcess, nodeId: string, code: string): EngineNode | undefined {
+    const catches = p.nodes.filter((n) => this.isErrorCatch(n));
+    const onNode = (n: EngineNode) => this.onList(n).includes(nodeId);
+    const global = (n: EngineNode) => this.onList(n).includes('*');
+    return catches.find((n) => onNode(n) && !this.isCatchAll(n) && (n as any).event.error === code)
+      || catches.find((n) => onNode(n) && this.isCatchAll(n))
+      || catches.find((n) => global(n) && !this.isCatchAll(n) && (n as any).event.error === code)
+      || catches.find((n) => global(n) && this.isCatchAll(n));
+  }
+
+  /** Route an error to a matching error-catch; returns true if handled (a handler token was spawned). */
+  private raiseError(inst: Instance, p: EngineProcess, failingNodeId: string, code: string, message: string): boolean {
+    const handler = this.findErrorHandler(p, failingNodeId, code);
+    if (!handler) return false;
+    inst.variables[ERROR_VAR] = { code, node: failingNodeId, message };
+    // a process-global (on '*') error is interrupting for the whole instance → cancel all other tokens
+    if (this.onList(handler).includes('*')) inst.tokens = [];
+    inst.tokens.push({ id: this.ctx.newId(), nodeId: handler.id!, state: 'active', enteredAt: this.ctx.clock() });
+    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: inst.tokens.at(-1)!.id });
+    return true;
+  }
+
   private defaultTargets(p: EngineProcess, node: EngineNode, _inst: Instance): string[] {
     return this.outgoing(p, node.id!).map((f) => f.to);
   }
@@ -189,7 +235,7 @@ export class ExecutionEngine {
         if (n.lang && n.lang !== 'js') return { outcome: 'skipped-nonjs' };
         const vars = { ...inst.variables };
         try { runScript(n.code || '', vars, config.scriptTimeoutMs); }
-        catch (e) { return { error: `script failed: ${(e as Error).message}` }; }
+        catch (e) { return { error: `script failed: ${(e as Error).message}`, errorCode: 'SCRIPT_ERROR' }; }
         return { vars };
       }
       case 'gateway': return this.gateway(node as any, inst, p, joins);

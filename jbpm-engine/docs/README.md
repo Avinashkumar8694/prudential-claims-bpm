@@ -33,6 +33,7 @@ with zero Java/KIE server required, and a one-click escape hatch to export to re
 | 11 | [Roadmap](./11-roadmap.md) | Phased delivery plan |
 | 12 | [Validation Rules](./12-validation-rules.md) | Process validation rules (jBPM-equivalent) + enforcement |
 | 13 | [Projects & Operations](./13-projects-and-operations.md) | Project→processes model, assets, per-version deploy, cron, instances |
+| 14 | [Error Handling](./14-error-handling.md) | Error Catch node (boundary + global), taxonomy, runtime, export |
 
 ## Tech stack (decided)
 

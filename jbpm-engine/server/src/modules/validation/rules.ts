@@ -35,17 +35,19 @@ function buildCtx(process: EngineProcess): GraphCtx {
     (outgoing.get(f.from) || outgoing.set(f.from, []).get(f.from)!).push(f);
     (incoming.get(f.to) || incoming.set(f.to, []).get(f.to)!).push(f);
   }
+  const onList = (n: EngineNode): string[] => { const on = (n as any).on; return Array.isArray(on) ? on : (on ? [on] : []); };
   const boundaryByHost = new Map<string, EngineNode[]>();
   for (const n of nodes) if (isBoundary(n)) {
-    const host = (n as any).on as string;
-    (boundaryByHost.get(host) || boundaryByHost.set(host, []).get(host)!).push(n);
+    for (const host of onList(n)) (boundaryByHost.get(host) || boundaryByHost.set(host, []).get(host)!).push(n);
   }
   const starts = nodes.filter(isStart);
   const ends = nodes.filter(isEnd);
 
-  // reachability from starts (event-subprocesses are always reachable; boundaries when their host is)
+  // reachability from starts (event-subprocesses + process-global error catches are always reachable;
+  // node-attached boundaries are reachable when their host is)
   const reachable = new Set<string>();
-  const queue: string[] = [...starts.map((n) => n.id!), ...nodes.filter(isEventSub).map((n) => n.id!)];
+  const globalCatches = nodes.filter((n) => isBoundary(n) && onList(n).includes('*'));
+  const queue: string[] = [...starts.map((n) => n.id!), ...nodes.filter(isEventSub).map((n) => n.id!), ...globalCatches.map((n) => n.id!)];
   while (queue.length) {
     const id = queue.shift()!;
     if (reachable.has(id) || !byId.has(id)) continue;
@@ -122,12 +124,12 @@ export const RULES: Rule[] = [
     return out;
   } },
 
-  { id: 'boundary-host', description: 'Boundary event must attach to an existing host node', run: (c) => {
+  { id: 'boundary-host', description: 'Error/boundary catch must attach to existing node(s) or all (*)', run: (c) => {
     const out: Problem[] = [];
     for (const n of c.nodes) if (isBoundary(n)) {
-      const host = (n as any).on as string | undefined;
-      if (!host) out.push(P('boundary-host', 'error', `Boundary "${label(n)}" is not attached to a host node`, { nodeId: n.id }));
-      else if (!c.byId.has(host)) out.push(P('boundary-host', 'error', `Boundary "${label(n)}" attaches to missing node "${host}"`, { nodeId: n.id }));
+      const hosts = (() => { const on = (n as any).on; return Array.isArray(on) ? on : (on ? [on] : []); })();
+      if (hosts.length === 0) { out.push(P('boundary-host', 'error', `Catch "${label(n)}" is not attached to any node (pick nodes or "all")`, { nodeId: n.id })); continue; }
+      for (const h of hosts) if (h !== '*' && !c.byId.has(h)) out.push(P('boundary-host', 'error', `Catch "${label(n)}" attaches to missing node "${h}"`, { nodeId: n.id }));
     }
     return out;
   } },

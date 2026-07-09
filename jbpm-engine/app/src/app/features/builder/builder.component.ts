@@ -117,7 +117,7 @@ const NW = 190, NH = 66;
           @if (selNode(); as n) {
             <div class="props-h"><span class="chip sm" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>{{ typeLabel(n) }}</div>
             <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
-            <app-properties-panel [node]="n" (changed)="markDirty()"></app-properties-panel>
+            <app-properties-panel [node]="n" [allNodes]="nodes()" (changed)="markDirty()"></app-properties-panel>
             <button class="btn danger full" (click)="del($event, n)">Delete node</button>
           } @else if (selEdge()) {
             <div class="props-h">Connection</div>

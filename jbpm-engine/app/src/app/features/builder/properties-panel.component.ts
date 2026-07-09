@@ -49,6 +49,17 @@ import { NODE_SCHEMA, type Field, type Section } from './node-schema';
                   <button class="add" (click)="addKv(f.key)">+ add entry</button>
                 </div>
               }
+              @case ('nodes') {
+                <label class="tog all"><input type="checkbox" [ngModel]="isAll(f.key)" (ngModelChange)="toggleAll(f.key, $event)" /><span>All nodes (process-wide handler)</span></label>
+                @if (!isAll(f.key)) {
+                  <div class="nodesel">
+                    @for (n of attachable(); track n.id) {
+                      <label class="tog"><input type="checkbox" [ngModel]="isAttached(f.key, n.id)" (ngModelChange)="toggleAttach(f.key, n.id)" /><span>{{ n.name || n.id }} <em>{{ n.type }}</em></span></label>
+                    }
+                    @if (attachable().length === 0) { <span class="muted">No other nodes yet.</span> }
+                  </div>
+                }
+              }
               @case ('event') {
                 <select [ngModel]="eventKind(f.key)" (ngModelChange)="setKind(f, $event)">
                   @for (k of f.options; track k) { <option [value]="k">{{ k }}</option> }
@@ -56,7 +67,11 @@ import { NODE_SCHEMA, type Field, type Section } from './node-schema';
                 @switch (eventKind(f.key)) {
                   @case ('signal') { <input class="mt" placeholder="Signal name" [ngModel]="val(f.key + '.signal')" (ngModelChange)="set(f.key + '.signal', $event)" /> }
                   @case ('message') { <input class="mt" placeholder="Message name" [ngModel]="val(f.key + '.message')" (ngModelChange)="set(f.key + '.message', $event)" /> }
-                  @case ('error') { <input class="mt" placeholder="Error code" [ngModel]="val(f.key + '.error')" (ngModelChange)="set(f.key + '.error', $event)" /> }
+                  @case ('error') {
+                    <input class="mt" placeholder="Error code (blank = any)" [attr.list]="'engine-errs'" [ngModel]="errText(f.key)" (ngModelChange)="set(f.key + '.error', $event || '*')" />
+                    <datalist id="engine-errs">@for (c of errorCodes; track c) { <option [value]="c"></option> }</datalist>
+                    <small>Runtime codes: SCRIPT_ERROR, SERVICE_ERROR, RULE_ERROR, CALL_ERROR, RUNTIME_ERROR — or your own from an error-throw end. Blank/“*” = any.</small>
+                  }
                   @case ('escalation') { <input class="mt" placeholder="Escalation code" [ngModel]="val(f.key + '.escalation')" (ngModelChange)="set(f.key + '.escalation', $event)" /> }
                   @case ('condition') {
                     <input class="mt" placeholder="Condition expression (JavaScript)" [ngModel]="val(f.key + '.condition')" (ngModelChange)="set(f.key + '.condition', $event); set(f.key + '.lang', 'js')" />
@@ -91,14 +106,32 @@ import { NODE_SCHEMA, type Field, type Section } from './node-schema';
     .x:hover { background: #fdeaea; color: var(--red); border-color: #f3b4b4; }
     .add { align-self: flex-start; border: 1px dashed var(--border); background: #fff; border-radius: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer; color: var(--muted); }
     .add:hover { border-color: var(--primary); color: var(--primary); }
+    .all { padding: 8px 10px; background: #f2f0ff; border-radius: 8px; margin-bottom: 8px; }
+    .nodesel { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+    .nodesel em { color: var(--muted); font-style: normal; font-size: 11px; }
   `],
 })
 export class PropertiesPanelComponent implements OnChanges {
   @Input() node: any;
+  @Input() allNodes: { id: string; type: string; name?: string }[] = [];
   @Output() changed = new EventEmitter<void>();
   sections: Section[] = [];
   kv: Record<string, { k: string; v: string }[]> = {};
   sl: Record<string, string[]> = {};
+  errorCodes = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'];
+
+  // nodes-to-catch selector (writes node.on as a string[]; '*' = all)
+  attachable() { return (this.allNodes || []).filter((n) => n.id !== this.node?.id && n.type !== 'boundary'); }
+  private onArr(path: string): string[] { const v = this.val(path); return Array.isArray(v) ? v : (v ? [v] : []); }
+  isAll(path: string) { return this.onArr(path).includes('*'); }
+  isAttached(path: string, id: string) { return this.onArr(path).includes(id); }
+  toggleAll(path: string, on: boolean) { this.node[path.split('.')[0]] = on ? ['*'] : []; this.changed.emit(); }
+  toggleAttach(path: string, id: string) {
+    const key = path.split('.')[0]; const arr = this.onArr(path).filter((x) => x !== '*');
+    const i = arr.indexOf(id); if (i >= 0) arr.splice(i, 1); else arr.push(id);
+    this.node[key] = arr; this.changed.emit();
+  }
+  errText(path: string) { const e = this.val(path + '.error'); return e === '*' ? '' : e; }
 
   ngOnChanges() {
     this.sections = (this.node && NODE_SCHEMA[this.node.type]) || [];

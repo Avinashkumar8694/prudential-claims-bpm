@@ -74,6 +74,8 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] UI: builder opens a selected process by id; header Test + Deploy
 - [x] backend+UI: `assets` module — list/add asset entries (forms/DRL/DMN/tables/…) in the project draft; Assets & Rules tabs
 - [ ] validation `asset-ref` rule (node references an existing asset)
+- [x] error handling: Error Catch node (boundary + global `*`), error taxonomy, runtime routing, validation, UI multi-select, SDK export expansion — see [14](./14-error-handling.md)
+- [ ] error export: emit a true event sub-process for global (`*`) catches (currently boundary-on-every-activity approximation)
 - [ ] backend+UI: cron/scheduled starts per process (`CronService` + settings + scheduler)
 - [ ] UI: per-asset editors (form builder, DRL/DMN/table editors) — Phase 8
 - [ ] tasks/definitions/instances views scoped per version + Test dry-run flow
