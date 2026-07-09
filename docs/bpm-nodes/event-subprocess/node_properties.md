@@ -52,12 +52,38 @@
 ## Example
 ```json
 {
+  "id": "_handler",
+  "name": "On terminate",
   "type": "subprocess",
   "on": {
     "error": "TERMINATE_CASE"
   },
-  "nodes": [],
-  "flows": []
+  "nodes": [
+    {
+      "id": "h_s",
+      "type": "start"
+    },
+    {
+      "id": "h_log",
+      "type": "script",
+      "lang": "java",
+      "code": "System.out.println(\"cleanup\");"
+    },
+    {
+      "id": "h_e",
+      "type": "end"
+    }
+  ],
+  "flows": [
+    {
+      "from": "h_s",
+      "to": "h_log"
+    },
+    {
+      "from": "h_log",
+      "to": "h_e"
+    }
+  ]
 }
 ```
 

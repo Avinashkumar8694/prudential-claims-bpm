@@ -46,8 +46,9 @@
 ## Example
 ```json
 {
+  "id": "_review",
+  "name": "Review claim",
   "type": "userTask",
-  "name": "Review",
   "group": "Verifier",
   "form": "review",
   "skippable": false

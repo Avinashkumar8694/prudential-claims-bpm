@@ -77,6 +77,8 @@
 ## Example
 ```json
 {
+  "id": "_start",
+  "name": "On system claim",
   "type": "start",
   "on": {
     "signal": "StartSystemClaim"

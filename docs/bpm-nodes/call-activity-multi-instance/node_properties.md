@@ -59,8 +59,10 @@
 ## Example
 ```json
 {
+  "id": "_perPolicy",
+  "name": "Assess each policy",
   "type": "forEach",
-  "process": "com.acme.single",
+  "process": "com.acme.assess",
   "over": "applicablePolicies",
   "as": "currentPolicy",
   "collectInto": "claimResults",

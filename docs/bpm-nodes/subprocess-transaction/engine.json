@@ -1,6 +1,32 @@
 {
+  "id": "_txn",
+  "name": "Payment transaction",
   "type": "subprocess",
   "transaction": true,
-  "nodes": [],
-  "flows": []
+  "nodes": [
+    {
+      "id": "t_s",
+      "type": "start"
+    },
+    {
+      "id": "t_pay",
+      "type": "call",
+      "name": "Pay",
+      "process": "com.acme.pay"
+    },
+    {
+      "id": "t_e",
+      "type": "end"
+    }
+  ],
+  "flows": [
+    {
+      "from": "t_s",
+      "to": "t_pay"
+    },
+    {
+      "from": "t_pay",
+      "to": "t_e"
+    }
+  ]
 }

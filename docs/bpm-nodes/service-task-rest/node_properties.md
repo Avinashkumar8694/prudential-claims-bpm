@@ -64,11 +64,17 @@
 ## Example
 ```json
 {
+  "id": "_status",
+  "name": "Set claim status",
   "type": "http",
   "method": "POST",
   "url": "/v1/claims/status",
+  "headers": {
+    "Content-Type": "application/json"
+  },
   "body": {
-    "status": "FOR_VERIFICATION"
+    "status": "FOR_VERIFICATION",
+    "caseId": "$caseId"
   },
   "resultTo": {
     "verifierId": "$.verifierId"

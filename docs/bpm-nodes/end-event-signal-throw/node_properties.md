@@ -81,6 +81,8 @@
 ## Example
 ```json
 {
+  "id": "_end",
+  "name": "Trigger payment",
   "type": "end",
   "throw": {
     "signal": "PaymentProcess"

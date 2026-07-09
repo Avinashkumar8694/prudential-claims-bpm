@@ -50,6 +50,8 @@
 ## Example
 ```json
 {
+  "id": "_split",
+  "name": "Inclusive split",
   "type": "gateway",
   "mode": "inclusive",
   "default": "fDefault"

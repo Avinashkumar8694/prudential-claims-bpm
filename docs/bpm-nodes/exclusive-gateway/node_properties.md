@@ -50,6 +50,8 @@
 ## Example
 ```json
 {
+  "id": "_route",
+  "name": "Route by type",
   "type": "gateway",
   "mode": "exclusive",
   "default": "fOther"

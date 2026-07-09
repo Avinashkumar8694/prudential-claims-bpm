@@ -50,8 +50,11 @@
 ## Example
 ```json
 {
+  "id": "_fork",
+  "name": "Fork",
   "type": "gateway",
-  "mode": "parallel"
+  "mode": "parallel",
+  "direction": "Diverging"
 }
 ```
 

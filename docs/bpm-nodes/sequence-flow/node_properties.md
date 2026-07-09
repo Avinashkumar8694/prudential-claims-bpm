@@ -42,8 +42,9 @@
 ## Example
 ```json
 {
-  "from": "_xg",
-  "to": "_calc",
+  "id": "fDeath",
+  "from": "_route",
+  "to": "_death",
   "when": "return \"DEATH\".equals(claimType);",
   "lang": "java"
 }

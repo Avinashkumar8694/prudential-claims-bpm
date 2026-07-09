@@ -77,6 +77,8 @@
 ## Example
 ```json
 {
+  "id": "_start",
+  "name": "Claim started",
   "type": "start"
 }
 ```

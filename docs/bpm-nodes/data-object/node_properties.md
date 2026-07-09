@@ -39,6 +39,15 @@
       "name": "Document",
       "type": "object",
       "collection": false
+    },
+    {
+      "name": "ClaimAmount",
+      "type": "double"
+    },
+    {
+      "name": "AttachmentIds",
+      "type": "string",
+      "collection": true
     }
   ]
 }

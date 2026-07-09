@@ -87,14 +87,16 @@
 ## Example
 ```json
 {
+  "id": "_reminder",
+  "name": "Reminder after 30 days",
   "type": "boundary",
-  "on": "_await",
+  "on": "_review",
   "event": {
     "timer": {
       "duration": "P30D"
     }
   },
-  "interrupting": true
+  "interrupting": false
 }
 ```
 

@@ -50,6 +50,8 @@
 ## Example
 ```json
 {
+  "id": "_wait",
+  "name": "Wait for event",
   "type": "gateway",
   "mode": "event"
 }

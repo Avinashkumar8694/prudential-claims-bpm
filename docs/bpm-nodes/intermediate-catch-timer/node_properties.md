@@ -78,6 +78,8 @@
 ## Example
 ```json
 {
+  "id": "_delay",
+  "name": "Wait 5 minutes",
   "type": "catch",
   "event": {
     "timer": {

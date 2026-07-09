@@ -43,9 +43,11 @@
 ## Example
 ```json
 {
+  "id": "_boot",
+  "name": "Bootstrap base URL",
   "type": "script",
   "lang": "java",
-  "code": "kcontext.setVariable(\"baseUrl\", \"http://localhost:3000\");"
+  "code": "String u = System.getProperty(\"INTEGRATION_LAYER_URL\");\nif (u == null || u.isEmpty()) u = \"http://localhost:3000\";\nkcontext.setVariable(\"baseUrl\", u);"
 }
 ```
 

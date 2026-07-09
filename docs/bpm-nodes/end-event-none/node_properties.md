@@ -81,6 +81,8 @@
 ## Example
 ```json
 {
+  "id": "_end",
+  "name": "Path done",
   "type": "end"
 }
 ```

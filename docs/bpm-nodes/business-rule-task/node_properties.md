@@ -54,6 +54,8 @@
 ## Example
 ```json
 {
+  "id": "_classify",
+  "name": "Classify claim",
   "type": "rule",
   "ruleflowGroup": "classify"
 }

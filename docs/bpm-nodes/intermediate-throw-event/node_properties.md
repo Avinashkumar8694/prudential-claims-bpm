@@ -78,6 +78,8 @@
 ## Example
 ```json
 {
+  "id": "_throw",
+  "name": "Signal Go",
   "type": "throw",
   "event": {
     "signal": "Go"

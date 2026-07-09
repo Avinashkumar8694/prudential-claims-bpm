@@ -30,8 +30,9 @@
 ## Example
 ```json
 {
-  "type": "manual",
-  "name": "File form"
+  "id": "_file",
+  "name": "File paperwork",
+  "type": "manual"
 }
 ```
 

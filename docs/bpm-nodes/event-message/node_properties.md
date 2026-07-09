@@ -78,9 +78,11 @@
 ## Example
 ```json
 {
+  "id": "_msg",
+  "name": "Await update",
   "type": "catch",
   "event": {
-    "message": "MSG"
+    "message": "ClaimUpdated"
   }
 }
 ```

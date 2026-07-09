@@ -81,6 +81,8 @@
 ## Example
 ```json
 {
+  "id": "_end",
+  "name": "Abort case",
   "type": "end",
   "throw": {
     "error": "TERMINATE_CASE"

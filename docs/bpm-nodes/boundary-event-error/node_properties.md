@@ -87,6 +87,8 @@
 ## Example
 ```json
 {
+  "id": "_onErr",
+  "name": "On call error",
   "type": "boundary",
   "on": "_validate",
   "event": {

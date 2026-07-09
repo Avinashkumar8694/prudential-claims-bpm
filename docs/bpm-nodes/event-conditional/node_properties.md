@@ -78,6 +78,8 @@
 ## Example
 ```json
 {
+  "id": "_cond",
+  "name": "Wait until flag set",
   "type": "catch",
   "event": {
     "condition": "return flag != null && flag;",

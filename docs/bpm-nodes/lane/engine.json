@@ -2,10 +2,16 @@
   "process-level": true,
   "lanes": [
     {
+      "name": "System",
+      "nodes": [
+        "_boot",
+        "_route"
+      ]
+    },
+    {
       "name": "Ops",
       "nodes": [
-        "_pg",
-        "_br"
+        "_review"
       ]
     }
   ]

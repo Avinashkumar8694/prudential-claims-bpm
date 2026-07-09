@@ -41,6 +41,8 @@
 ## Example
 ```json
 {
+  "id": "_child",
+  "name": "Run sub-claim",
   "type": "call",
   "process": "com.acme.child",
   "inputs": {

@@ -37,8 +37,11 @@
 ## Example
 ```json
 {
+  "id": "_await",
+  "name": "Await acknowledgement",
   "type": "receive",
-  "message": "MSG"
+  "message": "Ack",
+  "implementation": "##WebService"
 }
 ```
 

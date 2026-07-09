@@ -52,31 +52,33 @@
 ## Example
 ```json
 {
+  "id": "_sub",
+  "name": "Validate & enrich",
   "type": "subprocess",
   "nodes": [
     {
-      "id": "s",
+      "id": "s_s",
       "type": "start"
     },
     {
-      "id": "t",
+      "id": "s_check",
       "type": "script",
       "lang": "java",
-      "code": "…"
+      "code": "kcontext.setVariable(\"valid\", true);"
     },
     {
-      "id": "e",
+      "id": "s_e",
       "type": "end"
     }
   ],
   "flows": [
     {
-      "from": "s",
-      "to": "t"
+      "from": "s_s",
+      "to": "s_check"
     },
     {
-      "from": "t",
-      "to": "e"
+      "from": "s_check",
+      "to": "s_e"
     }
   ]
 }

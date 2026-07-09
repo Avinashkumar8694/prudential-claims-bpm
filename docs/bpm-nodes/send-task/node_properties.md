@@ -37,8 +37,11 @@
 ## Example
 ```json
 {
+  "id": "_notify",
+  "name": "Notify downstream",
   "type": "send",
-  "message": "MSG"
+  "message": "ClaimSubmitted",
+  "implementation": "##WebService"
 }
 ```
 

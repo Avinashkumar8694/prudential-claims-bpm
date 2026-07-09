@@ -81,6 +81,8 @@
 ## Example
 ```json
 {
+  "id": "_end",
+  "name": "Terminate all",
   "type": "end",
   "result": "terminate"
 }
