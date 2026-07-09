@@ -3,16 +3,25 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { JsonPipe, SlicePipe } from '@angular/common';
 import { ApiService } from '../../core/api.service';
-import type { Instance } from '../../core/models';
+import type { Deployment, Instance } from '../../core/models';
 
 const VISUAL: Record<string, { icon: string; color: string }> = {
   start: { icon: '▶', color: '#16a34a' }, end: { icon: '■', color: '#dc2626' }, script: { icon: '{ }', color: '#0891b2' },
   http: { icon: '🌐', color: '#0d9488' }, userTask: { icon: '👤', color: '#2563eb' }, rule: { icon: '📐', color: '#ea580c' },
   send: { icon: '📤', color: '#16a34a' }, receive: { icon: '📥', color: '#16a34a' }, manual: { icon: '✋', color: '#64748b' },
   gateway: { icon: '◇', color: '#f59e0b' }, catch: { icon: '⏱', color: '#7c3aed' }, throw: { icon: '📣', color: '#7c3aed' },
-  boundary: { icon: '⚠', color: '#7c3aed' }, subprocess: { icon: '▭', color: '#4f46e5' }, call: { icon: '⇥', color: '#4f46e5' }, forEach: { icon: '⇶', color: '#4f46e5' },
+  boundary: { icon: '⚠', color: '#dc2626' }, subprocess: { icon: '▭', color: '#4f46e5' }, call: { icon: '⇥', color: '#4f46e5' }, forEach: { icon: '⇶', color: '#4f46e5' },
 };
-const NW = 168, NH = 56;
+const NW = 150, NH = 52;
+type Tab = 'details' | 'variables' | 'logs' | 'diagram';
+const STATES: { key: string; label: string; match: (s: string) => boolean }[] = [
+  { key: '', label: 'All', match: () => true },
+  { key: 'active', label: 'Active', match: (s) => s === 'running' || s === 'waiting' },
+  { key: 'completed', label: 'Completed', match: (s) => s === 'completed' },
+  { key: 'aborted', label: 'Aborted', match: (s) => s === 'aborted' },
+  { key: 'failed', label: 'Errors', match: (s) => s === 'failed' },
+  { key: 'suspended', label: 'Suspended', match: (s) => s === 'suspended' },
+];
 
 @Component({
   selector: 'app-instances',
@@ -21,7 +30,7 @@ const NW = 168, NH = 56;
   template: `
     <div class="page">
       <header class="pagehead">
-        <a class="icon-btn" routerLink="/projects" title="Projects">‹</a>
+        <a class="icon-btn" [routerLink]="wfId ? ['/projects', wfId] : ['/projects']" title="Back">‹</a>
         <h1>Process Instances</h1>
         <span class="spacer"></span>
         <button class="btn" (click)="reload()">↻ Refresh</button>
@@ -30,140 +39,103 @@ const NW = 168, NH = 56;
       <div class="split">
         <!-- LIST -->
         <div class="list card">
-          <div class="list-head">
-            <span>{{ instances().length }} instances</span>
-            <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilter()">
-              <option value="">All statuses</option><option>running</option><option>waiting</option>
-              <option>completed</option><option>failed</option><option>aborted</option><option>suspended</option>
-            </select>
-          </div>
-          <div class="rows">
-            @for (i of filtered(); track i.id) {
-              <div class="ir" [class.sel]="sel()?.id === i.id" (click)="open(i.id)">
-                <span class="dot" [style.background]="statusColor(i.status)"></span>
-                <div class="ir-main">
-                  <div class="ir-id">{{ i.id | slice:0:12 }}…</div>
-                  <div class="ir-sub muted">{{ i.startedAt | slice:0:19 }} · {{ i.history.length }} steps</div>
-                </div>
-                <span class="badge" [style.color]="statusColor(i.status)">{{ i.status }}</span>
-              </div>
+          <div class="filters">
+            @for (st of states; track st.key) {
+              <button class="fchip" [class.on]="stateFilter === st.key" (click)="setFilter(st.key)">{{ st.label }} <span class="ct">{{ countFor(st) }}</span></button>
             }
-            @if (filtered().length === 0) { <p class="muted pad">No instances.</p> }
           </div>
+          <table>
+            <thead><tr><th>Id</th><th>Process</th><th>Version</th><th>Last update</th><th>Errors</th><th></th></tr></thead>
+            <tbody>
+              @for (i of filtered(); track i.id) {
+                <tr (click)="open(i.id)" [class.sel]="sel()?.id === i.id">
+                  <td class="mono">{{ i.id | slice:0:8 }}</td>
+                  <td>{{ procName(i) }}<div class="st"><span class="dot" [style.background]="statusColor(i.status)"></span>{{ i.status }}</div></td>
+                  <td class="muted">{{ version(i) }}</td>
+                  <td class="muted">{{ (i.endedAt || i.startedAt) | slice:0:19 }}</td>
+                  <td><span class="err-badge" [class.has]="i.status === 'failed'">{{ i.status === 'failed' ? 1 : 0 }}</span></td>
+                  <td><button class="kebab" (click)="$event.stopPropagation(); open(i.id)">⋮</button></td>
+                </tr>
+              }
+              @if (filtered().length === 0) { <tr><td colspan="6" class="muted pad">No instances match this filter.</td></tr> }
+            </tbody>
+          </table>
         </div>
 
         <!-- DETAIL -->
         @if (sel(); as s) {
-          <div class="detail">
-            <div class="d-head card">
-              <div class="row">
-                <span class="dot lg" [style.background]="statusColor(s.status)"></span>
-                <div>
-                  <div class="d-title">Instance {{ s.id | slice:0:12 }}…</div>
-                  <div class="muted">{{ s.status }} · started {{ s.startedAt | slice:0:19 }}</div>
-                </div>
-                <span class="spacer"></span>
-                @if (s.status !== 'completed' && s.status !== 'aborted') {
-                  <button class="btn" (click)="suspendResume(s)">{{ s.status === 'suspended' ? 'Resume' : 'Suspend' }}</button>
-                  <button class="btn danger" (click)="abort(s)">Abort</button>
-                }
-              </div>
-              @if (s.error) { <div class="err-box">⚠ {{ s.error.nodeId }}: {{ s.error.message }}</div> }
+          <div class="detail card">
+            <div class="d-head">
+              <div><b>{{ s.id | slice:0:8 }}</b> · {{ procName(s) }}
+                <span class="badge" [style.color]="statusColor(s.status)">{{ s.status }}</span></div>
+              <span class="spacer"></span>
+              @if (s.status !== 'completed' && s.status !== 'aborted') {
+                <button class="btn" (click)="suspendResume(s)">{{ s.status === 'suspended' ? 'Resume' : 'Suspend' }}</button>
+                <button class="btn danger" (click)="abort(s)">Abort</button>
+              }
             </div>
+            @if (s.error) { <div class="err-box">⚠ {{ s.error.nodeId }}: {{ s.error.message }}</div> }
 
-            <!-- DIAGRAM -->
-            <div class="card diagram">
-              <div class="card-h">Execution diagram</div>
-              <div class="dwrap" [style.height.px]="diagramH()">
-                <svg class="edges" [attr.width]="diagramW()" [attr.height]="diagramH()">
-                  <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2c8d4"/></marker></defs>
-                  @for (e of graph().flows; track $index) { <path [attr.d]="edgePath(e)" class="edge" marker-end="url(#arr)" /> }
-                </svg>
-                @for (n of laidOut(); track n.id) {
-                  <div class="gnode" [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="NW"
-                       [class.active]="isActive(n.id)" [class.visited]="isVisited(n.id)" (click)="pickNode(n.id)"
-                       [class.picked]="pickedNode() === n.id">
-                    <span class="gchip" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>
-                    <span class="gname">{{ n.name || n.type }}</span>
-                    @if (isActive(n.id)) { <span class="pulse"></span> }
+            <nav class="tabs">
+              @for (t of tabs; track t.key) { <button [class.active]="tab() === t.key" (click)="tab.set(t.key)">{{ t.label }}</button> }
+            </nav>
+
+            <div class="tabbody">
+              @switch (tab()) {
+                @case ('diagram') {
+                  <div class="diagram-wrap">
+                    <aside class="rel">
+                      <div class="rel-h">Parent instance</div>
+                      @if (parent()) { <button class="chip-btn" (click)="open(parent()!.id)">⬆ {{ parent()!.id | slice:0:8 }}</button> } @else { <div class="muted sm">None</div> }
+                      <div class="rel-h">Sub-process instances</div>
+                      @if (children().length) { @for (c of children(); track c.id) { <button class="chip-btn" (click)="open(c.id)">⬇ {{ c.id | slice:0:8 }} <span class="badge" [style.color]="statusColor(c.status)">{{ c.status }}</span></button> } } @else { <div class="muted sm">None</div> }
+                    </aside>
+                    <div class="dcanvas">
+                      <div class="legend">Node badges show <b>execution count</b>. <span class="lg active"></span> active · <span class="lg visited"></span> visited</div>
+                      <div class="dwrap" [style.height.px]="dh()" [style.width.px]="dw()">
+                        <svg class="edges" [attr.width]="dw()" [attr.height]="dh()">
+                          <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2c8d4"/></marker></defs>
+                          @for (e of graph().flows; track $index) { <path [attr.d]="edge(e)" class="ge" marker-end="url(#ar)" /> }
+                        </svg>
+                        @for (n of laid(); track n.id) {
+                          <div class="gn" [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="NW"
+                               [class.active]="isActive(n.id)" [class.visited]="count(n.id) > 0" [class.picked]="picked() === n.id" (click)="picked.set(n.id)">
+                            <span class="gc" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>
+                            <span class="gnm">{{ n.name || n.id }}</span>
+                            @if (count(n.id) > 0) { <span class="bc" title="executed {{ count(n.id) }}×">{{ count(n.id) }}</span> }
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  </div>
+                  <div class="ops">
+                    <div class="op"><label>Signal / message</label><div class="row"><input placeholder="signal name" [(ngModel)]="sigName" /><button class="btn primary" [disabled]="!sigName" (click)="sendSignal(s)">Send</button></div></div>
+                    <div class="op"><label>Re-trigger node {{ picked() ? '(' + picked() + ')' : '' }}</label><div class="row"><button class="btn" [disabled]="!picked()" (click)="retry(s)">Re-trigger selected node</button><span class="muted sm">Works after completion too — replays the node.</span></div></div>
                   </div>
                 }
-              </div>
-              <div class="legend"><span class="lg-active"></span> active <span class="lg-visited"></span> visited</div>
-            </div>
-
-            <div class="cols">
-              <!-- VARIABLES -->
-              <div class="card">
-                <div class="card-h">Variables</div>
-                @if (varRows(s).length) {
-                  <table class="vtab"><tbody>
-                    @for (kv of varRows(s); track kv[0]) { <tr><td class="k">{{ kv[0] }}</td><td class="v">{{ kv[1] }}</td></tr> }
+                @case ('variables') {
+                  @if (varRows(s).length) { <table class="kv"><tbody>@for (kv of varRows(s); track kv[0]) { <tr><td class="k">{{ kv[0] }}</td><td class="v">{{ kv[1] }}</td></tr> }</tbody></table> } @else { <p class="muted pad">No variables.</p> }
+                }
+                @case ('logs') {
+                  <table class="logs"><thead><tr><th>#</th><th>Node</th><th>Type</th><th>Entered</th><th>Exited</th><th>Outcome</th></tr></thead>
+                    <tbody>@for (h of s.history; track $index) { <tr><td class="muted">{{ $index + 1 }}</td><td><b>{{ nodeName(h.nodeId) }}</b></td><td class="muted">{{ h.type }}</td><td class="muted mono">{{ h.enteredAt | slice:11:19 }}</td><td class="muted mono">{{ h.exitedAt | slice:11:19 }}</td><td>{{ h.outcome }}</td></tr> }</tbody></table>
+                  @if (!s.history.length) { <p class="muted pad">No log entries.</p> }
+                }
+                @default {
+                  <table class="kv"><tbody>
+                    <tr><td class="k">Status</td><td><span class="badge" [style.color]="statusColor(s.status)">{{ s.status }}</span></td></tr>
+                    <tr><td class="k">Process</td><td>{{ procName(s) }}</td></tr>
+                    <tr><td class="k">Version</td><td>{{ version(s) }}</td></tr>
+                    <tr><td class="k">Started</td><td class="mono">{{ s.startedAt | slice:0:19 }}</td></tr>
+                    <tr><td class="k">Ended</td><td class="mono">{{ (s.endedAt || '—') | slice:0:19 }}</td></tr>
+                    <tr><td class="k">Correlation</td><td>{{ s.correlationKey || '—' }}</td></tr>
+                    <tr><td class="k">Nodes executed</td><td>{{ s.history.length }}</td></tr>
                   </tbody></table>
-                } @else { <p class="muted pad">No variables set.</p> }
-              </div>
-
-              <!-- HISTORY -->
-              <div class="card">
-                <div class="card-h">History</div>
-                <ol class="timeline">
-                  @for (h of s.history; track $index) {
-                    <li><span class="tdot" [style.background]="visual(h.type).color"></span>
-                      <b>{{ nodeName(h.nodeId) }}</b> <span class="muted">{{ h.type }}</span>
-                      <span class="out">{{ h.outcome }}</span></li>
-                  }
-                </ol>
-              </div>
-            </div>
-
-            <!-- OPERATIONS -->
-            <div class="card">
-              <div class="card-h">Operations</div>
-              <div class="ops">
-                <div class="op">
-                  <label>Trigger signal / message</label>
-                  <div class="row">
-                    <input placeholder="signal name (e.g. Approve)" [(ngModel)]="signalName" />
-                    <input placeholder="payload (optional)" [(ngModel)]="signalPayload" />
-                    <button class="btn primary" [disabled]="!signalName" (click)="sendSignal(s)">Send</button>
-                  </div>
-                </div>
-                <div class="op">
-                  <label>Re-trigger a node</label>
-                  <div class="row">
-                    <select [(ngModel)]="retryNodeId">
-                      <option value="">{{ pickedNode() ? nodeName(pickedNode()!) : 'select a node (or click one above)' }}</option>
-                      @for (n of graph().nodes; track n.id) { <option [value]="n.id">{{ n.name || n.id }}</option> }
-                    </select>
-                    <button class="btn" [disabled]="!(retryNodeId || pickedNode())" (click)="doRetry(s)">Re-trigger</button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- RELATED -->
-            <div class="card">
-              <div class="card-h">Related instances</div>
-              @if (parent()) {
-                <div class="rel"><span class="rel-l">Parent</span>
-                  <button class="chip-btn" (click)="open(parent()!.id)">⬆ {{ parent()!.id | slice:0:10 }}… <span class="badge" [style.color]="statusColor(parent()!.status)">{{ parent()!.status }}</span></button>
-                </div>
+                }
               }
-              @if (children().length) {
-                <div class="rel"><span class="rel-l">Children ({{ children().length }})</span>
-                  <div class="chips">
-                    @for (c of children(); track c.id) {
-                      <button class="chip-btn" (click)="open(c.id)">⬇ {{ c.id | slice:0:10 }}… <span class="badge" [style.color]="statusColor(c.status)">{{ c.status }}</span></button>
-                    }
-                  </div>
-                </div>
-              }
-              @if (!parent() && !children().length) { <p class="muted pad">No related instances (no call activities).</p> }
             </div>
           </div>
-        } @else {
-          <div class="detail empty card"><p class="muted">Select an instance to see its diagram, variables, history and operations.</p></div>
-        }
+        } @else { <div class="detail card empty"><p class="muted">Select a process instance.</p></div> }
       </div>
     </div>
   `,
@@ -172,53 +144,52 @@ const NW = 168, NH = 56;
     .pagehead { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
     .icon-btn { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--muted); }
     h1 { font-size: 19px; margin: 0; }
-    .split { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
-    .list { overflow: hidden; }
-    .list-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
-    .list-head select { border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px; font-size: 12px; }
-    .rows { max-height: calc(100vh - 180px); overflow: auto; }
-    .ir { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
-    .ir:hover { background: #f8f9fc; } .ir.sel { background: #f2f0ff; }
-    .ir-main { flex: 1; min-width: 0; } .ir-id { font-weight: 600; font-size: 13px; } .ir-sub { font-size: 11px; }
-    .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; } .dot.lg { width: 12px; height: 12px; }
-    .pad { padding: 14px; }
-
-    .detail { display: flex; flex-direction: column; gap: 14px; } .detail.empty { padding: 40px; text-align: center; }
-    .d-head { padding: 14px 16px; } .d-title { font-weight: 700; }
-    .err-box { margin-top: 10px; background: #fdeaea; color: var(--red); padding: 8px 12px; border-radius: 8px; font-size: 13px; }
-    .card-h { font-weight: 700; font-size: 13px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
-
-    .diagram .dwrap { position: relative; overflow: auto; background-color: #fafbfd;
-      background-image: radial-gradient(circle, #e5e9f2 1px, transparent 1px); background-size: 20px 20px; }
-    .edges { position: absolute; inset: 0; pointer-events: none; } .edge { fill: none; stroke: #c2c8d4; stroke-width: 2; }
-    .gnode { position: absolute; height: ${NH}px; background: #fff; border: 1px solid var(--border); border-radius: 11px; display: flex; align-items: center; gap: 9px; padding: 9px 11px; box-shadow: var(--shadow-card); cursor: pointer; opacity: .55; }
-    .gnode.visited { opacity: 1; } .gnode.active { opacity: 1; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(91,61,245,.2); }
-    .gnode.picked { outline: 2px dashed var(--amber); }
-    .gchip { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; color: #fff; font-size: 13px; }
-    .gname { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .pulse { position: absolute; top: -5px; right: -5px; width: 11px; height: 11px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 0 rgba(91,61,245,.5); animation: pulse 1.4s infinite; }
-    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(91,61,245,.5)} 70%{box-shadow:0 0 0 9px rgba(91,61,245,0)} 100%{box-shadow:0 0 0 0 rgba(91,61,245,0)} }
-    .legend { display: flex; align-items: center; gap: 8px; padding: 8px 16px; font-size: 11px; color: var(--muted); }
-    .lg-active, .lg-visited { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-    .lg-active { background: var(--primary); } .lg-visited { background: #cbd2e0; margin-left: 8px; }
-
-    .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .vtab { width: 100%; } .vtab td { padding: 7px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
-    .vtab .k { color: var(--muted); width: 40%; } .vtab .v { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
-    .timeline { list-style: none; margin: 0; padding: 10px 16px; } .timeline li { position: relative; padding: 5px 0 5px 18px; font-size: 13px; }
-    .tdot { position: absolute; left: 0; top: 9px; width: 9px; height: 9px; border-radius: 50%; } .out { color: var(--muted); font-size: 11px; margin-left: 6px; }
-
-    .ops { padding: 14px 16px; display: flex; flex-direction: column; gap: 16px; }
-    .op label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
-    .op .row { display: flex; gap: 8px; } .op input, .op select { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; }
-    .op .btn { flex: 0 0 auto; }
-
-    .rel { padding: 10px 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
-    .rel-l { font-size: 12px; color: var(--muted); width: 90px; font-weight: 600; } .chips { display: flex; gap: 8px; flex-wrap: wrap; }
-    .chip-btn { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 5px 12px; cursor: pointer; font-size: 12px; }
+    .split { display: grid; grid-template-columns: minmax(420px, 560px) 1fr; gap: 16px; align-items: start; }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+    .fchip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
+    .fchip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+    .fchip .ct { opacity: .7; margin-left: 4px; }
+    .list table, .detail table { width: 100%; border-collapse: collapse; }
+    .list th, .list td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .list tr { cursor: pointer; } .list tbody tr:hover { background: #f8f9fc; } .list tr.sel td { background: #f2f0ff; }
+    .st { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .err-badge { display: inline-grid; place-items: center; min-width: 22px; height: 20px; border-radius: 5px; background: #eef0f6; color: var(--muted); font-size: 12px; }
+    .err-badge.has { background: #fdeaea; color: var(--red); font-weight: 700; }
+    .kebab { border: none; background: transparent; cursor: pointer; color: var(--muted); font-size: 16px; }
+    .pad { padding: 16px; }
+    .detail.empty { padding: 40px; text-align: center; }
+    .d-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-left: 6px; }
+    .err-box { margin: 12px 16px 0; background: #fdeaea; color: var(--red); padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+    .tabs { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--border); }
+    .tabs button { border: none; background: transparent; padding: 11px 12px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+    .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tabbody { padding: 14px 16px; }
+    .diagram-wrap { display: grid; grid-template-columns: 170px 1fr; gap: 14px; }
+    .rel-h { font-size: 11px; font-weight: 700; color: #98a2b3; text-transform: uppercase; margin: 10px 0 6px; }
+    .chip-btn { display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; margin-bottom: 6px; }
     .chip-btn:hover { background: #f6f7fb; }
+    .legend { font-size: 11px; color: var(--muted); margin-bottom: 8px; } .lg { width: 10px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; }
+    .lg.active { background: var(--primary); } .lg.visited { background: #cbd2e0; }
+    .dcanvas { min-width: 0; }
+    .dwrap { position: relative; overflow: auto; background-color: #fafbfd; background-image: radial-gradient(circle, #e5e9f2 1px, transparent 1px); background-size: 20px 20px; border: 1px solid var(--border); border-radius: 10px; }
+    .edges { position: absolute; inset: 0; pointer-events: none; } .ge { fill: none; stroke: #c2c8d4; stroke-width: 2; }
+    .gn { position: absolute; height: ${NH}px; background: #fff; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; box-shadow: var(--shadow-card); cursor: pointer; opacity: .5; }
+    .gn.visited { opacity: 1; } .gn.active { opacity: 1; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(91,61,245,.2); }
+    .gn.picked { outline: 2px dashed var(--amber); }
+    .gc { width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; color: #fff; font-size: 12px; }
+    .gnm { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bc { position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); min-width: 18px; height: 18px; border-radius: 9px; background: #1f2430; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; box-shadow: var(--shadow-card); }
+    .ops { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .op label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 6px; } .op .row { display: flex; gap: 8px; align-items: center; }
+    .op input { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+    .kv { width: 100%; } .kv td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; } .kv .k { color: var(--muted); width: 34%; }
+    .kv .v { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+    .logs th, .logs td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 12px; } .logs th { color: var(--muted); }
+    .sm { font-size: 11px; }
     .btn.danger { color: var(--red); border-color: #f3b4b4; } .btn.danger:hover { background: #fdeaea; }
-    .badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
   `],
 })
 export class InstancesComponent {
@@ -226,68 +197,50 @@ export class InstancesComponent {
   private route = inject(ActivatedRoute);
   wfId = this.route.snapshot.paramMap.get('id');
   instances = signal<Instance[]>([]);
-  filtered = signal<Instance[]>([]);
+  deployments = signal<Record<string, Deployment>>({});
   sel = signal<Instance | null>(null);
-  graph = signal<{ nodes: any[]; flows: any[]; diagram: { activeNodeIds: string[]; visitedNodeIds: string[]; status: string } }>({ nodes: [], flows: [], diagram: { activeNodeIds: [], visitedNodeIds: [], status: '' } });
+  graph = signal<{ nodes: any[]; flows: any[]; diagram: { activeNodeIds: string[] }; counts: Record<string, number> }>({ nodes: [], flows: [], diagram: { activeNodeIds: [] }, counts: {} });
   parent = signal<Instance | null>(null);
   children = signal<Instance[]>([]);
-  pickedNode = signal<string | null>(null);
-  statusFilter = ''; signalName = ''; signalPayload = ''; retryNodeId = '';
-  NW = NW;
+  picked = signal<string | null>(null);
+  tab = signal<Tab>('diagram');
+  stateFilter = 'active'; sigName = '';
+  states = STATES; NW = NW;
+  tabs: { key: Tab; label: string }[] = [{ key: 'details', label: 'Instance Details' }, { key: 'variables', label: 'Process Variables' }, { key: 'logs', label: 'Logs' }, { key: 'diagram', label: 'Diagram' }];
 
-  laidOut = computed(() => {
-    const gn = this.graph().nodes;
-    return gn.map((n: any, i: number) => ({ ...n, x: n.x ?? (30 + (i % 5) * 190), y: n.y ?? (24 + Math.floor(i / 5) * 96) }));
-  });
-  diagramW = computed(() => Math.max(600, ...this.laidOut().map((n: any) => n.x + NW + 40)));
-  diagramH = computed(() => Math.max(220, ...this.laidOut().map((n: any) => n.y + NH + 40)));
+  filtered = computed(() => { const f = STATES.find((s) => s.key === this.stateFilter)!; return this.instances().filter((i) => f.match(i.status)); });
+  laid = computed(() => this.graph().nodes.map((n: any, i: number) => ({ ...n, x: n.x ?? (30 + (i % 5) * 175), y: n.y ?? (30 + Math.floor(i / 5) * 96) })));
+  dw = computed(() => Math.max(560, ...this.laid().map((n: any) => n.x + NW + 40)));
+  dh = computed(() => Math.max(220, ...this.laid().map((n: any) => n.y + NH + 40)));
 
   constructor() { this.reload(); }
-
   reload() {
     if (!this.wfId) return;
-    this.api.listInstances(this.wfId).subscribe((is) => { this.instances.set(is); this.applyFilter(); if (this.sel()) this.open(this.sel()!.id); });
+    this.api.listInstances(this.wfId).subscribe((is) => { this.instances.set(is); if (this.sel()) this.open(this.sel()!.id); });
+    this.api.listDeployments(this.wfId).subscribe((ds) => this.deployments.set(Object.fromEntries(ds.map((d) => [d.id, d]))));
   }
-  applyFilter() { this.filtered.set(this.instances().filter((i) => !this.statusFilter || i.status === this.statusFilter)); }
-
+  setFilter(k: string) { this.stateFilter = k; }
+  countFor(st: { match: (s: string) => boolean }) { return this.instances().filter((i) => st.match(i.status)).length; }
   open(id: string) {
-    this.pickedNode.set(null); this.retryNodeId = '';
+    this.picked.set(null);
     this.api.getInstance(id).subscribe((i) => this.sel.set(i));
-    this.api.instanceGraph(id).subscribe((g) => this.graph.set(g));
+    this.api.instanceGraph(id).subscribe((g) => this.graph.set(g as any));
     this.api.relatedInstances(id).subscribe((r) => { this.parent.set(r.parent); this.children.set(r.children); });
   }
 
-  // visuals
   visual(t: string) { return VISUAL[t] || { icon: '●', color: '#64748b' }; }
   statusColor(s: string) { return ({ running: '#2563eb', waiting: '#f59e0b', completed: '#16a34a', failed: '#dc2626', aborted: '#6b7280', suspended: '#7c3aed' } as any)[s] || '#6b7280'; }
+  procName(i: Instance) { return (i.processId || i.workflowId || '').split('.').pop() || i.workflowId; }
+  version(i: Instance) { const d = this.deployments()[i.deploymentId]; return d ? (d.versionLabel || ('v' + (d.versionNumber ?? '?'))) + ' · ' + d.environment : '—'; }
+  count(id: string) { return this.graph().counts?.[id] || 0; }
+  isActive(id: string) { return (this.graph().diagram?.activeNodeIds || []).includes(id); }
   nodeName(id: string) { return this.graph().nodes.find((n: any) => n.id === id)?.name || id; }
-  isActive(id: string) { return this.graph().diagram.activeNodeIds.includes(id); }
-  isVisited(id: string) { return this.graph().diagram.visitedNodeIds.includes(id); }
   varRows(s: Instance) { return Object.entries(s.variables || {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)] as [string, string]); }
-  pickNode(id: string) { this.pickedNode.set(id); this.retryNodeId = id; }
+  private byId(id: string) { return this.laid().find((n: any) => n.id === id); }
+  edge(e: any) { const a = this.byId(e.from), b = this.byId(e.to); if (!a || !b) return ''; const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, dx = Math.max(30, Math.abs(x2 - x1) / 2); return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`; }
 
-  // geometry
-  private laid(id: string) { return this.laidOut().find((n: any) => n.id === id); }
-  edgePath(e: any) {
-    const a = this.laid(e.from), b = this.laid(e.to);
-    if (!a || !b) return '';
-    const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, dx = Math.max(30, Math.abs(x2 - x1) / 2);
-    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-  }
-
-  // operations
-  sendSignal(s: Instance) {
-    let payload: unknown = this.signalPayload || undefined;
-    try { if (this.signalPayload) payload = JSON.parse(this.signalPayload); } catch { /* keep string */ }
-    this.api.signalInstance(s.id, this.signalName, payload).subscribe(() => { this.signalName = ''; this.signalPayload = ''; this.open(s.id); this.reload(); });
-  }
-  doRetry(s: Instance) {
-    const node = this.retryNodeId || this.pickedNode(); if (!node) return;
-    this.api.retryNode(s.id, node).subscribe(() => { this.open(s.id); this.reload(); });
-  }
-  suspendResume(s: Instance) {
-    const call = s.status === 'suspended' ? this.api.resumeInstance(s.id) : this.api.suspendInstance(s.id);
-    call.subscribe(() => { this.open(s.id); this.reload(); });
-  }
+  sendSignal(s: Instance) { let p: any = this.sigName; try { p = JSON.parse(this.sigName); } catch {} this.api.signalInstance(s.id, this.sigName, undefined).subscribe(() => { this.sigName = ''; this.open(s.id); this.reload(); }); }
+  retry(s: Instance) { const n = this.picked(); if (n) this.api.retryNode(s.id, n).subscribe(() => { this.open(s.id); this.reload(); }); }
+  suspendResume(s: Instance) { (s.status === 'suspended' ? this.api.resumeInstance(s.id) : this.api.suspendInstance(s.id)).subscribe(() => { this.open(s.id); this.reload(); }); }
   abort(s: Instance) { this.api.abort(s.id).subscribe(() => { this.open(s.id); this.reload(); }); }
 }

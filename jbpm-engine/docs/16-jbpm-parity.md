@@ -66,8 +66,12 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 |---|---|---|---|
 | Start instance (by active deployment) | start by env / deployment / processId | ✅ | tests 5,20 |
 | Instance statuses (active/complete/aborted/…) | running/waiting/completed/aborted/failed/suspended | ✅ | domain; instances UI |
-| Instance list + detail (variables, node log) | Instances console: diagram + vars + history | ✅ | app; graph/related APIs |
-| Diagram with node state | live highlight from `diagram-state` (WS events emitted) | 🟡 | WS emitted; live redraw pending |
+| Instance list (state filters, Version, Errors, Last update columns) | jBPM-style list: All/Active/Completed/Aborted/Errors/Suspended + counts | ✅ | instances UI |
+| Instance detail tabs (Details, Variables, Logs, Diagram) | all four tabs | ✅ | instances UI |
+| **Diagram with instance badges (per-node execution count)** | count badge per node + active/visited highlight | ✅ | `graph.counts`; counts-check |
+| Parent / sub-process instances panel | related() panel in the Diagram tab | ✅ | related API |
+| Re-trigger a node (incl. after completion) | select node → re-trigger; count increments | ✅ | counts-check (t:2 after complete) |
+| Live redraw as tokens move | WS events emitted; auto-redraw on the open diagram | 🟡 | WS hub (poll/refresh today) |
 | Signal / message to instance | `/instances/:id/signal` + broadcast | ✅ | test 12; E2E |
 | Retry / suspend / resume / abort | all present | ✅ | test 13; E2E |
 | Related instances (parent/children) | `/instances/:id/related` | ✅ | test 11; E2E |

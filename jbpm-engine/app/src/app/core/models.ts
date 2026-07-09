@@ -11,10 +11,10 @@ export interface Version { id: string; workflowId: string; branchId: string; num
 export interface Deployment {
   id: string; workflowId: string; versionId: string; branchId: string;
   env: Record<string, string>; tags: string[]; status: 'active' | 'inactive' | 'archived';
-  environment: string; deployedAt: string; deployedBy: string;
+  environment: string; versionNumber?: number; versionLabel?: string; deployedAt: string; deployedBy: string;
 }
 export interface Instance {
-  id: string; deploymentId: string; workflowId: string; correlationKey?: string;
+  id: string; deploymentId: string; workflowId: string; processId?: string; correlationKey?: string;
   status: 'running' | 'waiting' | 'completed' | 'aborted' | 'failed' | 'suspended';
   variables: Record<string, unknown>; tokens: Token[]; history: NodeVisit[];
   error?: { nodeId: string; message: string; at: string }; startedAt: string; endedAt?: string;

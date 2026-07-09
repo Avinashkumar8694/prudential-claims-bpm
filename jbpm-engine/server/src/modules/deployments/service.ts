@@ -33,6 +33,7 @@ export class DeploymentService {
       engine: structuredClone(v.engine), env: input.env || {},
       tags: [...new Set([environment, ...(input.tags || [])])],
       status: 'inactive', environment,
+      versionNumber: v.number, versionLabel: v.label,
       deployedAt: this.ctx.clock(), deployedBy: actor,
     };
     await this.dp().put(dep);

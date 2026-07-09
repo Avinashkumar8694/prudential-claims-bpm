@@ -105,11 +105,13 @@ export class InstanceService {
     return i;
   }
 
-  /** Read-only process graph (nodes + flows + positions) for rendering the instance diagram. */
+  /** Read-only process graph + per-node execution counts (jBPM "instance badges") for the diagram. */
   async graph(id: string) {
     const inst = await this.get(id);
     const dep = await this.deployments.get(inst.deploymentId);
     const p = (dep.engine.processes || []).find((x) => x.id === inst.processId) || dep.engine.processes?.[0];
-    return { nodes: p?.nodes || [], flows: p?.flows || [], diagram: this.engine.diagramState(inst) };
+    const counts: Record<string, number> = {};
+    for (const h of inst.history) counts[h.nodeId] = (counts[h.nodeId] || 0) + 1;
+    return { nodes: p?.nodes || [], flows: p?.flows || [], diagram: this.engine.diagramState(inst), counts, status: inst.status };
   }
 }

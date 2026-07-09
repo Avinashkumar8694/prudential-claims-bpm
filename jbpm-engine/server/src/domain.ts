@@ -42,6 +42,7 @@ export interface Deployment extends Entity {
   tags: string[];
   status: DeploymentStatus;
   environment: string;
+  versionNumber?: number; versionLabel?: string;   // shown as "Version" in the instance list
   deployedAt: string; deployedBy: string;
   undeployedAt?: string; archivedAt?: string;
 }
