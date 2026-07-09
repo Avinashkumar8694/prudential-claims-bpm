@@ -11,6 +11,7 @@ import { DeploymentService } from '../modules/deployments/service.ts';
 import { InstanceService } from '../modules/instances/service.ts';
 import { TaskService } from '../modules/tasks/service.ts';
 import { ProcessService } from '../modules/processes/service.ts';
+import { QueryService } from '../modules/queries/service.ts';
 import { AssetsService } from '../modules/assets/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
 import { exportKjar } from '../modules/export/service.ts';
@@ -121,6 +122,22 @@ export function buildRoutes(): Router {
   r.post('/tasks/:id/claim', asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).claim(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/release', asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).release(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/complete', asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).complete(req.params.id, req.body?.outputs || {}, actorOf(req)))));
+
+  // --- query / task-admin / analytics (jBPM KIE-Server-style; see docs/17) ---
+  const q = (req: Request) => new QueryService(ctxOf(req));
+  const s = (req: Request) => (req.query.status as string | undefined);
+  r.get('/query/process-definitions', asyncHandler(async (req, res) => res.json({ items: await q(req).processDefinitions() })));
+  r.get('/query/process-definitions/:processId/instances', asyncHandler(async (req, res) => res.json({ items: await q(req).processInstances(req.params.processId, s(req)) })));
+  r.get('/query/process-definitions/:processId/signals', asyncHandler(async (req, res) => res.json(await q(req).processSignals(req.params.processId))));
+  r.get('/query/users', asyncHandler(async (req, res) => res.json({ items: await q(req).users() })));
+  r.get('/query/users/:user/tasks', asyncHandler(async (req, res) => res.json({ items: await q(req).tasksForUser(req.params.user, s(req)) })));
+  r.get('/query/users/:user/tasks/completed', asyncHandler(async (req, res) => res.json({ items: await q(req).tasksCompletedByUser(req.params.user) })));
+  r.get('/query/groups/:group/tasks', asyncHandler(async (req, res) => res.json({ items: await q(req).tasksForGroup(req.params.group, s(req)) })));
+  r.get('/query/instances/:id/tasks', asyncHandler(async (req, res) => res.json({ items: await q(req).instanceTasks(req.params.id) })));
+  r.get('/query/analytics/tasks', asyncHandler(async (req, res) => res.json(await q(req).taskAnalytics())));
+  r.get('/query/analytics/processes', asyncHandler(async (req, res) => res.json(await q(req).processAnalytics())));
+  r.get('/query/analytics/summary', asyncHandler(async (req, res) => res.json(await q(req).summary())));
+  r.get('/query/jobs', asyncHandler(async (req, res) => res.json({ items: await q(req).jobs(s(req)) })));
 
   return r;
 }
