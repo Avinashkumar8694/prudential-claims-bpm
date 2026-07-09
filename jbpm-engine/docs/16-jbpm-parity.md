@@ -40,7 +40,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 | Boundary error events (per activity) | Error Catch attached to node(s) | ✅ | tests 1–4 |
 | Event sub-process (process-wide) | global Error Catch (`on:['*']`) | ✅ | test 2; E2E |
 | Error codes / catch-all | code match + `*` any | ✅ | tests 3,4 |
-| Compensation | — | ⛔ | — |
+| Compensation | compensation boundary records handlers; compensate throw/end runs them LIFO (all or by ref) | ✅ | engine-compensation test |
 
 ## D. Rules & decisions
 | jBPM | This engine | Status | Evidence |
@@ -66,6 +66,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 |---|---|---|---|
 | Start instance (by active deployment) | start by env / deployment / processId | ✅ | tests 5,20 |
 | Instance statuses (active/complete/aborted/…) | running/waiting/completed/aborted/failed/suspended | ✅ | domain; instances UI |
+| Lifecycle cascade / no orphans | terminal parent aborts active children (recursive); aborted/failed child unblocks parent (error-boundary route or fail-up); terminate clears siblings | ✅ | engine-cascade test |
 | Instance list (state filters, Version, Errors, Last update columns) | jBPM-style list: All/Active/Completed/Aborted/Errors/Suspended + counts | ✅ | instances UI |
 | Instance detail tabs (Details, Variables, Logs, Diagram) | all four tabs | ✅ | instances UI |
 | **Diagram with instance badges (per-node execution count)** | count badge per node + active/visited highlight | ✅ | `graph.counts`; counts-check |
@@ -109,7 +110,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 
 ## Not yet (tracked in the checklist)
 - **Auth/RBAC enforcement**, multi-tenant admin, **secrets encryption**, **Postgres** store.
-- **Asset editors**, **task inbox UI**, **compensation**, **automated UI e2e** (Playwright).
+- **Asset editors**, **task inbox UI**, **automated UI e2e** (Playwright).
 
 ## How to reproduce
 ```bash

@@ -30,6 +30,8 @@ export interface HandlerCtx {
   emit(e: EngineEvent): void;
   startChild(dep: Deployment, processId: string, vars: Record<string, unknown>, parentTokenId: string): Promise<Instance>;
   broadcast(name: string): Promise<void>;
+  /** Run compensation handlers for completed activities in reverse order (all, or a single host). */
+  compensate(ref?: string): Promise<Record<string, unknown>>;
   resolveCalled?: (processId: string) => Promise<{ dep: Deployment; processId: string } | undefined>;
 }
 

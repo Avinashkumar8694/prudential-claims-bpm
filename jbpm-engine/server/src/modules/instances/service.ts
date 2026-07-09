@@ -78,10 +78,11 @@ export class InstanceService {
   async abort(id: string, actor: string): Promise<Instance> {
     const i = await this.get(id);
     if (i.status === 'completed' || i.status === 'aborted') return i;
-    i.status = 'aborted'; i.tokens = []; i.endedAt = this.ctx.clock();
-    await this.repo().put(i);
+    // Aborts the instance AND its whole subtree (no orphan children left active); a child abort also
+    // unblocks / propagates to the waiting parent.
+    const aborted = await this.engine.abortInstance(i);
     await this.ctx.audit({ actor, kind: 'instance.aborted', workflowId: i.workflowId, instanceId: i.id });
-    return i;
+    return aborted;
   }
 
   /** Deliver a signal/message to a running instance (resumes matching waiting tokens). */

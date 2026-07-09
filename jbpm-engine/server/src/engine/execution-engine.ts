@@ -117,6 +117,13 @@ export class ExecutionEngine {
           if (this.raiseError(inst, p, node.id!, code, `error end: ${code}`)) continue;
           inst.status = 'failed'; inst.error = { nodeId: node.id!, message: `unhandled error end (${code})`, at: this.ctx.clock() }; break;
         }
+        // an activity that completed normally and has a compensation boundary → remember its handler
+        for (const b of p.nodes) {
+          if (b.type === 'boundary' && (b as any).event?.compensation && this.onList(b).includes(node.id!)) {
+            const target = this.outgoing(p, b.id!)[0]?.to;
+            if (target) (inst.compensations ||= []).push({ host: node.id!, handler: target });
+          }
+        }
         // consume current token, then spawn successors
         this.removeToken(inst, token.id);
         if (result.end === 'complete' || result.consume) { /* no successors */ }
@@ -137,9 +144,70 @@ export class ExecutionEngine {
     }
     await this.inst().put(inst);
     this.emit({ kind: inst.status === 'failed' ? 'instance.failed' : inst.status === 'completed' ? 'instance.completed' : 'instance.updated', instanceId: inst.id });
-    // if this is a child instance that just finished, resume the parent's waiting call-activity token
-    if (inst.status === 'completed' && inst.parentInstanceId) await this.tryResumeParent(inst);
+    // Reached a terminal state → no orphans: abort any still-active child instances (e.g. a terminate
+    // end / failure left parallel call-activities or sub-processes running).
+    if (inst.status === 'completed' || inst.status === 'aborted' || inst.status === 'failed') {
+      await this.cancelTimersForInstance(inst.id);
+      await this.abortDescendants(inst.id);
+    }
+    // Notify the parent's waiting call/sub-process token: completed → resume; aborted/failed → propagate.
+    if (inst.parentInstanceId) {
+      if (inst.status === 'completed') await this.tryResumeParent(inst);
+      else if (inst.status === 'aborted' || inst.status === 'failed') await this.tryFailParent(inst);
+    }
     return inst;
+  }
+
+  /** Abort every still-active descendant instance (recursively), cancelling their timers. */
+  private async abortDescendants(parentId: string): Promise<void> {
+    const children = await this.inst().query((c) =>
+      c.tenantId === this.ctx.tenantId && c.parentInstanceId === parentId &&
+      (c.status === 'running' || c.status === 'waiting' || c.status === 'suspended'));
+    for (const child of children) {
+      child.status = 'aborted'; child.tokens = []; child.endedAt = this.ctx.clock();
+      await this.cancelTimersForInstance(child.id);
+      await this.inst().put(child);
+      this.emit({ kind: 'instance.updated', instanceId: child.id });
+      await this.abortDescendants(child.id);
+    }
+  }
+
+  /** Public entry: abort an instance and its whole subtree; also unblock a waiting parent. */
+  async abortInstance(inst: Instance): Promise<Instance> {
+    if (inst.status === 'completed' || inst.status === 'aborted') return inst;
+    inst.status = 'aborted'; inst.tokens = []; inst.endedAt = this.ctx.clock();
+    await this.cancelTimersForInstance(inst.id);
+    await this.inst().put(inst);
+    this.emit({ kind: 'instance.updated', instanceId: inst.id });
+    await this.abortDescendants(inst.id);
+    if (inst.parentInstanceId) await this.tryFailParent(inst);
+    return inst;
+  }
+
+  /** A child instance aborted/failed → remove the parent's waiting token and raise an error there
+   *  (routes to an error boundary if one is attached, otherwise the parent fails and cascades). */
+  private async tryFailParent(child: Instance): Promise<void> {
+    const parent = await this.inst().get(child.parentInstanceId!);
+    if (!parent || parent.status === 'completed' || parent.status === 'aborted' || parent.status === 'failed') return;
+    const token = parent.tokens.find((t) => t.state === 'waiting' && t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id);
+    if (!token) return;
+    const pdep = await this.deps().get(parent.deploymentId);
+    if (!pdep) return;
+    const p = this.pick(pdep, parent.processId);
+    this.removeToken(parent, token.id);
+    const code = child.status === 'aborted' ? 'SUBPROCESS_ABORTED' : 'SUBPROCESS_ERROR';
+    if (this.raiseError(parent, p, token.nodeId, code, `child instance ${child.status}: ${child.id}`)) {
+      parent.status = 'running';
+      await this.runToQuiescence(parent, pdep);   // handler token → runs recovery, then settles (may cascade)
+    } else {
+      parent.status = 'failed';
+      parent.error = { nodeId: token.nodeId, message: `child instance ${child.status}`, at: this.ctx.clock() };
+      parent.endedAt = this.ctx.clock();
+      await this.inst().put(parent);
+      this.emit({ kind: 'instance.failed', instanceId: parent.id });
+      await this.abortDescendants(parent.id);
+      if (parent.parentInstanceId) await this.tryFailParent(parent);   // propagate up
+    }
   }
 
   /** A child instance completed → map its outputs into the parent and continue the parent flow. */
@@ -172,6 +240,34 @@ export class ExecutionEngine {
     };
     this.emit({ kind: 'instance.started', instanceId: child.id });
     return this.runToQuiescence(child, dep);
+  }
+
+  /**
+   * Run compensation handlers for successfully-completed activities in reverse (LIFO) order. `ref`
+   * limits compensation to a single host activity; omitted → compensate everything recorded so far.
+   * Handlers execute inline (they don't spawn into the main flow); each is recorded in history.
+   */
+  private async compensate(inst: Instance, p: EngineProcess, dep: Deployment, ref?: string): Promise<Record<string, unknown>> {
+    const all = inst.compensations || [];
+    const toRun = [...all].reverse().filter((c) => !ref || c.host === ref);
+    const merged: Record<string, unknown> = {};
+    const nodes = this.nodeMap(p);
+    for (const entry of toRun) {
+      const handler = nodes.get(entry.handler);
+      if (!handler) continue;
+      const visit: NodeVisit = { tokenId: 'compensation', nodeId: handler.id!, type: handler.type, enteredAt: this.ctx.clock() };
+      inst.history.push(visit);
+      this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: 'compensation' });
+      let res: HandlerResult;
+      try { res = await this.handle(handler, inst, p, {}, dep); }
+      catch (e) { res = { error: (e as Error).message }; }
+      if (res.vars) { Object.assign(inst.variables, res.vars); Object.assign(merged, res.vars); }
+      visit.exitedAt = this.ctx.clock(); visit.outcome = res.error ? `compensation-error: ${res.error}` : 'compensated';
+      this.emit({ kind: 'node.exited', instanceId: inst.id, nodeId: handler.id!, tokenId: 'compensation' });
+    }
+    // consume the entries we just compensated
+    inst.compensations = all.filter((c) => (ref ? c.host !== ref : false));
+    return merged;
   }
 
   /** Broadcast a signal/message to every waiting instance in the tenant (send/throw). */
@@ -216,6 +312,11 @@ export class ExecutionEngine {
   /** Cancel a token's pending timers (host completed/resumed → its boundary/catch timers no longer apply). */
   private async cancelTimersForToken(inst: Instance, tokenId: string) {
     const jobs = await this.timerRepo().query((t) => t.instanceId === inst.id && t.tokenId === tokenId && t.status === 'scheduled');
+    for (const j of jobs) { j.status = 'cancelled'; await this.timerRepo().put(j); }
+  }
+  /** Cancel every pending timer for an instance (instance reached a terminal state). */
+  private async cancelTimersForInstance(instanceId: string) {
+    const jobs = await this.timerRepo().query((t) => t.instanceId === instanceId && t.status === 'scheduled');
     for (const j of jobs) { j.status = 'cancelled'; await this.timerRepo().put(j); }
   }
   /** Fire a due timer job: boundary timer → activate the boundary; else resume the (catch) token. */
@@ -281,6 +382,7 @@ export class ExecutionEngine {
       emit: (e) => this.emit(e),
       startChild: (d, pid, vars, tok) => this.startChild(d, pid, vars, inst.startedBy, inst.id, tok),
       broadcast: (name) => this.broadcast(name),
+      compensate: (ref) => this.compensate(inst, p, dep, ref),
       resolveCalled: this.resolveCalled,
     };
     return h(c);

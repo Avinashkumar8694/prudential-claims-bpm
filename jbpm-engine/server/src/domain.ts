@@ -64,6 +64,9 @@ export interface Instance extends Entity {
   history: NodeVisit[];
   error?: { nodeId: string; message: string; stack?: string; at: string };
   parentInstanceId?: string; parentTokenId?: string;
+  // Compensation stack: activities completed successfully that have a compensation handler attached,
+  // in completion order. A compensate throw runs the matching entries in reverse (LIFO).
+  compensations?: Array<{ host: string; handler: string }>;
   startedAt: string; startedBy: string; endedAt?: string;
 }
 

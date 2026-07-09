@@ -194,7 +194,7 @@ export const RULES: Rule[] = [
 
   { id: 'event-trigger', description: 'Catch/throw/boundary events must define a trigger', run: (c) => {
     const out: Problem[] = [];
-    const hasTrigger = (e: any) => e && (e.signal != null || e.message != null || e.error != null || e.escalation != null || e.condition != null || e.timer != null);
+    const hasTrigger = (e: any) => e && (e.signal != null || e.message != null || e.error != null || e.escalation != null || e.condition != null || e.timer != null || e.compensation != null || e.compensate != null);
     for (const n of c.nodes) {
       const a = n as any;
       if ((n.type === 'catch' || n.type === 'throw' || n.type === 'boundary') && !hasTrigger(a.event))
