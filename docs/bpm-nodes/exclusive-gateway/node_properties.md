@@ -1,20 +1,61 @@
 # Exclusive Gateway — properties
 
-| Property | XML | Notes |
-|----------|-----|-------|
-| id / name | attrs | name shown for diverging decisions |
-| gatewayDirection | `@gatewayDirection` | `Diverging` or `Converging` |
-| default | `@default` | optional default outgoing flow id |
-| incoming | `<bpmn2:incoming>` | 1 (diverging) or many (converging) |
-| outgoing | `<bpmn2:outgoing>` | many (diverging) or 1 (converging) |
+**engine node `type: "gateway"`** — Branch/merge. exclusive=one path, parallel=all, inclusive=all-matching, event=wait-for-event, complex=custom.
 
-## Condition expressions (on the OUTGOING sequence flows, not the gateway)
-```xml
-<bpmn2:sequenceFlow id="_fdeath" name="Death" sourceRef="_XG_TYPE" targetRef="_SC_PEND">
-  <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression"
-     language="http://www.java.com/java"><![CDATA[return "DEATH".equals(claimType);]]></bpmn2:conditionExpression>
-</bpmn2:sequenceFlow>
+## JSON schema (what you author)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineGateway",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "optional; autowired from flows if omitted"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "const": "gateway"
+    },
+    "mode": {
+      "enum": [
+        "exclusive",
+        "parallel",
+        "inclusive",
+        "event",
+        "complex"
+      ]
+    },
+    "default": {
+      "type": "string",
+      "description": "flow id taken when no condition matches (exclusive/inclusive)"
+    },
+    "direction": {
+      "enum": [
+        "Diverging",
+        "Converging"
+      ]
+    }
+  },
+  "required": [
+    "type",
+    "mode"
+  ]
+}
 ```
 
-## Input / output mapping
-None — routing only. Decisions read process variables inside condition expressions.
+## Example
+```json
+{
+  "type": "gateway",
+  "mode": "exclusive",
+  "default": "fOther"
+}
+```
+
+> This is the **engine (nodejs) model** you author. `fromEngine` converts it to the jBPM node (see
+> `node.json` for the produced jBPM model), `serializeProcess` emits BPMN, and `toEngine` recovers it.
+> Every node type round-trips — see `../../../bpmn-sdk/test/engine-nodes.test.mjs`.

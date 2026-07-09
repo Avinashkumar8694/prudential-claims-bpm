@@ -1,22 +1,78 @@
-# Call Activity (Multi-Instance) — properties
+# Call Activity Multi Instance — properties
 
-| Property | XML | Notes |
-|----------|-----|-------|
-| calledElement | `@calledElement` | child process id |
-| isSequential | `multiInstanceLoopCharacteristics/@isSequential` | `true`=one-at-a-time, else parallel |
-| loopDataInputRef | child element | the collection dataInput to iterate |
-| loopDataOutputRef | child element | the collection dataOutput to collect into |
-| inputDataItem | child element (id+name) | per-iteration element -> child input var |
-| outputDataItem | child element (id+name) | child output var collected per iteration |
-| completionCondition | child element | optional early-exit expression |
+**engine node `type: "forEach"`** — Multi-instance call activity: runs the child once per item in `over`.
 
-## Input / output mapping
-- collection in: `dataInputAssociation` `applicablePolicies` -> `IN_COLL` dataInput; `loopDataInputRef`=IN_COLL.
-- per-item: `inputDataItem name="currentPolicy"` -> passed to child (name-matched to child variable).
-- constants per instance: normal `dataInputAssociation` (e.g. `caseId`,`claimId`).
-- collection out: `outputDataItem name="claimResult"` collected via `loopDataOutputRef`=OUT_COLL
-  -> `dataOutputAssociation` OUT_COLL -> `claimResults`.
+## JSON schema (what you author)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineForEach",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "optional; autowired from flows if omitted"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "const": "forEach"
+    },
+    "process": {
+      "type": "string"
+    },
+    "over": {
+      "type": "string",
+      "description": "collection variable to iterate"
+    },
+    "as": {
+      "type": "string",
+      "description": "per-item variable"
+    },
+    "collectInto": {
+      "type": "string"
+    },
+    "itemResult": {
+      "type": "string"
+    },
+    "parallel": {
+      "type": "boolean",
+      "description": "true = parallel MI, false = sequential"
+    },
+    "pass": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "type",
+    "process",
+    "over"
+  ]
+}
+```
 
-## Effect / semantics
-Parent waits for all instances (waitForCompletion). `claimResults` = list of each child's
-`claimResult`. No ordering guarantee when parallel.
+## Example
+```json
+{
+  "type": "forEach",
+  "process": "com.acme.single",
+  "over": "applicablePolicies",
+  "as": "currentPolicy",
+  "collectInto": "claimResults",
+  "itemResult": "claimResult",
+  "parallel": true,
+  "pass": [
+    "caseId",
+    "claimId"
+  ]
+}
+```
+
+> This is the **engine (nodejs) model** you author. `fromEngine` converts it to the jBPM node (see
+> `node.json` for the produced jBPM model), `serializeProcess` emits BPMN, and `toEngine` recovers it.
+> Every node type round-trips — see `../../../bpmn-sdk/test/engine-nodes.test.mjs`.

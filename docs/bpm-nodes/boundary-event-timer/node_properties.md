@@ -1,18 +1,103 @@
-# Boundary Event (Timer) — properties
+# Boundary Event Timer — properties
 
-| Property | XML | Required | Notes |
-|----------|-----|:--------:|-------|
-| id / name | attrs | yes/no | e.g. `_SC_TIMER` |
-| attachedToRef | `@attachedToRef` | yes | host activity id (`_SC_AWAIT`) |
-| cancelActivity | `@cancelActivity` | no | default `true` |
-| timeDuration | `timerEventDefinition/timeDuration` | one-of | ISO-8601 duration (`P30D`) |
-| timeCycle | `timerEventDefinition/timeCycle` | one-of | repeating |
-| timeDate | `timerEventDefinition/timeDate` | one-of | absolute |
-| outgoing | `<bpmn2:outgoing>` | yes | escalation path |
+**engine node `type: "boundary"`** — Boundary event on a task/subprocess (error/timer/message/signal/conditional/escalation). Interrupting cancels the host.
 
-## Effect on host
-Host keeps its normal outgoing (e.g. `Documents uploaded`); timer adds the `Day 30` escalation
-exit. Interrupting (`true`) cancels the open task when it fires.
+## JSON schema (what you author)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineBoundary",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "optional; autowired from flows if omitted"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "const": "boundary"
+    },
+    "on": {
+      "type": "string",
+      "description": "host node id the event attaches to"
+    },
+    "event": {
+      "type": "object",
+      "description": "exactly one trigger kind",
+      "properties": {
+        "signal": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "escalation": {
+          "type": "string"
+        },
+        "condition": {
+          "type": "string"
+        },
+        "lang": {
+          "enum": [
+            "js",
+            "java",
+            "mvel"
+          ],
+          "description": "script/expression dialect"
+        },
+        "timer": {
+          "type": [
+            "object",
+            "string"
+          ],
+          "description": "ISO-8601 duration/date or a cycle",
+          "properties": {
+            "duration": {
+              "type": "string"
+            },
+            "cycle": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "interrupting": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "type",
+    "on",
+    "event"
+  ]
+}
+```
 
-## Input / output mapping
-None (timer carries no business payload).
+## Example
+```json
+{
+  "type": "boundary",
+  "on": "_await",
+  "event": {
+    "timer": {
+      "duration": "P30D"
+    }
+  },
+  "interrupting": true
+}
+```
+
+> This is the **engine (nodejs) model** you author. `fromEngine` converts it to the jBPM node (see
+> `node.json` for the produced jBPM model), `serializeProcess` emits BPMN, and `toEngine` recovers it.
+> Every node type round-trips — see `../../../bpmn-sdk/test/engine-nodes.test.mjs`.

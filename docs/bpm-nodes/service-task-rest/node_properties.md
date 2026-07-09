@@ -1,25 +1,81 @@
-# Service Task (REST Work Item) — properties
+# Service Task Rest — properties
 
-| Data input | Meaning | Example |
-|------------|---------|---------|
-| Url | endpoint | `#{baseUrl}/v1/claims/mrx-check` |
-| Method | HTTP verb | `POST` / `PUT` |
-| ContentData | request body | mapped from `reqPayload` var |
-| ContentType | header | `application/json` |
-| HandleResponseErrors | throw on non-2xx | `true` |
-| ConnectTimeout / ReadTimeout | ms | optional |
-| AuthType / Username / Password / AuthUrl | auth | optional |
-| Headers | extra headers | optional |
-| ResultClass | deserialize target | optional |
-| Data output: Result | response body | mapped to `resPayload` var |
+**engine node `type: "http"`** — A REST call (via the pru-rest-executor). SDK builds reqPayload / parses resPayload.
 
-| Element property | XML | Notes |
-|------------------|-----|-------|
-| taskName | `drools:taskName="Rest"` | selects the work-item handler |
-| ioSpecification | dataInput/dataOutput set | declares the params above |
+## JSON schema (what you author)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineHttp",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "optional; autowired from flows if omitted"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "const": "http"
+    },
+    "method": {
+      "enum": [
+        "GET",
+        "POST",
+        "PUT",
+        "DELETE",
+        "PATCH",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "default": "POST"
+    },
+    "url": {
+      "type": "string",
+      "description": "appended to #{baseUrl}"
+    },
+    "headers": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "body": {
+      "type": "object",
+      "description": "constants or \"$var\" refs -> request payload"
+    },
+    "resultTo": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "JSONPath-ish -> process var"
+    }
+  },
+  "required": [
+    "type",
+    "url"
+  ]
+}
+```
 
-## Input / output mapping
-Two mapping styles are used (see `_data-mapping-reference.md`):
-- **from a variable**: `<dataInputAssociation><sourceRef>reqPayload</sourceRef><targetRef>..ContentData</targetRef>`
-- **constant/expression**: `<assignment><from><![CDATA[POST]]></from><to>..Method</to>`
-Output: `<dataOutputAssociation><sourceRef>Result</sourceRef><targetRef>resPayload</targetRef>`
+## Example
+```json
+{
+  "type": "http",
+  "method": "POST",
+  "url": "/v1/claims/status",
+  "body": {
+    "status": "FOR_VERIFICATION"
+  },
+  "resultTo": {
+    "verifierId": "$.verifierId"
+  }
+}
+```
+
+> This is the **engine (nodejs) model** you author. `fromEngine` converts it to the jBPM node (see
+> `node.json` for the produced jBPM model), `serializeProcess` emits BPMN, and `toEngine` recovers it.
+> Every node type round-trips — see `../../../bpmn-sdk/test/engine-nodes.test.mjs`.

@@ -1,14 +1,64 @@
 # Business Rule Task — properties
 
-| Property | XML | Notes |
-|----------|-----|-------|
-| id / name | attrs | |
-| ruleFlowGroup | `drools:ruleFlowGroup` | DRL group to activate |
-| implementation | `@implementation` | `##unspecified` (DRL) or DMN URL |
-| ioSpecification | dataInput/Output | optional facts in/out |
+**engine node `type: "rule"`** — Business rule task: fires a DRL ruleflow-group OR evaluates a DMN decision.
 
-## Input / output mapping
-Optional `dataInputs`/`dataOutputs` (mapped from/to process variables) — same as `call-activity`.
+## JSON schema (what you author)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineRule",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "optional; autowired from flows if omitted"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "const": "rule"
+    },
+    "ruleflowGroup": {
+      "type": "string",
+      "description": "fires a DRL ruleflow-group"
+    },
+    "dmn": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "decision": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "namespace",
+        "model",
+        "decision"
+      ],
+      "description": "evaluate a DMN decision instead"
+    }
+  },
+  "required": [
+    "type"
+  ]
+}
+```
 
-## SDK
-`{ "type":"businessRuleTask", "ruleFlowGroup":"grp", "implementation":"##unspecified" }`
+## Example
+```json
+{
+  "type": "rule",
+  "ruleflowGroup": "classify"
+}
+```
+
+> This is the **engine (nodejs) model** you author. `fromEngine` converts it to the jBPM node (see
+> `node.json` for the produced jBPM model), `serializeProcess` emits BPMN, and `toEngine` recovers it.
+> Every node type round-trips — see `../../../bpmn-sdk/test/engine-nodes.test.mjs`.

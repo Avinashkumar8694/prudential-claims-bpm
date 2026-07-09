@@ -1,15 +1,54 @@
 # Script Task — properties
 
-| Property | XML | Required | Notes |
-|----------|-----|:--------:|-------|
-| id | `id` | yes | e.g. `_BOOT` |
-| name | `name` | no | Label |
-| scriptFormat | `@scriptFormat` | yes | `http://www.java.com/java` (Java) |
-| script | `<bpmn2:script><![CDATA[...]]>` | yes | Body; use `&amp;&amp;` for `&&` if not in CDATA |
-| incoming / outgoing | elements | yes | one each (typically) |
+**engine node `type: "script"`** — Runs inline code (`kcontext` API). `lang` js|java|mvel.
 
-## Input / output mapping
-No `ioSpecification`. Data flows purely through **process variables** touched in the script.
-Document the vars read/written as an engine-level contract:
-- reads: any process variable via `kcontext.getVariable("x")`
-- writes: `kcontext.setVariable("x", value)`
+## JSON schema (what you author)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineScript",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "optional; autowired from flows if omitted"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "const": "script"
+    },
+    "lang": {
+      "enum": [
+        "js",
+        "java",
+        "mvel"
+      ],
+      "description": "script/expression dialect",
+      "default": "java"
+    },
+    "code": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "type",
+    "code"
+  ]
+}
+```
+
+## Example
+```json
+{
+  "type": "script",
+  "lang": "java",
+  "code": "kcontext.setVariable(\"baseUrl\", \"http://localhost:3000\");"
+}
+```
+
+> This is the **engine (nodejs) model** you author. `fromEngine` converts it to the jBPM node (see
+> `node.json` for the produced jBPM model), `serializeProcess` emits BPMN, and `toEngine` recovers it.
+> Every node type round-trips — see `../../../bpmn-sdk/test/engine-nodes.test.mjs`.

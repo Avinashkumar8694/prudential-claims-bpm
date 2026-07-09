@@ -1,19 +1,66 @@
-# Event Sub-Process — properties
+# Event Subprocess — properties
 
-| Property | XML | Notes |
-|----------|-----|-------|
-| id / name | attrs | e.g. `_GLOBAL_TERMINATE_SUBPROCESS` |
-| triggeredByEvent | `@triggeredByEvent="true"` | marks it an event sub-process |
-| (child) start event | `<bpmn2:startEvent isInterrupting="true">` + `errorEventDefinition` | trigger |
-| (child) end event | terminate/none | outcome |
-| (child) sequence flow | connects start->end | |
+**engine node `type: "subprocess"`** — Embedded/transaction/event sub-process containing its own nodes + flows.
 
-## Trigger declaration
-```xml
-<bpmn2:startEvent id="_START_TERMINATE_EVENT" isInterrupting="true">
-  <bpmn2:errorEventDefinition drools:erefname="TERMINATE_CASE" errorRef="TERMINATE_CASE"/>
-</bpmn2:startEvent>
+## JSON schema (what you author)
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineSubprocess",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "optional; autowired from flows if omitted"
+    },
+    "name": {
+      "type": "string"
+    },
+    "type": {
+      "const": "subprocess"
+    },
+    "transaction": {
+      "type": "boolean"
+    },
+    "on": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        }
+      },
+      "description": "error -> event sub-process"
+    },
+    "nodes": {
+      "type": "array",
+      "description": "child EngineNode[]"
+    },
+    "flows": {
+      "type": "array",
+      "description": "child EngineFlow[]"
+    }
+  },
+  "required": [
+    "type",
+    "nodes",
+    "flows"
+  ]
+}
 ```
 
-## Input / output mapping
-Inherits parent process variables (same scope). No explicit ioSpecification.
+## Example
+```json
+{
+  "type": "subprocess",
+  "on": {
+    "error": "TERMINATE_CASE"
+  },
+  "nodes": [],
+  "flows": []
+}
+```
+
+> This is the **engine (nodejs) model** you author. `fromEngine` converts it to the jBPM node (see
+> `node.json` for the produced jBPM model), `serializeProcess` emits BPMN, and `toEngine` recovers it.
+> Every node type round-trips — see `../../../bpmn-sdk/test/engine-nodes.test.mjs`.
