@@ -2,6 +2,7 @@
 // the nodejs engine model. Each rule inspects the EngineProcess graph and returns typed Problems.
 // Errors block publish/deploy; warnings are advisory. See docs/08 + docs/09.
 import type { EngineFlow, EngineNode, EngineProcess } from '../../sdk/index.ts';
+import { NODE_DEF_BY_TYPE } from '../../engine/nodes/index.ts';
 
 export type Severity = 'error' | 'warning';
 export interface Problem { rule: string; severity: Severity; message: string; nodeId?: string; flowId?: string; }
@@ -83,13 +84,13 @@ export const RULES: Rule[] = [
     return out;
   } },
 
-  { id: 'flow-direction', description: 'Connections must respect BPMN direction rules', run: (c) => {
+  { id: 'flow-direction', description: 'Connections must respect each node type\'s declared ports (in/out)', run: (c) => {
     const out: Problem[] = [];
     for (const f of c.flows) {
       const from = c.byId.get(f.from); const to = c.byId.get(f.to);
-      if (from && from.type === 'end') out.push(P('flow-direction', 'error', `Connection out of end "${label(from)}" is not allowed (end events have no outgoing)`, { flowId: f.id, nodeId: from.id }));
-      if (to && to.type === 'start') out.push(P('flow-direction', 'error', `Connection into start "${label(to)}" is not allowed (start events have no incoming)`, { flowId: f.id, nodeId: to.id }));
-      if (to && to.type === 'boundary') out.push(P('flow-direction', 'error', `Connection into boundary/error catch "${label(to)}" is not allowed (it attaches to a host node)`, { flowId: f.id, nodeId: to.id }));
+      const fromDef = from && NODE_DEF_BY_TYPE[from.type]; const toDef = to && NODE_DEF_BY_TYPE[to.type];
+      if (fromDef && !fromDef.ports.out) out.push(P('flow-direction', 'error', `"${label(from!)}" (${from!.type}) has no outgoing connection point`, { flowId: f.id, nodeId: from!.id }));
+      if (toDef && !toDef.ports.in) out.push(P('flow-direction', 'error', `"${label(to!)}" (${to!.type}) has no incoming connection point`, { flowId: f.id, nodeId: to!.id }));
     }
     return out;
   } },

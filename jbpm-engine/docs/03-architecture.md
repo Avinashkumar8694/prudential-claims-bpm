@@ -146,7 +146,9 @@ server/
     sdk/     (sdk wrapper + runtime evaluators re-export)
     store/   (repository.ts, file-store.ts, pg-store.ts)
     engine/  (execution-engine.ts, decisioning.ts, duration.ts, sandbox.ts,
-              nodes/<type>/handler.ts + nodes/index.ts  ← per-node backend logic + registry)
+              nodes/<type>/{def.ts, handler.ts} + nodes/index.ts
+                ← self-contained node: def.ts (UI palette + ports + property schema, served via
+                  /catalog) and handler.ts (backend runtime); registry aggregates both)
     assets/  (<kind>/def.ts + index.ts  ← per-asset-kind definition + seed + registry)
     modules/ (workflows, branches, versions, deployments, instances, tasks, assets, export, import,
               auth, secrets, audit)  ← each: model.ts service.ts router.ts *.test.ts

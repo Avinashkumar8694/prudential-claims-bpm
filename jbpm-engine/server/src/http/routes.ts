@@ -12,7 +12,7 @@ import { InstanceService } from '../modules/instances/service.ts';
 import { TaskService } from '../modules/tasks/service.ts';
 import { ProcessService } from '../modules/processes/service.ts';
 import { AssetsService } from '../modules/assets/service.ts';
-import { NODE_REGISTRY, CATEGORIES } from '../modules/catalog/registry.ts';
+import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
 import { fromEngineProject } from '../sdk/index.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { hub } from '../infra/ws-hub.ts';
@@ -24,8 +24,18 @@ const emit = hub.engineEmit;
 export function buildRoutes(): Router {
   const r = Router();
 
-  // --- catalog (palette / property schemas) ---
-  r.get('/catalog/nodes', (_req, res) => res.json({ categories: CATEGORIES, nodes: NODE_REGISTRY }));
+  // --- catalog: the UI gets the node list + per-node config (palette, ports, property schema) here ---
+  r.get('/catalog/nodes', (_req, res) => res.json({
+    categories: CATEGORIES,
+    nodes: NODE_DEFS.flatMap((d) => d.palette),                                  // palette tiles
+    schemas: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.schema])), // engineType → property form
+    ports: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.ports])),    // engineType → { in, out }
+  }));
+  r.get('/catalog/nodes/:engineType', (req, res) => {
+    const def = NODE_DEF_BY_TYPE[req.params.engineType];
+    if (!def) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'node type not found' } });
+    res.json(def);
+  });
 
   // --- validation (validate an in-progress engine process, no save) ---
   r.post('/validate', (req, res) => res.json(new ValidationService().validate((req.body?.engine?.processes?.[0]) || req.body?.process || req.body)));

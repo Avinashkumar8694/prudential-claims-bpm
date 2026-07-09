@@ -89,13 +89,13 @@ const NW = 190, NH = 66;
                  (pointerdown)="startDrag($event, n)" (click)="selectNode($event, n)">
               @if (hasErr(n.id)) { <span class="nmark err" title="Has errors">!</span> }
               @else if (hasWarn(n.id)) { <span class="nmark warn" title="Has warnings">!</span> }
-              <span class="port in" title="Connect into" (pointerdown)="$event.stopPropagation()" (click)="endLink($event, n)"></span>
+              @if (portsFor(n.type).in) { <span class="port in" title="Incoming" (pointerdown)="$event.stopPropagation()" (click)="endLink($event, n)"></span> }
               <span class="chip" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>
               <div class="ninfo">
                 <div class="ntitle">{{ n.name || labelFor(n) }}</div>
                 <div class="ntype">{{ typeLabel(n) }}</div>
               </div>
-              <span class="port out" title="Drag to connect" (pointerdown)="$event.stopPropagation()" (click)="startLink($event, n)"></span>
+              @if (portsFor(n.type).out) { <span class="port out" title="Connect from here" (pointerdown)="$event.stopPropagation()" (click)="startLink($event, n)"></span> }
               @if (selNode()?.id===n.id) {
                 <button class="ndel" (pointerdown)="$event.stopPropagation()" (click)="del($event, n)" title="Delete">🗑</button>
               }
@@ -118,7 +118,7 @@ const NW = 190, NH = 66;
           @if (selNode(); as n) {
             <div class="props-h"><span class="chip sm" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>{{ typeLabel(n) }}</div>
             <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
-            <app-properties-panel [node]="n" [allNodes]="nodes()" (changed)="markDirty()"></app-properties-panel>
+            <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" (changed)="markDirty()"></app-properties-panel>
             <button class="btn danger full" (click)="del($event, n)">Delete node</button>
           } @else if (selEdge()) {
             <div class="props-h">Connection</div>
@@ -409,11 +409,14 @@ export class BuilderComponent {
     this.edges.set([...this.edges(), { id: `e${this.idc++}_${fromId}_${to.id}`, from: fromId, to: to.id }]);
     this.linkFrom.set(null); this.markDirty();
   }
-  /** BPMN/jBPM sequence-flow validity for a source→target. */
+  // per-node config from the backend catalog (single source of truth for ports + property schema)
+  portsFor(type: string) { return this.catalog()?.ports?.[type] || { in: true, out: true }; }
+  schemaFor(type: string) { return this.catalog()?.schemas?.[type] || []; }
+
+  /** Connection validity derived from each node type's declared ports (config-driven, matches backend). */
   canConnect(from: CNode, to: CNode): { ok: boolean; reason?: string } {
-    if (from.type === 'end') return { ok: false, reason: 'End events have no outgoing connection' };
-    if (to.type === 'start') return { ok: false, reason: 'Start events have no incoming connection' };
-    if (to.type === 'boundary') return { ok: false, reason: 'An error/boundary catch attaches to its host node, not via a connection' };
+    if (!this.portsFor(from.type).out) return { ok: false, reason: `A ${from.type} has no outgoing connection` };
+    if (!this.portsFor(to.type).in) return { ok: false, reason: `A ${to.type} has no incoming connection` };
     if (this.edges().some((e) => e.from === from.id && e.to === to.id)) return { ok: false, reason: 'That connection already exists' };
     return { ok: true };
   }

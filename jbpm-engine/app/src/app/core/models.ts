@@ -27,7 +27,15 @@ export interface NodeSpec {
   key: string; label: string; category: string; icon: string; color: string;
   engineType: string; defaults: Record<string, unknown>; docFolder: string;
 }
-export interface Catalog { categories: string[]; nodes: NodeSpec[]; }
+export interface UiField { key: string; label: string; widget: string; options?: string[]; placeholder?: string; help?: string; }
+export interface UiSection { title: string; fields: UiField[]; }
+export interface Ports { in: boolean; out: boolean; }
+export interface Catalog {
+  categories: string[];
+  nodes: NodeSpec[];
+  schemas: Record<string, UiSection[]>;   // engineType → property form (served by the backend)
+  ports: Record<string, Ports>;           // engineType → connection points
+}
 
 export interface Problem { rule: string; severity: 'error' | 'warning'; message: string; nodeId?: string; flowId?: string; }
 export interface ValidationResult { ok: boolean; errors: Problem[]; warnings: Problem[]; problems: Problem[]; }

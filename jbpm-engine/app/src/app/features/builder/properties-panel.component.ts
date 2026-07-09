@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { NODE_SCHEMA, type Field, type Section } from './node-schema';
+import type { UiField as Field, UiSection as Section } from '../../core/models';
 
 // Generic, schema-driven property editor. Renders every configurable field for the selected node's
 // type (from NODE_SCHEMA) so a node can be fully configured. Emits `changed` on any edit.
@@ -114,8 +114,8 @@ import { NODE_SCHEMA, type Field, type Section } from './node-schema';
 export class PropertiesPanelComponent implements OnChanges {
   @Input() node: any;
   @Input() allNodes: { id: string; type: string; name?: string }[] = [];
+  @Input() sections: Section[] = [];   // property form for this node type, served by the backend catalog
   @Output() changed = new EventEmitter<void>();
-  sections: Section[] = [];
   kv: Record<string, { k: string; v: string }[]> = {};
   sl: Record<string, string[]> = {};
   errorCodes = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'];
@@ -134,7 +134,6 @@ export class PropertiesPanelComponent implements OnChanges {
   errText(path: string) { const e = this.val(path + '.error'); return e === '*' ? '' : e; }
 
   ngOnChanges() {
-    this.sections = (this.node && NODE_SCHEMA[this.node.type]) || [];
     this.kv = {}; this.sl = {};
     for (const sec of this.sections) for (const f of sec.fields) {
       if (f.widget === 'keyval') this.kv[f.key] = Object.entries(this.val(f.key) || {}).map(([k, v]) => ({ k, v: this.str(v) }));
