@@ -11,6 +11,7 @@ import { DeploymentService } from '../modules/deployments/service.js';
 import { InstanceService } from '../modules/instances/service.js';
 import { TaskService } from '../modules/tasks/service.js';
 import { ProcessService } from '../modules/processes/service.js';
+import { AssetsService } from '../modules/assets/service.js';
 import { NODE_REGISTRY, CATEGORIES } from '../modules/catalog/registry.js';
 import { fromEngineProject } from '../sdk/index.js';
 import { ValidationService } from '../modules/validation/service.js';
@@ -45,6 +46,11 @@ export function buildRoutes(): Router {
   r.put('/workflows/:id/processes/:pid', asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).saveProcess(req.params.id, req.params.pid, req.body?.process || req.body, actorOf(req)); res.json({ ok: true }); }));
   r.patch('/workflows/:id/processes/:pid', asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).rename(req.params.id, req.params.pid, req.body?.name, actorOf(req)); res.json({ ok: true }); }));
   r.delete('/workflows/:id/processes/:pid', asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).remove(req.params.id, req.params.pid, actorOf(req)); res.status(204).end(); }));
+
+  // --- project engine + assets ---
+  r.get('/workflows/:id/engine', asyncHandler(async (req, res) => res.json(await new ProcessService(ctxOf(req)).getEngine(req.params.id))));
+  r.get('/workflows/:id/assets', asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).list(req.params.id))));
+  r.post('/workflows/:id/assets', asyncHandler(async (req, res) => res.status(201).json(await new AssetsService(ctxOf(req)).add(req.params.id, req.body?.kind, req.body?.name, actorOf(req)))));
 
   // --- branches ---
   r.get('/workflows/:id/branches', asyncHandler(async (req, res) => res.json({ items: await new BranchService(ctxOf(req)).listByWorkflow(req.params.id) })));

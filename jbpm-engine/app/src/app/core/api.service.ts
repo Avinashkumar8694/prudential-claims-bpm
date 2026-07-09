@@ -21,6 +21,16 @@ export class ApiService {
   createWorkflow(body: { name: string; description?: string }): Observable<Workflow> { return this.http.post<Workflow>(`${base}/workflows`, body); }
   updateWorkflow(id: string, patch: Partial<Workflow>): Observable<Workflow> { return this.http.patch<Workflow>(`${base}/workflows/${id}`, patch); }
 
+  // processes (within a project) + assets
+  listProcesses(projectId: string): Observable<{ id: string; name: string; nodes: number; flows: number }[]> { return this.http.get<List<any>>(`${base}/workflows/${projectId}/processes`).pipe(map((r) => r.items)); }
+  addProcess(projectId: string, name: string): Observable<{ id: string; name: string }> { return this.http.post<any>(`${base}/workflows/${projectId}/processes`, { name }); }
+  renameProcess(projectId: string, pid: string, name: string): Observable<any> { return this.http.patch(`${base}/workflows/${projectId}/processes/${pid}`, { name }); }
+  removeProcess(projectId: string, pid: string): Observable<any> { return this.http.delete(`${base}/workflows/${projectId}/processes/${pid}`); }
+  getProcess(projectId: string, pid: string): Observable<any> { return this.http.get<any>(`${base}/workflows/${projectId}/processes/${pid}`); }
+  saveProcess(projectId: string, pid: string, process: any): Observable<any> { return this.http.put(`${base}/workflows/${projectId}/processes/${pid}`, { process }); }
+  getAssets(projectId: string): Observable<{ kinds: { key: string; label: string }[]; assets: Record<string, { name: string }[]> }> { return this.http.get<any>(`${base}/workflows/${projectId}/assets`); }
+  addAsset(projectId: string, kind: string, name: string): Observable<any> { return this.http.post(`${base}/workflows/${projectId}/assets`, { kind, name }); }
+
   // branches + versions
   listBranches(wfId: string): Observable<Branch[]> { return this.http.get<List<Branch>>(`${base}/workflows/${wfId}/branches`).pipe(map((r) => r.items)); }
   listVersions(branchId: string): Observable<Version[]> { return this.http.get<List<Version>>(`${base}/branches/${branchId}/versions`).pipe(map((r) => r.items)); }
@@ -37,7 +47,7 @@ export class ApiService {
   setTags(depId: string, change: { add?: string[]; remove?: string[] }): Observable<Deployment> { return this.http.post<Deployment>(`${base}/deployments/${depId}/tags`, change); }
 
   // instances
-  startInstance(body: { workflowId: string; environment?: string; deploymentId?: string; variables?: Record<string, unknown> }): Observable<Instance> { return this.http.post<Instance>(`${base}/instances`, body); }
+  startInstance(body: { workflowId: string; processId?: string; environment?: string; deploymentId?: string; variables?: Record<string, unknown> }): Observable<Instance> { return this.http.post<Instance>(`${base}/instances`, body); }
   listInstances(workflowId: string): Observable<Instance[]> { return this.http.get<List<Instance>>(`${base}/instances`, { params: { workflowId } }).pipe(map((r) => r.items)); }
   getInstance(id: string): Observable<Instance> { return this.http.get<Instance>(`${base}/instances/${id}`); }
   diagramState(id: string): Observable<any> { return this.http.get(`${base}/instances/${id}/diagram-state`); }

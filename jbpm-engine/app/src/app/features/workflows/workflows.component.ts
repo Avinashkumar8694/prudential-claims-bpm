@@ -11,20 +11,20 @@ import type { Workflow } from '../../core/models';
   template: `
     <div class="page">
       <header class="pagehead">
-        <h1>Workflow Applications</h1>
+        <h1>Projects</h1>
         <span class="spacer"></span>
         <div class="row">
-          <input class="in" placeholder="New workflow name" [(ngModel)]="newName" (keyup.enter)="create()" />
-          <button class="btn primary" (click)="create()">+ Create Workflow</button>
+          <input class="in" placeholder="New project name" [(ngModel)]="newName" (keyup.enter)="create()" />
+          <button class="btn primary" (click)="create()">+ Create Project</button>
         </div>
       </header>
 
       @if (loading()) { <p class="muted">Loading…</p> }
-      @else if (workflows().length === 0) { <p class="muted">No workflows yet. Create your first one above.</p> }
+      @else if (workflows().length === 0) { <p class="muted">No projects yet. Create your first one above.</p> }
       @else {
         <div class="grid">
           @for (w of workflows(); track w.id) {
-            <div class="card wf">
+            <a class="card wf" [routerLink]="['/projects', w.id]">
               <div class="wf-top">
                 <span class="ic">⚡</span>
                 <div>
@@ -33,11 +33,9 @@ import type { Workflow } from '../../core/models';
                 </div>
               </div>
               <div class="wf-actions">
-                <a class="btn" [routerLink]="['/workflows', w.id, 'builder']">Open builder</a>
-                <a class="btn" [routerLink]="['/workflows', w.id, 'deployments']">Deployments</a>
-                <a class="btn" [routerLink]="['/workflows', w.id, 'instances']">Instances</a>
+                <span class="btn">Open project →</span>
               </div>
-            </div>
+            </a>
           }
         </div>
       }

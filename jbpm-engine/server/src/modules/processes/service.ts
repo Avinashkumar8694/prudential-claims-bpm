@@ -25,6 +25,8 @@ export class ProcessService {
   }
   private async saveEngine(branchId: string, engine: EngineProject, actor: string) { await this.ver.saveDraft(branchId, engine, actor); }
 
+  async getEngine(projectId: string): Promise<EngineProject> { return (await this.head(projectId)).engine; }
+
   async list(projectId: string): Promise<ProcessSummary[]> {
     const { engine } = await this.head(projectId);
     return (engine.processes || []).map((p) => ({ id: p.id!, name: p.name || p.id!, nodes: (p.nodes || []).length, flows: (p.flows || []).length }));

@@ -2,7 +2,7 @@ import { Component, ElementRef, HostListener, computed, inject, signal, viewChil
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
-import type { Catalog, NodeSpec, Problem, Version, Workflow } from '../../core/models';
+import type { Catalog, NodeSpec, Problem, Workflow } from '../../core/models';
 import { PropertiesPanelComponent } from './properties-panel.component';
 import { ProblemsPanelComponent } from './problems-panel.component';
 
@@ -30,16 +30,16 @@ const NW = 190, NH = 66;
     <div class="builder">
       <!-- HEADER -->
       <header class="hdr">
-        <a class="icon-btn" routerLink="/workflows" title="Back to apps">‹</a>
+        <a class="icon-btn" [routerLink]="['/projects', projectId]" title="Back to project">‹</a>
         <div class="titles">
-          <input class="wfname" [(ngModel)]="name" (ngModelChange)="markDirty()" placeholder="Workflow Name *" />
-          <span class="key">{{ wf()?.key || '—' }}</span>
+          <span class="proj-chip">{{ wf()?.name }}</span><span class="sep">▸</span>
+          <input class="wfname" [(ngModel)]="name" (ngModelChange)="markDirty()" placeholder="Process name *" />
         </div>
         <span class="spacer"></span>
         <span class="savestate" [class.dirty]="saveState()==='dirty'">{{ saveLabel() }}</span>
         <button class="btn" (click)="saveNow()">Update</button>
         <button class="btn ghost">User Permissions</button>
-        <button class="btn ghost" (click)="openVars()">Variables ({{ wf()?.variables?.length || 0 }})</button>
+        <button class="btn ghost" (click)="openVars()">Variables ({{ procVars().length }})</button>
         <span class="divider"></span>
         <button class="icon-btn" (click)="autoLayout()" title="Auto-layout">▦</button>
         <button class="btn" (click)="run()">▷ Run</button>
@@ -143,8 +143,8 @@ const NW = 190, NH = 66;
           <div class="modal" (click)="$event.stopPropagation()">
             <div class="modal-h"><span>Process Variables</span><button class="x" (click)="closeVars()">✕</button></div>
             <div class="modal-body">
-              <p class="hint">Typed data the process carries. Referenced from scripts (kcontext), conditions, and data mappings.</p>
-              @for (v of wf()!.variables; track $index) {
+              <p class="hint">Typed data this process carries. Referenced from scripts (kcontext), conditions, and data mappings.</p>
+              @for (v of procVars(); track $index) {
                 <div class="vrow">
                   <input placeholder="name" [(ngModel)]="v.name" (ngModelChange)="markDirty()" />
                   <select [(ngModel)]="v.type" (ngModelChange)="markDirty()">
@@ -153,7 +153,7 @@ const NW = 190, NH = 66;
                   <button class="x" (click)="rmVar($index)">✕</button>
                 </div>
               }
-              @if (!wf()!.variables.length) { <p class="muted">No variables yet.</p> }
+              @if (!procVars().length) { <p class="muted">No variables yet.</p> }
               <button class="add" (click)="addVar()">+ add variable</button>
             </div>
           </div>
@@ -169,6 +169,7 @@ const NW = 190, NH = 66;
     .titles { display: flex; align-items: center; gap: 10px; }
     .wfname { border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; font-size: 15px; font-weight: 700; width: 220px; }
     .wfname:hover { border-color: var(--border); } .wfname:focus { border-color: var(--primary); outline: none; }
+    .proj-chip { font-size: 13px; color: var(--muted); font-weight: 600; } .sep { color: #cbd2e0; }
     .key { font-size: 11px; color: var(--muted); background: #eef0f6; padding: 3px 8px; border-radius: 999px; }
     .divider { width: 1px; height: 22px; background: var(--border); margin: 0 4px; }
     .savestate { font-size: 12px; color: var(--muted); margin-right: 4px; } .savestate.dirty { color: var(--amber); }
@@ -259,9 +260,11 @@ export class BuilderComponent {
   saveState = signal<'saved' | 'saving' | 'dirty'>('saved');
   validationMsg = signal<string>(''); validOk = signal(false);
   showVars = signal(false);
+  procVars = signal<{ name: string; type: string }[]>([]);
   name = ''; q = '';
   NW = NW;
-  private branchId = ''; private versionId = ''; private idc = 0; private saveTimer: any;
+  projectId = ''; pid = '';
+  private branchId = ''; private idc = 0; private saveTimer: any;
   private pointer = { x: 0, y: 0 };
   private drag: { id: string; offX: number; offY: number; moved: boolean } | null = null;
 
@@ -277,7 +280,7 @@ export class BuilderComponent {
   hasWarn(id: string) { return this.warnIds().has(id); }
   private runValidate() {
     if (!this.wf()) return;
-    this.api.validateProcess(this.buildEngine().processes[0]).subscribe((r) => this.problems.set(r.problems));
+    this.api.validateProcess(this.buildProcess()).subscribe((r) => this.problems.set(r.problems));
   }
   pickProblem(id: string) {
     const n = this.nodes().find((x) => x.id === id);
@@ -287,12 +290,11 @@ export class BuilderComponent {
   }
 
   constructor() {
-    const id = this.route.snapshot.paramMap.get('id')!;
+    this.projectId = this.route.snapshot.paramMap.get('id')!;
+    this.pid = this.route.snapshot.paramMap.get('pid')!;
     this.api.catalog().subscribe((c) => this.catalog.set(c));
-    this.api.getWorkflow(id).subscribe((w) => {
-      this.wf.set(w); this.name = w.name; this.branchId = w.defaultBranchId;
-      this.api.listVersions(w.defaultBranchId).subscribe((vs) => this.loadVersion(vs));
-    });
+    this.api.getWorkflow(this.projectId).subscribe((w) => { this.wf.set(w); this.branchId = w.defaultBranchId; });
+    this.api.getProcess(this.projectId, this.pid).subscribe((p) => this.loadProcess(p));
   }
 
   // ---- visuals / labels ----
@@ -307,13 +309,11 @@ export class BuilderComponent {
     return (this.catalog()?.nodes ?? []).filter((n) => n.category === cat && (!q || n.label.toLowerCase().includes(q)));
   }
 
-  // ---- load / map ----
-  private loadVersion(vs: Version[]) {
-    const head = vs.filter((v) => v.state === 'draft').at(-1) || vs.at(-1);
-    if (!head) return;
-    this.versionId = head.id;
-    const proc = head.engine?.processes?.[0];
+  // ---- load / map (a single process within the project) ----
+  private loadProcess(proc: any) {
     if (!proc) return;
+    this.name = proc.name || this.pid;
+    this.procVars.set([...(proc.vars || [])]);
     const cn: CNode[] = (proc.nodes || []).map((n: any, i: number) => ({
       ...n, x: n.x ?? (100 + (i % 4) * 230), y: n.y ?? (90 + Math.floor(i / 4) * 150),
     }));
@@ -323,14 +323,11 @@ export class BuilderComponent {
     this.runValidate();
   }
 
-  private buildEngine() {
-    const w = this.wf()!;
+  private buildProcess() {
     return {
-      id: w.key, name: this.name, processes: [{
-        id: `${w.key}.process`, name: this.name, package: 'com.acme', vars: w.variables || [],
-        nodes: this.nodes().map((n) => ({ ...n })),
-        flows: this.edges().map((e) => ({ id: e.id, from: e.from, to: e.to, ...(e.when ? { when: e.when, lang: e.lang || 'js' } : {}) })),
-      }],
+      id: this.pid, name: this.name, package: 'com.acme', vars: this.procVars(),
+      nodes: this.nodes().map((n) => ({ ...n })),
+      flows: this.edges().map((e) => ({ id: e.id, from: e.from, to: e.to, ...(e.when ? { when: e.when, lang: 'js' } : {}) })),
     };
   }
 
@@ -430,15 +427,11 @@ export class BuilderComponent {
     return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
   }
 
-  // ---- process variables ----
-  openVars() { const w = this.wf(); if (w && !w.variables) w.variables = []; this.showVars.set(true); }
-  addVar() { this.wf()!.variables.push({ name: '', type: 'string' }); this.markDirty(); }
-  rmVar(i: number) { this.wf()!.variables.splice(i, 1); this.markDirty(); }
-  closeVars() {
-    this.showVars.set(false);
-    const w = this.wf(); if (w) this.api.updateWorkflow(w.id, { variables: w.variables.filter((v) => v.name.trim()) }).subscribe();
-    this.saveNow();
-  }
+  // ---- process variables (this process's own variables) ----
+  openVars() { this.showVars.set(true); }
+  addVar() { this.procVars.set([...this.procVars(), { name: '', type: 'string' }]); this.markDirty(); }
+  rmVar(i: number) { const v = [...this.procVars()]; v.splice(i, 1); this.procVars.set(v); this.markDirty(); }
+  closeVars() { this.showVars.set(false); this.saveNow(); }
 
   autoLayout() {
     const ns = this.nodes();
@@ -454,36 +447,37 @@ export class BuilderComponent {
   }
   saveNow() { clearTimeout(this.saveTimer); this.save(); }
   private save() {
-    if (!this.branchId || !this.wf()) return;
+    if (!this.wf()) return;
     this.saveState.set('saving');
-    this.api.saveDraft(this.branchId, this.buildEngine()).subscribe({
-      next: (v) => { this.versionId = v.id; this.saveState.set('saved'); },
+    this.api.saveProcess(this.projectId, this.pid, this.buildProcess()).subscribe({
+      next: () => this.saveState.set('saved'),
       error: () => this.saveState.set('dirty'),
     });
   }
   validate() {
-    this.saveNow();
-    setTimeout(() => this.api.validate(this.versionId).subscribe((r) => {
-      this.validOk.set(r.ok);
-      this.validationMsg.set(r.ok ? '✓ Model is valid' : `✗ ${r.errors.length} error(s): ${r.errors.slice(0, 3).join('; ')}`);
-    }), 300);
+    this.api.validateProcess(this.buildProcess()).subscribe((r) => {
+      this.problems.set(r.problems); this.validOk.set(r.ok);
+      this.validationMsg.set(r.ok ? '✓ Process is valid' : `✗ ${r.errors.length} error(s)`);
+    });
   }
 
-  // ---- run / deploy ----
+  // ---- run / deploy (project-level) ----
   run() {
-    const w = this.wf()!;
-    this.api.startInstance({ workflowId: w.id, environment: 'prod' }).subscribe({
+    this.saveNow();
+    this.api.startInstance({ workflowId: this.projectId, processId: this.pid, environment: 'prod' }).subscribe({
       next: (i) => alert(`Instance started: ${i.id}\nStatus: ${i.status}`),
-      error: (e) => alert(`Cannot run: ${e?.error?.error?.message || 'deploy to prod first'}`),
+      error: (e) => alert(`Cannot run: ${e?.error?.error?.message || 'deploy the project to prod first'}`),
     });
   }
   deploy() {
     if (this.errorCount() > 0) { alert(`Fix ${this.errorCount()} validation error(s) before deploying.`); return; }
     this.saveNow();
-    setTimeout(() => this.api.publish(this.versionId, 'ui').subscribe((p: any) => {
-      this.api.deploy(p.published.id, { environment: 'prod', activate: true }).subscribe((d) => {
-        this.versionId = p.newDraft.id;
-        alert(`Deployed v${p.published.number} to prod (active).\nDeployment ${d.id}`);
+    setTimeout(() => this.api.listVersions(this.branchId).subscribe((vs) => {
+      const head = vs.filter((v) => v.state === 'draft').at(-1) || vs.at(-1);
+      if (!head) return;
+      this.api.publish(head.id, 'ui').subscribe({
+        next: (p: any) => this.api.deploy(p.published.id, { environment: 'prod', activate: true }).subscribe(() => alert(`Deployed project v${p.published.number} to prod (active).`)),
+        error: (e) => alert('Cannot deploy: ' + (e?.error?.error?.message || 'validation failed') + '\n' + ((e?.error?.error?.details || []).map((d: any) => '• ' + d.message).join('\n'))),
       });
     }), 400);
   }

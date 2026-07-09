@@ -43,7 +43,7 @@ interface NavItem { label: string; icon: string; link: string; }
 export class SideNavComponent {
   collapsed = signal(false);
   items: NavItem[] = [
-    { label: 'Workflow Applications', icon: '▤', link: '/workflows' },
+    { label: 'Projects', icon: '▤', link: '/projects' },
     { label: 'Tasks', icon: '☑', link: '/tasks' },
   ];
 }

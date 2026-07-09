@@ -72,7 +72,8 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] UI: relabel Workflows → Projects; project list
 - [x] UI: project detail with tabs (Processes / Variables / Assets / Rules / Settings / Deployments / Instances)
 - [x] UI: builder opens a selected process by id; header Test + Deploy
-- [ ] backend+UI: `assets` module — list/add asset entries (forms/DRL/DMN/tables/…) + `asset-ref` validation rule
+- [x] backend+UI: `assets` module — list/add asset entries (forms/DRL/DMN/tables/…) in the project draft; Assets & Rules tabs
+- [ ] validation `asset-ref` rule (node references an existing asset)
 - [ ] backend+UI: cron/scheduled starts per process (`CronService` + settings + scheduler)
 - [ ] UI: per-asset editors (form builder, DRL/DMN/table editors) — Phase 8
 - [ ] tasks/definitions/instances views scoped per version + Test dry-run flow

@@ -11,7 +11,7 @@ import type { Deployment } from '../../core/models';
   template: `
     <div class="page">
       <header class="pagehead">
-        <a class="btn ghost" routerLink="/workflows">‹ Apps</a>
+        <a class="btn ghost" [routerLink]="['/projects', wfId]">‹ Project</a>
         <h1>Deployments</h1>
       </header>
 

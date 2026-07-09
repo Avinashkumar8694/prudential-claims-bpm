@@ -21,7 +21,7 @@ const NW = 168, NH = 56;
   template: `
     <div class="page">
       <header class="pagehead">
-        <a class="icon-btn" routerLink="/workflows" title="Apps">‹</a>
+        <a class="icon-btn" routerLink="/projects" title="Projects">‹</a>
         <h1>Process Instances</h1>
         <span class="spacer"></span>
         <button class="btn" (click)="reload()">↻ Refresh</button>
