@@ -18,7 +18,7 @@ export class TimerService {
     for (const job of due) {
       job.status = 'fired'; job.fired += 1;
       await this.repo().put(job);
-      try { await this.instances.resume(job.instanceId, job.tokenId); }
+      try { await this.instances.fireTimer(job); }
       catch { /* token already gone / instance finished — ignore */ }
     }
     return due.length;

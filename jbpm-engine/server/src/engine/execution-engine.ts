@@ -4,6 +4,7 @@ import type { AppContext } from '../context.ts';
 import { Collections, type Deployment, type Instance, type NodeVisit, type TimerJob } from '../domain.ts';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
 import { NODE_HANDLERS, type HandlerCtx, type HandlerResult } from './nodes/index.ts';
+import { computeDue } from './duration.ts';
 
 // Error codes the Node runtime raises (documented in docs/14-error-handling.md); user codes also allowed.
 export const ENGINE_ERRORS = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'] as const;
@@ -85,11 +86,12 @@ export class ExecutionEngine {
 
         if (result.wait) {
           token.state = 'waiting'; token.waitFor = result.wait;
-          if (result.wait.kind === 'timer' && result.wait.dueAt) {
-            await this.ctx.store.repo<TimerJob>(Collections.timers).put({
-              id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: inst.id, tokenId: token.id, nodeId: node.id!,
-              kind: 'duration', dueAt: result.wait.dueAt, fired: 0, status: 'scheduled',
-            });
+          if (result.wait.kind === 'timer' && result.wait.dueAt) await this.scheduleTimer(inst, token.id, node.id!, result.wait.dueAt);
+          // schedule any timer boundary events attached to this (now waiting) host node
+          for (const b of p.nodes) {
+            if (b.type === 'boundary' && (b as any).event?.timer && this.onList(b).includes(node.id!)) {
+              await this.scheduleTimer(inst, token.id, b.id!, computeDue((b as any).event.timer, this.ctx.clock()));
+            }
           }
           continue;
         }
@@ -194,6 +196,33 @@ export class ExecutionEngine {
 
   private removeToken(inst: Instance, tokenId: string) { inst.tokens = inst.tokens.filter((t) => t.id !== tokenId); }
 
+  // ---- timers ----
+  private timerRepo() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
+  private async scheduleTimer(inst: Instance, tokenId: string, nodeId: string, dueAt: string) {
+    await this.timerRepo().put({ id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: inst.id, tokenId, nodeId, kind: 'duration', dueAt, fired: 0, status: 'scheduled' });
+  }
+  /** Cancel a token's pending timers (host completed/resumed → its boundary/catch timers no longer apply). */
+  private async cancelTimersForToken(inst: Instance, tokenId: string) {
+    const jobs = await this.timerRepo().query((t) => t.instanceId === inst.id && t.tokenId === tokenId && t.status === 'scheduled');
+    for (const j of jobs) { j.status = 'cancelled'; await this.timerRepo().put(j); }
+  }
+  /** Fire a due timer job: boundary timer → activate the boundary; else resume the (catch) token. */
+  async fireTimerJob(inst: Instance, dep: Deployment, nodeId: string, tokenId: string): Promise<Instance> {
+    const node = this.nodeMap(this.proc(inst, dep)).get(nodeId);
+    if (node?.type === 'boundary') return this.fireBoundary(inst, dep, node, tokenId);
+    return this.resumeToken(inst, dep, tokenId);
+  }
+  /** A timer boundary fired: interrupting cancels the host token; then run the boundary's recovery flow. */
+  private async fireBoundary(inst: Instance, dep: Deployment, boundary: EngineNode, hostTokenId: string): Promise<Instance> {
+    const host = inst.tokens.find((t) => t.id === hostTokenId);
+    if (!host) return inst;   // host already finished → stale timer
+    if ((boundary as any).interrupting !== false) { this.removeToken(inst, hostTokenId); await this.cancelTimersForToken(inst, hostTokenId); }
+    inst.tokens.push({ id: this.ctx.newId(), nodeId: boundary.id!, state: 'active', enteredAt: this.ctx.clock() });
+    inst.status = 'running';
+    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: boundary.id!, tokenId: inst.tokens.at(-1)!.id });
+    return this.runToQuiescence(inst, dep);
+  }
+
   // ---- error handling: route a raised error to a matching error-catch (boundary) node ----
   /** on: string | string[]; '*' = all nodes (process-global). Normalize to a list. */
   private onList(n: EngineNode): string[] { const on = (n as any).on; return Array.isArray(on) ? on : (on ? [on] : []); }
@@ -251,6 +280,7 @@ export class ExecutionEngine {
     const token = inst.tokens.find((t) => t.id === tokenId);
     if (!token || token.state !== 'waiting') throw new Error('token is not waiting');
     if (vars) Object.assign(inst.variables, vars);
+    await this.cancelTimersForToken(inst, tokenId);   // host resumed → drop its pending boundary/catch timers
     const p = this.proc(inst, dep);
     const node = this.nodeMap(p).get(token.nodeId);
     // exit the wait node, spawn successors, resume the loop

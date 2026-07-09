@@ -1,6 +1,6 @@
 // Process-instance lifecycle: start against a resolved deployment, query, inspect, resume.
 import type { AppContext } from '../../context.ts';
-import { Collections, type Deployment, type Instance } from '../../domain.ts';
+import { Collections, type Deployment, type Instance, type TimerJob } from '../../domain.ts';
 import { ExecutionEngine, type EngineEvent } from '../../engine/execution-engine.ts';
 import { DeploymentService } from '../deployments/service.ts';
 import { notFound, conflict } from '../../infra/errors.ts';
@@ -54,11 +54,18 @@ export class InstanceService {
 
   async history(id: string) { return (await this.get(id)).history; }
 
-  /** Resume a waiting token (used by task completion / timer firing / signals). */
+  /** Resume a waiting token (used by task completion / signals). */
   async resume(id: string, tokenId: string, vars?: Record<string, unknown>): Promise<Instance> {
     const inst = await this.get(id);
     const dep = await this.deployments.get(inst.deploymentId);
     return this.engine.resumeToken(inst, dep, tokenId, vars);
+  }
+
+  /** Fire a due timer job (catch timer → resume; boundary timer → activate the boundary). */
+  async fireTimer(job: TimerJob): Promise<Instance> {
+    const inst = await this.get(job.instanceId);
+    const dep = await this.deployments.get(inst.deploymentId);
+    return this.engine.fireTimerJob(inst, dep, job.nodeId, job.tokenId);
   }
 
   async abort(id: string, actor: string): Promise<Instance> {
