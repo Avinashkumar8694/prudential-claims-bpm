@@ -21,6 +21,13 @@ interface HandlerResult {
 export const ENGINE_ERRORS = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'] as const;
 const ERROR_VAR = 'errorInfo';   // { code, node, message } bound when an error is caught
 
+/** Tiny JSONPath-ish reader for HTTP resultTo mapping: "$.a.b" / "a.b". */
+function jsonPath(obj: any, path: string): unknown {
+  if (obj == null) return undefined;
+  const parts = path.replace(/^\$\.?/, '').split('.').filter(Boolean);
+  return parts.reduce((c: any, p) => (c == null ? c : c[p]), obj);
+}
+
 export type EngineEvent =
   | { kind: 'instance.started' | 'instance.updated' | 'instance.completed' | 'instance.failed'; instanceId: string }
   | { kind: 'node.entered' | 'node.exited'; instanceId: string; nodeId: string; tokenId: string }
@@ -88,7 +95,7 @@ export class ExecutionEngine {
         this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: node.id!, tokenId: token.id });
 
         let result: HandlerResult;
-        try { result = await this.handle(node, inst, p, joins); }
+        try { result = await this.handle(node, inst, p, joins, dep); }
         catch (e) { result = { error: (e as Error).message, errorCode: 'RUNTIME_ERROR' }; }
 
         if (result.vars) Object.assign(inst.variables, result.vars);
@@ -221,9 +228,33 @@ export class ExecutionEngine {
   }
 
   // ---- node handlers ----
-  private async handle(node: EngineNode, inst: Instance, p: EngineProcess, joins: Record<string, Set<string>>): Promise<HandlerResult> {
+  private async handle(node: EngineNode, inst: Instance, p: EngineProcess, joins: Record<string, Set<string>>, dep: Deployment): Promise<HandlerResult> {
     switch (node.type) {
       case 'start': return {};
+      case 'http': {
+        // Service (REST) task — performs a real HTTP call; failures raise SERVICE_ERROR (catchable).
+        const n = node as any;
+        const baseUrl = (dep.env && dep.env['INTEGRATION_LAYER_URL']) || config.integrationBaseUrl;
+        const url = /^https?:\/\//.test(n.url || '') ? n.url : `${baseUrl}${n.url || ''}`;
+        const method = String(n.method || 'POST').toUpperCase();
+        const body: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(n.body || {})) body[k] = (typeof v === 'string' && v.startsWith('$')) ? inst.variables[v.slice(1)] : v;
+        try {
+          const res = await fetch(url, {
+            method,
+            headers: { 'content-type': 'application/json', ...(n.headers || {}) },
+            ...(method === 'GET' || method === 'HEAD' ? {} : { body: JSON.stringify(body) }),
+          });
+          if (!res.ok) return { error: `HTTP ${res.status} from ${url}`, errorCode: 'SERVICE_ERROR' };
+          const text = await res.text();
+          let json: any; try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
+          const vars: Record<string, unknown> = {};
+          for (const [varName, path] of Object.entries(n.resultTo || {})) vars[varName] = jsonPath(json, String(path));
+          return { vars, outcome: `HTTP ${res.status}` };
+        } catch (e) {
+          return { error: `service call failed: ${(e as Error).message}`, errorCode: 'SERVICE_ERROR' };
+        }
+      }
       case 'end': {
         if ((node as any).result === 'terminate') return { end: 'terminate' };
         if ((node as any).throw?.error) return { end: 'error', outcome: 'error-throw' };

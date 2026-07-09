@@ -42,7 +42,7 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [ ] send/throw onto an external bus
 
 ## Phase 4 — Decisions & integration
-- [ ] handler: http service task (+ outbound allowlist)
+- [x] handler: http service task — real REST call, $var body, resultTo mapping, SERVICE_ERROR on failure (outbound allowlist: Phase 6)
 - [ ] handler: rule (DRL) + dmn + decision-table/tree + scorecard (SDK runtimes)
 - [ ] design-time preview endpoints (rules/dmn/forms)
 - [ ] sub-process (embedded/transaction/event) + error handling + node retry
