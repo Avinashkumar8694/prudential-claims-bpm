@@ -66,7 +66,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 |---|---|---|---|
 | Start instance (by active deployment) | start by env / deployment / processId | ✅ | tests 5,20 |
 | Instance statuses (active/complete/aborted/…) | running/waiting/completed/aborted/failed/suspended | ✅ | domain; instances UI |
-| Lifecycle cascade / no orphans | terminal parent aborts active children (recursive); aborted/failed child unblocks parent (error-boundary route or fail-up); terminate clears siblings | ✅ | engine-cascade test |
+| Lifecycle cascade / no orphans | terminal parent aborts active children (recursive); aborted/failed child unblocks parent (error-boundary route or fail-up); **suspend/resume pauses & restores the whole subtree** — a paused tree refuses tasks/timers; terminate clears siblings | ✅ | engine-cascade + engine-suspend-cascade tests |
 | Instance list (state filters, Version, Errors, Last update columns) | jBPM-style list: All/Active/Completed/Aborted/Errors/Suspended + counts | ✅ | instances UI |
 | Instance detail tabs (Details, Variables, Logs, Diagram) | all four tabs | ✅ | instances UI |
 | **Diagram with instance badges (per-node execution count)** | count badge per node + active/visited highlight | ✅ | `graph.counts`; counts-check |

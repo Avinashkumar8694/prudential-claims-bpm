@@ -47,6 +47,11 @@ export class TaskService {
   async complete(id: string, outputs: Record<string, unknown>, user: string): Promise<Task> {
     const t = await this.get(id);
     if (t.status === 'completed') throw conflict('task already completed');
+    // Refuse before mutating the task if the instance can't accept it (e.g. suspended/aborted), so a
+    // failed resume can't leave the task completed but the instance un-advanced.
+    const inst = await this.instances.get(t.instanceId).catch(() => null);
+    if (inst && inst.status === 'suspended') throw conflict('instance is suspended');
+    if (inst && (inst.status === 'aborted' || inst.status === 'completed' || inst.status === 'failed')) throw conflict(`instance is ${inst.status}`);
     t.status = 'completed'; t.outputs = outputs; t.completedAt = this.ctx.clock(); t.completedBy = user;
     await this.repo().put(t);
     await this.ctx.audit({ actor: user, kind: 'task.completed', instanceId: t.instanceId, taskId: t.id, nodeId: t.nodeId });

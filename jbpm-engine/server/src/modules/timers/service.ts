@@ -16,9 +16,16 @@ export class TimerService {
   /** Fire every scheduled timer due at or before `nowIso`; returns the number fired. */
   async tick(nowIso: string): Promise<number> {
     const due = await this.repo().query((t) => t.status === 'scheduled' && t.dueAt <= nowIso);
+    let fired = 0;
     for (const job of due) {
+      // Don't fire (or consume) a timer whose instance is suspended — leave it scheduled to fire on resume.
+      if (job.kind !== 'start') {
+        const inst = await this.instances.get(job.instanceId).catch(() => null);
+        if (inst && inst.status === 'suspended') continue;
+      }
       job.status = 'fired'; job.fired += 1;
       await this.repo().put(job);
+      fired++;
       try {
         if (job.kind === 'start') {
           await this.instances.startScheduled(job);
@@ -29,7 +36,7 @@ export class TimerService {
         }
       } catch { /* token gone / instance finished / deployment inactive — ignore */ }
     }
-    return due.length;
+    return fired;
   }
 
   private async reschedule(job: TimerJob, nowIso: string): Promise<void> {

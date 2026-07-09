@@ -109,15 +109,35 @@ export class InstanceService {
     return { instance: inst, parent, children };
   }
 
+  /** Suspend pauses the WHOLE subtree: the instance and every active descendant (call activities /
+   *  sub-processes). A paused tree does no work — tasks/signals/timers on it are refused until resume. */
   async suspend(id: string, actor: string): Promise<Instance> {
     const i = await this.get(id);
-    if (i.status === 'running' || i.status === 'waiting') { i.status = 'suspended'; await this.repo().put(i); await this.ctx.audit({ actor, kind: 'instance.suspended', instanceId: id }); }
-    return i;
+    await this.suspendTree(i);
+    await this.ctx.audit({ actor, kind: 'instance.suspended', workflowId: i.workflowId, instanceId: id });
+    return this.get(id);
   }
+  private async suspendTree(i: Instance): Promise<void> {
+    if (i.status === 'running' || i.status === 'waiting') {
+      i.status = 'suspended'; await this.repo().put(i);
+    }
+    const kids = await this.repo().query((c) => c.tenantId === this.ctx.tenantId && c.parentInstanceId === i.id && (c.status === 'running' || c.status === 'waiting'));
+    for (const k of kids) await this.suspendTree(k);
+  }
+
+  /** Resume restores the whole paused subtree to running/waiting. */
   async resumeInstance(id: string, actor: string): Promise<Instance> {
     const i = await this.get(id);
-    if (i.status === 'suspended') { i.status = i.tokens.some((t) => t.state === 'active') ? 'running' : 'waiting'; await this.repo().put(i); await this.ctx.audit({ actor, kind: 'instance.resumed', instanceId: id }); }
-    return i;
+    await this.resumeTree(i);
+    await this.ctx.audit({ actor, kind: 'instance.resumed', workflowId: i.workflowId, instanceId: id });
+    return this.get(id);
+  }
+  private async resumeTree(i: Instance): Promise<void> {
+    if (i.status === 'suspended') {
+      i.status = i.tokens.some((t) => t.state === 'active') ? 'running' : 'waiting'; await this.repo().put(i);
+    }
+    const kids = await this.repo().query((c) => c.tenantId === this.ctx.tenantId && c.parentInstanceId === i.id && c.status === 'suspended');
+    for (const k of kids) await this.resumeTree(k);
   }
 
   /** Read-only process graph + per-node execution counts (jBPM "instance badges") for the diagram. */

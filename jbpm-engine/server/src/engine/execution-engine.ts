@@ -391,6 +391,7 @@ export class ExecutionEngine {
   // ---- resume (wait states) ----
   /** Complete a wait node (task/timer/message/signal) and continue the instance. */
   async resumeToken(inst: Instance, dep: Deployment, tokenId: string, vars?: Record<string, unknown>): Promise<Instance> {
+    if (inst.status === 'suspended') throw new Error('instance is suspended');   // nothing advances a paused tree
     const token = inst.tokens.find((t) => t.id === tokenId);
     if (!token || token.state !== 'waiting') throw new Error('token is not waiting');
     if (vars) Object.assign(inst.variables, vars);
