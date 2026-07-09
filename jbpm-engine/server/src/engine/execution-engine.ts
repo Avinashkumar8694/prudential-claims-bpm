@@ -182,6 +182,17 @@ export class ExecutionEngine {
     return this.runToQuiescence(child, dep);
   }
 
+  /** Broadcast a signal/message to every waiting instance in the tenant (send/throw). */
+  private async broadcast(name: string): Promise<void> {
+    const others = await this.inst().query((i) => i.tenantId === this.ctx.tenantId && (i.status === 'waiting' || i.status === 'running'));
+    for (const other of others) {
+      const hit = other.tokens.some((t) => t.state === 'waiting' && (t.waitFor?.kind === 'signal' || t.waitFor?.kind === 'message') && t.waitFor?.ref === name);
+      if (!hit) continue;
+      const dep = await this.deps().get(other.deploymentId);
+      if (dep) await this.signalInstance(other, dep, name);
+    }
+  }
+
   /** Deliver a signal/message to an instance: resume every token waiting on that name. */
   async signalInstance(inst: Instance, dep: Deployment, name: string, payload?: unknown): Promise<Instance> {
     const targets = inst.tokens
@@ -310,8 +321,27 @@ export class ExecutionEngine {
         if (ev.signal) return { wait: { kind: 'signal', ref: ev.signal } };
         return { wait: { kind: 'condition', ref: node.id } };
       }
-      case 'throw': return {};                 // fire-and-continue (signal bus wired in Phase 3)
-      case 'send': return {};
+      case 'throw': { const ev = (node as any).event || {}; const name = ev.signal || ev.message || ev.escalation; if (name) await this.broadcast(name); return { outcome: name ? `threw:${name}` : 'throw' }; }
+      case 'send': { const n = node as any; if (n.message) await this.broadcast(n.message); return { outcome: n.message ? `sent:${n.message}` : 'send' }; }
+      case 'forEach': {
+        // Multi-instance: run the child process once per item in `over` (v1: sequential, synchronous
+        // children); collect each `itemResult` into `collectInto`. Per-item human tasks: follow-up.
+        const n = node as any;
+        if (!this.resolveCalled || !n.process) return {};
+        const resolved = await this.resolveCalled(n.process);
+        if (!resolved) return { outcome: 'mi-process-not-deployed' };
+        const items = Array.isArray(inst.variables[n.over]) ? (inst.variables[n.over] as any[]) : [];
+        const parentToken = inst.tokens.find((t) => t.nodeId === node.id)!;
+        const results: unknown[] = [];
+        for (const item of items) {
+          const childVars: Record<string, unknown> = {};
+          for (const v of (n.pass || [])) childVars[v] = inst.variables[v];
+          if (n.as) childVars[n.as] = item;
+          const child = await this.startChild(resolved.dep, resolved.processId, childVars, inst.startedBy, inst.id, parentToken.id);
+          if (child.status === 'completed' && n.itemResult) results.push(child.variables[n.itemResult]);
+        }
+        return { vars: n.collectInto ? { [n.collectInto]: results } : {}, outcome: `multiInstance:${items.length}` };
+      }
       case 'call': {
         const n = node as any;
         if (!this.resolveCalled || !n.process) return {};
@@ -334,7 +364,7 @@ export class ExecutionEngine {
         // embedded: inline the child start into the parent scope (best-effort v1: run nested to its end)
         return {};
       }
-      // http / forEach / rule / boundary: pass through in the core (implemented in later phases)
+      // boundary tokens (error-catch) reach here when raised → follow the recovery flow
       default: return {};
     }
   }

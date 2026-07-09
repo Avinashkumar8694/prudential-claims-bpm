@@ -38,9 +38,10 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] timers: catch-timer + durable scheduler (TimerJob + TimerService.tick, wired in index.ts); ISO duration/cycle
 - [ ] timers: boundary-timer + start-timer (cron) firing (needs host-active tracking / scheduled instance creation)
 - [ ] boundary events (interrupting + non-interrupting)
-- [ ] forEach (multiple child instances)
+- [x] forEach (multi-instance) — child per item, collects results (v1: sequential, synchronous children)
+- [x] send/throw — broadcast a signal/message to waiting instances in the tenant (resumes their catch/receive)
 - [ ] task inbox UI + form render/validate
-- [ ] send/throw onto an external bus
+- [ ] embedded/transaction sub-process execution (nested nodes); boundary-timer firing; work-item nodes (Email/DB/SMS/Compute); decision-tree + scorecard
 
 ## Phase 4 — Decisions & integration
 - [x] handler: http service task — real REST call, $var body, resultTo mapping, SERVICE_ERROR on failure (outbound allowlist: Phase 6)
