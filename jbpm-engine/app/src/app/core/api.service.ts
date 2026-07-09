@@ -40,6 +40,12 @@ export class ApiService {
   listInstances(workflowId: string): Observable<Instance[]> { return this.http.get<List<Instance>>(`${base}/instances`, { params: { workflowId } }).pipe(map((r) => r.items)); }
   getInstance(id: string): Observable<Instance> { return this.http.get<Instance>(`${base}/instances/${id}`); }
   diagramState(id: string): Observable<any> { return this.http.get(`${base}/instances/${id}/diagram-state`); }
+  instanceGraph(id: string): Observable<{ nodes: any[]; flows: any[]; diagram: { activeNodeIds: string[]; visitedNodeIds: string[]; status: string } }> { return this.http.get<any>(`${base}/instances/${id}/graph`); }
+  relatedInstances(id: string): Observable<{ instance: Instance; parent: Instance | null; children: Instance[] }> { return this.http.get<any>(`${base}/instances/${id}/related`); }
+  signalInstance(id: string, name: string, payload?: unknown): Observable<Instance> { return this.http.post<Instance>(`${base}/instances/${id}/signal`, { name, payload }); }
+  retryNode(id: string, nodeId: string): Observable<Instance> { return this.http.post<Instance>(`${base}/instances/${id}/retry`, { nodeId }); }
+  suspendInstance(id: string): Observable<Instance> { return this.http.post<Instance>(`${base}/instances/${id}/suspend`, {}); }
+  resumeInstance(id: string): Observable<Instance> { return this.http.post<Instance>(`${base}/instances/${id}/resume`, {}); }
   abort(id: string): Observable<Instance> { return this.http.post<Instance>(`${base}/instances/${id}/abort`, {}); }
 
   // tasks

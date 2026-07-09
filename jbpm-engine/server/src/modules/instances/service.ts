@@ -9,8 +9,15 @@ export class InstanceService {
   private engine: ExecutionEngine;
   private deployments: DeploymentService;
   constructor(private ctx: AppContext, emit: (e: EngineEvent) => void = () => {}) {
-    this.engine = new ExecutionEngine(ctx, emit);
     this.deployments = new DeploymentService(ctx);
+    // resolve a called process id -> its active deployment (for call-activity child instances)
+    const resolveCalled = async (processId: string): Promise<Deployment | undefined> => {
+      const found = await this.ctx.store.repo<Deployment>(Collections.deployments).query((d) =>
+        d.tenantId === this.ctx.tenantId && d.status === 'active' &&
+        (d.engine?.processes?.[0]?.id === processId || d.engine?.id === processId));
+      return found[0];
+    };
+    this.engine = new ExecutionEngine(ctx, emit, resolveCalled);
   }
   private repo() { return this.ctx.store.repo<Instance>(Collections.instances); }
 
@@ -59,5 +66,48 @@ export class InstanceService {
     await this.repo().put(i);
     await this.ctx.audit({ actor, kind: 'instance.aborted', workflowId: i.workflowId, instanceId: i.id });
     return i;
+  }
+
+  /** Deliver a signal/message to a running instance (resumes matching waiting tokens). */
+  async signal(id: string, name: string, payload: unknown, actor: string): Promise<Instance> {
+    const inst = await this.get(id);
+    const dep = await this.deployments.get(inst.deploymentId);
+    await this.ctx.audit({ actor, kind: 'instance.signaled', workflowId: inst.workflowId, instanceId: id, data: { name } });
+    return this.engine.signalInstance(inst, dep, name, payload);
+  }
+
+  /** Re-trigger a node (retry a failed node, or replay a node) and continue the flow. */
+  async retry(id: string, nodeId: string, actor: string): Promise<Instance> {
+    const inst = await this.get(id);
+    const dep = await this.deployments.get(inst.deploymentId);
+    await this.ctx.audit({ actor, kind: 'instance.node.retriggered', workflowId: inst.workflowId, instanceId: id, nodeId });
+    return this.engine.retryNode(inst, dep, nodeId);
+  }
+
+  /** Parent + child instances (call activities) for related-instance navigation. */
+  async related(id: string): Promise<{ instance: Instance; parent: Instance | null; children: Instance[] }> {
+    const inst = await this.get(id);
+    const parent = inst.parentInstanceId ? (await this.repo().get(inst.parentInstanceId)) || null : null;
+    const children = await this.repo().query((c) => c.tenantId === this.ctx.tenantId && c.parentInstanceId === id);
+    return { instance: inst, parent, children };
+  }
+
+  async suspend(id: string, actor: string): Promise<Instance> {
+    const i = await this.get(id);
+    if (i.status === 'running' || i.status === 'waiting') { i.status = 'suspended'; await this.repo().put(i); await this.ctx.audit({ actor, kind: 'instance.suspended', instanceId: id }); }
+    return i;
+  }
+  async resumeInstance(id: string, actor: string): Promise<Instance> {
+    const i = await this.get(id);
+    if (i.status === 'suspended') { i.status = i.tokens.some((t) => t.state === 'active') ? 'running' : 'waiting'; await this.repo().put(i); await this.ctx.audit({ actor, kind: 'instance.resumed', instanceId: id }); }
+    return i;
+  }
+
+  /** Read-only process graph (nodes + flows + positions) for rendering the instance diagram. */
+  async graph(id: string) {
+    const inst = await this.get(id);
+    const dep = await this.deployments.get(inst.deploymentId);
+    const p = dep.engine.processes?.[0];
+    return { nodes: p?.nodes || [], flows: p?.flows || [], diagram: this.engine.diagramState(inst) };
   }
 }

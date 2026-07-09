@@ -22,9 +22,15 @@ export type EngineEvent =
   | { kind: 'task.created'; instanceId: string; taskId: string };
 
 export class ExecutionEngine {
-  constructor(private ctx: AppContext, private emit: (e: EngineEvent) => void = () => {}) {}
+  constructor(
+    private ctx: AppContext,
+    private emit: (e: EngineEvent) => void = () => {},
+    /** resolve a called process id -> its active deployment (enables call-activity child instances) */
+    private resolveCalled?: (processId: string) => Promise<Deployment | undefined>,
+  ) {}
   private inst() { return this.ctx.store.repo<Instance>(Collections.instances); }
   private tasks() { return this.ctx.store.repo<Task>(Collections.tasks); }
+  private deps() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
 
   // ---- process graph helpers ----
   private proc(inst: Instance, dep: Deployment): EngineProcess {
@@ -105,7 +111,60 @@ export class ExecutionEngine {
     }
     await this.inst().put(inst);
     this.emit({ kind: inst.status === 'failed' ? 'instance.failed' : inst.status === 'completed' ? 'instance.completed' : 'instance.updated', instanceId: inst.id });
+    // if this is a child instance that just finished, resume the parent's waiting call-activity token
+    if (inst.status === 'completed' && inst.parentInstanceId) await this.tryResumeParent(inst);
     return inst;
+  }
+
+  /** A child instance completed → map its outputs into the parent and continue the parent flow. */
+  private async tryResumeParent(child: Instance): Promise<void> {
+    const parent = await this.inst().get(child.parentInstanceId!);
+    if (!parent) return;
+    const token = parent.tokens.find((t) => t.state === 'waiting' && t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id);
+    if (!token) return;
+    const pdep = await this.deps().get(parent.deploymentId);
+    if (!pdep) return;
+    const callNode = pdep.engine.processes?.[0]?.nodes.find((n) => n.id === token.nodeId) as any;
+    const vars: Record<string, unknown> = {};
+    for (const [pv, cv] of Object.entries(callNode?.outputs || {})) vars[pv] = child.variables[cv as string];
+    await this.resumeToken(parent, pdep, token.id, vars);
+  }
+
+  /** Start a child process instance linked to a parent token (call activity). */
+  private async startChild(dep: Deployment, vars: Record<string, unknown>, actor: string, parentInstanceId: string, parentTokenId: string): Promise<Instance> {
+    const p = dep.engine.processes?.[0];
+    if (!p) throw new Error('called deployment has no process');
+    const startNode = p.nodes.find((n) => n.type === 'start') || p.nodes[0];
+    const now = this.ctx.clock();
+    const child: Instance = {
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId,
+      status: 'running', variables: { ...vars },
+      tokens: [{ id: this.ctx.newId(), nodeId: startNode!.id!, state: 'active', enteredAt: now }],
+      history: [], startedAt: now, startedBy: actor, parentInstanceId, parentTokenId,
+    };
+    this.emit({ kind: 'instance.started', instanceId: child.id });
+    return this.runToQuiescence(child, dep);
+  }
+
+  /** Deliver a signal/message to an instance: resume every token waiting on that name. */
+  async signalInstance(inst: Instance, dep: Deployment, name: string, payload?: unknown): Promise<Instance> {
+    const targets = inst.tokens
+      .filter((t) => t.state === 'waiting' && (t.waitFor?.kind === 'signal' || t.waitFor?.kind === 'message') && t.waitFor?.ref === name)
+      .map((t) => t.id);
+    for (const tid of targets) {
+      if (inst.tokens.find((t) => t.id === tid && t.state === 'waiting')) {
+        await this.resumeToken(inst, dep, tid, payload !== undefined ? { [name]: payload } : undefined);
+      }
+    }
+    return inst;
+  }
+
+  /** Re-trigger a node: drop a fresh active token onto it and run (retry a failed node or replay). */
+  async retryNode(inst: Instance, dep: Deployment, nodeId: string): Promise<Instance> {
+    inst.error = undefined;
+    inst.tokens.push({ id: this.ctx.newId(), nodeId, state: 'active', enteredAt: this.ctx.clock() });
+    inst.status = 'running';
+    return this.runToQuiescence(inst, dep);
   }
 
   private removeToken(inst: Instance, tokenId: string) { inst.tokens = inst.tokens.filter((t) => t.id !== tokenId); }
@@ -155,11 +214,29 @@ export class ExecutionEngine {
       }
       case 'throw': return {};                 // fire-and-continue (signal bus wired in Phase 3)
       case 'send': return {};
+      case 'call': {
+        const n = node as any;
+        if (!this.resolveCalled || !n.process) return {};
+        const childDep = await this.resolveCalled(n.process);
+        if (!childDep) return { outcome: 'called-process-not-deployed' };   // graceful passthrough
+        const token = inst.tokens.find((t) => t.nodeId === node.id)!;
+        const childVars: Record<string, unknown> = {};
+        for (const [cv, spec] of Object.entries(n.inputs || {})) {
+          childVars[cv] = typeof spec === 'string' && spec.startsWith('$') ? inst.variables[spec.slice(1)] : spec;
+        }
+        const child = await this.startChild(childDep, childVars, inst.startedBy, inst.id, token.id);
+        if (child.status === 'completed') {
+          const vars: Record<string, unknown> = {};
+          for (const [pv, cv] of Object.entries(n.outputs || {})) vars[pv] = child.variables[cv as string];
+          return { vars, outcome: `called:${child.id}` };
+        }
+        return { wait: { kind: 'child', ref: child.id }, outcome: `called:${child.id}` };   // parent waits for the child
+      }
       case 'subprocess': {
         // embedded: inline the child start into the parent scope (best-effort v1: run nested to its end)
         return {};
       }
-      // http / call / forEach / rule / boundary: pass through in the core (implemented in later phases)
+      // http / forEach / rule / boundary: pass through in the core (implemented in later phases)
       default: return {};
     }
   }

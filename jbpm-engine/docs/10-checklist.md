@@ -30,11 +30,16 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] sandbox for js scripts + flow conditions (node:vm; isolated-vm hardening in Phase 6)
 
 ## Phase 3 — Human & async work
-- [ ] handlers: userTask (+ Task service), receive/send (+ SignalBus), catch/throw
+- [x] handlers: userTask (+ Task service); catch/receive waits
+- [x] signal/message delivery to an instance (resumes matching waits)
+- [x] call activity → linked child instances + parent-resume with output mapping
+- [x] node re-trigger (retry a node / replay); suspend/resume; abort
+- [x] instance ops UI: list → detail (diagram highlight, variables, history), related-instance switching, signal, re-trigger
 - [ ] timers: catch-timer, boundary-timer, delay + durable scheduler
 - [ ] boundary events (interrupting + non-interrupting)
-- [ ] call activity + forEach (child instances)
+- [ ] forEach (multiple child instances)
 - [ ] task inbox UI + form render/validate
+- [ ] send/throw onto an external bus
 
 ## Phase 4 — Decisions & integration
 - [ ] handler: http service task (+ outbound allowlist)
