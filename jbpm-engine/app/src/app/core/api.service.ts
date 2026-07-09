@@ -21,6 +21,10 @@ export class ApiService {
   createWorkflow(body: { name: string; description?: string }): Observable<Workflow> { return this.http.post<Workflow>(`${base}/workflows`, body); }
   updateWorkflow(id: string, patch: Partial<Workflow>): Observable<Workflow> { return this.http.patch<Workflow>(`${base}/workflows/${id}`, patch); }
 
+  // import / export (jBPM kjar)
+  importJbpm(files: Record<string, string>, name?: string): Observable<{ workflowId: string; processes: number }> { return this.http.post<any>(`${base}/import/jbpm`, { files, name }); }
+  exportVersion(versionId: string): Observable<{ files: Record<string, string> }> { return this.http.get<any>(`${base}/versions/${versionId}/export`); }
+
   // processes (within a project) + assets
   listProcesses(projectId: string): Observable<{ id: string; name: string; nodes: number; flows: number }[]> { return this.http.get<List<any>>(`${base}/workflows/${projectId}/processes`).pipe(map((r) => r.items)); }
   addProcess(projectId: string, name: string): Observable<{ id: string; name: string }> { return this.http.post<any>(`${base}/workflows/${projectId}/processes`, { name }); }

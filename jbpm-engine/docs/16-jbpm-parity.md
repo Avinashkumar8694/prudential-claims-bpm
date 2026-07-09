@@ -100,12 +100,18 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 | Forms, DRL, DMN, tables, trees, scorecards, enums, data types, tests | per-kind asset folders; list/add; SDK export | ✅ (list/add) | assets module; E2E |
 | Dedicated asset editors (form builder, DRL/DMN editors) | — | ⛔ | Phase 8 |
 
+## Done since first draft
+- ✅ **Work-item nodes** (Email/SMS/DB/Compute/Log) via a pluggable handler framework.
+- ✅ **Boundary-timer** firing (interrupting cancels host + runs recovery; cancel on host completion).
+- ✅ **kjar import** endpoint + UI (round-trips with export).
+- ✅ Instance screen with **execution-count badges**, tabs, post-completion re-trigger.
+- ✅ Connection **direction + cardinality** (per-node maxIn/maxOut); **ends-at-end** validation.
+
 ## Not yet (tracked in the checklist)
-- Embedded/transaction **sub-process execution**; **boundary-timer & start-timer (cron)** firing.
+- Embedded/transaction **sub-process execution**; **start-timer (cron)** scheduled starts.
 - **Decision-tree & scorecard** runtime; richer **DRL**.
-- **Work-item nodes** (Email/DB/Compute/SMS) via a handler framework.
 - **Auth/RBAC enforcement**, multi-tenant admin, **secrets encryption**, **Postgres** store.
-- **Asset editors**, **task inbox UI**, **live canvas highlight**, **kjar import** endpoint, **automated UI e2e** (Playwright).
+- **Asset editors**, **task inbox UI**, **live canvas WS redraw**, **compensation**, **automated UI e2e** (Playwright).
 
 ## How to reproduce
 ```bash

@@ -16,6 +16,8 @@ import type { Workflow } from '../../core/models';
         <div class="row">
           <input class="in" placeholder="New project name" [(ngModel)]="newName" (keyup.enter)="create()" />
           <button class="btn primary" (click)="create()">+ Create Project</button>
+          <input #imp type="file" accept="application/json,.json" hidden (change)="importFile($event)" />
+          <button class="btn" (click)="imp.click()" title="Import a jBPM kjar exported as JSON">↥ Import jBPM</button>
         </div>
       </header>
 
@@ -71,5 +73,18 @@ export class WorkflowsComponent {
     const name = this.newName.trim();
     if (!name) return;
     this.api.createWorkflow({ name }).subscribe(() => { this.newName = ''; this.reload(); });
+  }
+  importFile(ev: Event) {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0]; if (!file) return;
+    file.text().then((txt) => {
+      let files: Record<string, string>;
+      try { const j = JSON.parse(txt); files = j.files || j; } catch { alert('Not a valid exported project JSON'); return; }
+      this.api.importJbpm(files, file.name.replace(/\.json$/, '')).subscribe({
+        next: (r) => { alert(`Imported project with ${r.processes} process(es).`); this.reload(); },
+        error: (e) => alert('Import failed: ' + (e?.error?.error?.message || 'invalid project')),
+      });
+    });
+    input.value = '';
   }
 }

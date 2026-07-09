@@ -14,6 +14,7 @@ import { ProcessService } from '../modules/processes/service.ts';
 import { AssetsService } from '../modules/assets/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
 import { exportKjar } from '../modules/export/service.ts';
+import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { hub } from '../infra/ws-hub.ts';
 
@@ -39,6 +40,9 @@ export function buildRoutes(): Router {
 
   // --- validation (validate an in-progress engine process, no save) ---
   r.post('/validate', (req, res) => res.json(new ValidationService().validate((req.body?.engine?.processes?.[0]) || req.body?.process || req.body)));
+
+  // --- import a jBPM kjar (file map) as a new project ---
+  r.post('/import/jbpm', asyncHandler(async (req, res) => res.status(201).json(await new ImportService(ctxOf(req)).importKjar(req.body?.files, req.body?.name, actorOf(req)))));
 
   // --- workflows ---
   r.get('/workflows', asyncHandler(async (req, res) => res.json({ items: await new WorkflowService(ctxOf(req)).list() })));
