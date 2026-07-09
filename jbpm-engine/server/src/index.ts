@@ -1,12 +1,12 @@
 // Boot: HTTP server + WebSocket hub.
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import { createApp } from './app.js';
-import { config } from './infra/config.js';
-import { hub } from './infra/ws-hub.js';
-import { logger } from './infra/logger.js';
-import { makeContext } from './context.js';
-import { TimerService } from './modules/timers/service.js';
+import { createApp } from './app.ts';
+import { config } from './infra/config.ts';
+import { hub } from './infra/ws-hub.ts';
+import { logger } from './infra/logger.ts';
+import { makeContext } from './context.ts';
+import { TimerService } from './modules/timers/service.ts';
 
 const { app, store } = createApp();
 const server = http.createServer(app);

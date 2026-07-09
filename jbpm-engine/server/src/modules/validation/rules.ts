@@ -1,7 +1,7 @@
 // Process validation rules — the engine-native equivalent of jBPM/BPMN diagram validation, adapted to
 // the nodejs engine model. Each rule inspects the EngineProcess graph and returns typed Problems.
 // Errors block publish/deploy; warnings are advisory. See docs/08 + docs/09.
-import type { EngineFlow, EngineNode, EngineProcess } from '../../sdk/index.js';
+import type { EngineFlow, EngineNode, EngineProcess } from '../../sdk/index.ts';
 
 export type Severity = 'error' | 'warning';
 export interface Problem { rule: string; severity: Severity; message: string; nodeId?: string; flowId?: string; }

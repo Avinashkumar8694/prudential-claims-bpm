@@ -1,8 +1,8 @@
 // Deployments: immutable runnable snapshots of a published version, labeled with tags, grouped by
 // environment. Exactly one deployment is ACTIVE per (workflow, environment). See docs/09.
-import type { AppContext } from '../../context.js';
-import { Collections, type Deployment, type Version } from '../../domain.js';
-import { conflict, notFound, validation } from '../../infra/errors.js';
+import type { AppContext } from '../../context.ts';
+import { Collections, type Deployment, type Version } from '../../domain.ts';
+import { conflict, notFound, validation } from '../../infra/errors.ts';
 
 export class DeploymentService {
   constructor(private ctx: AppContext) {}

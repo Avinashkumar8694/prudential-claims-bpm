@@ -1,12 +1,12 @@
 // Token-based interpreter over the SDK engine JSON. See docs/08-execution-engine.md.
 // Deterministic core (clock/newId injected). Persists the instance after runToQuiescence.
-import type { AppContext } from '../context.js';
-import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.js';
-import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.js';
-import { runScript, evalCondition } from './sandbox.js';
-import { evaluateDmn, evaluateRules } from './decisioning.js';
-import { computeDue } from './duration.js';
-import { config } from '../infra/config.js';
+import type { AppContext } from '../context.ts';
+import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.ts';
+import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
+import { runScript, evalCondition } from './sandbox.ts';
+import { evaluateDmn, evaluateRules } from './decisioning.ts';
+import { computeDue } from './duration.ts';
+import { config } from '../infra/config.ts';
 
 interface HandlerResult {
   vars?: Record<string, unknown>;

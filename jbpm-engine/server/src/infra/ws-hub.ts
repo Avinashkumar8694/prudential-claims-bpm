@@ -1,6 +1,6 @@
 // Realtime hub: clients subscribe to topics; engine/domain events are broadcast to matching sockets.
 import type { WebSocket } from 'ws';
-import type { EngineEvent } from '../engine/execution-engine.js';
+import type { EngineEvent } from '../engine/execution-engine.ts';
 
 interface Sub { ws: WebSocket; topics: Set<string>; }
 

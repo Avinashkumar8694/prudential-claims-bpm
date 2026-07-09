@@ -11,7 +11,8 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "noUncheckedIndexedAccess": false,
-    "outDir": "dist",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "rootDir": "."
   },
   "include": ["src", "test"]

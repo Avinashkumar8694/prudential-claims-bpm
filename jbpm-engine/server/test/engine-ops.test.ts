@@ -2,15 +2,15 @@
 // and node re-trigger. Deterministic (MemoryStore + fake clock + counting ids).
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { MemoryStore } from '../src/store/memory-store.js';
-import { fakeClock } from '../src/infra/ids.js';
-import { makeContext, type AppContext } from '../src/context.js';
-import { WorkflowService } from '../src/modules/workflows/service.js';
-import { VersionService } from '../src/modules/versions/service.js';
-import { DeploymentService } from '../src/modules/deployments/service.js';
-import { InstanceService } from '../src/modules/instances/service.js';
-import { TaskService } from '../src/modules/tasks/service.js';
-import { Collections, type Task } from '../src/domain.js';
+import { MemoryStore } from '../src/store/memory-store.ts';
+import { fakeClock } from '../src/infra/ids.ts';
+import { makeContext, type AppContext } from '../src/context.ts';
+import { WorkflowService } from '../src/modules/workflows/service.ts';
+import { VersionService } from '../src/modules/versions/service.ts';
+import { DeploymentService } from '../src/modules/deployments/service.ts';
+import { InstanceService } from '../src/modules/instances/service.ts';
+import { TaskService } from '../src/modules/tasks/service.ts';
+import { Collections, type Task } from '../src/domain.ts';
 
 function newCtx() {
   let n = 0;

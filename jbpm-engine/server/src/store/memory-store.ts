@@ -1,5 +1,5 @@
 // In-memory store — used by tests and as the FileStore's cache layer.
-import type { Entity, Repository, Store } from './repository.js';
+import type { Entity, Repository, Store } from './repository.ts';
 
 class MemoryRepo<T extends Entity> implements Repository<T> {
   private map = new Map<string, T>();

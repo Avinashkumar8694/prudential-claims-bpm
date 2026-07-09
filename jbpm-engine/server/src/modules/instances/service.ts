@@ -1,9 +1,9 @@
 // Process-instance lifecycle: start against a resolved deployment, query, inspect, resume.
-import type { AppContext } from '../../context.js';
-import { Collections, type Deployment, type Instance } from '../../domain.js';
-import { ExecutionEngine, type EngineEvent } from '../../engine/execution-engine.js';
-import { DeploymentService } from '../deployments/service.js';
-import { notFound, conflict } from '../../infra/errors.js';
+import type { AppContext } from '../../context.ts';
+import { Collections, type Deployment, type Instance } from '../../domain.ts';
+import { ExecutionEngine, type EngineEvent } from '../../engine/execution-engine.ts';
+import { DeploymentService } from '../deployments/service.ts';
+import { notFound, conflict } from '../../infra/errors.ts';
 
 export class InstanceService {
   private engine: ExecutionEngine;

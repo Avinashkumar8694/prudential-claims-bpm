@@ -2,11 +2,11 @@
 // tables/trees, scorecards, enumerations, data types, messages, test scenarios. Stored in the head
 // draft version.engine (an EngineProject); the SDK turns them into real jBPM assets on export and the
 // runtime evaluators apply them. This module lists + adds minimal asset entries (full editors: Phase 8).
-import type { AppContext } from '../../context.js';
-import type { EngineProject } from '../../sdk/index.js';
-import { WorkflowService } from '../workflows/service.js';
-import { VersionService } from '../versions/service.js';
-import { notFound, validation } from '../../infra/errors.js';
+import type { AppContext } from '../../context.ts';
+import type { EngineProject } from '../../sdk/index.ts';
+import { WorkflowService } from '../workflows/service.ts';
+import { VersionService } from '../versions/service.ts';
+import { notFound, validation } from '../../infra/errors.ts';
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 

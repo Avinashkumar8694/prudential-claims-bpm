@@ -1,8 +1,8 @@
 // Workflow lifecycle: create (with a main branch + initial draft v1), read/update, permissions, vars.
-import type { AppContext } from '../../context.js';
-import { Collections, type Branch, type Version, type Workflow, type WorkflowPermission } from '../../domain.js';
-import type { EngineProject, EngineVar } from '../../sdk/index.js';
-import { notFound, validation } from '../../infra/errors.js';
+import type { AppContext } from '../../context.ts';
+import { Collections, type Branch, type Version, type Workflow, type WorkflowPermission } from '../../domain.ts';
+import type { EngineProject, EngineVar } from '../../sdk/index.ts';
+import { notFound, validation } from '../../infra/errors.ts';
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 

@@ -1,12 +1,12 @@
 // Engine validation rules + the publish gate (no invalid/unconnected process is publishable).
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { validateProcess } from '../src/modules/validation/rules.js';
-import { MemoryStore } from '../src/store/memory-store.js';
-import { fakeClock } from '../src/infra/ids.js';
-import { makeContext } from '../src/context.js';
-import { WorkflowService } from '../src/modules/workflows/service.js';
-import { VersionService } from '../src/modules/versions/service.js';
+import { validateProcess } from '../src/modules/validation/rules.ts';
+import { MemoryStore } from '../src/store/memory-store.ts';
+import { fakeClock } from '../src/infra/ids.ts';
+import { makeContext } from '../src/context.ts';
+import { WorkflowService } from '../src/modules/workflows/service.ts';
+import { VersionService } from '../src/modules/versions/service.ts';
 
 const proc = (nodes: any[], flows: any[]) => ({ id: 'p', name: 'p', package: 'com.acme', vars: [], nodes, flows }) as any;
 const codes = (r: { problems: { rule: string }[] }) => r.problems.map((p) => p.rule);

@@ -1,9 +1,9 @@
 // User-task inbox: list/claim/complete. Completing a task resumes the waiting instance token.
-import type { AppContext } from '../../context.js';
-import { Collections, type Task } from '../../domain.js';
-import { InstanceService } from '../instances/service.js';
-import type { EngineEvent } from '../../engine/execution-engine.js';
-import { notFound, conflict } from '../../infra/errors.js';
+import type { AppContext } from '../../context.ts';
+import { Collections, type Task } from '../../domain.ts';
+import { InstanceService } from '../instances/service.ts';
+import type { EngineEvent } from '../../engine/execution-engine.ts';
+import { notFound, conflict } from '../../infra/errors.ts';
 
 export class TaskService {
   private instances: InstanceService;

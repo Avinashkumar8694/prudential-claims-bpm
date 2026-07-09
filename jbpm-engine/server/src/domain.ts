@@ -1,6 +1,6 @@
 // Domain entities — see docs/04-data-model.md. Persisted via Repository<T>.
-import type { EngineProject, EngineVar } from './sdk/index.js';
-import type { Entity } from './store/repository.js';
+import type { EngineProject, EngineVar } from './sdk/index.ts';
+import type { Entity } from './store/repository.ts';
 
 export interface Audited { createdAt: string; createdBy: string; updatedAt: string; updatedBy: string; }
 

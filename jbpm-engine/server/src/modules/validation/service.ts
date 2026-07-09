@@ -1,8 +1,8 @@
 // Validation module facade. Runs the engine rule set (rules.ts) over an EngineProcess / EngineProject.
 // Authoritative: publish/deploy call this and refuse on errors so an invalid process is never saved.
-import type { EngineProcess, EngineProject } from '../../sdk/index.js';
-import { validateProcess, type ValidationResult, type Problem } from './rules.js';
-import { ApiError } from '../../infra/errors.js';
+import type { EngineProcess, EngineProject } from '../../sdk/index.ts';
+import { validateProcess, type ValidationResult, type Problem } from './rules.ts';
+import { ApiError } from '../../infra/errors.ts';
 
 export { validateProcess };
 export type { ValidationResult, Problem };

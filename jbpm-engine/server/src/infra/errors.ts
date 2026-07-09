@@ -1,6 +1,6 @@
 // Typed API errors with a stable code (mirrors docs/05-api-spec.md error codes) + express handler.
 import type { Request, Response, NextFunction } from 'express';
-import { logger } from './logger.js';
+import { logger } from './logger.ts';
 
 export type ErrorCode =
   | 'AUTH_REQUIRED' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION_FAILED' | 'CONFLICT'

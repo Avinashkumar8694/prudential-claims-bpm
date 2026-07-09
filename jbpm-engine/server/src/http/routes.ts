@@ -2,20 +2,20 @@
 // A per-request AppContext + actor are attached by contextMiddleware (see app.ts).
 import { Router } from 'express';
 import type { Request } from 'express';
-import { asyncHandler } from '../infra/errors.js';
-import type { AppContext } from '../context.js';
-import { WorkflowService } from '../modules/workflows/service.js';
-import { BranchService } from '../modules/branches/service.js';
-import { VersionService } from '../modules/versions/service.js';
-import { DeploymentService } from '../modules/deployments/service.js';
-import { InstanceService } from '../modules/instances/service.js';
-import { TaskService } from '../modules/tasks/service.js';
-import { ProcessService } from '../modules/processes/service.js';
-import { AssetsService } from '../modules/assets/service.js';
-import { NODE_REGISTRY, CATEGORIES } from '../modules/catalog/registry.js';
-import { fromEngineProject } from '../sdk/index.js';
-import { ValidationService } from '../modules/validation/service.js';
-import { hub } from '../infra/ws-hub.js';
+import { asyncHandler } from '../infra/errors.ts';
+import type { AppContext } from '../context.ts';
+import { WorkflowService } from '../modules/workflows/service.ts';
+import { BranchService } from '../modules/branches/service.ts';
+import { VersionService } from '../modules/versions/service.ts';
+import { DeploymentService } from '../modules/deployments/service.ts';
+import { InstanceService } from '../modules/instances/service.ts';
+import { TaskService } from '../modules/tasks/service.ts';
+import { ProcessService } from '../modules/processes/service.ts';
+import { AssetsService } from '../modules/assets/service.ts';
+import { NODE_REGISTRY, CATEGORIES } from '../modules/catalog/registry.ts';
+import { fromEngineProject } from '../sdk/index.ts';
+import { ValidationService } from '../modules/validation/service.ts';
+import { hub } from '../infra/ws-hub.ts';
 
 const ctxOf = (req: Request): AppContext => (req as any).ctx;
 const actorOf = (req: Request): string => (req as any).actor;

@@ -1,11 +1,11 @@
 // Versions: immutable-once-published snapshots of the engine JSON on a branch.
 // Saving writes to the branch's head DRAFT (creating one if the head is published); publishing freezes
 // the draft and opens a fresh draft as the new head.
-import type { AppContext } from '../../context.js';
-import { Collections, type Branch, type Version } from '../../domain.js';
-import type { EngineProject } from '../../sdk/index.js';
-import { conflict, notFound, validation } from '../../infra/errors.js';
-import { ValidationService } from '../validation/service.js';
+import type { AppContext } from '../../context.ts';
+import { Collections, type Branch, type Version } from '../../domain.ts';
+import type { EngineProject } from '../../sdk/index.ts';
+import { conflict, notFound, validation } from '../../infra/errors.ts';
+import { ValidationService } from '../validation/service.ts';
 
 export interface DiffResult {
   nodes: { added: string[]; removed: string[]; changed: string[] };

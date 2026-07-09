@@ -2,7 +2,7 @@
 // Zero-setup durability for dev; same Repository interface as memory/pg.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Entity, Repository, Store } from './repository.js';
+import type { Entity, Repository, Store } from './repository.ts';
 
 class FileRepo<T extends Entity> implements Repository<T> {
   private cache = new Map<string, T>();

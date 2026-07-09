@@ -1,9 +1,9 @@
 // Durable timer scheduler: fires scheduled TimerJobs whose dueAt has passed by resuming their token.
 // A real interval in index.ts calls tick() periodically; tests call tick(now) with a fake clock.
-import type { AppContext } from '../../context.js';
-import { Collections, type TimerJob } from '../../domain.js';
-import { InstanceService } from '../instances/service.js';
-import type { EngineEvent } from '../../engine/execution-engine.js';
+import type { AppContext } from '../../context.ts';
+import { Collections, type TimerJob } from '../../domain.ts';
+import { InstanceService } from '../instances/service.ts';
+import type { EngineEvent } from '../../engine/execution-engine.ts';
 
 export class TimerService {
   private instances: InstanceService;

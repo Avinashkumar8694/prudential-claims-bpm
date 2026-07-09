@@ -1,11 +1,11 @@
 // Express app assembly: shared store, per-request context, routes, error handler.
 import express from 'express';
-import type { Store } from './store/repository.js';
-import { FileStore } from './store/file-store.js';
-import { config } from './infra/config.js';
-import { makeContext } from './context.js';
-import { buildRoutes } from './http/routes.js';
-import { errorMiddleware } from './infra/errors.js';
+import type { Store } from './store/repository.ts';
+import { FileStore } from './store/file-store.ts';
+import { config } from './infra/config.ts';
+import { makeContext } from './context.ts';
+import { buildRoutes } from './http/routes.ts';
+import { errorMiddleware } from './infra/errors.ts';
 
 export function createApp(store?: Store) {
   const app = express();

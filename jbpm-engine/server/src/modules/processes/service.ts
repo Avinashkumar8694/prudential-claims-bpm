@@ -1,11 +1,11 @@
 // Manage the processes inside a PROJECT (Workflow). A project's head-draft version.engine is an
 // EngineProject with a processes[] array; this service lists/adds/renames/removes and gets/saves a
 // single process while preserving the rest of the project (other processes + assets).
-import type { AppContext } from '../../context.js';
-import type { EngineProcess, EngineProject } from '../../sdk/index.js';
-import { WorkflowService } from '../workflows/service.js';
-import { VersionService } from '../versions/service.js';
-import { notFound, validation } from '../../infra/errors.js';
+import type { AppContext } from '../../context.ts';
+import type { EngineProcess, EngineProject } from '../../sdk/index.ts';
+import { WorkflowService } from '../workflows/service.ts';
+import { VersionService } from '../versions/service.ts';
+import { notFound, validation } from '../../infra/errors.ts';
 
 const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 

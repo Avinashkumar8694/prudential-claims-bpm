@@ -1,8 +1,8 @@
 // AppContext bundles the injectable dependencies every service/engine needs. Constructed once at boot
 // (and freshly per-test with a MemoryStore + fakeClock for determinism).
-import type { Store } from './store/repository.js';
-import { systemClock, newId as defaultNewId, type Clock } from './infra/ids.js';
-import { Collections, type AuditEvent } from './domain.js';
+import type { Store } from './store/repository.ts';
+import { systemClock, newId as defaultNewId, type Clock } from './infra/ids.ts';
+import { Collections, type AuditEvent } from './domain.ts';
 
 export interface AppContext {
   store: Store;

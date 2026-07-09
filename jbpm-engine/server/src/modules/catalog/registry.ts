@@ -1,6 +1,6 @@
 // Node registry — the single catalog that drives the UI palette, canvas rendering, and property forms.
 // Mirrors the SDK node set and docs/bpm-nodes. `schemaRef` points at the per-node JSON Schema doc.
-import type { EngineNode } from '../../sdk/index.js';
+import type { EngineNode } from '../../sdk/index.ts';
 
 export type NodeCategory = 'Events' | 'Tasks' | 'Gateways' | 'Sub-process' | 'Data';
 

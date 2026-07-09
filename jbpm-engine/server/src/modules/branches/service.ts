@@ -1,8 +1,8 @@
 // Branches: named lines of development. Fork a new branch from any version (copies its engine JSON
 // into a fresh draft that becomes the new branch's head).
-import type { AppContext } from '../../context.js';
-import { Collections, type Branch, type Version } from '../../domain.js';
-import { notFound, validation } from '../../infra/errors.js';
+import type { AppContext } from '../../context.ts';
+import { Collections, type Branch, type Version } from '../../domain.ts';
+import { notFound, validation } from '../../infra/errors.ts';
 
 export class BranchService {
   constructor(private ctx: AppContext) {}

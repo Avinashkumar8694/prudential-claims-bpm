@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { newId, fakeClock } from '../src/infra/ids.js';
+import { newId, fakeClock } from '../src/infra/ids.ts';
 
 test('newId — 16 chars, base32 only, highly unique', () => {
   const seen = new Set<string>();

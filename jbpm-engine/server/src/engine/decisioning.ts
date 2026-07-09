@@ -1,6 +1,6 @@
 // Decisioning: evaluate DMN decision tables and (basic) DRL rulesets from the project engine against
 // the instance variables. Node-native; the SDK exports the same models to real DMN/DRL for jBPM.
-import type { EngineProject } from '../sdk/index.js';
+import type { EngineProject } from '../sdk/index.ts';
 
 type Vars = Record<string, unknown>;
 
