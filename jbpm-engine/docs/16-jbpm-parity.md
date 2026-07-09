@@ -71,7 +71,7 @@ proves each claim. **Legend:** ✅ full · 🟡 partial · ⛔ not yet · ➖ No
 | **Diagram with instance badges (per-node execution count)** | count badge per node + active/visited highlight | ✅ | `graph.counts`; counts-check |
 | Parent / sub-process instances panel | related() panel in the Diagram tab | ✅ | related API |
 | Re-trigger a node (incl. after completion) | select node → re-trigger; count increments | ✅ | counts-check (t:2 after complete) |
-| Live redraw as tokens move | WS events emitted; auto-redraw on the open diagram | 🟡 | WS hub (poll/refresh today) |
+| Live redraw as tokens move | WS `instance:<id>` events → open diagram auto-refreshes (RealtimeService) | ✅ | ws-hub + realtime.service |
 | Signal / message to instance | `/instances/:id/signal` + broadcast | ✅ | test 12; E2E |
 | Retry / suspend / resume / abort | all present | ✅ | test 13; E2E |
 | Related instances (parent/children) | `/instances/:id/related` | ✅ | test 11; E2E |

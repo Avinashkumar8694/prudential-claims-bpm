@@ -3,6 +3,7 @@ import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { JsonPipe, SlicePipe } from '@angular/common';
 import { ApiService } from '../../core/api.service';
+import { RealtimeService } from '../../core/realtime.service';
 import type { Deployment, Instance } from '../../core/models';
 
 const VISUAL: Record<string, { icon: string; color: string }> = {
@@ -194,6 +195,8 @@ const STATES: { key: string; label: string; match: (s: string) => boolean }[] = 
 })
 export class InstancesComponent {
   private api = inject(ApiService);
+  private realtime = inject(RealtimeService);
+  private unsub?: () => void;
   private route = inject(ActivatedRoute);
   wfId = this.route.snapshot.paramMap.get('id');
   instances = signal<Instance[]>([]);
@@ -223,10 +226,17 @@ export class InstancesComponent {
   countFor(st: { match: (s: string) => boolean }) { return this.instances().filter((i) => st.match(i.status)).length; }
   open(id: string) {
     this.picked.set(null);
+    this.refresh(id);
+    // Live redraw: refresh the open diagram as tokens move (node enter/exit, instance updates).
+    this.unsub?.();
+    this.unsub = this.realtime.subscribe(`instance:${id}`, () => { this.refresh(id); this.reload(); });
+  }
+  private refresh(id: string) {
     this.api.getInstance(id).subscribe((i) => this.sel.set(i));
     this.api.instanceGraph(id).subscribe((g) => this.graph.set(g as any));
     this.api.relatedInstances(id).subscribe((r) => { this.parent.set(r.parent); this.children.set(r.children); });
   }
+  ngOnDestroy() { this.unsub?.(); }
 
   visual(t: string) { return VISUAL[t] || { icon: '●', color: '#64748b' }; }
   statusColor(s: string) { return ({ running: '#2563eb', waiting: '#f59e0b', completed: '#16a34a', failed: '#dc2626', aborted: '#6b7280', suspended: '#7c3aed' } as any)[s] || '#6b7280'; }
