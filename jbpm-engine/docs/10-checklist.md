@@ -1,0 +1,65 @@
+# 10 — Implementation Checklist
+
+Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]` done.
+
+## Phase 0 — Docs & scaffold
+- [x] docs: README, requirements, features, architecture, data-model, api-spec, ui-spec, security,
+      execution-engine, deployment/branching/versioning, roadmap, checklist
+- [x] monorepo root `package.json` (workspaces: server, app) + `.gitignore`
+- [x] `server/` scaffold: package.json, tsconfig, config, Express app, `/api/health`
+- [x] `server/` SDK wrapper (`src/sdk`) re-exporting `@neutrinos/bpmn-sdk` + runtime evaluators
+- [x] `server/` store: `Repository<T>` + `FileStore`
+- [x] `app/` Angular scaffold: header, sidenav, canvas placeholder, footer, routing
+- [ ] `npm install` clean at root; `npm run dev` boots both (documented; run locally)
+
+## Phase 1 — Authoring foundation
+- [x] modules: `workflows`, `branches`, `versions` — model + service + router + tests
+- [x] node registry (palette ↔ engine type ↔ schema) — server catalog endpoint
+- [ ] canvas: @foblex/flow integration, drag-drop, connect, select, delete
+- [ ] engine JSON ↔ canvas mapping layer + autosave draft
+- [ ] properties panel schema-form (start/end/script/userTask/gateway)
+- [ ] validation surfacing (footer + inline) via `validateModel`
+- [ ] header dialogs: Variables, User Permissions; branch/version switcher
+
+## Phase 2 — Execution engine (core)
+- [x] `engine/` step loop + token model + persistence hooks
+- [x] handlers: start, end, manual, script(js), sequence-flow, gateway(exclusive, parallel)
+- [x] `instances` module + REST (start, get, history, diagram-state)
+- [ ] WS hub + realtime events
+- [ ] instance detail view + live canvas highlight
+- [ ] sandbox for js scripts + flow conditions
+
+## Phase 3 — Human & async work
+- [ ] handlers: userTask (+ Task service), receive/send (+ SignalBus), catch/throw
+- [ ] timers: catch-timer, boundary-timer, delay + durable scheduler
+- [ ] boundary events (interrupting + non-interrupting)
+- [ ] call activity + forEach (child instances)
+- [ ] task inbox UI + form render/validate
+
+## Phase 4 — Decisions & integration
+- [ ] handler: http service task (+ outbound allowlist)
+- [ ] handler: rule (DRL) + dmn + decision-table/tree + scorecard (SDK runtimes)
+- [ ] design-time preview endpoints (rules/dmn/forms)
+- [ ] sub-process (embedded/transaction/event) + error handling + node retry
+
+## Phase 5 — Deploy / branch / version / export
+- [ ] `deployments` module: deploy, tags, environment, active pointer (atomic), promote/rollback
+- [ ] undeploy/archive; management list with counts + active badge
+- [ ] version publish + diff; branch create/fork; copy-forward merge
+- [ ] export kjar (zip) endpoint + UI; import jBPM project + round-trip test
+- [ ] run-against-active/tagged deployment
+
+## Phase 6 — Platform hardening
+- [ ] auth (JWT) + RBAC guard + workflow permissions
+- [ ] multi-tenancy enforcement in store; secrets module + encryption
+- [ ] isolated-vm sandbox; rate limits + quotas
+- [ ] Postgres store implementation
+- [ ] metrics/dashboards; structured logging; audit completeness
+- [ ] e2e (Playwright); Docker/compose; CI pipeline
+- [ ] a11y (WCAG 2.1 AA) + i18n + theming polish
+
+## Definition of done (per module)
+- [ ] Model + service + router + zod DTOs
+- [ ] Unit tests (service) + integration test (API)
+- [ ] AuthZ enforced; audit emitted
+- [ ] Docs updated (api-spec / data-model) if contract changed
