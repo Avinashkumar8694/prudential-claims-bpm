@@ -84,18 +84,19 @@ const NW = 190, NH = 66;
 
           @for (n of nodes(); track n.id) {
             <div class="node" [class.sel]="selNode()?.id===n.id" [class.linking]="linkFrom()===n.id"
+                 [class.droptarget]="linkFrom() && linkFrom()!==n.id && portsFor(n.type).in"
                  [class.has-err]="hasErr(n.id)" [class.has-warn]="!hasErr(n.id) && hasWarn(n.id)"
                  [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="NW"
-                 (pointerdown)="startDrag($event, n)" (click)="selectNode($event, n)">
+                 (pointerdown)="startDrag($event, n)" (pointerup)="onNodePointerUp($event, n)" (click)="selectNode($event, n)">
               @if (hasErr(n.id)) { <span class="nmark err" title="Has errors">!</span> }
               @else if (hasWarn(n.id)) { <span class="nmark warn" title="Has warnings">!</span> }
-              @if (portsFor(n.type).in) { <span class="port in" title="Incoming" (pointerdown)="$event.stopPropagation()" (click)="endLink($event, n)"></span> }
+              @if (portsFor(n.type).in) { <span class="port in" title="Incoming"></span> }
               <span class="chip" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>
               <div class="ninfo">
                 <div class="ntitle">{{ n.name || labelFor(n) }}</div>
                 <div class="ntype">{{ typeLabel(n) }}</div>
               </div>
-              @if (portsFor(n.type).out) { <span class="port out" title="Connect from here" (pointerdown)="$event.stopPropagation()" (click)="startLink($event, n)"></span> }
+              @if (portsFor(n.type).out) { <span class="port out" title="Drag to a target node to connect" (pointerdown)="startLink($event, n)" (click)="$event.stopPropagation()"></span> }
               @if (selNode()?.id===n.id) {
                 <button class="ndel" (pointerdown)="$event.stopPropagation()" (click)="del($event, n)" title="Delete">🗑</button>
               }
@@ -110,7 +111,7 @@ const NW = 190, NH = 66;
             </div>
           }
           @if (linkError()) { <div class="hint-bar err">⛔ {{ linkError() }}</div> }
-          @else if (linkFrom()) { <div class="hint-bar">Click the target node to connect — or click empty space to cancel.</div> }
+          @else if (linkFrom()) { <div class="hint-bar">Release on a target node to connect (or click a node) — click empty space to cancel.</div> }
         </main>
 
         <!-- PROPERTIES -->
@@ -201,6 +202,7 @@ const NW = 190, NH = 66;
     .node:hover { box-shadow: var(--shadow-pop); }
     .node.sel { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(91,61,245,.18), var(--shadow-card); }
     .node.linking { border-color: var(--primary); }
+    .node.droptarget { border-color: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,.18), var(--shadow-card); cursor: alias; }
     .node.has-err { border-color: #f0a5a5; } .node.has-warn { border-color: #f0cf8a; }
     .nmark { position: absolute; top: -9px; left: -9px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #fff; box-shadow: var(--shadow-card); z-index: 2; }
     .nmark.err { background: var(--red); } .nmark.warn { background: #d97706; }
@@ -272,6 +274,7 @@ export class BuilderComponent {
   private branchId = ''; private idc = 0; private saveTimer: any;
   private pointer = { x: 0, y: 0 };
   private drag: { id: string; offX: number; offY: number; moved: boolean } | null = null;
+  private linkMoved = false;   // did the pointer move while linking? (drag-to-connect vs click-to-arm)
 
   problems = signal<Problem[]>([]);
   errorCount = computed(() => this.problems().filter((p) => p.severity === 'error').length);
@@ -381,33 +384,45 @@ export class BuilderComponent {
     const el = this.canvasRef()?.nativeElement; if (!el) return;
     const rect = el.getBoundingClientRect();
     this.pointer = { x: ev.clientX - rect.left + el.scrollLeft, y: ev.clientY - rect.top + el.scrollTop };
+    if (this.linkFrom()) this.linkMoved = true;   // moved while linking → treat as a drag-connect
     if (!this.drag) return;
     const n = this.nodes().find((x) => x.id === this.drag!.id); if (!n) return;
     n.x = Math.max(4, this.pointer.x - this.drag.offX); n.y = Math.max(4, this.pointer.y - this.drag.offY);
     this.drag.moved = true;
   }
   @HostListener('document:pointerup')
-  onUp() { if (this.drag?.moved) this.markDirty(); this.drag = null; }
+  onUp() {
+    if (this.drag?.moved) this.markDirty();
+    this.drag = null;
+    // released after dragging a link but not over a valid node → cancel; a plain click stays "armed"
+    if (this.linkFrom() && this.linkMoved) { this.linkFrom.set(null); this.linkMoved = false; }
+  }
 
   // ---- selection ----
   // while linking, clicking any node completes the connection to it; otherwise it selects.
   selectNode(ev: Event, n: CNode) { ev.stopPropagation(); if (this.linkFrom()) { this.completeLink(n); return; } this.selNode.set(n); this.selEdge.set(null); }
   selectEdge(ev: Event, e: CEdge) { ev.stopPropagation(); this.selEdge.set(e.id); this.selNode.set(null); }
-  bgClick() { this.linkFrom.set(null); this.linkError.set(''); this.selNode.set(null); this.selEdge.set(null); }
+  bgClick() { this.linkFrom.set(null); this.linkMoved = false; this.linkError.set(''); this.selNode.set(null); this.selEdge.set(null); }
   edgeById(id: string) { return this.edges().find((e) => e.id === id); }
 
-  // ---- connect (jBPM sequence-flow rules) ----
-  startLink(ev: Event, n: CNode) { ev.stopPropagation(); this.linkError.set(''); this.linkFrom.set(n.id); this.selNode.set(null); }
-  endLink(ev: Event, n: CNode) { ev.stopPropagation(); if (this.linkFrom()) this.completeLink(n); }
+  // ---- connect: drag from a node's output port to a target node (jBPM sequence-flow rules) ----
+  startLink(ev: PointerEvent, n: CNode) {
+    ev.stopPropagation(); ev.preventDefault();   // don't start a node drag; begin a link drag
+    this.linkError.set(''); this.selNode.set(null); this.linkFrom.set(n.id);
+  }
+  // pointer released over a node while linking → complete (ignore release on the source itself)
+  onNodePointerUp(_ev: Event, n: CNode) { const f = this.linkFrom(); if (f && f !== n.id) this.completeLink(n); }
   private completeLink(to: CNode) {
-    const fromId = this.linkFrom(); if (!fromId) return;
-    if (fromId === to.id) { this.linkFrom.set(null); return; }
+    const fromId = this.linkFrom();
+    const clear = () => { this.linkFrom.set(null); this.linkMoved = false; };
+    if (!fromId) return;
+    if (fromId === to.id) { clear(); return; }
     const from = this.nodes().find((x) => x.id === fromId);
-    if (!from) { this.linkFrom.set(null); return; }
+    if (!from) { clear(); return; }
     const check = this.canConnect(from, to);
-    if (!check.ok) { this.linkError.set(check.reason!); this.linkFrom.set(null); setTimeout(() => this.linkError.set(''), 3500); return; }
+    if (!check.ok) { this.linkError.set(check.reason!); clear(); setTimeout(() => this.linkError.set(''), 3500); return; }
     this.edges.set([...this.edges(), { id: `e${this.idc++}_${fromId}_${to.id}`, from: fromId, to: to.id }]);
-    this.linkFrom.set(null); this.markDirty();
+    clear(); this.markDirty();
   }
   // per-node config from the backend catalog (single source of truth for ports + property schema)
   portsFor(type: string) { return this.catalog()?.ports?.[type] || { in: true, out: true }; }
