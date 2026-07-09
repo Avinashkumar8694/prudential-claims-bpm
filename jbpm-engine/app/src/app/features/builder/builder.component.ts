@@ -18,7 +18,7 @@ const VISUAL: Record<string, { icon: string; color: string }> = {
   manual: { icon: '✋', color: '#64748b' }, gateway: { icon: '◇', color: '#f59e0b' },
   catch: { icon: '⏱', color: '#7c3aed' }, throw: { icon: '📣', color: '#7c3aed' },
   boundary: { icon: '⚠', color: '#7c3aed' }, subprocess: { icon: '▭', color: '#4f46e5' },
-  call: { icon: '⇥', color: '#4f46e5' }, forEach: { icon: '⇶', color: '#4f46e5' },
+  call: { icon: '⇥', color: '#4f46e5' }, forEach: { icon: '⇶', color: '#4f46e5' }, workItem: { icon: '⚙', color: '#0891b2' },
 };
 const NW = 190, NH = 66;
 
@@ -309,7 +309,7 @@ export class BuilderComponent {
   visual(t: string) { return VISUAL[t] || { icon: '●', color: '#64748b' }; }
   labelFor(n: CNode) { return this.catalog()?.nodes.find((s) => s.engineType === n.type)?.label || n.type; }
   typeLabel(n: CNode) {
-    const map: Record<string, string> = { start: 'Start event', end: 'End event', script: 'Script task', http: 'Service task', userTask: 'User task', rule: 'Business rule', send: 'Send task', receive: 'Receive task', manual: 'Manual task', gateway: 'Gateway', catch: 'Catch event', throw: 'Throw event', boundary: 'Boundary event', subprocess: 'Sub-process', call: 'Call activity', forEach: 'Multi-instance' };
+    const map: Record<string, string> = { start: 'Start event', end: 'End event', script: 'Script task', http: 'Service task', userTask: 'User task', rule: 'Business rule', send: 'Send task', receive: 'Receive task', manual: 'Manual task', gateway: 'Gateway', catch: 'Catch event', throw: 'Throw event', boundary: 'Boundary event', subprocess: 'Sub-process', call: 'Call activity', forEach: 'Multi-instance', workItem: 'Work item' };
     return map[n.type] || n.type;
   }
   nodesIn(cat: string): NodeSpec[] {

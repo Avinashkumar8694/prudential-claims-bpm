@@ -16,10 +16,11 @@ import { handler as send } from './send/handler.ts';
 import { handler as call } from './call/handler.ts';
 import { handler as forEach } from './for-each/handler.ts';
 import { handler as subprocess } from './subprocess/handler.ts';
+import { handler as workItem } from './work-item/handler.ts';
 
 export const NODE_HANDLERS: Record<string, NodeHandler> = {
   start, end, manual, script, http, rule, gateway, userTask, receive,
-  catch: catchEvent, throw: throwEvent, send, call, forEach, subprocess,
+  catch: catchEvent, throw: throwEvent, send, call, forEach, subprocess, workItem,
   // 'boundary' has no active handler — it is spawned by the error router and follows its outgoing flow.
 };
 
@@ -40,11 +41,12 @@ import { def as callDef } from './call/def.ts';
 import { def as forEachDef } from './for-each/def.ts';
 import { def as subprocessDef } from './subprocess/def.ts';
 import { def as boundaryDef } from './boundary/def.ts';
+import { def as workItemDef } from './work-item/def.ts';
 import type { NodeDef } from './def-types.ts';
 
 export const NODE_DEFS: NodeDef[] = [
   startDef, endDef, catchDef, throwDef, boundaryDef,        // Events
-  userTaskDef, scriptDef, httpDef, ruleDef, sendDef, receiveDef, manualDef,  // Tasks
+  userTaskDef, scriptDef, httpDef, ruleDef, sendDef, receiveDef, manualDef, workItemDef,  // Tasks (+ work items)
   gatewayDef,                                                // Gateways
   callDef, forEachDef, subprocessDef,                        // Sub-process
 ];
