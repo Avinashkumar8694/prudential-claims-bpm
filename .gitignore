@@ -6,4 +6,4 @@ target/
 .project
 .classpath
 node_modules/
-dist
+# dist
