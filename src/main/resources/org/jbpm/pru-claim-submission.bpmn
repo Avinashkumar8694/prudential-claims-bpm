@@ -17,25 +17,6 @@
   <bpmn2:itemDefinition id="_dateOfDeathItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_eligibilityResultItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_validationPassedItem" structureRef="java.lang.Boolean"/>
-  <bpmn2:itemDefinition id="_claimIdsItem" structureRef="java.util.List"/>
-  <bpmn2:itemDefinition id="_claimResultsItem" structureRef="java.util.List"/>
-  <bpmn2:itemDefinition id="_caseStpEligibleItem" structureRef="java.lang.Boolean"/>
-  <bpmn2:itemDefinition id="__P1_GETIDS_ContentDataInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_GETIDS_ContentTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_GETIDS_HandleResponseErrorsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_GETIDS_MethodInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_GETIDS_UrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_GETIDS_ResultOutputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_claimIdsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_caseIdInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_claimTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_policyNumberInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_applicablePoliciesInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_dateOfDeathInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_uploadedDocumentsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_policyDataInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_bankAccountDetailsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__P1_RUNEVAL_claimResultsOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="_validationErrorsItem" structureRef="java.util.List"/>
   <bpmn2:itemDefinition id="_allDocsVerifiedItem" structureRef="java.lang.Boolean"/>
   <bpmn2:itemDefinition id="_missingDocsItem" structureRef="java.util.List"/>
@@ -321,7 +302,7 @@
   <bpmn2:itemDefinition id="__P1_N11_UsernameInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P1_N11_ResultOutputXItem" structureRef=""/>
   <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
-  <bpmn2:process id="prudential-claims-submission.pru-claim-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-processing" isExecutable="true" processType="Public">
+  <bpmn2:process id="prudential-claims-submission.pru-claim-submission" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-submission" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
     <bpmn2:property id="nodeError" itemSubjectRef="_nodeErrorItem" name="nodeError"/>
@@ -360,9 +341,6 @@
     <bpmn2:property id="finalPaymentInstructions" itemSubjectRef="_finalPaymentInstructionsItem" name="finalPaymentInstructions"/>
     <bpmn2:property id="reqPayload" itemSubjectRef="_reqPayloadItem" name="reqPayload"/>
     <bpmn2:property id="resPayload" itemSubjectRef="_resPayloadItem" name="resPayload"/>
-    <bpmn2:property id="claimIds" itemSubjectRef="_claimIdsItem" name="claimIds"/>
-    <bpmn2:property id="claimResults" itemSubjectRef="_claimResultsItem" name="claimResults"/>
-    <bpmn2:property id="caseStpEligible" itemSubjectRef="_caseStpEligibleItem" name="caseStpEligible"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
     <bpmn2:property id="auditLogId" itemSubjectRef="_auditLogIdItem" name="auditLogId"/>
     <bpmn2:property id="alerts" itemSubjectRef="_alertsItem" name="alerts"/>
@@ -411,119 +389,7 @@
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_BOOTSTRAP" sourceRef="_P1_START" targetRef="_P1_BOOTSTRAP"/>
     <bpmn2:sequenceFlow id="_5E2B3164-5854-4063-B3D1-A1735F38642C" sourceRef="_P1_N17" targetRef="_P1_XG_PAYMENT"/>
-    <bpmn2:sequenceFlow id="_P1_F_MERGE_CONTESTABLE" sourceRef="_P1_CONTESTABLE_MERGE" targetRef="_P1_GET_CLAIM_IDS"/>
-    <bpmn2:sequenceFlow id="_P1_F_GETIDS" sourceRef="_P1_GET_CLAIM_IDS" targetRef="_P1_RUN_EVAL"/>
-    <bpmn2:sequenceFlow id="_P1_F_RUNEVAL" sourceRef="_P1_RUN_EVAL" targetRef="_P1_AGGREGATE"/>
-    <bpmn2:sequenceFlow id="_P1_F_AGG" sourceRef="_P1_AGGREGATE" targetRef="_P1_XG_TI"/>
-    <bpmn2:callActivity id="_P1_GET_CLAIM_IDS" drools:independent="true" drools:waitForCompletion="true" name="Get Claim IDs" calledElement="prudential-claims-submission.pru-rest-executor">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname"><drools:metaValue><![CDATA[Get Claim IDs]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY] process=pru-claim-internal | node=GetClaimIds | caseId=" + kcontext.getVariable("caseId"));
-com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
-json.putPOJO("caseId", kcontext.getVariable("caseId"));
-json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
-kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
-        <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-if (r != null && !r.isEmpty()) { try {
-  com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(r);
-  java.util.List ids = new java.util.ArrayList();
-  if (root.has("claimIds") && root.get("claimIds").isArray()) { for (com.fasterxml.jackson.databind.JsonNode idn : root.get("claimIds")) { ids.add(idn.asText()); } }
-  kcontext.setVariable("claimIds", ids);
-  System.out.println("[BPM][EXIT] process=pru-claim-internal | node=GetClaimIds | claimIds=" + ids);
-} catch(Exception e) { System.out.println("[BPM][EXIT][ERROR] GetClaimIds " + e.getMessage()); } }]]></drools:script></drools:onExit-script>
-      </bpmn2:extensionElements>
-      <bpmn2:incoming>_P1_F_MERGE_CONTESTABLE</bpmn2:incoming>
-      <bpmn2:outgoing>_P1_F_GETIDS</bpmn2:outgoing>
-      <bpmn2:ioSpecification id="io__P1_GET_CLAIM_IDS">
-        <bpmn2:dataInput id="_P1_GET_CLAIM_IDS_ContentDataInputX" drools:dtype="" itemSubjectRef="__P1_GETIDS_ContentDataInputXItem" name="ContentData"/>
-        <bpmn2:dataInput id="_P1_GET_CLAIM_IDS_ContentTypeInputX" drools:dtype="" itemSubjectRef="__P1_GETIDS_ContentTypeInputXItem" name="ContentType"/>
-        <bpmn2:dataInput id="_P1_GET_CLAIM_IDS_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="__P1_GETIDS_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
-        <bpmn2:dataInput id="_P1_GET_CLAIM_IDS_MethodInputX" drools:dtype="" itemSubjectRef="__P1_GETIDS_MethodInputXItem" name="Method"/>
-        <bpmn2:dataInput id="_P1_GET_CLAIM_IDS_UrlInputX" drools:dtype="" itemSubjectRef="__P1_GETIDS_UrlInputXItem" name="Url"/>
-        <bpmn2:dataOutput id="_P1_GET_CLAIM_IDS_ResultOutputX" drools:dtype="" itemSubjectRef="__P1_GETIDS_ResultOutputXItem" name="Result"/>
-        <bpmn2:inputSet id="iset__P1_GET_CLAIM_IDS">
-          <bpmn2:dataInputRefs>_P1_GET_CLAIM_IDS_ContentDataInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_GET_CLAIM_IDS_ContentTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_GET_CLAIM_IDS_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_GET_CLAIM_IDS_MethodInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_GET_CLAIM_IDS_UrlInputX</bpmn2:dataInputRefs>
-        </bpmn2:inputSet>
-        <bpmn2:outputSet id="oset__P1_GET_CLAIM_IDS"><bpmn2:dataOutputRefs>_P1_GET_CLAIM_IDS_ResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
-      </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="dia__P1_GET_CLAIM_IDS_cd"><bpmn2:sourceRef>reqPayload</bpmn2:sourceRef><bpmn2:targetRef>_P1_GET_CLAIM_IDS_ContentDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_GET_CLAIM_IDS_ct"><bpmn2:targetRef>_P1_GET_CLAIM_IDS_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P1_GET_CLAIM_IDS_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_ctt">_P1_GET_CLAIM_IDS_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_GET_CLAIM_IDS_he"><bpmn2:targetRef>_P1_GET_CLAIM_IDS_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P1_GET_CLAIM_IDS_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_het">_P1_GET_CLAIM_IDS_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_GET_CLAIM_IDS_m"><bpmn2:targetRef>_P1_GET_CLAIM_IDS_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P1_GET_CLAIM_IDS_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_mt">_P1_GET_CLAIM_IDS_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_GET_CLAIM_IDS_u"><bpmn2:targetRef>_P1_GET_CLAIM_IDS_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P1_GET_CLAIM_IDS_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_uf"><![CDATA[#{baseUrl}/v1/claims/get-claim-ids]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P1_GET_CLAIM_IDS_ut">_P1_GET_CLAIM_IDS_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="doa__P1_GET_CLAIM_IDS_r"><bpmn2:sourceRef>_P1_GET_CLAIM_IDS_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-    </bpmn2:callActivity>
-    <bpmn2:callActivity id="_P1_RUN_EVAL" drools:independent="true" drools:waitForCompletion="true" name="Run Per Claim Evaluation" calledElement="prudential-claims-submission.pru-claim-run-evaluation">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname"><drools:metaValue><![CDATA[Run Per Claim Evaluation]]></drools:metaValue></drools:metaData>
-      </bpmn2:extensionElements>
-      <bpmn2:incoming>_P1_F_GETIDS</bpmn2:incoming>
-      <bpmn2:outgoing>_P1_F_RUNEVAL</bpmn2:outgoing>
-      <bpmn2:ioSpecification id="io__P1_RUN_EVAL">
-        <bpmn2:dataInput id="_P1_RUN_EVAL_claimIdsInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_claimIdsInputXItem" name="claimIds"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_caseIdInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_caseIdInputXItem" name="caseId"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_claimTypeInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_claimTypeInputXItem" name="claimType"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_policyNumberInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_policyNumberInputXItem" name="policyNumber"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_applicablePoliciesInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_applicablePoliciesInputXItem" name="applicablePolicies"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_dateOfDeathInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_dateOfDeathInputXItem" name="dateOfDeath"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_uploadedDocumentsInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_uploadedDocumentsInputXItem" name="uploadedDocuments"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_policyDataInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_policyDataInputXItem" name="policyData"/>
-        <bpmn2:dataInput id="_P1_RUN_EVAL_bankAccountDetailsInputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_bankAccountDetailsInputXItem" name="bankAccountDetails"/>
-        <bpmn2:dataOutput id="_P1_RUN_EVAL_claimResultsOutputX" drools:dtype="" itemSubjectRef="__P1_RUNEVAL_claimResultsOutputXItem" name="claimResults"/>
-        <bpmn2:inputSet id="iset__P1_RUN_EVAL">
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_claimIdsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_caseIdInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_claimTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_policyNumberInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_applicablePoliciesInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_dateOfDeathInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_uploadedDocumentsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_policyDataInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P1_RUN_EVAL_bankAccountDetailsInputX</bpmn2:dataInputRefs>
-        </bpmn2:inputSet>
-        <bpmn2:outputSet id="oset__P1_RUN_EVAL"><bpmn2:dataOutputRefs>_P1_RUN_EVAL_claimResultsOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
-      </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_claimIds"><bpmn2:sourceRef>claimIds</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_claimIdsInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_caseId"><bpmn2:sourceRef>caseId</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_caseIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_claimType"><bpmn2:sourceRef>claimType</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_claimTypeInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_policyNumber"><bpmn2:sourceRef>policyNumber</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_policyNumberInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_applicablePolicies"><bpmn2:sourceRef>applicablePolicies</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_applicablePoliciesInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_dateOfDeath"><bpmn2:sourceRef>dateOfDeath</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_dateOfDeathInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_uploadedDocuments"><bpmn2:sourceRef>uploadedDocuments</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_uploadedDocumentsInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_policyData"><bpmn2:sourceRef>policyData</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_policyDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P1_RUN_EVAL_bankAccountDetails"><bpmn2:sourceRef>bankAccountDetails</bpmn2:sourceRef><bpmn2:targetRef>_P1_RUN_EVAL_bankAccountDetailsInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="doa__P1_RUN_EVAL_res"><bpmn2:sourceRef>_P1_RUN_EVAL_claimResultsOutputX</bpmn2:sourceRef><bpmn2:targetRef>claimResults</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-    </bpmn2:callActivity>
-    <bpmn2:scriptTask id="_P1_AGGREGATE" name="Aggregate Case_STP_Eligible" scriptFormat="http://www.java.com/java">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname"><drools:metaValue><![CDATA[Aggregate Case_STP_Eligible]]></drools:metaValue></drools:metaData>
-      </bpmn2:extensionElements>
-      <bpmn2:incoming>_P1_F_RUNEVAL</bpmn2:incoming>
-      <bpmn2:outgoing>_P1_F_AGG</bpmn2:outgoing>
-      <bpmn2:script><![CDATA[java.util.List results = (java.util.List) kcontext.getVariable("claimResults");
-boolean allStp = true; int total = 0, stp = 0;
-if (results != null) {
-  for (Object o : results) {
-    total++;
-    boolean e = false;
-    try {
-      if (o instanceof com.fasterxml.jackson.databind.JsonNode) {
-        com.fasterxml.jackson.databind.JsonNode n = (com.fasterxml.jackson.databind.JsonNode) o;
-        e = n.has("claimStpEligible") && n.get("claimStpEligible").asBoolean();
-      }
-    } catch (Exception ex) {}
-    if (e) { stp++; } else { allStp = false; }
-  }
-}
-if (total == 0) { allStp = false; }
-kcontext.setVariable("caseStpEligible", Boolean.valueOf(allStp));
-System.out.println("[BPM][AGGREGATE] process=pru-claim-internal | caseStpEligible=" + allStp + " (" + stp + "/" + total + " claims STP-eligible)");]]></bpmn2:script>
-    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="_P1_F_MERGE_CONTESTABLE" sourceRef="_P1_CONTESTABLE_MERGE" targetRef="_P1_XG_TI"/>
     <bpmn2:sequenceFlow id="_P1_F_MRX" sourceRef="_P1_N11" targetRef="_P1_CONTESTABLE_MERGE"/>
     <bpmn2:sequenceFlow id="_P1_F_TAX_YES" name="Yes" sourceRef="_P1_XG_TAX" targetRef="_P1_N16">
       <bpmn2:extensionElements>
@@ -957,7 +823,7 @@ if (response != null && !response.isEmpty()) {
           <drools:metaValue><![CDATA[Is TI Claim?]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
-      <bpmn2:incoming>_P1_F_AGG</bpmn2:incoming>
+      <bpmn2:incoming>_P1_F_MERGE_CONTESTABLE</bpmn2:incoming>
       <bpmn2:outgoing>_P1_F_TI_YES</bpmn2:outgoing>
       <bpmn2:outgoing>_P1_F_TI_NO</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
@@ -2498,7 +2364,7 @@ kcontext.setVariable("flagContestable", contestable);]]></bpmn2:script>
     </bpmn2:subProcess>
   </bpmn2:process>
   <bpmndi:BPMNDiagram id="_XmSD6VpoEfGoNpO8onZRMw">
-    <bpmndi:BPMNPlane id="_XmSD6lpoEfGoNpO8onZRMw" bpmnElement="prudential-claims-submission.pru-claim-processing">
+    <bpmndi:BPMNPlane id="_XmSD6lpoEfGoNpO8onZRMw" bpmnElement="prudential-claims-submission.pru-claim-submission">
       <bpmndi:BPMNShape id="shape__GLOBAL_TERMINATE_SUBPROCESS" bpmnElement="_GLOBAL_TERMINATE_SUBPROCESS" isExpanded="true">
         <dc:Bounds height="150.0" width="350.0" x="100.0" y="500.0"/>
       </bpmndi:BPMNShape>
@@ -2751,9 +2617,8 @@ kcontext.setVariable("flagContestable", contestable);]]></bpmn2:script>
         <di:waypoint xsi:type="dc:Point" x="1775.0" y="103.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__P1_CONTESTABLE_MERGE_to_shape__P1_XG_TI" bpmnElement="_P1_F_MERGE_CONTESTABLE">
-        <di:waypoint xsi:type="dc:Point" x="1778.0" y="159.0"/>
-        <di:waypoint xsi:type="dc:Point" x="1778.0" y="300.0"/>
-        <di:waypoint xsi:type="dc:Point" x="1745.0" y="300.0"/>
+        <di:waypoint xsi:type="dc:Point" x="1800.0" y="128.0"/>
+        <di:waypoint xsi:type="dc:Point" x="1850.0" y="128.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_shape__P1_N17_to_shape__P1_XG_PAYMENT" bpmnElement="_5E2B3164-5854-4063-B3D1-A1735F38642C">
         <di:waypoint xsi:type="dc:Point" x="2760.0" y="128.0"/>
@@ -2787,12 +2652,6 @@ kcontext.setVariable("flagContestable", contestable);]]></bpmn2:script>
         <di:waypoint xsi:type="dc:Point" x="2192.0" y="131.0"/>
         <di:waypoint xsi:type="dc:Point" x="2192.0" y="374.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNShape id="shape__P1_GET_CLAIM_IDS" bpmnElement="_P1_GET_CLAIM_IDS"><dc:Bounds height="80.0" width="130.0" x="1615.0" y="260.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__P1_RUN_EVAL" bpmnElement="_P1_RUN_EVAL"><dc:Bounds height="90.0" width="160.0" x="1790.0" y="255.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__P1_AGGREGATE" bpmnElement="_P1_AGGREGATE"><dc:Bounds height="80.0" width="140.0" x="2000.0" y="260.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="edge__P1_F_GETIDS" bpmnElement="_P1_F_GETIDS"><di:waypoint xsi:type="dc:Point" x="1745.0" y="300.0"/><di:waypoint xsi:type="dc:Point" x="1790.0" y="300.0"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge__P1_F_RUNEVAL" bpmnElement="_P1_F_RUNEVAL"><di:waypoint xsi:type="dc:Point" x="1950.0" y="300.0"/><di:waypoint xsi:type="dc:Point" x="2000.0" y="300.0"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge__P1_F_AGG" bpmnElement="_P1_F_AGG"><di:waypoint xsi:type="dc:Point" x="2070.0" y="260.0"/><di:waypoint xsi:type="dc:Point" x="2070.0" y="128.0"/><di:waypoint xsi:type="dc:Point" x="1878.0" y="128.0"/></bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
   <bpmn2:relationship id="_XmSD61poEfGoNpO8onZRMw" type="BPSimData">

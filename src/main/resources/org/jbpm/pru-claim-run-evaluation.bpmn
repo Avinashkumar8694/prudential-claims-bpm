@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:bpsim="http://www.bpsim.org/schemas/1.0" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="prudential-claims-submission_pru-claim-run-evaluation_defs" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd http://www.bpsim.org/schemas/1.0 bpsim.xsd http://www.omg.org/spec/DD/20100524/DC DC.xsd http://www.omg.org/spec/DD/20100524/DI DI.xsd " exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
+  <bpmn2:itemDefinition id="_claimIdsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_claimResultsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_policyNumberItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_applicablePoliciesItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_dateOfDeathItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_uploadedDocumentsItem" structureRef="java.util.List"/>
+  <bpmn2:itemDefinition id="_policyDataItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_bankAccountDetailsItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="_A_claimIdItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_A_claimResultItem" structureRef="java.lang.Object"/>
+  <bpmn2:itemDefinition id="__A_MI_IN_COLLECTIONInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_claimIdInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_caseIdInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_claimTypeInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_policyNumberInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_dateOfDeathInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_uploadedDocumentsInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_policyDataInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_bankAccountDetailsInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_OUT_COLLECTIONOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_claimResultOutputXItem" structureRef=""/>
+  <bpmn2:error id="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
+  <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
+  <bpmn2:process id="prudential-claims-submission.pru-claim-run-evaluation" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-run-evaluation" isExecutable="true" processType="Public">
+    <bpmn2:property id="claimIds" itemSubjectRef="_claimIdsItem" name="claimIds"/>
+    <bpmn2:property id="claimResults" itemSubjectRef="_claimResultsItem" name="claimResults"/>
+    <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
+    <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
+    <bpmn2:property id="policyNumber" itemSubjectRef="_policyNumberItem" name="policyNumber"/>
+    <bpmn2:property id="applicablePolicies" itemSubjectRef="_applicablePoliciesItem" name="applicablePolicies"/>
+    <bpmn2:property id="dateOfDeath" itemSubjectRef="_dateOfDeathItem" name="dateOfDeath"/>
+    <bpmn2:property id="uploadedDocuments" itemSubjectRef="_uploadedDocumentsItem" name="uploadedDocuments"/>
+    <bpmn2:property id="policyData" itemSubjectRef="_policyDataItem" name="policyData"/>
+    <bpmn2:property id="bankAccountDetails" itemSubjectRef="_bankAccountDetailsItem" name="bankAccountDetails"/>
+    <bpmn2:sequenceFlow id="_A_F1" sourceRef="_A_START" targetRef="_A_MI"/>
+    <bpmn2:sequenceFlow id="_A_F2" sourceRef="_A_MI" targetRef="_A_END"/>
+    <bpmn2:startEvent id="_A_START" name="Run Per Claim Evaluation">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Run Per Claim Evaluation]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:outgoing>_A_F1</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:callActivity id="_A_MI" drools:independent="true" drools:waitForCompletion="true" name="Evaluate Claim (per claim)" calledElement="prudential-claims-submission.pru-claim-per-claim-eval">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Evaluate Claim (per claim)]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>_A_F1</bpmn2:incoming>
+      <bpmn2:outgoing>_A_F2</bpmn2:outgoing>
+      <bpmn2:ioSpecification id="io_A_MI">
+        <bpmn2:dataInput id="_A_MI_IN_COLLECTIONInputX" drools:dtype="" itemSubjectRef="__A_MI_IN_COLLECTIONInputXItem" name="IN_COLLECTION"/>
+        <bpmn2:dataInput id="_A_MI_claimIdInputX" drools:dtype="" itemSubjectRef="__A_MI_claimIdInputXItem" name="claimId"/>
+        <bpmn2:dataInput id="_A_MI_caseIdInputX" drools:dtype="" itemSubjectRef="__A_MI_caseIdInputXItem" name="caseId"/>
+        <bpmn2:dataInput id="_A_MI_claimTypeInputX" drools:dtype="" itemSubjectRef="__A_MI_claimTypeInputXItem" name="claimType"/>
+        <bpmn2:dataInput id="_A_MI_policyNumberInputX" drools:dtype="" itemSubjectRef="__A_MI_policyNumberInputXItem" name="policyNumber"/>
+        <bpmn2:dataInput id="_A_MI_dateOfDeathInputX" drools:dtype="" itemSubjectRef="__A_MI_dateOfDeathInputXItem" name="dateOfDeath"/>
+        <bpmn2:dataInput id="_A_MI_uploadedDocumentsInputX" drools:dtype="" itemSubjectRef="__A_MI_uploadedDocumentsInputXItem" name="uploadedDocuments"/>
+        <bpmn2:dataInput id="_A_MI_policyDataInputX" drools:dtype="" itemSubjectRef="__A_MI_policyDataInputXItem" name="policyData"/>
+        <bpmn2:dataInput id="_A_MI_bankAccountDetailsInputX" drools:dtype="" itemSubjectRef="__A_MI_bankAccountDetailsInputXItem" name="bankAccountDetails"/>
+        <bpmn2:dataOutput id="_A_MI_OUT_COLLECTIONOutputX" drools:dtype="" itemSubjectRef="__A_MI_OUT_COLLECTIONOutputXItem" name="OUT_COLLECTION"/>
+        <bpmn2:dataOutput id="_A_MI_claimResultOutputX" drools:dtype="" itemSubjectRef="__A_MI_claimResultOutputXItem" name="claimResult"/>
+        <bpmn2:inputSet id="iset_A_MI">
+          <bpmn2:dataInputRefs>_A_MI_IN_COLLECTIONInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_claimIdInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_caseIdInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_claimTypeInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_policyNumberInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_dateOfDeathInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_uploadedDocumentsInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_policyDataInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_MI_bankAccountDetailsInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet id="oset_A_MI">
+          <bpmn2:dataOutputRefs>_A_MI_OUT_COLLECTIONOutputX</bpmn2:dataOutputRefs>
+          <bpmn2:dataOutputRefs>_A_MI_claimResultOutputX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
+      </bpmn2:ioSpecification>
+      <bpmn2:dataInputAssociation id="dia_A_incol"><bpmn2:sourceRef>claimIds</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_IN_COLLECTIONInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_claimId"><bpmn2:sourceRef>_A_claimId</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_claimIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_caseId"><bpmn2:sourceRef>caseId</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_caseIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_claimType"><bpmn2:sourceRef>claimType</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_claimTypeInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_policyNumber"><bpmn2:sourceRef>policyNumber</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_policyNumberInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_dateOfDeath"><bpmn2:sourceRef>dateOfDeath</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_dateOfDeathInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_uploadedDocuments"><bpmn2:sourceRef>uploadedDocuments</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_uploadedDocumentsInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_policyData"><bpmn2:sourceRef>policyData</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_policyDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_A_bankAccountDetails"><bpmn2:sourceRef>bankAccountDetails</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_bankAccountDetailsInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation id="doa_A_outcol"><bpmn2:sourceRef>_A_MI_OUT_COLLECTIONOutputX</bpmn2:sourceRef><bpmn2:targetRef>claimResults</bpmn2:targetRef></bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="doa_A_claimResult"><bpmn2:sourceRef>_A_MI_claimResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>_A_claimResult</bpmn2:targetRef></bpmn2:dataOutputAssociation>
+      <bpmn2:multiInstanceLoopCharacteristics isSequential="false">
+        <bpmn2:loopDataInputRef>_A_MI_IN_COLLECTIONInputX</bpmn2:loopDataInputRef>
+        <bpmn2:loopDataOutputRef>_A_MI_OUT_COLLECTIONOutputX</bpmn2:loopDataOutputRef>
+        <bpmn2:inputDataItem id="_A_claimId" itemSubjectRef="_A_claimIdItem" name="claimId"/>
+        <bpmn2:outputDataItem id="_A_claimResult" itemSubjectRef="_A_claimResultItem" name="claimResult"/>
+      </bpmn2:multiInstanceLoopCharacteristics>
+    </bpmn2:callActivity>
+    <bpmn2:endEvent id="_A_END" name="End">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[End]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>_A_F2</bpmn2:incoming>
+    </bpmn2:endEvent>
+  </bpmn2:process>
+  <bpmndi:BPMNDiagram id="prudential-claims-submission_pru-claim-run-evaluation_defs_diag">
+    <bpmndi:BPMNPlane id="prudential-claims-submission_pru-claim-run-evaluation_defs_plane" bpmnElement="prudential-claims-submission.pru-claim-run-evaluation">
+      <bpmndi:BPMNShape id="s__A_START" bpmnElement="_A_START"><dc:Bounds height="56.0" width="56.0" x="100.0" y="120.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s__A_MI" bpmnElement="_A_MI"><dc:Bounds height="90.0" width="160.0" x="220.0" y="103.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s__A_END" bpmnElement="_A_END"><dc:Bounds height="56.0" width="56.0" x="430.0" y="120.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e__A_F1" bpmnElement="_A_F1"><di:waypoint xsi:type="dc:Point" x="156.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="220.0" y="148.0"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e__A_F2" bpmnElement="_A_F2"><di:waypoint xsi:type="dc:Point" x="380.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="430.0" y="148.0"/></bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn2:definitions>

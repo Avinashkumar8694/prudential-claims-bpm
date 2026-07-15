@@ -1310,6 +1310,347 @@
         }
       }
     },
+    "/api/v1/claims/verification/case-status": {
+      "put": {
+        "summary": "V1. Update Case Status to For Verification",
+        "description": "Verification process: sets the case status to FOR_VERIFICATION.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notificationId": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "status": { "type": "string", "example": "FOR_VERIFICATION" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "caseStatus": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/verification/assign": {
+      "post": {
+        "summary": "V2. Assign Case to Verifier",
+        "description": "Verification process: assigns the case to the verifier queue (platform pull/auto-push).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notificationId": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "role": { "type": "string", "example": "Verifier" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "assignedTo": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/verification/promote": {
+      "post": {
+        "summary": "V3. Promote to Claim",
+        "description": "Verification process: sets Notification Status to Verified_Promoted and generates Case ID + Claim ID (formal claim submission for Track B).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notificationId": { "type": "string" },
+                  "claimType": { "type": "string", "example": "DEATH" },
+                  "policyNumber": { "type": "string" },
+                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "notificationStatus": { "type": "string", "example": "VERIFIED_PROMOTED" },
+                    "caseId": { "type": "string" },
+                    "claimId": { "type": "string" },
+                    "cid": { "type": "integer", "description": "Numeric claim id consumed by pru-claim-processing" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/verification/send-confirmation": {
+      "post": {
+        "summary": "V4. Send Confirmation + Claim Forms",
+        "description": "Verification process: sends email confirmation to claimant and beneficiaries, and the claim form to known benes.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "caseId": { "type": "string" },
+                  "claimId": { "type": "string" },
+                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "claimFormsSent": { "type": "integer" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/verification/hold": {
+      "post": {
+        "summary": "V5. Hold (Retain in Verifier Queue)",
+        "description": "Verification process: retains the case in the verifier queue for later action.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notificationId": { "type": "string" },
+                  "caseId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "notificationStatus": { "type": "string", "example": "ON_HOLD" },
+                    "queue": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/verification/close": {
+      "post": {
+        "summary": "V6. Close (Not Verified)",
+        "description": "Verification process: sets Notification Status to Not_Verified_Closed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notificationId": { "type": "string" },
+                  "caseId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "notificationStatus": { "type": "string", "example": "NOT_VERIFIED_CLOSED" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/verification/closure-notice": {
+      "post": {
+        "summary": "V7. Generate & Send Closure Notification",
+        "description": "Verification process: generates and sends the closure notification to the notifier.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notificationId": { "type": "string" },
+                  "caseId": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "noticeSentAt": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/get-claim-ids": {
+      "post": {
+        "summary": "E1. Get Claim IDs",
+        "description": "Returns the array of claim ids for a case (one per claim). Each id is processed as one claim by the per-claim evaluation fan-out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "applicablePolicies": { "type": "array", "items": { "type": "string" } }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "claimIds": { "type": "array", "items": { "type": "string" } }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/claims/evaluate-claim": {
+      "post": {
+        "summary": "E2. Evaluate Claim (per claim)",
+        "description": "Per-claim evaluation (one claim at a time), called in parallel by the run-evaluation sub-process. Returns per-claim STP eligibility + flags aggregated by the parent into Case_STP_Eligible.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "piid": { "type": "string" },
+                  "caseId": { "type": "string" },
+                  "claimId": { "type": "string" },
+                  "claimType": { "type": "string" },
+                  "policyNumber": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "claimId": { "type": "string" },
+                    "claimStpEligible": { "type": "boolean" },
+                    "requiresExaminer": { "type": "boolean" },
+                    "pendingRequirements": { "type": "boolean" },
+                    "claimFlags": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/business-central/rest/spaces/{spaceName}/git/clone": {
       "post": {
         "summary": "25. Business Central Git Clone",

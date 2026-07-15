@@ -743,6 +743,142 @@ app.post('/api/v1/claims/nigo/death-verification', (req, res) => {
   });
 });
 
+// --- PROCESS 3: CLAIM VERIFICATION (Track B) ENDPOINTS ---
+// Consumed by pru-claim-verification.bpmn. The verifier reviews an inbound
+// notification in the workbench and decides Promote / Hold / Close.
+
+// V1. Update Case Status to "For Verification"
+app.put('/api/v1/claims/verification/case-status', (req, res) => {
+  const { notificationId, caseId, status } = req.body;
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    caseId: caseId || null,
+    caseStatus: status || 'FOR_VERIFICATION',
+    updatedAt: new Date().toISOString()
+  });
+});
+
+// V2. Assign Case to Verifier (platform pull/auto-push abstraction)
+app.post('/api/v1/claims/verification/assign', (req, res) => {
+  const { notificationId, role } = req.body;
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    assignedTo: `${(role || 'Verifier').toLowerCase()}-queue`,
+    assignedAt: new Date().toISOString()
+  });
+});
+
+// V3. Promote: set Notification Status = Verified_Promoted, generate Case ID + Claim ID
+app.post('/api/v1/claims/verification/promote', (req, res) => {
+  const { notificationId, claimType } = req.body;
+  const now = new Date();
+  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const seq = Math.floor(10000 + Math.random() * 90000);
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    notificationStatus: 'VERIFIED_PROMOTED',
+    caseId: `CASE-${ymd}-${seq}`,
+    claimId: `CLM-${now.getFullYear()}-${String(seq).padStart(5, '0')}`,
+    cid: seq,                       // numeric claim id consumed by pru-claim-processing (Integer)
+    claimType: claimType || 'DEATH',
+    caseStatus: 'CLAIM_SUBMITTED'
+  });
+});
+
+// V4. Send email confirmation to Claimant/Bene + claim form to known benes
+app.post('/api/v1/claims/verification/send-confirmation', (req, res) => {
+  const { caseId, claimId, applicablePolicies } = req.body;
+  res.json({
+    success: true,
+    caseId: caseId || null,
+    claimId: claimId || null,
+    confirmationSentAt: new Date().toISOString(),
+    claimFormsSent: (applicablePolicies || ['POL12345']).length
+  });
+});
+
+// V5. Hold: retain case in verifier queue
+app.post('/api/v1/claims/verification/hold', (req, res) => {
+  const { notificationId } = req.body;
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    notificationStatus: 'ON_HOLD',
+    queue: 'verifier',
+    heldAt: new Date().toISOString()
+  });
+});
+
+// V6. Close: set Notification Status = Not_Verified_Closed
+app.post('/api/v1/claims/verification/close', (req, res) => {
+  const { notificationId } = req.body;
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    notificationStatus: 'NOT_VERIFIED_CLOSED',
+    closedAt: new Date().toISOString()
+  });
+});
+
+// V7. Generate and send Closure Notification
+app.post('/api/v1/claims/verification/closure-notice', (req, res) => {
+  const { notificationId } = req.body;
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    noticeSentAt: new Date().toISOString()
+  });
+});
+
+
+// --- PROCESS 4: PER-CLAIM EVALUATION (fan-out) ENDPOINTS ---
+// Consumed by pru-claim-processing (Get Claim IDs) and the pru-claim-run-evaluation
+// / pru-claim-per-claim-eval sub-processes (parallel one-claim-at-a-time evaluation).
+
+// E1. Get Claim IDs — returns the array of claim ids for the case (one per claim).
+app.post('/api/v1/claims/get-claim-ids', (req, res) => {
+  const { caseId, applicablePolicies } = req.body;
+  const policies = (applicablePolicies && applicablePolicies.length) ? applicablePolicies : ['POL12345'];
+  const yr = new Date().getFullYear();
+  // one claim id per applicable policy; caseId containing MULTI forces a 3-claim fan-out
+  const list = (caseId && caseId.includes('MULTI'))
+    ? ['POLA', 'POLB', 'POLC']
+    : policies;
+  const claimIds = list.map((p, i) => `CLM-${yr}-${String(1000 + i)}-${String(p).replace(/[^A-Za-z0-9]/g, '')}`);
+  console.log(`\x1b[36m[GetClaimIds]\x1b[0m case=${caseId} -> ${claimIds.length} claim(s): ${claimIds.join(', ')}`);
+  res.json({ success: true, caseId: caseId || null, claimIds });
+});
+
+// E2. Evaluate Claim — per-claim evaluation (one claim at a time). Returns the
+// per-claim STP eligibility + flags that the parent aggregates into Case_STP_Eligible.
+app.post('/api/v1/claims/evaluate-claim', (req, res) => {
+  const { caseId, claimId, claimType } = req.body;
+  const key = `${caseId || ''} ${claimId || ''}`;
+  const hasFailure = /FASTTRACKFAIL|BANKFAIL|CONTEST|MINOR|SANCTION|LAPSE|POLICYFAIL/.test(key);
+  const needsExaminer = /CONTEST|SANCTION|EXAMINER/.test(key);
+  const pendingReq = /NIGO|PARTIAL/.test(key);
+  const claimStpEligible = !hasFailure && !needsExaminer && !pendingReq;
+  console.log(`\x1b[36m[EvaluateClaim]\x1b[0m claim=${claimId} -> stpEligible=${claimStpEligible}`);
+  res.json({
+    success: true,
+    claimId: claimId || null,
+    claimType: claimType || 'DEATH',
+    claimStpEligible,
+    requiresExaminer: needsExaminer,
+    pendingRequirements: pendingReq,
+    claimFlags: {
+      contestable: /CONTEST/.test(key),
+      minorBene: /MINOR/.test(key),
+      sanctionsHit: /SANCTION/.test(key),
+      policyNotInForce: /LAPSE|POLICYFAIL/.test(key)
+    }
+  });
+});
+
+
 // 25. Business Central Git Clone - Live Proxy
 app.post('/business-central/rest/spaces/:spaceName/git/clone', (req, res) => {
   const targetPath = `/business-central/rest/spaces/${req.params.spaceName}/git/clone`;
