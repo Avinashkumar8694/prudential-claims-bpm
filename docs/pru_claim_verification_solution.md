@@ -97,8 +97,7 @@ graph TD
     START([Verification Process]) --> BOOT[Script_Bootstrap]
     BOOT --> ST["Update Case Status to For Verification<br/>(PUT case-status)"]
     ST --> AS["Assign Case to Verifier<br/>(POST assign)"]
-    AS --> RV["Review notification in workbench<br/>(User Task · Verifier)"]
-    RV --> DC["Update Decision<br/>(User Task · Verifier → verifierDecision)"]
+    AS --> DC["Claims Verifier<br/>(User Task · Verifier → verifierDecision)"]
     DC --> GW{Verifier Decision?}
 
     GW -- "Promote to Claim" --> PR["Set Verified_Promoted,<br/>Generate Case ID + Claim ID<br/>(POST promote)"]
@@ -114,7 +113,7 @@ graph TD
     CN --> EC([Not Verified - Closed · terminate])
 ```
 
-The grey data object in the source diagram (*notification, policy, event, insured, beneficiary, documents, system flags*) is modelled as a **text annotation** attached to the **Review notification** task — it names the read-only context the verifier sees on that screen.
+The grey data object in the source diagram (*notification, policy, event, insured, beneficiary, documents, system flags*) is modelled as a **text annotation** attached to the **Claims Verifier** task — it names the read-only context the verifier reviews before recording the decision. (There is no separate "Review notification" step; the verifier reviews and decides in the single Claims Verifier task.)
 
 ---
 
@@ -127,17 +126,16 @@ REST nodes follow the repo convention exactly: a `callActivity → prudential-cl
 | 0 | `Script_Bootstrap` | Script | — | env | `baseUrl`, `maxRetryCount` |
 | 1 | Update Case Status to For Verification | REST (PUT) | `/v1/claims/verification/case-status` | `notificationId`, `caseId` | `notificationStatus` |
 | 2 | Assign Case to Verifier | REST (POST) | `/v1/claims/verification/assign` | `notificationId` | `assignedTo` |
-| 3 | Review notification in workbench | **User Task** (Verifier) | — | notification context | — |
-| 4 | Update Decision | **User Task** (Verifier) | — | — | `verifierDecision`, `verifierRemarks` |
-| 5 | Verifier Decision? | Exclusive gateway | — | `verifierDecision` | — |
-| 6 | Set Verified_Promoted + Generate IDs | REST (POST) | `/v1/claims/verification/promote` | `notificationId`, `claimType`, `policyNumber`, `applicablePolicies`, `verifierRemarks` | `notificationStatus`, `caseId`, `claimId`, `cid` |
-| 7 | Send confirmation + claim forms | REST (POST) | `/v1/claims/verification/send-confirmation` | `caseId`, `claimId`, `applicablePolicies` | — |
-| 8 | **System Claim Process** | **callActivity → `pru-claim-processing`** | — | 9 vars (see §6) | — |
-| 9 | Retain case in verifier queue | REST (POST) | `/v1/claims/verification/hold` | `notificationId`, `caseId` | `notificationStatus` |
-| 10 | Set Not_Verified_Closed | REST (POST) | `/v1/claims/verification/close` | `notificationId`, `caseId`, `verifierRemarks` | `notificationStatus` |
-| 11 | Generate and send Closure Notification | REST (POST) | `/v1/claims/verification/closure-notice` | `notificationId`, `caseId` | — |
+| 3 | Claims Verifier | **User Task** (Verifier) | — | notification context (annotation) | `verifierDecision`, `verifierRemarks` |
+| 4 | Verifier Decision? | Exclusive gateway | — | `verifierDecision` | — |
+| 5 | Set Verified_Promoted + Generate IDs | REST (POST) | `/v1/claims/verification/promote` | `notificationId`, `claimType`, `policyNumber`, `applicablePolicies`, `verifierRemarks` | `notificationStatus`, `caseId`, `claimId`, `cid` |
+| 6 | Send confirmation + claim forms | REST (POST) | `/v1/claims/verification/send-confirmation` | `caseId`, `claimId`, `applicablePolicies` | — |
+| 7 | **System Claim Process** | **callActivity → `pru-claim-processing`** | — | 9 vars (see §6) | — |
+| 8 | Retain case in verifier queue | REST (POST) | `/v1/claims/verification/hold` | `notificationId`, `caseId` | `notificationStatus` |
+| 9 | Set Not_Verified_Closed | REST (POST) | `/v1/claims/verification/close` | `notificationId`, `caseId`, `verifierRemarks` | `notificationStatus` |
+| 10 | Generate and send Closure Notification | REST (POST) | `/v1/claims/verification/closure-notice` | `notificationId`, `caseId` | — |
 
-**Gateway logic** (`Update Decision` sets `verifierDecision`):
+**Gateway logic** (the `Claims Verifier` task sets `verifierDecision`):
 
 | Branch | Condition | Path |
 |--------|-----------|------|
@@ -225,7 +223,7 @@ curl -X POST "$KIE/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/proces
   }'
 ```
 
-**2. Verifier works the human tasks** (`Review notification`, then `Update Decision`). Complete `Update Decision` with the branch selector:
+**2. Verifier works the `Claims Verifier` human task** (reviews the notification context, then records the decision). Complete it with the branch selector:
 ```bash
 curl -X PUT "$KIE/server/containers/{container}/tasks/{taskId}/states/completed" \
   -H 'Content-Type: application/json' \
@@ -238,7 +236,7 @@ curl -X PUT "$KIE/server/containers/{container}/tasks/{taskId}/states/completed"
 
 ## 9. Roles & statuses
 
-- **Role:** both user tasks are assigned to the **`Verifier`** group via the `GroupId` data input (mirrors how the main process assigns `ClaimsExaminer`). Work allocation (pull / auto-push) is an Alpha platform capability (WB-4), so `Assign Case to Verifier` is a thin platform-abstraction service call.
+- **Role:** the single `Claims Verifier` user task is assigned to the **`Verifier`** group via the `GroupId` data input (mirrors how the main process assigns `ClaimsExaminer`). The verifier reviews the notification context (annotation) and records the decision in that one task. Work allocation (pull / auto-push) is an Alpha platform capability (WB-4), so `Assign Case to Verifier` is a thin platform-abstraction service call.
 - **Notification status axis** (distinct from `CASE.CASE_STATUS`): `FOR_VERIFICATION` → `VERIFIED_PROMOTED` / `ON_HOLD` / `NOT_VERIFIED_CLOSED`. Full detail and the mapping into `CASE_STATUS` (`Claim Submitted` on promote; `Closed` on close) is in [claims_status.md](claims_status.md) §1.1.
 
 ---

@@ -31,9 +31,6 @@
   <bpmn2:itemDefinition id="___VER_ASSIGN_MethodInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_ASSIGN_UrlInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_ASSIGN_ResultOutputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___VER_REVIEW_TaskNameInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___VER_REVIEW_SkippableInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___VER_REVIEW_GroupIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_DECISION_TaskNameInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_DECISION_SkippableInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_DECISION_GroupIdInputXItem" structureRef=""/>
@@ -106,9 +103,7 @@
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_STATUS" sourceRef="_VER_UPDATE_STATUS" targetRef="_VER_ASSIGN">
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_ASSIGN" sourceRef="_VER_ASSIGN" targetRef="_VER_REVIEW">
-    </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_REVIEW" sourceRef="_VER_REVIEW" targetRef="_VER_DECISION">
+    <bpmn2:sequenceFlow id="_F_ASSIGN" sourceRef="_VER_ASSIGN" targetRef="_VER_DECISION">
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_DECISION" sourceRef="_VER_DECISION" targetRef="_VER_GW">
     </bpmn2:sequenceFlow>
@@ -330,54 +325,13 @@ if (r != null && !r.isEmpty()) { try {
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
-    <bpmn2:userTask id="_VER_REVIEW" name="Review notification in workbench">
+    <bpmn2:userTask id="_VER_DECISION" name="Claims Verifier">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[Review notification in workbench]]></drools:metaValue>
+          <drools:metaValue><![CDATA[Claims Verifier]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_ASSIGN</bpmn2:incoming>
-      <bpmn2:outgoing>_F_REVIEW</bpmn2:outgoing>
-      <bpmn2:ioSpecification id="io__VER_REVIEW">
-        <bpmn2:dataInput id="_VER_REVIEW_TaskNameInputX" drools:dtype="Object" itemSubjectRef="___VER_REVIEW_TaskNameInputXItem" name="TaskName"/>
-        <bpmn2:dataInput id="_VER_REVIEW_SkippableInputX" drools:dtype="Object" itemSubjectRef="___VER_REVIEW_SkippableInputXItem" name="Skippable"/>
-        <bpmn2:dataInput id="_VER_REVIEW_GroupIdInputX" drools:dtype="Object" itemSubjectRef="___VER_REVIEW_GroupIdInputXItem" name="GroupId"/>
-        <bpmn2:inputSet id="iset__VER_REVIEW">
-          <bpmn2:dataInputRefs>_VER_REVIEW_TaskNameInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_VER_REVIEW_SkippableInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_VER_REVIEW_GroupIdInputX</bpmn2:dataInputRefs>
-        </bpmn2:inputSet>
-        <bpmn2:outputSet id="oset__VER_REVIEW"/>
-      </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="dia__VER_REVIEW_tn">
-        <bpmn2:targetRef>_VER_REVIEW_TaskNameInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="asg__VER_REVIEW_tn">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_REVIEW_tnf"><![CDATA[Review notification in workbench]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_REVIEW_tnt">_VER_REVIEW_TaskNameInputX</bpmn2:to>
-        </bpmn2:assignment>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__VER_REVIEW_sk">
-        <bpmn2:targetRef>_VER_REVIEW_SkippableInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="asg__VER_REVIEW_sk">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_REVIEW_skf"><![CDATA[false]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_REVIEW_skt">_VER_REVIEW_SkippableInputX</bpmn2:to>
-        </bpmn2:assignment>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__VER_REVIEW_gi">
-        <bpmn2:targetRef>_VER_REVIEW_GroupIdInputX</bpmn2:targetRef>
-        <bpmn2:assignment id="asg__VER_REVIEW_gi">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_REVIEW_gif"><![CDATA[Verifier]]></bpmn2:from>
-          <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_REVIEW_git">_VER_REVIEW_GroupIdInputX</bpmn2:to>
-        </bpmn2:assignment>
-      </bpmn2:dataInputAssociation>
-    </bpmn2:userTask>
-    <bpmn2:userTask id="_VER_DECISION" name="Update Decision">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[Update Decision]]></drools:metaValue>
-        </drools:metaData>
-      </bpmn2:extensionElements>
-      <bpmn2:incoming>_F_REVIEW</bpmn2:incoming>
       <bpmn2:outgoing>_F_DECISION</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__VER_DECISION">
         <bpmn2:dataInput id="_VER_DECISION_TaskNameInputX" drools:dtype="Object" itemSubjectRef="___VER_DECISION_TaskNameInputXItem" name="TaskName"/>
@@ -398,7 +352,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__VER_DECISION_tn">
         <bpmn2:targetRef>_VER_DECISION_TaskNameInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_DECISION_tn">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_DECISION_tnf"><![CDATA[Update Decision]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_DECISION_tnf"><![CDATA[Claims Verifier]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_DECISION_tnt">_VER_DECISION_TaskNameInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -918,7 +872,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
     <bpmn2:textAnnotation id="_VER_NOTE" textFormat="text/plain">
       <bpmn2:text>notification, policy, event, insured, beneficiary, documents, system flags</bpmn2:text>
     </bpmn2:textAnnotation>
-    <bpmn2:association id="_VER_NOTE_ASSOC" sourceRef="_VER_NOTE" targetRef="_VER_REVIEW" associationDirection="None"/>
+    <bpmn2:association id="_VER_NOTE_ASSOC" sourceRef="_VER_DECISION" targetRef="_VER_NOTE" associationDirection="None"/>
   </bpmn2:process>
   <bpmndi:BPMNDiagram id="_VER_DIAGRAM">
     <bpmndi:BPMNPlane id="_VER_PLANE" bpmnElement="prudential-claims-submission.pru-claim-verification">
@@ -934,11 +888,8 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       <bpmndi:BPMNShape id="shape__VER_ASSIGN" bpmnElement="_VER_ASSIGN">
         <dc:Bounds height="80.0" width="130.0" x="530.0" y="220.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__VER_REVIEW" bpmnElement="_VER_REVIEW">
-        <dc:Bounds height="80.0" width="130.0" x="700.0" y="220.0"/>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_DECISION" bpmnElement="_VER_DECISION">
-        <dc:Bounds height="80.0" width="120.0" x="870.0" y="220.0"/>
+        <dc:Bounds height="80.0" width="140.0" x="720.0" y="220.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_GW" bpmnElement="_VER_GW">
         <dc:Bounds height="56.0" width="56.0" x="1030.0" y="232.0"/>
@@ -971,7 +922,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <dc:Bounds height="56.0" width="56.0" x="1520.0" y="372.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_NOTE" bpmnElement="_VER_NOTE">
-        <dc:Bounds height="80.0" width="160.0" x="690.0" y="90.0"/>
+        <dc:Bounds height="80.0" width="160.0" x="710.0" y="90.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="edge__F_START" bpmnElement="_F_START">
         <di:waypoint xsi:type="dc:Point" x="156.0" y="260.0"/>
@@ -987,14 +938,10 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_ASSIGN" bpmnElement="_F_ASSIGN">
         <di:waypoint xsi:type="dc:Point" x="660.0" y="260.0"/>
-        <di:waypoint xsi:type="dc:Point" x="700.0" y="260.0"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge__F_REVIEW" bpmnElement="_F_REVIEW">
-        <di:waypoint xsi:type="dc:Point" x="830.0" y="260.0"/>
-        <di:waypoint xsi:type="dc:Point" x="870.0" y="260.0"/>
+        <di:waypoint xsi:type="dc:Point" x="720.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_DECISION" bpmnElement="_F_DECISION">
-        <di:waypoint xsi:type="dc:Point" x="990.0" y="260.0"/>
+        <di:waypoint xsi:type="dc:Point" x="860.0" y="260.0"/>
         <di:waypoint xsi:type="dc:Point" x="1030.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_PROMOTE" bpmnElement="_F_PROMOTE">
@@ -1036,8 +983,8 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <di:waypoint xsi:type="dc:Point" x="1520.0" y="400.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__VER_NOTE_ASSOC" bpmnElement="_VER_NOTE_ASSOC">
-        <di:waypoint xsi:type="dc:Point" x="770.0" y="170.0"/>
-        <di:waypoint xsi:type="dc:Point" x="765.0" y="220.0"/>
+        <di:waypoint xsi:type="dc:Point" x="790.0" y="220.0"/>
+        <di:waypoint xsi:type="dc:Point" x="790.0" y="170.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
