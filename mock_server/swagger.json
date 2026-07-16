@@ -1317,43 +1317,6 @@
         }
       }
     },
-    "/api/v1/claims/verification/assign": {
-      "post": {
-        "summary": "V2. Assign Case to Verifier",
-        "description": "Verification process: assigns the case to the verifier queue (platform pull/auto-push).",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "notificationId": { "type": "string" },
-                  "caseId": { "type": "string" },
-                  "role": { "type": "string", "example": "Verifier" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean" },
-                    "assignedTo": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/claims/verification/promote": {
       "post": {
         "summary": "V3. Promote to Claim",

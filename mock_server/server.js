@@ -751,20 +751,11 @@ app.post('/api/v1/claims/nigo/death-verification', (req, res) => {
 // Consumed by pru-claim-verification.bpmn. The verifier reviews an inbound
 // notification in the workbench and decides Promote / Hold / Close.
 
-// V1. (removed) Case-status updates now reuse the shared POST /api/v1/claims/status
-// endpoint (used by NIGO too) — the verification flow sends status=FOR_VERIFICATION
-// (initial) and status=ON_HOLD (Retain Case).
-
-// V2. Assign Case to Verifier (platform pull/auto-push abstraction)
-app.post('/api/v1/claims/verification/assign', (req, res) => {
-  const { notificationId, role } = req.body;
-  res.json({
-    success: true,
-    notificationId: notificationId || null,
-    assignedTo: `${(role || 'Verifier').toLowerCase()}-queue`,
-    assignedAt: new Date().toISOString()
-  });
-});
+// V1. (no dedicated endpoint) The "Update Case Status to For Verification" step reuses
+// the shared POST /api/v1/claims/status (used by NIGO too) with status=FOR_VERIFICATION.
+// V2. (no dedicated endpoint) No explicit "Assign to Verifier" step — the Claims Verifier
+// human task is group-assigned and auto-lands on the worklist (Alpha pull/auto-push).
+// Hold: handled internally — the gateway's Hold branch loops straight back to the task.
 
 // V3. Promote: set Notification Status = Verified_Promoted, generate the Case ID.
 // NOTE: no claim id here — a case has multiple claims; the claim ids are generated
@@ -796,8 +787,8 @@ app.post('/api/v1/claims/verification/send-confirmation', (req, res) => {
   });
 });
 
-// V5. (removed) Hold — the "Retain Case" step now reuses V1 (case-status) with
-// status=ON_HOLD and loops back to the Claims Verifier task; no dedicated endpoint.
+// V5. (no endpoint) Hold is handled internally — the gateway's Hold branch loops
+// straight back to the Claims Verifier task; there is no Hold node or endpoint.
 
 // V6. Close: set Notification Status = Not_Verified_Closed
 app.post('/api/v1/claims/verification/close', (req, res) => {
