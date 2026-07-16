@@ -1462,43 +1462,6 @@
         }
       }
     },
-    "/api/v1/claims/verification/hold": {
-      "post": {
-        "summary": "V5. Hold (Retain in Verifier Queue)",
-        "description": "Verification process: retains the case in the verifier queue for later action.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "notificationId": { "type": "string" },
-                  "caseId": { "type": "string" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean" },
-                    "notificationStatus": { "type": "string", "example": "ON_HOLD" },
-                    "queue": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/claims/verification/close": {
       "post": {
         "summary": "V6. Close (Not Verified)",

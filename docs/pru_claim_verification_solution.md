@@ -105,8 +105,8 @@ graph TD
     SC --> SYS["System Claim Process<br/>(callActivity → pru-claim-processing)"]
     SYS --> EP([Promoted to System Claim Process])
 
-    GW -- "Hold" --> HO["Retain case in verifier queue<br/>(POST hold)"]
-    HO --> EH([Held - back to Verification queue])
+    GW -- "Hold" --> HO["Retain Case (update status)<br/>(PUT case-status, status=ON_HOLD)"]
+    HO -. "re-assign to same verifier" .-> DC
 
     GW -- "Close" --> CL["Set Not_Verified_Closed<br/>(POST close)"]
     CL --> CN["Generate and send Closure Notification<br/>(POST closure-notice)"]
@@ -131,7 +131,7 @@ REST nodes follow the repo convention exactly: a `callActivity → prudential-cl
 | 5 | Set Verified_Promoted + Generate IDs | REST (POST) | `/v1/claims/verification/promote` | `notificationId`, `claimType`, `policyNumber`, `applicablePolicies`, `verifierRemarks` | `notificationStatus`, `caseId`, `claimId`, `cid` |
 | 6 | Send confirmation + claim forms | REST (POST) | `/v1/claims/verification/send-confirmation` | `caseId`, `claimId`, `applicablePolicies` | — |
 | 7 | **System Claim Process** | **callActivity → `pru-claim-processing`** | — | 9 vars (see §6) | — |
-| 8 | Retain case in verifier queue | REST (POST) | `/v1/claims/verification/hold` | `notificationId`, `caseId` | `notificationStatus` |
+| 8 | Retain Case (update status) | REST (PUT) | `/v1/claims/verification/case-status` (status=`ON_HOLD`) | `notificationId`, `caseId` | `notificationStatus` — then **loops back to `Claims Verifier`** (re-assigned to the same user via `ActorId`=`verifierUser`) |
 | 9 | Set Not_Verified_Closed | REST (POST) | `/v1/claims/verification/close` | `notificationId`, `caseId`, `verifierRemarks` | `notificationStatus` |
 | 10 | Generate and send Closure Notification | REST (POST) | `/v1/claims/verification/closure-notice` | `notificationId`, `caseId` | — |
 
@@ -140,7 +140,7 @@ REST nodes follow the repo convention exactly: a `callActivity → prudential-cl
 | Branch | Condition | Path |
 |--------|-----------|------|
 | Promote to Claim | `"PROMOTE".equals(verifierDecision)` | promote → send-confirmation → System Claim Process → end |
-| Hold | `"HOLD".equals(verifierDecision)` | hold → end (case stays in verifier queue) |
+| Hold | `"HOLD".equals(verifierDecision)` | Retain Case (PUT case-status, `ON_HOLD`) → **loops back to `Claims Verifier`**, re-assigned to the same user |
 | Close | `"CLOSE".equals(verifierDecision)` | close → closure-notice → **terminate** end event |
 
 ---
@@ -167,19 +167,20 @@ Its data-input mapping **mirrors the `pru-claim-processing` start payload** docu
 
 ---
 
-## 7. Mock / integration APIs (7 new endpoints)
+## 7. Mock / integration APIs (6 endpoints)
 
 Implemented in [mock_server/server.js](../mock_server/server.js) and [swagger.json](../mock_server/swagger.json). Base path served by the mock is `/api/v1/...`; the BPMN calls `#{baseUrl}/v1/...` (so for local mock testing set `INTEGRATION_LAYER_URL=http://localhost:3010/api`).
 
 | ID | Method | Path | Response (key fields) |
 |----|--------|------|------------------------|
-| V1 | PUT | `/api/v1/claims/verification/case-status` | `caseStatus: "FOR_VERIFICATION"` |
+| V1 | PUT | `/api/v1/claims/verification/case-status` | `caseStatus` (`FOR_VERIFICATION`; also used by **Retain Case** with `ON_HOLD`) |
 | V2 | POST | `/api/v1/claims/verification/assign` | `assignedTo: "verifier-queue"` |
 | V3 | POST | `/api/v1/claims/verification/promote` | `notificationStatus: "VERIFIED_PROMOTED"`, `caseId`, `claimId`, `cid` (int) |
 | V4 | POST | `/api/v1/claims/verification/send-confirmation` | `claimFormsSent` |
-| V5 | POST | `/api/v1/claims/verification/hold` | `notificationStatus: "ON_HOLD"`, `queue: "verifier"` |
 | V6 | POST | `/api/v1/claims/verification/close` | `notificationStatus: "NOT_VERIFIED_CLOSED"` |
 | V7 | POST | `/api/v1/claims/verification/closure-notice` | `noticeSentAt` |
+
+> **Hold reuses V1.** The `Retain Case` step calls the **case-status** endpoint (V1) with `status=ON_HOLD` — there is no separate `/hold` endpoint. After it, control loops back to the `Claims Verifier` task.
 
 ### curl — request → response
 

@@ -800,17 +800,8 @@ app.post('/api/v1/claims/verification/send-confirmation', (req, res) => {
   });
 });
 
-// V5. Hold: retain case in verifier queue
-app.post('/api/v1/claims/verification/hold', (req, res) => {
-  const { notificationId } = req.body;
-  res.json({
-    success: true,
-    notificationId: notificationId || null,
-    notificationStatus: 'ON_HOLD',
-    queue: 'verifier',
-    heldAt: new Date().toISOString()
-  });
-});
+// V5. (removed) Hold — the "Retain Case" step now reuses V1 (case-status) with
+// status=ON_HOLD and loops back to the Claims Verifier task; no dedicated endpoint.
 
 // V6. Close: set Notification Status = Not_Verified_Closed
 app.post('/api/v1/claims/verification/close', (req, res) => {
