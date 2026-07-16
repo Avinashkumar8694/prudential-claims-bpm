@@ -1092,8 +1092,8 @@
     },
     "/api/v1/claims/status": {
       "post": {
-        "summary": "19. Set Claim Status to Pending Requirements",
-        "description": "Sets the status of the claim to pending requirements.",
+        "summary": "19. Update Claim/Case Status",
+        "description": "Generic case/claim status update. Echoes the requested `status`; defaults to PENDING_REQUIREMENTS when none is supplied. Used by NIGO (pending requirements) and the verification flow (FOR_VERIFICATION, ON_HOLD).",
         "responses": {
           "200": {
             "description": "Success",
@@ -1121,8 +1121,15 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "notificationId": {
+                    "type": "string"
+                  },
                   "caseId": {
                     "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "FOR_VERIFICATION"
                   }
                 }
               }
@@ -1310,43 +1317,6 @@
         }
       }
     },
-    "/api/v1/claims/verification/case-status": {
-      "put": {
-        "summary": "V1. Update Case Status to For Verification",
-        "description": "Verification process: sets the case status to FOR_VERIFICATION.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "notificationId": { "type": "string" },
-                  "caseId": { "type": "string" },
-                  "status": { "type": "string", "example": "FOR_VERIFICATION" }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "success": { "type": "boolean" },
-                    "caseStatus": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/claims/verification/assign": {
       "post": {
         "summary": "V2. Assign Case to Verifier",
@@ -1387,7 +1357,7 @@
     "/api/v1/claims/verification/promote": {
       "post": {
         "summary": "V3. Promote to Claim",
-        "description": "Verification process: sets Notification Status to Verified_Promoted and generates Case ID + Claim ID (formal claim submission for Track B).",
+        "description": "Verification process: sets Notification Status to Verified_Promoted and generates the Case ID (formal claim submission for Track B). No claim id — a case has multiple claims; claim ids are generated per-case downstream via /get-claim-ids.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1414,9 +1384,7 @@
                   "properties": {
                     "success": { "type": "boolean" },
                     "notificationStatus": { "type": "string", "example": "VERIFIED_PROMOTED" },
-                    "caseId": { "type": "string" },
-                    "claimId": { "type": "string" },
-                    "cid": { "type": "integer", "description": "Numeric claim id consumed by pru-claim-processing" }
+                    "caseId": { "type": "string" }
                   }
                 }
               }

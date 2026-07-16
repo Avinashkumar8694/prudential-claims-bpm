@@ -2,8 +2,6 @@
 <bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:bpsim="http://www.bpsim.org/schemas/1.0" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_pru_claim_verification_defs" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd http://www.bpsim.org/schemas/1.0 bpsim.xsd http://www.omg.org/spec/DD/20100524/DC DC.xsd http://www.omg.org/spec/DD/20100524/DI DI.xsd " exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
   <bpmn2:itemDefinition id="_notificationIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_claimIdItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_cidItem" structureRef="Integer"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_policyNumberItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_applicablePoliciesItem" structureRef="java.util.List"/>
@@ -52,7 +50,6 @@
   <bpmn2:itemDefinition id="___VER_SENDCONF_UrlInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_SENDCONF_ResultOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__VER_SYS_caseIdInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__VER_SYS_cidInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__VER_SYS_claimTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__VER_SYS_policyNumberInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__VER_SYS_applicablePoliciesInputXItem" structureRef=""/>
@@ -60,6 +57,7 @@
   <bpmn2:itemDefinition id="__VER_SYS_uploadedDocumentsInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__VER_SYS_policyDataInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__VER_SYS_bankAccountDetailsInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__VER_SYS_caseIdOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_HOLD_ContentDataInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_HOLD_ContentTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_HOLD_HandleResponseErrorsInputXItem" structureRef=""/>
@@ -83,8 +81,6 @@
   <bpmn2:process id="prudential-claims-submission.pru-claim-verification" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-verification" isExecutable="true" processType="Public">
     <bpmn2:property id="notificationId" itemSubjectRef="_notificationIdItem" name="notificationId"/>
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
-    <bpmn2:property id="claimId" itemSubjectRef="_claimIdItem" name="claimId"/>
-    <bpmn2:property id="cid" itemSubjectRef="_cidItem" name="cid"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
     <bpmn2:property id="policyNumber" itemSubjectRef="_policyNumberItem" name="policyNumber"/>
     <bpmn2:property id="applicablePolicies" itemSubjectRef="_applicablePoliciesItem" name="applicablePolicies"/>
@@ -190,7 +186,7 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
           <drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
 if (r != null && !r.isEmpty()) { try {
   com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(r);
-  if (root.has("caseStatus")) kcontext.setVariable("notificationStatus", root.get("caseStatus").asText());
+  if (root.has("status")) kcontext.setVariable("notificationStatus", root.get("status").asText());
 } catch(Exception e) {} }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -235,14 +231,14 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__VER_UPDATE_STATUS_m">
         <bpmn2:targetRef>_VER_UPDATE_STATUS_MethodInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_UPDATE_STATUS_m">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_mf"><![CDATA[PUT]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_mf"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_mt">_VER_UPDATE_STATUS_MethodInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__VER_UPDATE_STATUS_u">
         <bpmn2:targetRef>_VER_UPDATE_STATUS_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_UPDATE_STATUS_u">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_uf"><![CDATA[#{baseUrl}/v1/claims/verification/case-status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_uf"><![CDATA[#{baseUrl}/v1/claims/status]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_ut">_VER_UPDATE_STATUS_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -394,10 +390,10 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:outgoing>_F_HOLD</bpmn2:outgoing>
       <bpmn2:outgoing>_F_CLOSE</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
-    <bpmn2:callActivity id="_VER_PROMOTE" drools:independent="true" drools:waitForCompletion="true" name="Set Notification Status to Verified_Promoted, Generate Case ID + Claim ID" calledElement="prudential-claims-submission.pru-rest-executor">
+    <bpmn2:callActivity id="_VER_PROMOTE" drools:independent="true" drools:waitForCompletion="true" name="Set Notification Status to Verified_Promoted, Generate Case ID" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[Set Notification Status to Verified_Promoted, Generate Case ID + Claim ID]]></drools:metaValue>
+          <drools:metaValue><![CDATA[Set Notification Status to Verified_Promoted, Generate Case ID]]></drools:metaValue>
         </drools:metaData>
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[System.out.println("[BPM][ENTRY:Promote] process=pru-claim-verification | piid=" + kcontext.getProcessInstance().getId() + " | notificationId=" + kcontext.getVariable("notificationId") + " | Verified_Promoted + generate IDs");
@@ -415,9 +411,7 @@ if (r != null && !r.isEmpty()) { try {
   com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(r);
   if (root.has("notificationStatus")) kcontext.setVariable("notificationStatus", root.get("notificationStatus").asText());
   if (root.has("caseId")) kcontext.setVariable("caseId", root.get("caseId").asText());
-  if (root.has("claimId")) kcontext.setVariable("claimId", root.get("claimId").asText());
-  if (root.has("cid")) kcontext.setVariable("cid", Integer.valueOf(root.get("cid").asInt()));
-  System.out.println("[BPM][EXIT:Promote] pru-claim-verification | caseId=" + kcontext.getVariable("caseId") + " | claimId=" + kcontext.getVariable("claimId") + " | cid=" + kcontext.getVariable("cid") + " | notificationStatus=" + kcontext.getVariable("notificationStatus"));
+  System.out.println("[BPM][EXIT:Promote] pru-claim-verification | caseId=" + kcontext.getVariable("caseId") + " | notificationStatus=" + kcontext.getVariable("notificationStatus") + " (claim ids are generated per-case downstream in Get Claim IDs)");
 } catch(Exception e) { System.out.println("[BPM][EXIT:Promote][ERROR] " + e.getMessage()); } }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -487,7 +481,6 @@ if (r != null && !r.isEmpty()) { try {
           <drools:script><![CDATA[System.out.println("[BPM][ENTRY:SendConfirmation] process=pru-claim-verification | piid=" + kcontext.getProcessInstance().getId() + " | notificationId=" + kcontext.getVariable("notificationId") + " | email + claim form to known benes");
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
-json.putPOJO("claimId", kcontext.getVariable("claimId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
         </drools:onEntry-script>
@@ -563,7 +556,6 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       <bpmn2:outgoing>_F_P3</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__VER_SYSCLAIM">
         <bpmn2:dataInput id="_VER_SYS_caseIdInputX" drools:dtype="" itemSubjectRef="__VER_SYS_caseIdInputXItem" name="caseId"/>
-        <bpmn2:dataInput id="_VER_SYS_cidInputX" drools:dtype="" itemSubjectRef="__VER_SYS_cidInputXItem" name="cid"/>
         <bpmn2:dataInput id="_VER_SYS_claimTypeInputX" drools:dtype="" itemSubjectRef="__VER_SYS_claimTypeInputXItem" name="claimType"/>
         <bpmn2:dataInput id="_VER_SYS_policyNumberInputX" drools:dtype="" itemSubjectRef="__VER_SYS_policyNumberInputXItem" name="policyNumber"/>
         <bpmn2:dataInput id="_VER_SYS_applicablePoliciesInputX" drools:dtype="" itemSubjectRef="__VER_SYS_applicablePoliciesInputXItem" name="applicablePolicies"/>
@@ -571,9 +563,9 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <bpmn2:dataInput id="_VER_SYS_uploadedDocumentsInputX" drools:dtype="" itemSubjectRef="__VER_SYS_uploadedDocumentsInputXItem" name="uploadedDocuments"/>
         <bpmn2:dataInput id="_VER_SYS_policyDataInputX" drools:dtype="" itemSubjectRef="__VER_SYS_policyDataInputXItem" name="policyData"/>
         <bpmn2:dataInput id="_VER_SYS_bankAccountDetailsInputX" drools:dtype="" itemSubjectRef="__VER_SYS_bankAccountDetailsInputXItem" name="bankAccountDetails"/>
+        <bpmn2:dataOutput id="_VER_SYS_caseIdOutputX" drools:dtype="" itemSubjectRef="__VER_SYS_caseIdOutputXItem" name="caseId"/>
         <bpmn2:inputSet id="iset__VER_SYSCLAIM">
           <bpmn2:dataInputRefs>_VER_SYS_caseIdInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_VER_SYS_cidInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_VER_SYS_claimTypeInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_VER_SYS_policyNumberInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_VER_SYS_applicablePoliciesInputX</bpmn2:dataInputRefs>
@@ -582,15 +574,13 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
           <bpmn2:dataInputRefs>_VER_SYS_policyDataInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_VER_SYS_bankAccountDetailsInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet id="oset__VER_SYSCLAIM"/>
+        <bpmn2:outputSet id="oset__VER_SYSCLAIM">
+          <bpmn2:dataOutputRefs>_VER_SYS_caseIdOutputX</bpmn2:dataOutputRefs>
+        </bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation id="dia_VER_SYS_caseId">
         <bpmn2:sourceRef>caseId</bpmn2:sourceRef>
         <bpmn2:targetRef>_VER_SYS_caseIdInputX</bpmn2:targetRef>
-      </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia_VER_SYS_cid">
-        <bpmn2:sourceRef>cid</bpmn2:sourceRef>
-        <bpmn2:targetRef>_VER_SYS_cidInputX</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia_VER_SYS_claimType">
         <bpmn2:sourceRef>claimType</bpmn2:sourceRef>
@@ -620,6 +610,10 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <bpmn2:sourceRef>bankAccountDetails</bpmn2:sourceRef>
         <bpmn2:targetRef>_VER_SYS_bankAccountDetailsInputX</bpmn2:targetRef>
       </bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation id="doa_VER_SYS_caseId">
+        <bpmn2:sourceRef>_VER_SYS_caseIdOutputX</bpmn2:sourceRef>
+        <bpmn2:targetRef>caseId</bpmn2:targetRef>
+      </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:endEvent id="_VER_END_PROMOTE" name="Promoted to System Claim Process">
       <bpmn2:extensionElements>
@@ -646,7 +640,7 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
           <drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
 if (r != null && !r.isEmpty()) { try {
   com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(r);
-  if (root.has("caseStatus")) kcontext.setVariable("notificationStatus", root.get("caseStatus").asText());
+  if (root.has("status")) kcontext.setVariable("notificationStatus", root.get("status").asText());
 } catch(Exception e) {} }]]></drools:script>
         </drools:onExit-script>
       </bpmn2:extensionElements>
@@ -691,14 +685,14 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__VER_HOLD_m">
         <bpmn2:targetRef>_VER_HOLD_MethodInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_HOLD_m">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_HOLD_mf"><![CDATA[PUT]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_HOLD_mf"><![CDATA[POST]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_HOLD_mt">_VER_HOLD_MethodInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__VER_HOLD_u">
         <bpmn2:targetRef>_VER_HOLD_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_HOLD_u">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_HOLD_uf"><![CDATA[#{baseUrl}/v1/claims/verification/case-status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_HOLD_uf"><![CDATA[#{baseUrl}/v1/claims/status]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_HOLD_ut">_VER_HOLD_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>

@@ -693,9 +693,13 @@ app.post('/api/v1/claims/nigo/send', (req, res) => {
 
 // 19. Set Claim Status to Pending Requirements
 app.post('/api/v1/claims/status', (req, res) => {
+  // Generic case/claim status update. Echoes the requested status (used by the
+  // verification flow for FOR_VERIFICATION / ON_HOLD); defaults to PENDING_REQUIREMENTS
+  // for the NIGO pending-requirements caller that sends no explicit status.
+  const { status } = req.body;
   res.json({
     success: true,
-    status: "PENDING_REQUIREMENTS"
+    status: status || "PENDING_REQUIREMENTS"
   });
 });
 
@@ -747,17 +751,9 @@ app.post('/api/v1/claims/nigo/death-verification', (req, res) => {
 // Consumed by pru-claim-verification.bpmn. The verifier reviews an inbound
 // notification in the workbench and decides Promote / Hold / Close.
 
-// V1. Update Case Status to "For Verification"
-app.put('/api/v1/claims/verification/case-status', (req, res) => {
-  const { notificationId, caseId, status } = req.body;
-  res.json({
-    success: true,
-    notificationId: notificationId || null,
-    caseId: caseId || null,
-    caseStatus: status || 'FOR_VERIFICATION',
-    updatedAt: new Date().toISOString()
-  });
-});
+// V1. (removed) Case-status updates now reuse the shared POST /api/v1/claims/status
+// endpoint (used by NIGO too) — the verification flow sends status=FOR_VERIFICATION
+// (initial) and status=ON_HOLD (Retain Case).
 
 // V2. Assign Case to Verifier (platform pull/auto-push abstraction)
 app.post('/api/v1/claims/verification/assign', (req, res) => {
@@ -770,7 +766,9 @@ app.post('/api/v1/claims/verification/assign', (req, res) => {
   });
 });
 
-// V3. Promote: set Notification Status = Verified_Promoted, generate Case ID + Claim ID
+// V3. Promote: set Notification Status = Verified_Promoted, generate the Case ID.
+// NOTE: no claim id here — a case has multiple claims; the claim ids are generated
+// per-case downstream by the main process (POST /api/v1/claims/get-claim-ids).
 app.post('/api/v1/claims/verification/promote', (req, res) => {
   const { notificationId, claimType } = req.body;
   const now = new Date();
@@ -781,8 +779,6 @@ app.post('/api/v1/claims/verification/promote', (req, res) => {
     notificationId: notificationId || null,
     notificationStatus: 'VERIFIED_PROMOTED',
     caseId: `CASE-${ymd}-${seq}`,
-    claimId: `CLM-${now.getFullYear()}-${String(seq).padStart(5, '0')}`,
-    cid: seq,                       // numeric claim id consumed by pru-claim-processing (Integer)
     claimType: claimType || 'DEATH',
     caseStatus: 'CLAIM_SUBMITTED'
   });
