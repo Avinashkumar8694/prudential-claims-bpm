@@ -97,7 +97,8 @@ graph TD
     START([Verification Process]) --> BOOT[Script_Bootstrap]
     BOOT --> ST["Update Case Status to For Verification<br/>(PUT case-status)"]
     ST --> AS["Assign Case to Verifier<br/>(POST assign)"]
-    AS --> DC["Claims Verifier<br/>(User Task · Verifier → verifierDecision)"]
+    AS --> MG{merge}
+    MG --> DC["Claims Verifier<br/>(User Task · Verifier → verifierDecision)"]
     DC --> GW{Verifier Decision?}
 
     GW -- "Promote to Claim" --> PR["Set Verified_Promoted,<br/>Generate Case ID<br/>(POST promote)"]
@@ -105,8 +106,8 @@ graph TD
     SC --> SYS["System Claim Process<br/>(callActivity → pru-claim-processing)"]
     SYS --> EP([Promoted to System Claim Process])
 
-    GW -- "Hold" --> HO["Retain Case (update status)<br/>(PUT case-status, status=ON_HOLD)"]
-    HO -. "re-assign to same verifier" .-> DC
+    GW -- "Hold" --> HO["Retain Case (update status)<br/>(POST /claims/status, status=ON_HOLD)"]
+    HO -. "re-assign to same verifier" .-> MG
 
     GW -- "Close" --> CL["Set Not_Verified_Closed<br/>(POST close)"]
     CL --> CN["Generate and send Closure Notification<br/>(POST closure-notice)"]
@@ -114,6 +115,8 @@ graph TD
 ```
 
 The grey data object in the source diagram (*notification, policy, event, insured, beneficiary, documents, system flags*) is modelled as a **text annotation** attached to the **Claims Verifier** task — it names the read-only context the verifier reviews before recording the decision. (There is no separate "Review notification" step; the verifier reviews and decides in the single Claims Verifier task.)
+
+> **Merge gateway before Claims Verifier.** A user task may have only **one** incoming connection, but two flows reach the verifier — the normal `Assign` flow and the `Retain Case` (Hold) loop-back. A converging exclusive gateway (`merge`) joins them and feeds the single incoming flow into the Claims Verifier task.
 
 ---
 

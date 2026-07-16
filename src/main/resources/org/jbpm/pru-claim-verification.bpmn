@@ -103,7 +103,9 @@
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_STATUS" sourceRef="_VER_UPDATE_STATUS" targetRef="_VER_ASSIGN">
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_ASSIGN" sourceRef="_VER_ASSIGN" targetRef="_VER_DECISION">
+    <bpmn2:sequenceFlow id="_F_ASSIGN" sourceRef="_VER_ASSIGN" targetRef="_VER_MERGE">
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="_F_MERGE" sourceRef="_VER_MERGE" targetRef="_VER_DECISION">
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_DECISION" sourceRef="_VER_DECISION" targetRef="_VER_GW">
     </bpmn2:sequenceFlow>
@@ -129,7 +131,7 @@
       </bpmn2:extensionElements>
       <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_F_HOLD_c" language="http://www.java.com/java"><![CDATA[return "HOLD".equals(verifierDecision);]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_H1" sourceRef="_VER_HOLD" targetRef="_VER_DECISION">
+    <bpmn2:sequenceFlow id="_F_H1" sourceRef="_VER_HOLD" targetRef="_VER_MERGE">
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_CLOSE" sourceRef="_VER_GW" targetRef="_VER_CLOSE" name="Close">
       <bpmn2:extensionElements>
@@ -325,13 +327,18 @@ if (r != null && !r.isEmpty()) { try {
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
+    <bpmn2:exclusiveGateway id="_VER_MERGE" gatewayDirection="Converging">
+      <bpmn2:incoming>_F_ASSIGN</bpmn2:incoming>
+      <bpmn2:incoming>_F_H1</bpmn2:incoming>
+      <bpmn2:outgoing>_F_MERGE</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
     <bpmn2:userTask id="_VER_DECISION" name="Claims Verifier">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
           <drools:metaValue><![CDATA[Claims Verifier]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
-      <bpmn2:incoming>_F_ASSIGN</bpmn2:incoming>
+      <bpmn2:incoming>_F_MERGE</bpmn2:incoming>
       <bpmn2:outgoing>_F_DECISION</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__VER_DECISION">
         <bpmn2:dataInput id="_VER_DECISION_TaskNameInputX" drools:dtype="Object" itemSubjectRef="___VER_DECISION_TaskNameInputXItem" name="TaskName"/>
@@ -356,7 +363,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__VER_DECISION_tn">
         <bpmn2:targetRef>_VER_DECISION_TaskNameInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_DECISION_tn">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_DECISION_tnf"><![CDATA[Claims Verifier]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_DECISION_tnf"><![CDATA[ClaimsVerifier]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_DECISION_tnt">_VER_DECISION_TaskNameInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -881,8 +888,11 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       <bpmndi:BPMNShape id="shape__VER_ASSIGN" bpmnElement="_VER_ASSIGN">
         <dc:Bounds height="80.0" width="130.0" x="530.0" y="220.0"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__VER_MERGE" bpmnElement="_VER_MERGE">
+        <dc:Bounds height="56.0" width="56.0" x="690.0" y="232.0"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_DECISION" bpmnElement="_VER_DECISION">
-        <dc:Bounds height="80.0" width="140.0" x="720.0" y="220.0"/>
+        <dc:Bounds height="80.0" width="140.0" x="780.0" y="220.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_GW" bpmnElement="_VER_GW">
         <dc:Bounds height="56.0" width="56.0" x="1030.0" y="232.0"/>
@@ -912,7 +922,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <dc:Bounds height="56.0" width="56.0" x="1520.0" y="372.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_NOTE" bpmnElement="_VER_NOTE">
-        <dc:Bounds height="80.0" width="160.0" x="710.0" y="90.0"/>
+        <dc:Bounds height="80.0" width="160.0" x="770.0" y="90.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="edge__F_START" bpmnElement="_F_START">
         <di:waypoint xsi:type="dc:Point" x="156.0" y="260.0"/>
@@ -928,10 +938,14 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_ASSIGN" bpmnElement="_F_ASSIGN">
         <di:waypoint xsi:type="dc:Point" x="660.0" y="260.0"/>
-        <di:waypoint xsi:type="dc:Point" x="720.0" y="260.0"/>
+        <di:waypoint xsi:type="dc:Point" x="690.0" y="260.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge__F_MERGE" bpmnElement="_F_MERGE">
+        <di:waypoint xsi:type="dc:Point" x="746.0" y="260.0"/>
+        <di:waypoint xsi:type="dc:Point" x="780.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_DECISION" bpmnElement="_F_DECISION">
-        <di:waypoint xsi:type="dc:Point" x="860.0" y="260.0"/>
+        <di:waypoint xsi:type="dc:Point" x="920.0" y="260.0"/>
         <di:waypoint xsi:type="dc:Point" x="1030.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_PROMOTE" bpmnElement="_F_PROMOTE">
@@ -958,8 +972,8 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_H1" bpmnElement="_F_H1">
         <di:waypoint xsi:type="dc:Point" x="940.0" y="500.0"/>
-        <di:waypoint xsi:type="dc:Point" x="790.0" y="500.0"/>
-        <di:waypoint xsi:type="dc:Point" x="790.0" y="300.0"/>
+        <di:waypoint xsi:type="dc:Point" x="718.0" y="500.0"/>
+        <di:waypoint xsi:type="dc:Point" x="718.0" y="288.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_CLOSE" bpmnElement="_F_CLOSE">
         <di:waypoint xsi:type="dc:Point" x="1058.0" y="288.0"/>
@@ -975,8 +989,8 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <di:waypoint xsi:type="dc:Point" x="1520.0" y="400.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__VER_NOTE_ASSOC" bpmnElement="_VER_NOTE_ASSOC">
-        <di:waypoint xsi:type="dc:Point" x="790.0" y="220.0"/>
-        <di:waypoint xsi:type="dc:Point" x="790.0" y="170.0"/>
+        <di:waypoint xsi:type="dc:Point" x="850.0" y="220.0"/>
+        <di:waypoint xsi:type="dc:Point" x="850.0" y="170.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
