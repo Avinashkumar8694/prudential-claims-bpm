@@ -16,6 +16,7 @@
   <bpmn2:itemDefinition id="__A_MI_claimTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__A_MI_OUT_COLLECTIONOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__A_MI_claimResultOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__A_MI_caseIdOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_ContentDataInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_ContentTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_HandleResponseErrorsInputXItem" structureRef=""/>
@@ -118,6 +119,7 @@ if (r != null && !r.isEmpty()) { try {
         <bpmn2:dataInput id="_A_MI_claimTypeInputX" drools:dtype="" itemSubjectRef="__A_MI_claimTypeInputXItem" name="claimType"/>
         <bpmn2:dataOutput id="_A_MI_OUT_COLLECTIONOutputX" drools:dtype="" itemSubjectRef="__A_MI_OUT_COLLECTIONOutputXItem" name="OUT_COLLECTION"/>
         <bpmn2:dataOutput id="_A_MI_claimResultOutputX" drools:dtype="" itemSubjectRef="__A_MI_claimResultOutputXItem" name="claimResult"/>
+        <bpmn2:dataOutput id="_A_MI_caseIdOutputX" drools:dtype="" itemSubjectRef="__A_MI_caseIdOutputXItem" name="caseId"/>
         <bpmn2:inputSet id="iset_A_MI">
           <bpmn2:dataInputRefs>_A_MI_IN_COLLECTIONInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_A_MI_claimIdInputX</bpmn2:dataInputRefs>
@@ -127,6 +129,7 @@ if (r != null && !r.isEmpty()) { try {
         <bpmn2:outputSet id="oset_A_MI">
           <bpmn2:dataOutputRefs>_A_MI_OUT_COLLECTIONOutputX</bpmn2:dataOutputRefs>
           <bpmn2:dataOutputRefs>_A_MI_claimResultOutputX</bpmn2:dataOutputRefs>
+          <bpmn2:dataOutputRefs>_A_MI_caseIdOutputX</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation id="dia_A_incol"><bpmn2:sourceRef>claimIds</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_IN_COLLECTIONInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
@@ -135,6 +138,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia_A_claimType"><bpmn2:sourceRef>claimType</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_claimTypeInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa_A_outcol"><bpmn2:sourceRef>_A_MI_OUT_COLLECTIONOutputX</bpmn2:sourceRef><bpmn2:targetRef>claimResults</bpmn2:targetRef></bpmn2:dataOutputAssociation>
       <bpmn2:dataOutputAssociation id="doa_A_claimResult"><bpmn2:sourceRef>_A_MI_claimResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>_A_claimResult</bpmn2:targetRef></bpmn2:dataOutputAssociation>
+      <bpmn2:dataOutputAssociation id="doa_A_caseId"><bpmn2:sourceRef>_A_MI_caseIdOutputX</bpmn2:sourceRef><bpmn2:targetRef>caseId</bpmn2:targetRef></bpmn2:dataOutputAssociation>
       <bpmn2:multiInstanceLoopCharacteristics isSequential="false">
         <bpmn2:loopDataInputRef>_A_MI_IN_COLLECTIONInputX</bpmn2:loopDataInputRef>
         <bpmn2:loopDataOutputRef>_A_MI_OUT_COLLECTIONOutputX</bpmn2:loopDataOutputRef>

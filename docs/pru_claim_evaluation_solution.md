@@ -81,10 +81,11 @@ New main-flow endpoint: `POST /v1/claims/check-contestability` (others reuse exi
 - **Inputs (generic):** `caseId` + `claimType` only. Keyed by caseId — the evaluate API looks up per-claim data by `claimId` behind the scenes. `claimType` selects the death vs TI examination battery.
 - **Body:**
   1. `Script_Bootstrap` — resolve `baseUrl`.
-  2. **Get Claim IDs** (REST → `POST /v1/claims/get-claim-ids`) — onExit parses `claimIds[]` (**each id = one claim**).
+  2. **Get Claim IDs** (REST → `POST #{baseUrl}/claims/get-claim-ids`) — onExit parses `claimIds[]` (**each id = one claim**).
   3. **Evaluate Claim (per claim)** — one **multi-instance callActivity** (`isSequential="false"`, parallel) → sub-process B:
      - `loopDataInputRef` = collection dataInput fed from `claimIds`; `inputDataItem` = `claimId` (one element per instance).
      - shared vars mapped to every instance; `loopDataOutputRef` → `claimResults`, `outputDataItem` = `claimResult` ← B's output.
+     - **Stunner constraint:** a reusable-subprocess node must expose a *regular* (non-MI) data-input **and** data-output assignment, otherwise the modeler flags *"Reusable Subprocess with no Assignments Data Input/Data Output"*. The MI collection (`IN_COLLECTION`/`OUT_COLLECTION`) and loop item/result (`claimId`/`claimResult`) are treated as MI wiring and don't count. The node therefore carries `caseId`/`claimType` as scalar inputs **and** a harmless `caseId` scalar output round-trip (constant across instances) to satisfy the check.
 - **Output:** `claimResults` (List of per-claim result objects) returned to Main.
 
 ```
