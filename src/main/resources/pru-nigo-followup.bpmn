@@ -439,7 +439,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_KpPV-VtXEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P2_N6_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_KpPV-ltXEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPV-1tXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/nigo/rerun-idp]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPV-1tXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/nigo/rerun-idp]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_KpPV_FtXEfGoNpO8onZRMw">_P2_N6_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -594,7 +594,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_KpPWDltXEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P2_N7_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_KpPWD1tXEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWEFtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/nigo/update-status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWEFtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/nigo/update-status]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_KpPWEVtXEfGoNpO8onZRMw">_P2_N7_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -703,7 +703,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_KpPWI1tXEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P2_N1_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_KpPWJFtXEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWJVtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/nigo/send]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWJVtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/nigo/send]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_KpPWJltXEfGoNpO8onZRMw">_P2_N1_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -918,7 +918,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_KpPWWltXEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P2_N12_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_KpPWW1tXEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWXFtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/nigo/death-verification]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWXFtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/nigo/death-verification]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_KpPWXVtXEfGoNpO8onZRMw">_P2_N12_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1026,7 +1026,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_KpPWb1tXEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P2_N11_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_KpPWcFtXEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWcVtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/nigo/auto-followup]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWcVtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/nigo/auto-followup]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_KpPWcltXEfGoNpO8onZRMw">_P2_N11_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1196,7 +1196,7 @@ System.out.println("[BPM][EXIT] process=pru-nigo-followup | piid=" + kcontext.ge
       <bpmn2:dataInputAssociation id="_KpPWhltXEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P2_N1B_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_KpPWh1tXEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWiFtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_KpPWiFtXEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/status]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_KpPWiVtXEfGoNpO8onZRMw">_P2_N1B_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>

@@ -25,7 +25,7 @@
 
 ## 2. Death system lane — node → rule → API (US 10.01–10.39)
 
-Legend: **API** = the mock/integration endpoint the node calls (`#{baseUrl}/v1/…`); **script** = in-process logic (no REST). *STP?* = does a `true` result block STP.
+Legend: **API** = the mock/integration endpoint the node calls (`#{baseUrl}/…` — no `/v1` in the node URL; the version lives in `baseUrl`); **script** = in-process logic (no REST). Every REST payload carries `piid`. *STP?* = does a `true` result block STP.
 
 | Node (BPMN) | US | Rule | API / impl | STP? |
 |-------------|----|------|-----------|------|
@@ -44,7 +44,7 @@ Legend: **API** = the mock/integration endpoint the node calls (`#{baseUrl}/v1/�
 | Update followup to 30 days | 10.36 | Absolute 30-day timer from first Pending entry (not reset by partial uploads). | user task + **boundary timer `P30D`** | n/a |
 | Run AI classification, extraction, validation | 10.37 | Per-document classify/extract/validate; sets `VALIDATION_STATUS` (VALID / NEEDS_REVIEW / INVALID) + confidence/completeness (AD-21). | `POST /v1/claims/nigo/rerun-idp` | n/a |
 | Update Case data | 10.38 | Update doc statuses/extracted fields/bene-form completion; **loop back to Run Per Claim Evaluation** (MRX not re-run). | `POST /v1/claims/nigo/update-status` → loop | n/a |
-| Assign case to examiner | 10.39 | Single shared handoff for the Refer-to-Examiner branch **and** the Day-30 escalation; system lane ends. | `POST /v1/claims/assign-examiner` | n/a |
+| Assign case to examiner | 10.39 | Single shared handoff for the Refer-to-Examiner branch **and** the Day-30 escalation; system lane ends. | **Human task** (user task, `ClaimsExaminer` group) — lands on the examiner worklist; no REST call | n/a |
 
 **Claimant self-service upload (US 12.01, Feature 12):** the secure upload landing reached from `Send Requirement eMail` — checklist of outstanding required docs + a single bin; each file classified in real time (10.37/10.38); only **required** items resolve the pending condition; partial submit allowed with the 30-day clock still running; `UPLOAD_SOURCE = claimant self-service`.
 
@@ -63,7 +63,7 @@ Legend: **API** = the mock/integration endpoint the node calls (`#{baseUrl}/v1/�
 | Consolidate TI Flags | 11.07 | Roll up per-claim flags to a case view; **no STP roll-up, no Outcome gateway** — always to reviewer. |
 | Assign TI Case to Reviewer | 11.08 | Every TI case → reviewer (sole TI outcome); shared handoff with US 10.39. |
 
-> **BPMN note (implemented).** The TI branch is now built in `pru-claim-processing`: the **Claim Type** gate routes TI to **Run TI Per Claim Evaluation** (callActivity → `pru-claim-run-evaluation` with `claimType=TI`, reusing subprocess A/B) → **Consolidate TI Flags for the Case** (script, sets `outcome=REVIEWER`) → **Assign TI Case to Reviewer** (`POST /v1/claims/assign-examiner`, `reason=TI_MEDICAL_REVIEW` — shared handoff per US 11.08/10.39) → **End (Claim Reviewer)**. There is **no** STP/Outcome gateway on the TI branch (TI is always non-STP, AD-32). The `evaluate-claim` endpoint returns the TI flag set (Contestable, Life_Expectancy_Not_Confirmed, Owner_Incapacity_Indicated, Payout_Account_Changed + shared) with `claimStpEligible=false` and `reviewerRequired=true` when `claimType=TI`. Mandatory medical-expert review itself is reviewer-side (Examiner/Workbench BRDs).
+> **BPMN note (implemented).** The TI branch is now built in `pru-claim-processing`: the **Claim Type** gate routes TI to **Run TI Per Claim Evaluation** (callActivity → `pru-claim-run-evaluation` with `claimType=TI`, reusing subprocess A/B) → **Consolidate TI Flags for the Case** (script, sets `outcome=REVIEWER`) → **Assign TI Case to Reviewer** (**human task**, `Reviewer` group — shared reviewer/examiner handoff per US 11.08/10.39) → **End (Claim Reviewer)**. There is **no** STP/Outcome gateway on the TI branch (TI is always non-STP, AD-32). The `evaluate-claim` endpoint returns the TI flag set (Contestable, Life_Expectancy_Not_Confirmed, Owner_Incapacity_Indicated, Payout_Account_Changed + shared) with `claimStpEligible=false` and `reviewerRequired=true` when `claimType=TI`. Mandatory medical-expert review itself is reviewer-side (Examiner/Workbench BRDs).
 
 ---
 

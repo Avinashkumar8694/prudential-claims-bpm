@@ -37,7 +37,7 @@ The main process was **fully replaced** with the outcome-based flow below (the o
 
 ```
 Start → Script_Bootstrap → «Claim Type?»
-   ├─ TI  → Run TI Per Claim Evaluation (→ A, claimType=TI) → Consolidate TI Flags → Assign TI Case to Reviewer → End (Claim Reviewer)
+   ├─ TI  → Run TI Per Claim Evaluation (→ A, claimType=TI) → Consolidate TI Flags → Assign TI Case to Reviewer [human task · Reviewer group] → End (Claim Reviewer)
    └─ Death →
         Set Pol Status to Pend Death (PUT /v1/policy/status)   [note: stops billing, reversible]
         → Check contestability (POST /v1/claims/check-contestability — ANY policy = contestable)
@@ -51,11 +51,12 @@ Start → Script_Bootstrap → «Claim Type?»
              ├─ Pending Requirement → Send Requirement eMail (POST /nigo/send)
              │                       → Update Case+claim status Pending Req (POST /status)
              │                       → Update followup to 30 days (user task, wait)
-             │                            ├─[Documents uploaded]→ Run AI classification (POST /nigo/rerun-idp)
-             │                            │                       → Update Case data (POST /nigo/update-status)
+             │                            ├─[Documents uploaded]→ (parallel) Run AI classification (POST /claims/nigo/rerun-idp, payload: piid + signalName)
+             │                            │                                  ‖ Signal catch "AIClassificationComplete"  → join
+             │                            │                       → Update Case data (POST /claims/nigo/update-status)
              │                            │                       → (loop back to Run Per Claim Evaluation)
-             │                            └─[Day 30, boundary timer P30D]→ Assign case to examiner (POST /assign-examiner) → End (Claim Examiner)
-             └─ Refer to Examiner  → Assign case to examiner (POST /assign-examiner) → End (Claim Examiner)
+             │                            └─[Day 30, boundary timer P30D]→ Assign case to examiner [human task · ClaimsExaminer group] → End (Claim Examiner)
+             └─ Refer to Examiner  → Assign case to examiner [human task · ClaimsExaminer group] → End (Claim Examiner)
 ```
 
 Key points:
@@ -64,11 +65,12 @@ Key points:
 - **Run Per Claim Evaluation** is the self-contained sub-process A (it fetches the claim ids and fans out — see §3). The main process passes only case data and gets back `claimResults`.
 - **Aggregate** computes `caseStpEligible = AND(claimResults[*].claimStpEligible)` and sets `outcome` ∈ `STP` / `PENDING` / `EXAMINER`, which the **Outcome** gateway routes on.
 - **Pending-requirement loop.** After sending the requirement email and setting Pending, the case **waits** on `Update followup to 30 days` (user task). On document upload it re-classifies, updates case data, and **loops back to Run Per Claim Evaluation**; an **interrupting boundary timer (P30D)** escalates a still-pending case to an examiner. (This mirrors the existing `pru-nigo-followup` wait/timer pattern.)
+- **AI classification is async with a signal callback.** A **parallel gateway** splits into (a) the `Run AI classification, extraction and validation` REST call — its payload carries `piid` **and** `signalName` (`AIClassificationComplete`) so the async AI service can signal this instance back — and (b) a **signal intermediate catch event** on that signal. A **parallel join** waits for both before `Update Case data`. The signal must be sent to the process instance (e.g. by the AI service or a test harness) via the KIE signal API using the `piid` + `signalName` the payload provided.
 - The loop-back re-enters via the **contestable merge** gateway (which therefore has three incoming: not-contestable, MRX-check, and the loop), keeping `Run Per Claim Evaluation` single-incoming.
 
 Main process variables: `caseId, claimType, policyNumber, applicablePolicies, dateOfDeath, uploadedDocuments, policyData, bankAccountDetails, flagContestable, flagMrxDiscrepancy, claimResults, caseStpEligible, outcome, payoutAmount, pasLockStatus, baseUrl, reqPayload, resPayload, maxRetryCount`.
 
-New main-flow endpoints: `POST /v1/claims/check-contestability`, `POST /v1/claims/assign-examiner` (others reuse existing endpoints).
+New main-flow endpoint: `POST /v1/claims/check-contestability` (others reuse existing endpoints). **Assign case to examiner** and **Assign TI Case to Reviewer** are **human tasks** (user tasks on the `ClaimsExaminer` / `Reviewer` group) — no assignment REST call.
 
 ---
 
@@ -97,7 +99,7 @@ Start → Script_Bootstrap → Get Claim IDs → [ MI callActivity → B ] (para
 
 - **Inputs:** `claimId` (the loop item) + `caseId`, `claimType`, `policyNumber`, `dateOfDeath`, `uploadedDocuments`, `policyData`, `bankAccountDetails`.
 - **Flow:** `Start → Script_Bootstrap (baseUrl) → Evaluate Claim (REST) → End`.
-  - **Evaluate Claim** = callActivity → `pru-rest-executor`, `POST #{baseUrl}/v1/claims/evaluate-claim` with `{piid, caseId, claimId, claimType, policyNumber, dateOfDeath}`.
+  - **Evaluate Claim** = callActivity → `pru-rest-executor`, `POST #{baseUrl}/claims/evaluate-claim` with `{piid, caseId, claimId, claimType}` (every REST payload carries `piid`).
   - onExit stores the whole response in `claimResult` (Object) and `claimStpEligible` (Boolean).
 - **Output:** `claimResult` — collected by A's multi-instance output.
 
@@ -125,7 +127,7 @@ Aggregate: caseStpEligible = AND(claimResults[*].claimStpEligible)   [Death only
 
 ## 6. New mock / integration endpoints
 
-Base path served by the mock is `/api/v1/…`; the BPMN calls `#{baseUrl}/v1/…`.
+The BPMN nodes call `#{baseUrl}/…` — **no `/v1` in the node URLs** (the version lives in `baseUrl`). The mock serves `/api/v1/…`, so for local testing set `INTEGRATION_LAYER_URL=http://localhost:3010/api/v1`. Every REST payload includes `piid`.
 
 ### E1 — Get Claim IDs
 ```bash

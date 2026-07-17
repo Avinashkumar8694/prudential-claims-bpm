@@ -112,7 +112,7 @@ The grey data object in the source diagram (*notification, policy, event, insure
 
 ## 5. Node specifications
 
-REST nodes follow the repo convention exactly: a `callActivity → prudential-claims-submission.pru-rest-executor` with an **onEntry** script that builds `reqPayload` and an **onExit** script that parses `resPayload`. URLs use `#{baseUrl}/v1/...`. User tasks assign the role via the `GroupId` data input (like N13b/N16 in the main process).
+REST nodes follow the repo convention exactly: a `callActivity → prudential-claims-submission.pru-rest-executor` with an **onEntry** script that builds `reqPayload` (always including `piid`) and an **onExit** script that parses `resPayload`. URLs use `#{baseUrl}/...` (no `/v1` in the node — the version lives in `baseUrl`). User tasks assign the role via the `GroupId` data input (like N13b/N16 in the main process).
 
 | # | Node | Type | Endpoint (`#{baseUrl}` + …) | Reads | Writes |
 |---|------|------|------------------------------|-------|--------|
@@ -162,7 +162,7 @@ Its data-input mapping **mirrors the `pru-claim-processing` start payload** docu
 
 ## 7. Mock / integration APIs
 
-Implemented in [mock_server/server.js](../mock_server/server.js) and [swagger.json](../mock_server/swagger.json). Base path served by the mock is `/api/v1/...`; the BPMN calls `#{baseUrl}/v1/...` (so for local mock testing set `INTEGRATION_LAYER_URL=http://localhost:3010/api`).
+Implemented in [mock_server/server.js](../mock_server/server.js) and [swagger.json](../mock_server/swagger.json). The BPMN calls `#{baseUrl}/...` (**no `/v1` in the node** — version in `baseUrl`); the mock serves `/api/v1/...`, so for local testing set `INTEGRATION_LAYER_URL=http://localhost:3010/api/v1`.
 
 **Case-status updates reuse the shared status API** (same one NIGO uses), not a bespoke endpoint:
 
@@ -182,7 +182,7 @@ Verification-specific endpoints:
 ### curl — request → response
 
 ```bash
-BASE=http://localhost:3010/api   # mock; BPMN uses #{baseUrl}=$INTEGRATION_LAYER_URL
+BASE=http://localhost:3010/api/v1   # mock; BPMN uses #{baseUrl}=$INTEGRATION_LAYER_URL (version in baseUrl)
 
 # Update Case Status (shared status API)
 curl -X POST "$BASE/v1/claims/status" -H 'Content-Type: application/json' \

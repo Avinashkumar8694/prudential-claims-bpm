@@ -598,7 +598,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSCv1poEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N11_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSCwFpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSCwVpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/mrx-check]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSCwVpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/mrx-check]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSCwlpoEfGoNpO8onZRMw">_P1_N11_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -707,7 +707,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSC1FpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N10_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSC1VpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSC1lpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/validate-bank]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSC1lpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/validate-bank]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSC11poEfGoNpO8onZRMw">_P1_N10_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -958,7 +958,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSC-FpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N17_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSC-VpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSC-lpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/calculate]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSC-lpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/calculate]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSC-1poEfGoNpO8onZRMw">_P1_N17_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1113,7 +1113,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDHFpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N9A_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDHVpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDHlpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/validate-beneficiary]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDHlpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/validate-beneficiary]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDH1poEfGoNpO8onZRMw">_P1_N9A_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1221,7 +1221,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDMVpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N19_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDMlpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDM1poEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/beneficiary-split]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDM1poEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/beneficiary-split]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDNFpoEfGoNpO8onZRMw">_P1_N19_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1335,7 +1335,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDRlpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N14_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDR1poEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDSFpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/tax/apply]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDSFpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/tax/apply]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDSVpoEfGoNpO8onZRMw">_P1_N14_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1443,7 +1443,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDW1poEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N3_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDXFpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDXVpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/audit/log-failure]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDXVpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/audit/log-failure]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDXlpoEfGoNpO8onZRMw">_P1_N3_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1552,7 +1552,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDcFpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N4_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDcVpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDclpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/policy/status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDclpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/policy/status]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDc1poEfGoNpO8onZRMw">_P1_N4_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1683,7 +1683,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDhVpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N22_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDhlpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDh1poEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/finalize]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDh1poEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/finalize]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDiFpoEfGoNpO8onZRMw">_P1_N22_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1847,7 +1847,7 @@ if (response != null && !response.trim().isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDmlpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N6_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDm1poEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDnFpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/check-documents]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDnFpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/check-documents]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDnVpoEfGoNpO8onZRMw">_P1_N6_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -1970,7 +1970,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDr1poEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N1_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDsFpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDsVpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/validate-data]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDsVpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/validate-data]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDslpoEfGoNpO8onZRMw">_P1_N1_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -2087,7 +2087,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSDxFpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N9_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSDxVpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDxlpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/validate-policy]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSDxlpoEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/validate-policy]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSDx1poEfGoNpO8onZRMw">_P1_N9_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -2196,7 +2196,7 @@ if (response != null && !response.isEmpty()) {
       <bpmn2:dataInputAssociation id="_XmSD2VpoEfGoNpO8onZRMw">
         <bpmn2:targetRef>_P1_N13A_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="_XmSD2lpoEfGoNpO8onZRMw">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSD21poEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/v1/claims/check-fast-track-rule]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="_XmSD21poEfGoNpO8onZRMw"><![CDATA[#{baseUrl}/claims/check-fast-track-rule]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="_XmSD3FpoEfGoNpO8onZRMw">_P1_N13A_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>

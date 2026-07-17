@@ -790,17 +790,9 @@ app.post('/api/v1/claims/check-contestability', (req, res) => {
   res.json({ success: true, caseId: caseId || null, contestable });
 });
 
-// Assign the case to a claims examiner (Refer to Examiner, and the Day-30 timeout).
-app.post('/api/v1/claims/assign-examiner', (req, res) => {
-  const { caseId, reason } = req.body;
-  res.json({
-    success: true,
-    caseId: caseId || null,
-    assignedTo: 'claim-examiner-queue',
-    reason: reason || null,
-    assignedAt: new Date().toISOString()
-  });
-});
+// (no endpoint) "Assign case to examiner" / "Assign TI Case to Reviewer" are now
+// human tasks (user tasks assigned to the ClaimsExaminer / Reviewer group) — the case
+// lands on the group worklist directly; there is no assignment REST call.
 
 
 // --- PROCESS 3: CLAIM VERIFICATION (Track B) ENDPOINTS ---

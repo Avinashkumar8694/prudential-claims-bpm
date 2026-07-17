@@ -49,12 +49,9 @@
   <bpmn2:itemDefinition id="__P_TIRUN_caseIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_TIRUN_claimTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_TIRUN_claimResultsOutputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_TI_ASSIGN_ContentDataInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_TI_ASSIGN_ContentTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_TI_ASSIGN_HandleResponseErrorsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_TI_ASSIGN_MethodInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_TI_ASSIGN_UrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_TI_ASSIGN_ResultOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_TI_ASSIGN_TaskNameInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_TI_ASSIGN_SkippableInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_TI_ASSIGN_GroupIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_CALCBENEFIT_ContentDataInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_CALCBENEFIT_ContentTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_CALCBENEFIT_HandleResponseErrorsInputXItem" structureRef=""/>
@@ -87,20 +84,15 @@
   <bpmn2:itemDefinition id="___P_UPDATE_CASEDATA_MethodInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_UPDATE_CASEDATA_UrlInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_UPDATE_CASEDATA_ResultOutputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_ContentDataInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_ContentTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_HandleResponseErrorsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_MethodInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_UrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_ResultOutputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_ContentDataInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_ContentTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_HandleResponseErrorsInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_MethodInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_UrlInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_ResultOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_TaskNameInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_SkippableInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_ASSIGN_TIMEOUT_GroupIdInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_TaskNameInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_SkippableInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___P_REFER_ASSIGN_GroupIdInputXItem" structureRef=""/>
   <bpmn2:error id="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
+  <bpmn2:signal id="_SIG_AI_DONE" name="AIClassificationComplete"/>
   <bpmn2:process id="prudential-claims-submission.pru-claim-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-processing" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
@@ -175,10 +167,18 @@
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_TOPEND" sourceRef="_P_UPDATE_PENDING" targetRef="_P_WAIT">
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_DOCS" sourceRef="_P_WAIT" targetRef="_P_AI_CLASSIFY" name="Documents uploaded">
+    <bpmn2:sequenceFlow id="_F_DOCS" sourceRef="_P_WAIT" targetRef="_P_AI_SPLIT" name="Documents uploaded">
       <bpmn2:extensionElements><drools:metaData name="elementname"><drools:metaValue><![CDATA[Documents uploaded]]></drools:metaValue></drools:metaData></bpmn2:extensionElements>
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_AI" sourceRef="_P_AI_CLASSIFY" targetRef="_P_UPDATE_CASEDATA">
+    <bpmn2:sequenceFlow id="_F_AI_REST" sourceRef="_P_AI_SPLIT" targetRef="_P_AI_CLASSIFY">
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="_F_AI_SIG" sourceRef="_P_AI_SPLIT" targetRef="_P_AI_SIGNAL">
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="_F_AI_REST_J" sourceRef="_P_AI_CLASSIFY" targetRef="_P_AI_JOIN">
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="_F_AI_SIG_J" sourceRef="_P_AI_SIGNAL" targetRef="_P_AI_JOIN">
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="_F_AI" sourceRef="_P_AI_JOIN" targetRef="_P_UPDATE_CASEDATA">
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_LOOP" sourceRef="_P_UPDATE_CASEDATA" targetRef="_P_CONTEST_MERGE">
     </bpmn2:sequenceFlow>
@@ -260,7 +260,7 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:
       <bpmn2:dataInputAssociation id="dia__P_SETPEND_ct"><bpmn2:targetRef>_P_SETPEND_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_ctt">_P_SETPEND_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SETPEND_he"><bpmn2:targetRef>_P_SETPEND_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_het">_P_SETPEND_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SETPEND_m"><bpmn2:targetRef>_P_SETPEND_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_mf"><![CDATA[PUT]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_mt">_P_SETPEND_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_SETPEND_u"><bpmn2:targetRef>_P_SETPEND_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_uf"><![CDATA[#{baseUrl}/v1/policy/status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_ut">_P_SETPEND_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_SETPEND_u"><bpmn2:targetRef>_P_SETPEND_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_uf"><![CDATA[#{baseUrl}/policy/status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_ut">_P_SETPEND_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_SETPEND_r"><bpmn2:sourceRef>_P_SETPEND_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:callActivity id="_P_CHECKCONTEST" drools:independent="true" drools:waitForCompletion="true" name="Check contestability. ANY policy = contestable" calledElement="prudential-claims-submission.pru-rest-executor">
@@ -302,7 +302,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_ct"><bpmn2:targetRef>_P_CHECKCONTEST_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_ctt">_P_CHECKCONTEST_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_he"><bpmn2:targetRef>_P_CHECKCONTEST_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_het">_P_CHECKCONTEST_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_m"><bpmn2:targetRef>_P_CHECKCONTEST_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_mt">_P_CHECKCONTEST_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_u"><bpmn2:targetRef>_P_CHECKCONTEST_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_uf"><![CDATA[#{baseUrl}/v1/claims/check-contestability]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_ut">_P_CHECKCONTEST_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_u"><bpmn2:targetRef>_P_CHECKCONTEST_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_uf"><![CDATA[#{baseUrl}/claims/check-contestability]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_ut">_P_CHECKCONTEST_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_CHECKCONTEST_r"><bpmn2:sourceRef>_P_CHECKCONTEST_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:exclusiveGateway id="_P_CONTEST_GW" name="Contestable?" gatewayDirection="Diverging">
@@ -348,7 +348,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_ct"><bpmn2:targetRef>_P_MRX_PULL_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_ctt">_P_MRX_PULL_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_he"><bpmn2:targetRef>_P_MRX_PULL_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_het">_P_MRX_PULL_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_m"><bpmn2:targetRef>_P_MRX_PULL_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_mt">_P_MRX_PULL_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_u"><bpmn2:targetRef>_P_MRX_PULL_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_uf"><![CDATA[#{baseUrl}/v1/claims/mrx-check]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_ut">_P_MRX_PULL_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_u"><bpmn2:targetRef>_P_MRX_PULL_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_uf"><![CDATA[#{baseUrl}/claims/mrx-check]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_ut">_P_MRX_PULL_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_MRX_PULL_r"><bpmn2:sourceRef>_P_MRX_PULL_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:callActivity id="_P_MRX_CHECK" drools:independent="true" drools:waitForCompletion="true" name="MRX check, Set MRX_Discrepancy Flag" calledElement="prudential-claims-submission.pru-rest-executor">
@@ -389,7 +389,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_ct"><bpmn2:targetRef>_P_MRX_CHECK_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_ctt">_P_MRX_CHECK_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_he"><bpmn2:targetRef>_P_MRX_CHECK_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_het">_P_MRX_CHECK_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_m"><bpmn2:targetRef>_P_MRX_CHECK_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_mt">_P_MRX_CHECK_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_u"><bpmn2:targetRef>_P_MRX_CHECK_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_uf"><![CDATA[#{baseUrl}/v1/claims/mrx-check]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_ut">_P_MRX_CHECK_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_u"><bpmn2:targetRef>_P_MRX_CHECK_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_uf"><![CDATA[#{baseUrl}/claims/mrx-check]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_ut">_P_MRX_CHECK_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_MRX_CHECK_r"><bpmn2:sourceRef>_P_MRX_CHECK_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:exclusiveGateway id="_P_CONTEST_MERGE" gatewayDirection="Converging">
@@ -505,43 +505,29 @@ int total = results != null ? results.size() : 0;
 kcontext.setVariable("outcome", "REVIEWER");
 System.out.println("[BPM][TI-CONSOLIDATE] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId") + " | tiClaims=" + total + " | outcome=REVIEWER (TI always non-STP)");]]></bpmn2:script>
     </bpmn2:scriptTask>
-    <bpmn2:callActivity id="_P_TI_ASSIGN" drools:independent="true" drools:waitForCompletion="true" name="Assign TI Case to Reviewer" calledElement="prudential-claims-submission.pru-rest-executor">
+    <bpmn2:userTask id="_P_TI_ASSIGN" name="Assign TI Case to Reviewer">
       <bpmn2:extensionElements>
-        <drools:metaData name="elementname"><drools:metaValue><![CDATA[Assign TI Case to Reviewer]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:AssignReviewer] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
-com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
-json.putPOJO("caseId", kcontext.getVariable("caseId"));
-json.put("reason", "TI_MEDICAL_REVIEW");
-kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
-        <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Assign TI Case to Reviewer]]></drools:metaValue>
+        </drools:metaData>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_TI2</bpmn2:incoming>
       <bpmn2:outgoing>_F_TI3</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__P_TI_ASSIGN">
-        <bpmn2:dataInput id="_P_TI_ASSIGN_ContentDataInputX" drools:dtype="" itemSubjectRef="___P_TI_ASSIGN_ContentDataInputXItem" name="ContentData"/>
-        <bpmn2:dataInput id="_P_TI_ASSIGN_ContentTypeInputX" drools:dtype="" itemSubjectRef="___P_TI_ASSIGN_ContentTypeInputXItem" name="ContentType"/>
-        <bpmn2:dataInput id="_P_TI_ASSIGN_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="___P_TI_ASSIGN_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
-        <bpmn2:dataInput id="_P_TI_ASSIGN_MethodInputX" drools:dtype="" itemSubjectRef="___P_TI_ASSIGN_MethodInputXItem" name="Method"/>
-        <bpmn2:dataInput id="_P_TI_ASSIGN_UrlInputX" drools:dtype="" itemSubjectRef="___P_TI_ASSIGN_UrlInputXItem" name="Url"/>
-        <bpmn2:dataOutput id="_P_TI_ASSIGN_ResultOutputX" drools:dtype="" itemSubjectRef="___P_TI_ASSIGN_ResultOutputXItem" name="Result"/>
+        <bpmn2:dataInput id="_P_TI_ASSIGN_TaskNameInputX" drools:dtype="Object" itemSubjectRef="___P_TI_ASSIGN_TaskNameInputXItem" name="TaskName"/>
+        <bpmn2:dataInput id="_P_TI_ASSIGN_SkippableInputX" drools:dtype="Object" itemSubjectRef="___P_TI_ASSIGN_SkippableInputXItem" name="Skippable"/>
+        <bpmn2:dataInput id="_P_TI_ASSIGN_GroupIdInputX" drools:dtype="Object" itemSubjectRef="___P_TI_ASSIGN_GroupIdInputXItem" name="GroupId"/>
         <bpmn2:inputSet id="iset__P_TI_ASSIGN">
-          <bpmn2:dataInputRefs>_P_TI_ASSIGN_ContentDataInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_TI_ASSIGN_ContentTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_TI_ASSIGN_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_TI_ASSIGN_MethodInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_TI_ASSIGN_UrlInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_TI_ASSIGN_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_TI_ASSIGN_SkippableInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_TI_ASSIGN_GroupIdInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet id="oset__P_TI_ASSIGN"><bpmn2:dataOutputRefs>_P_TI_ASSIGN_ResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
+        <bpmn2:outputSet id="oset__P_TI_ASSIGN"/>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_cd"><bpmn2:sourceRef>reqPayload</bpmn2:sourceRef><bpmn2:targetRef>_P_TI_ASSIGN_ContentDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_ct"><bpmn2:targetRef>_P_TI_ASSIGN_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_TI_ASSIGN_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_ctt">_P_TI_ASSIGN_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_he"><bpmn2:targetRef>_P_TI_ASSIGN_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_TI_ASSIGN_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_het">_P_TI_ASSIGN_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_m"><bpmn2:targetRef>_P_TI_ASSIGN_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_TI_ASSIGN_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_mt">_P_TI_ASSIGN_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_u"><bpmn2:targetRef>_P_TI_ASSIGN_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_TI_ASSIGN_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_uf"><![CDATA[#{baseUrl}/v1/claims/assign-examiner]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_ut">_P_TI_ASSIGN_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="doa__P_TI_ASSIGN_r"><bpmn2:sourceRef>_P_TI_ASSIGN_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-    </bpmn2:callActivity>
+      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_tn"><bpmn2:targetRef>_P_TI_ASSIGN_TaskNameInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_TI_ASSIGN_tn"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_tnf"><![CDATA[AssignTICasetoReviewer]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_tnt">_P_TI_ASSIGN_TaskNameInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_sk"><bpmn2:targetRef>_P_TI_ASSIGN_SkippableInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_TI_ASSIGN_sk"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_skf"><![CDATA[false]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_skt">_P_TI_ASSIGN_SkippableInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_TI_ASSIGN_gi"><bpmn2:targetRef>_P_TI_ASSIGN_GroupIdInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_TI_ASSIGN_gi"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_gif"><![CDATA[Reviewer]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_TI_ASSIGN_git">_P_TI_ASSIGN_GroupIdInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+    </bpmn2:userTask>
     <bpmn2:endEvent id="_P_END_REVIEWER" name="Claim Reviewer">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -587,7 +573,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_ct"><bpmn2:targetRef>_P_CALCBENEFIT_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_ctt">_P_CALCBENEFIT_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_he"><bpmn2:targetRef>_P_CALCBENEFIT_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_het">_P_CALCBENEFIT_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_m"><bpmn2:targetRef>_P_CALCBENEFIT_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_mt">_P_CALCBENEFIT_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_u"><bpmn2:targetRef>_P_CALCBENEFIT_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_uf"><![CDATA[#{baseUrl}/v1/claims/calculate]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_ut">_P_CALCBENEFIT_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_u"><bpmn2:targetRef>_P_CALCBENEFIT_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_uf"><![CDATA[#{baseUrl}/claims/calculate]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_ut">_P_CALCBENEFIT_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_CALCBENEFIT_r"><bpmn2:sourceRef>_P_CALCBENEFIT_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:endEvent id="_P_END_PAYMENT" name="Payment Process">
@@ -631,7 +617,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_ct"><bpmn2:targetRef>_P_SENDEMAIL_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_ctt">_P_SENDEMAIL_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_he"><bpmn2:targetRef>_P_SENDEMAIL_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_het">_P_SENDEMAIL_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_m"><bpmn2:targetRef>_P_SENDEMAIL_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_mt">_P_SENDEMAIL_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_u"><bpmn2:targetRef>_P_SENDEMAIL_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_uf"><![CDATA[#{baseUrl}/v1/claims/nigo/send]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_ut">_P_SENDEMAIL_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_u"><bpmn2:targetRef>_P_SENDEMAIL_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_uf"><![CDATA[#{baseUrl}/claims/nigo/send]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_ut">_P_SENDEMAIL_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_SENDEMAIL_r"><bpmn2:sourceRef>_P_SENDEMAIL_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:callActivity id="_P_UPDATE_PENDING" drools:independent="true" drools:waitForCompletion="true" name="Update Case AND claim status to Pending Req" calledElement="prudential-claims-submission.pru-rest-executor">
@@ -668,7 +654,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_ct"><bpmn2:targetRef>_P_UPDATE_PENDING_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_ctt">_P_UPDATE_PENDING_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_he"><bpmn2:targetRef>_P_UPDATE_PENDING_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_het">_P_UPDATE_PENDING_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_m"><bpmn2:targetRef>_P_UPDATE_PENDING_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_mt">_P_UPDATE_PENDING_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_u"><bpmn2:targetRef>_P_UPDATE_PENDING_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_uf"><![CDATA[#{baseUrl}/v1/claims/status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_ut">_P_UPDATE_PENDING_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_u"><bpmn2:targetRef>_P_UPDATE_PENDING_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_uf"><![CDATA[#{baseUrl}/claims/status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_ut">_P_UPDATE_PENDING_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_UPDATE_PENDING_r"><bpmn2:sourceRef>_P_UPDATE_PENDING_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:userTask id="_P_WAIT" name="Update followup to 30 days">
@@ -702,6 +688,16 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
         <bpmn2:timeDuration xsi:type="bpmn2:tFormalExpression" id="_P_TIMER_DUR">P30D</bpmn2:timeDuration>
       </bpmn2:timerEventDefinition>
     </bpmn2:boundaryEvent>
+    <bpmn2:parallelGateway id="_P_AI_SPLIT" name="AI (parallel)" gatewayDirection="Diverging">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[AI (parallel)]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>_F_DOCS</bpmn2:incoming>
+      <bpmn2:outgoing>_F_AI_REST</bpmn2:outgoing>
+      <bpmn2:outgoing>_F_AI_SIG</bpmn2:outgoing>
+    </bpmn2:parallelGateway>
     <bpmn2:callActivity id="_P_AI_CLASSIFY" drools:independent="true" drools:waitForCompletion="true" name="Run AI classification, extraction and validation" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Run AI classification, extraction and validation]]></drools:metaValue></drools:metaData>
@@ -710,12 +706,13 @@ com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("uploadedDocuments", kcontext.getVariable("uploadedDocuments"));
+json.put("signalName", "AIClassificationComplete");
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
 System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
       </bpmn2:extensionElements>
-      <bpmn2:incoming>_F_DOCS</bpmn2:incoming>
-      <bpmn2:outgoing>_F_AI</bpmn2:outgoing>
+      <bpmn2:incoming>_F_AI_REST</bpmn2:incoming>
+      <bpmn2:outgoing>_F_AI_REST_J</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__P_AI_CLASSIFY">
         <bpmn2:dataInput id="_P_AI_CLASSIFY_ContentDataInputX" drools:dtype="" itemSubjectRef="___P_AI_CLASSIFY_ContentDataInputXItem" name="ContentData"/>
         <bpmn2:dataInput id="_P_AI_CLASSIFY_ContentTypeInputX" drools:dtype="" itemSubjectRef="___P_AI_CLASSIFY_ContentTypeInputXItem" name="ContentType"/>
@@ -736,9 +733,24 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_ct"><bpmn2:targetRef>_P_AI_CLASSIFY_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_ctt">_P_AI_CLASSIFY_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_he"><bpmn2:targetRef>_P_AI_CLASSIFY_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_het">_P_AI_CLASSIFY_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_m"><bpmn2:targetRef>_P_AI_CLASSIFY_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_mt">_P_AI_CLASSIFY_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_u"><bpmn2:targetRef>_P_AI_CLASSIFY_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_uf"><![CDATA[#{baseUrl}/v1/claims/nigo/rerun-idp]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_ut">_P_AI_CLASSIFY_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_u"><bpmn2:targetRef>_P_AI_CLASSIFY_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_uf"><![CDATA[#{baseUrl}/claims/nigo/rerun-idp]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_ut">_P_AI_CLASSIFY_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_AI_CLASSIFY_r"><bpmn2:sourceRef>_P_AI_CLASSIFY_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
+    <bpmn2:intermediateCatchEvent id="_P_AI_SIGNAL" name="AI Classification Complete">
+      <bpmn2:extensionElements>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[AI Classification Complete]]></drools:metaValue>
+        </drools:metaData>
+      </bpmn2:extensionElements>
+      <bpmn2:incoming>_F_AI_SIG</bpmn2:incoming>
+      <bpmn2:outgoing>_F_AI_SIG_J</bpmn2:outgoing>
+      <bpmn2:signalEventDefinition id="_P_AI_SIGDEF" drools:erefname="AIClassificationComplete" signalRef="_SIG_AI_DONE"/>
+    </bpmn2:intermediateCatchEvent>
+    <bpmn2:parallelGateway id="_P_AI_JOIN" gatewayDirection="Converging">
+      <bpmn2:incoming>_F_AI_REST_J</bpmn2:incoming>
+      <bpmn2:incoming>_F_AI_SIG_J</bpmn2:incoming>
+      <bpmn2:outgoing>_F_AI</bpmn2:outgoing>
+    </bpmn2:parallelGateway>
     <bpmn2:callActivity id="_P_UPDATE_CASEDATA" drools:independent="true" drools:waitForCompletion="true" name="Update Case data" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Update Case data]]></drools:metaValue></drools:metaData>
@@ -772,46 +784,32 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_ct"><bpmn2:targetRef>_P_UPDATE_CASEDATA_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_ctt">_P_UPDATE_CASEDATA_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_he"><bpmn2:targetRef>_P_UPDATE_CASEDATA_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_het">_P_UPDATE_CASEDATA_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_m"><bpmn2:targetRef>_P_UPDATE_CASEDATA_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_mt">_P_UPDATE_CASEDATA_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_u"><bpmn2:targetRef>_P_UPDATE_CASEDATA_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_uf"><![CDATA[#{baseUrl}/v1/claims/nigo/update-status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_ut">_P_UPDATE_CASEDATA_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_u"><bpmn2:targetRef>_P_UPDATE_CASEDATA_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_uf"><![CDATA[#{baseUrl}/claims/nigo/update-status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_ut">_P_UPDATE_CASEDATA_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_UPDATE_CASEDATA_r"><bpmn2:sourceRef>_P_UPDATE_CASEDATA_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
-    <bpmn2:callActivity id="_P_ASSIGN_TIMEOUT" drools:independent="true" drools:waitForCompletion="true" name="Assign case to examiner" calledElement="prudential-claims-submission.pru-rest-executor">
+    <bpmn2:userTask id="_P_ASSIGN_TIMEOUT" name="Assign case to examiner">
       <bpmn2:extensionElements>
-        <drools:metaData name="elementname"><drools:metaValue><![CDATA[Assign case to examiner]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:AssignExaminerTimeout] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
-com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
-json.putPOJO("caseId", kcontext.getVariable("caseId"));
-json.put("reason", "DAY30_PENDING");
-kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
-        <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Assign case to examiner]]></drools:metaValue>
+        </drools:metaData>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_TIMEOUT</bpmn2:incoming>
       <bpmn2:outgoing>_F_AT</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__P_ASSIGN_TIMEOUT">
-        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_ContentDataInputX" drools:dtype="" itemSubjectRef="___P_ASSIGN_TIMEOUT_ContentDataInputXItem" name="ContentData"/>
-        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_ContentTypeInputX" drools:dtype="" itemSubjectRef="___P_ASSIGN_TIMEOUT_ContentTypeInputXItem" name="ContentType"/>
-        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="___P_ASSIGN_TIMEOUT_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
-        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_MethodInputX" drools:dtype="" itemSubjectRef="___P_ASSIGN_TIMEOUT_MethodInputXItem" name="Method"/>
-        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_UrlInputX" drools:dtype="" itemSubjectRef="___P_ASSIGN_TIMEOUT_UrlInputXItem" name="Url"/>
-        <bpmn2:dataOutput id="_P_ASSIGN_TIMEOUT_ResultOutputX" drools:dtype="" itemSubjectRef="___P_ASSIGN_TIMEOUT_ResultOutputXItem" name="Result"/>
+        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_TaskNameInputX" drools:dtype="Object" itemSubjectRef="___P_ASSIGN_TIMEOUT_TaskNameInputXItem" name="TaskName"/>
+        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_SkippableInputX" drools:dtype="Object" itemSubjectRef="___P_ASSIGN_TIMEOUT_SkippableInputXItem" name="Skippable"/>
+        <bpmn2:dataInput id="_P_ASSIGN_TIMEOUT_GroupIdInputX" drools:dtype="Object" itemSubjectRef="___P_ASSIGN_TIMEOUT_GroupIdInputXItem" name="GroupId"/>
         <bpmn2:inputSet id="iset__P_ASSIGN_TIMEOUT">
-          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_ContentDataInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_ContentTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_MethodInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_UrlInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_SkippableInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_ASSIGN_TIMEOUT_GroupIdInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet id="oset__P_ASSIGN_TIMEOUT"><bpmn2:dataOutputRefs>_P_ASSIGN_TIMEOUT_ResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
+        <bpmn2:outputSet id="oset__P_ASSIGN_TIMEOUT"/>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_cd"><bpmn2:sourceRef>reqPayload</bpmn2:sourceRef><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_ContentDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_ct"><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_ASSIGN_TIMEOUT_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_ctt">_P_ASSIGN_TIMEOUT_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_he"><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_ASSIGN_TIMEOUT_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_het">_P_ASSIGN_TIMEOUT_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_m"><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_ASSIGN_TIMEOUT_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_mt">_P_ASSIGN_TIMEOUT_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_u"><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_ASSIGN_TIMEOUT_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_uf"><![CDATA[#{baseUrl}/v1/claims/assign-examiner]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_ut">_P_ASSIGN_TIMEOUT_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="doa__P_ASSIGN_TIMEOUT_r"><bpmn2:sourceRef>_P_ASSIGN_TIMEOUT_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-    </bpmn2:callActivity>
+      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_tn"><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_TaskNameInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_ASSIGN_TIMEOUT_tn"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_tnf"><![CDATA[Assigncasetoexaminer]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_tnt">_P_ASSIGN_TIMEOUT_TaskNameInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_sk"><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_SkippableInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_ASSIGN_TIMEOUT_sk"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_skf"><![CDATA[false]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_skt">_P_ASSIGN_TIMEOUT_SkippableInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_ASSIGN_TIMEOUT_gi"><bpmn2:targetRef>_P_ASSIGN_TIMEOUT_GroupIdInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_ASSIGN_TIMEOUT_gi"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_gif"><![CDATA[ClaimsExaminer]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_ASSIGN_TIMEOUT_git">_P_ASSIGN_TIMEOUT_GroupIdInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+    </bpmn2:userTask>
     <bpmn2:endEvent id="_P_END_EXAMINER_T" name="Claim Examiner">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -820,43 +818,29 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_AT</bpmn2:incoming>
     </bpmn2:endEvent>
-    <bpmn2:callActivity id="_P_REFER_ASSIGN" drools:independent="true" drools:waitForCompletion="true" name="Assign case to examiner" calledElement="prudential-claims-submission.pru-rest-executor">
+    <bpmn2:userTask id="_P_REFER_ASSIGN" name="Assign case to examiner">
       <bpmn2:extensionElements>
-        <drools:metaData name="elementname"><drools:metaValue><![CDATA[Assign case to examiner]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:AssignExaminerRefer] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
-com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
-json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
-json.putPOJO("caseId", kcontext.getVariable("caseId"));
-json.put("reason", "REFER");
-kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
-        <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+        <drools:metaData name="elementname">
+          <drools:metaValue><![CDATA[Assign case to examiner]]></drools:metaValue>
+        </drools:metaData>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_EXAMINER</bpmn2:incoming>
       <bpmn2:outgoing>_F_RA</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__P_REFER_ASSIGN">
-        <bpmn2:dataInput id="_P_REFER_ASSIGN_ContentDataInputX" drools:dtype="" itemSubjectRef="___P_REFER_ASSIGN_ContentDataInputXItem" name="ContentData"/>
-        <bpmn2:dataInput id="_P_REFER_ASSIGN_ContentTypeInputX" drools:dtype="" itemSubjectRef="___P_REFER_ASSIGN_ContentTypeInputXItem" name="ContentType"/>
-        <bpmn2:dataInput id="_P_REFER_ASSIGN_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="___P_REFER_ASSIGN_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
-        <bpmn2:dataInput id="_P_REFER_ASSIGN_MethodInputX" drools:dtype="" itemSubjectRef="___P_REFER_ASSIGN_MethodInputXItem" name="Method"/>
-        <bpmn2:dataInput id="_P_REFER_ASSIGN_UrlInputX" drools:dtype="" itemSubjectRef="___P_REFER_ASSIGN_UrlInputXItem" name="Url"/>
-        <bpmn2:dataOutput id="_P_REFER_ASSIGN_ResultOutputX" drools:dtype="" itemSubjectRef="___P_REFER_ASSIGN_ResultOutputXItem" name="Result"/>
+        <bpmn2:dataInput id="_P_REFER_ASSIGN_TaskNameInputX" drools:dtype="Object" itemSubjectRef="___P_REFER_ASSIGN_TaskNameInputXItem" name="TaskName"/>
+        <bpmn2:dataInput id="_P_REFER_ASSIGN_SkippableInputX" drools:dtype="Object" itemSubjectRef="___P_REFER_ASSIGN_SkippableInputXItem" name="Skippable"/>
+        <bpmn2:dataInput id="_P_REFER_ASSIGN_GroupIdInputX" drools:dtype="Object" itemSubjectRef="___P_REFER_ASSIGN_GroupIdInputXItem" name="GroupId"/>
         <bpmn2:inputSet id="iset__P_REFER_ASSIGN">
-          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_ContentDataInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_ContentTypeInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_MethodInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_UrlInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_TaskNameInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_SkippableInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_REFER_ASSIGN_GroupIdInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
-        <bpmn2:outputSet id="oset__P_REFER_ASSIGN"><bpmn2:dataOutputRefs>_P_REFER_ASSIGN_ResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
+        <bpmn2:outputSet id="oset__P_REFER_ASSIGN"/>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_cd"><bpmn2:sourceRef>reqPayload</bpmn2:sourceRef><bpmn2:targetRef>_P_REFER_ASSIGN_ContentDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_ct"><bpmn2:targetRef>_P_REFER_ASSIGN_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_REFER_ASSIGN_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_ctt">_P_REFER_ASSIGN_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_he"><bpmn2:targetRef>_P_REFER_ASSIGN_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_REFER_ASSIGN_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_het">_P_REFER_ASSIGN_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_m"><bpmn2:targetRef>_P_REFER_ASSIGN_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_REFER_ASSIGN_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_mt">_P_REFER_ASSIGN_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_u"><bpmn2:targetRef>_P_REFER_ASSIGN_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_REFER_ASSIGN_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_uf"><![CDATA[#{baseUrl}/v1/claims/assign-examiner]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_ut">_P_REFER_ASSIGN_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="doa__P_REFER_ASSIGN_r"><bpmn2:sourceRef>_P_REFER_ASSIGN_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-    </bpmn2:callActivity>
+      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_tn"><bpmn2:targetRef>_P_REFER_ASSIGN_TaskNameInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_REFER_ASSIGN_tn"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_tnf"><![CDATA[Assigncasetoexaminer]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_tnt">_P_REFER_ASSIGN_TaskNameInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_sk"><bpmn2:targetRef>_P_REFER_ASSIGN_SkippableInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_REFER_ASSIGN_sk"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_skf"><![CDATA[false]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_skt">_P_REFER_ASSIGN_SkippableInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_REFER_ASSIGN_gi"><bpmn2:targetRef>_P_REFER_ASSIGN_GroupIdInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_REFER_ASSIGN_gi"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_gif"><![CDATA[ClaimsExaminer]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_REFER_ASSIGN_git">_P_REFER_ASSIGN_GroupIdInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+    </bpmn2:userTask>
     <bpmn2:endEvent id="_P_END_EXAMINER_R" name="Claim Examiner">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -894,8 +878,11 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmndi:BPMNShape id="shape__P_UPDATE_PENDING" bpmnElement="_P_UPDATE_PENDING"><dc:Bounds height="70.0" width="160.0" x="1970.0" y="280.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P_WAIT" bpmnElement="_P_WAIT"><dc:Bounds height="70.0" width="150.0" x="2170.0" y="280.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P_TIMER" bpmnElement="_P_TIMER"><dc:Bounds height="36.0" width="36.0" x="2217.0" y="336.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__P_AI_CLASSIFY" bpmnElement="_P_AI_CLASSIFY"><dc:Bounds height="70.0" width="160.0" x="2360.0" y="280.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__P_UPDATE_CASEDATA" bpmnElement="_P_UPDATE_CASEDATA"><dc:Bounds height="70.0" width="150.0" x="2550.0" y="280.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__P_AI_SPLIT" bpmnElement="_P_AI_SPLIT"><dc:Bounds height="56.0" width="56.0" x="2360.0" y="292.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__P_AI_CLASSIFY" bpmnElement="_P_AI_CLASSIFY"><dc:Bounds height="60.0" width="170.0" x="2450.0" y="235.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__P_AI_SIGNAL" bpmnElement="_P_AI_SIGNAL"><dc:Bounds height="36.0" width="36.0" x="2510.0" y="352.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__P_AI_JOIN" bpmnElement="_P_AI_JOIN"><dc:Bounds height="56.0" width="56.0" x="2680.0" y="292.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape__P_UPDATE_CASEDATA" bpmnElement="_P_UPDATE_CASEDATA"><dc:Bounds height="70.0" width="150.0" x="2770.0" y="280.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P_ASSIGN_TIMEOUT" bpmnElement="_P_ASSIGN_TIMEOUT"><dc:Bounds height="70.0" width="150.0" x="2170.0" y="440.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P_END_EXAMINER_T" bpmnElement="_P_END_EXAMINER_T"><dc:Bounds height="56.0" width="56.0" x="2360.0" y="452.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P_REFER_ASSIGN" bpmnElement="_P_REFER_ASSIGN"><dc:Bounds height="70.0" width="150.0" x="1780.0" y="480.0"/></bpmndi:BPMNShape>
@@ -993,15 +980,35 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_DOCS" bpmnElement="_F_DOCS">
         <di:waypoint xsi:type="dc:Point" x="2320.0" y="315.0"/>
-        <di:waypoint xsi:type="dc:Point" x="2360.0" y="315.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2360.0" y="320.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge__F_AI_REST" bpmnElement="_F_AI_REST">
+        <di:waypoint xsi:type="dc:Point" x="2388.0" y="292.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2388.0" y="265.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2450.0" y="265.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge__F_AI_SIG" bpmnElement="_F_AI_SIG">
+        <di:waypoint xsi:type="dc:Point" x="2388.0" y="348.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2388.0" y="370.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2510.0" y="370.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge__F_AI_REST_J" bpmnElement="_F_AI_REST_J">
+        <di:waypoint xsi:type="dc:Point" x="2620.0" y="265.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2708.0" y="265.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2708.0" y="292.0"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge__F_AI_SIG_J" bpmnElement="_F_AI_SIG_J">
+        <di:waypoint xsi:type="dc:Point" x="2546.0" y="370.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2708.0" y="370.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2708.0" y="348.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_AI" bpmnElement="_F_AI">
-        <di:waypoint xsi:type="dc:Point" x="2520.0" y="315.0"/>
-        <di:waypoint xsi:type="dc:Point" x="2550.0" y="315.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2736.0" y="320.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2770.0" y="315.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_LOOP" bpmnElement="_F_LOOP">
-        <di:waypoint xsi:type="dc:Point" x="2625.0" y="280.0"/>
-        <di:waypoint xsi:type="dc:Point" x="2625.0" y="130.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2845.0" y="280.0"/>
+        <di:waypoint xsi:type="dc:Point" x="2845.0" y="130.0"/>
         <di:waypoint xsi:type="dc:Point" x="1228.0" y="130.0"/>
         <di:waypoint xsi:type="dc:Point" x="1228.0" y="172.0"/>
       </bpmndi:BPMNEdge>

@@ -147,6 +147,7 @@ System.out.println("[BPM][BOOTSTRAP] process=pru-claim-verification | piid=" + k
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[System.out.println("[BPM][ENTRY:UpdateStatus] process=pru-claim-verification | piid=" + kcontext.getProcessInstance().getId() + " | notificationId=" + kcontext.getVariable("notificationId") + " | -> FOR_VERIFICATION");
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("notificationId", kcontext.getVariable("notificationId"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.put("status", "FOR_VERIFICATION");
@@ -208,7 +209,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__VER_UPDATE_STATUS_u">
         <bpmn2:targetRef>_VER_UPDATE_STATUS_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_UPDATE_STATUS_u">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_uf"><![CDATA[#{baseUrl}/v1/claims/status]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_uf"><![CDATA[#{baseUrl}/claims/status]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_UPDATE_STATUS_ut">_VER_UPDATE_STATUS_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -283,6 +284,7 @@ if (r != null && !r.isEmpty()) { try {
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[System.out.println("[BPM][ENTRY:Promote] process=pru-claim-verification | piid=" + kcontext.getProcessInstance().getId() + " | notificationId=" + kcontext.getVariable("notificationId") + " | Verified_Promoted + generate IDs");
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("notificationId", kcontext.getVariable("notificationId"));
 json.putPOJO("claimType", kcontext.getVariable("claimType"));
 json.putPOJO("policyNumber", kcontext.getVariable("policyNumber"));
@@ -348,7 +350,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__VER_PROMOTE_u">
         <bpmn2:targetRef>_VER_PROMOTE_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_PROMOTE_u">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_PROMOTE_uf"><![CDATA[#{baseUrl}/v1/claims/verification/promote]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_PROMOTE_uf"><![CDATA[#{baseUrl}/claims/verification/promote]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_PROMOTE_ut">_VER_PROMOTE_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -365,6 +367,7 @@ if (r != null && !r.isEmpty()) { try {
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[System.out.println("[BPM][ENTRY:SendConfirmation] process=pru-claim-verification | piid=" + kcontext.getProcessInstance().getId() + " | notificationId=" + kcontext.getVariable("notificationId") + " | email + claim form to known benes");
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
@@ -422,7 +425,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       <bpmn2:dataInputAssociation id="dia__VER_SENDCONF_u">
         <bpmn2:targetRef>_VER_SENDCONF_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_SENDCONF_u">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_SENDCONF_uf"><![CDATA[#{baseUrl}/v1/claims/verification/send-confirmation]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_SENDCONF_uf"><![CDATA[#{baseUrl}/claims/verification/send-confirmation]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_SENDCONF_ut">_VER_SENDCONF_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -516,6 +519,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[System.out.println("[BPM][ENTRY:Close] process=pru-claim-verification | piid=" + kcontext.getProcessInstance().getId() + " | notificationId=" + kcontext.getVariable("notificationId") + " | Not_Verified_Closed");
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("notificationId", kcontext.getVariable("notificationId"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("verifierRemarks", kcontext.getVariable("verifierRemarks"));
@@ -577,7 +581,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__VER_CLOSE_u">
         <bpmn2:targetRef>_VER_CLOSE_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_CLOSE_u">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_CLOSE_uf"><![CDATA[#{baseUrl}/v1/claims/verification/close]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_CLOSE_uf"><![CDATA[#{baseUrl}/claims/verification/close]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_CLOSE_ut">_VER_CLOSE_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
@@ -594,6 +598,7 @@ if (r != null && !r.isEmpty()) { try {
         <drools:onEntry-script scriptFormat="http://www.java.com/java">
           <drools:script><![CDATA[System.out.println("[BPM][ENTRY:ClosureNotice] process=pru-claim-verification | piid=" + kcontext.getProcessInstance().getId() + " | notificationId=" + kcontext.getVariable("notificationId") + " | generate + send closure notification");
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("notificationId", kcontext.getVariable("notificationId"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script>
@@ -651,7 +656,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       <bpmn2:dataInputAssociation id="dia__VER_CLOSURE_NOTICE_u">
         <bpmn2:targetRef>_VER_CLOSURE_NOTICE_UrlInputX</bpmn2:targetRef>
         <bpmn2:assignment id="asg__VER_CLOSURE_NOTICE_u">
-          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_CLOSURE_NOTICE_uf"><![CDATA[#{baseUrl}/v1/claims/verification/closure-notice]]></bpmn2:from>
+          <bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__VER_CLOSURE_NOTICE_uf"><![CDATA[#{baseUrl}/claims/verification/closure-notice]]></bpmn2:from>
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_CLOSURE_NOTICE_ut">_VER_CLOSURE_NOTICE_UrlInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
