@@ -3,11 +3,11 @@
 > Adds a **parallel, one-claim-at-a-time** evaluation layer to the main claims process. Before evaluation, a REST call fetches the **array of claim ids** for the case; each id is then evaluated **in parallel** in its own sub-process, and the per-claim results are aggregated back into a single `Case_STP_Eligible` decision.
 >
 > **New / changed files**
-> - `src/main/resources/org/jbpm/pru-claim-submission.bpmn` — **backup** of the pre-change main process (distinct id `…pru-claim-submission`)
-> - `src/main/resources/org/jbpm/pru-claim-processing.bpmn` — **modified** (Get Claim IDs → Run Per Claim Evaluation → Aggregate spliced in)
-> - `src/main/resources/org/jbpm/pru-claim-run-evaluation.bpmn` — **new** sub-process A (parallel multi-instance)
-> - `src/main/resources/org/jbpm/pru-claim-per-claim-eval.bpmn` — **new** sub-process B (evaluates one claim via REST)
-> - `mock_server/server.js` + `swagger.json` — 2 new endpoints
+> - `src/main/resources/org/jbpm/pru-claim-submission.bpmn` — **backup** of the original full pipeline (distinct id `…pru-claim-submission`); the pre-rewrite `pru-claim-processing` logic lives here
+> - `src/main/resources/org/jbpm/pru-claim-processing.bpmn` — **rewritten** to the new outcome-based flow (§2)
+> - `src/main/resources/org/jbpm/pru-claim-run-evaluation.bpmn` — sub-process A (**self-contained**: Get Claim IDs → parallel multi-instance)
+> - `src/main/resources/org/jbpm/pru-claim-per-claim-eval.bpmn` — sub-process B (evaluates one claim via REST)
+> - `mock_server/server.js` + `swagger.json` — evaluation + main-flow endpoints
 >
 > Companions: [claims_solution.md](claims_solution.md), [mock_testing_blueprint.md](mock_testing_blueprint.md), [pru_claim_verification_solution.md](pru_claim_verification_solution.md).
 
@@ -23,7 +23,7 @@ graph TD
     RX -->|POST /v1/claims/evaluate-claim| API[(Integration Layer)]
 ```
 
-- **Main → A**: synchronous call activity (`waitForCompletion=true`). Main passes the full case payload + the claim-id array and gets back the list of per-claim results.
+- **Main → A**: synchronous call activity (`waitForCompletion=true`). A is a **single generic subprocess keyed by `caseId` (+ `claimType`)** — **both** the death *Run Per Claim Evaluation* and the TI *Run TI Per Claim Evaluation* nodes call the same `pru-claim-run-evaluation`, passing only `caseId` + `claimType`. A fetches the claim ids by caseId and returns the per-claim results. The death vs TI **examination flag batteries run behind the scenes in the evaluate API** (per-claim), not as BPMN nodes.
 - **A → B**: a **multi-instance callActivity**, `isSequential="false"` (parallel). One instance of B per element of `claimIds`. jBPM collects each B's `claimResult` into a result collection.
 - **B → REST**: B calls `POST /v1/claims/evaluate-claim` for its single claim (via the shared `pru-rest-executor`), parses the response, and returns it to A. A returns the collection to Main.
 
@@ -31,43 +31,62 @@ This is exactly the pattern requested: *"parallel flow for each claim to another
 
 ---
 
-## 2. What changed in `pru-claim-processing.bpmn`
+## 2. The rewritten `pru-claim-processing.bpmn` flow
 
-Spliced in **after the Contestable merge** and **before the Is-TI gateway** (existing downstream — tax/payment/examiner/NIGO — is unchanged and still reachable):
+The main process was **fully replaced** with the outcome-based flow below (the original full submission→payment pipeline is preserved in `pru-claim-submission.bpmn`):
 
 ```
-… → Contestable? → [MRX Pull → MRX check] → (merge)
-      → Get Claim IDs (REST)               ← NEW
-      → Run Per Claim Evaluation (→ A)     ← NEW (parallel fan-out)
-      → Aggregate Case_STP_Eligible        ← NEW (script)
-      → Is TI Claim? → … (existing flow) …
+Start → Script_Bootstrap → «Claim Type?»
+   ├─ TI  → Run TI Per Claim Evaluation (→ A, claimType=TI) → Consolidate TI Flags → Assign TI Case to Reviewer → End (Claim Reviewer)
+   └─ Death →
+        Set Pol Status to Pend Death (PUT /v1/policy/status)   [note: stops billing, reversible]
+        → Check contestability (POST /v1/claims/check-contestability — ANY policy = contestable)
+        → «Contestable?»
+             ├─ yes → MRX Pull (POST /mrx-check) → MRX check, Set MRx_Discrepancy (POST /mrx-check) ─┐
+             └─ no ───────────────────────────────────────────────────────────────────────────────┤ (merge)
+        → Run Per Claim Evaluation  (callActivity → pru-claim-run-evaluation)   [note: case level, once, auto hold]
+        → Aggregate Case_STP_Eligible = All Claim_STP_Eligible (script)
+        → «Outcome?»
+             ├─ STP                → Calculate Benefit Amount (POST /calculate) → End (Payment Process)
+             ├─ Pending Requirement → Send Requirement eMail (POST /nigo/send)
+             │                       → Update Case+claim status Pending Req (POST /status)
+             │                       → Update followup to 30 days (user task, wait)
+             │                            ├─[Documents uploaded]→ Run AI classification (POST /nigo/rerun-idp)
+             │                            │                       → Update Case data (POST /nigo/update-status)
+             │                            │                       → (loop back to Run Per Claim Evaluation)
+             │                            └─[Day 30, boundary timer P30D]→ Assign case to examiner (POST /assign-examiner) → End (Claim Examiner)
+             └─ Refer to Examiner  → Assign case to examiner (POST /assign-examiner) → End (Claim Examiner)
 ```
 
-| New node | Type | Detail |
-|----------|------|--------|
-| **Get Claim IDs** | REST callActivity → `pru-rest-executor` | `POST #{baseUrl}/v1/claims/get-claim-ids` with `{piid, caseId, applicablePolicies}`; onExit parses `claimIds[]` into the `claimIds` List var. **Each id = one claim.** |
-| **Run Per Claim Evaluation** | callActivity → `pru-claim-run-evaluation` (A) | Passes the 9 payload vars + `claimIds`; receives `claimResults` (List). |
-| **Aggregate Case_STP_Eligible** | scriptTask | `caseStpEligible = AND(claimResults[*].claimStpEligible)` — the whole case is STP only if **every** claim is STP-eligible (matches the image label *"Case_STP_Eligible = All Claim_STP_Eligible"*). |
+Key points:
+- **Claim Type gate.** **Death** runs the STP adjudication lane; **TI** runs its own non-STP lane (Run TI Per Claim Evaluation → Consolidate TI Flags → Assign TI Case to Reviewer) and always lands on the **Reviewer** for mandatory medical review (AD-32) — no STP/Outcome gateway.
+- **Case-level contestability.** A single `Check contestability` call decides contestable if **any** policy is contestable; contestable cases go through MRX pull + non-disclosure (`MRx_Discrepancy`) before evaluation.
+- **Run Per Claim Evaluation** is the self-contained sub-process A (it fetches the claim ids and fans out — see §3). The main process passes only case data and gets back `claimResults`.
+- **Aggregate** computes `caseStpEligible = AND(claimResults[*].claimStpEligible)` and sets `outcome` ∈ `STP` / `PENDING` / `EXAMINER`, which the **Outcome** gateway routes on.
+- **Pending-requirement loop.** After sending the requirement email and setting Pending, the case **waits** on `Update followup to 30 days` (user task). On document upload it re-classifies, updates case data, and **loops back to Run Per Claim Evaluation**; an **interrupting boundary timer (P30D)** escalates a still-pending case to an examiner. (This mirrors the existing `pru-nigo-followup` wait/timer pattern.)
+- The loop-back re-enters via the **contestable merge** gateway (which therefore has three incoming: not-contestable, MRX-check, and the loop), keeping `Run Per Claim Evaluation` single-incoming.
 
-New process variables added to the main process: `claimIds` (List), `claimResults` (List), `caseStpEligible` (Boolean).
+Main process variables: `caseId, claimType, policyNumber, applicablePolicies, dateOfDeath, uploadedDocuments, policyData, bankAccountDetails, flagContestable, flagMrxDiscrepancy, claimResults, caseStpEligible, outcome, payoutAmount, pasLockStatus, baseUrl, reqPayload, resPayload, maxRetryCount`.
+
+New main-flow endpoints: `POST /v1/claims/check-contestability`, `POST /v1/claims/assign-examiner` (others reuse existing endpoints).
 
 ---
 
-## 3. Sub-process A — `pru-claim-run-evaluation` (parallel multi-instance)
+## 3. Sub-process A — `pru-claim-run-evaluation` (self-contained parallel multi-instance)
 
-**Purpose:** fan out the claim-id array to per-claim evaluation, in parallel, and collect the results.
+**Purpose:** discover the case's claims, fan them out to per-claim evaluation in parallel, and collect the results. **Self-contained** — it fetches the claim ids itself (the main process has no separate "Get Claim IDs" node, matching the diagram).
 
-- **Inputs:** `claimIds` (List) + all mock_testing_blueprint payload data — `caseId`, `claimType`, `policyNumber`, `applicablePolicies`, `dateOfDeath`, `uploadedDocuments`, `policyData`, `bankAccountDetails`.
-- **Body:** one **multi-instance callActivity** (`Evaluate Claim (per claim)`) → sub-process B.
-  - `multiInstanceLoopCharacteristics isSequential="false"` (parallel).
-  - `loopDataInputRef` = the collection dataInput fed from `claimIds`.
-  - `inputDataItem` = `claimId` — the single element handed to each B instance.
-  - Shared vars (`caseId`, `claimType`, …) are mapped to every instance.
-  - `loopDataOutputRef` = collection dataOutput → `claimResults`; `outputDataItem` = `claimResult` ← B's output.
+- **Inputs (generic):** `caseId` + `claimType` only. Keyed by caseId — the evaluate API looks up per-claim data by `claimId` behind the scenes. `claimType` selects the death vs TI examination battery.
+- **Body:**
+  1. `Script_Bootstrap` — resolve `baseUrl`.
+  2. **Get Claim IDs** (REST → `POST /v1/claims/get-claim-ids`) — onExit parses `claimIds[]` (**each id = one claim**).
+  3. **Evaluate Claim (per claim)** — one **multi-instance callActivity** (`isSequential="false"`, parallel) → sub-process B:
+     - `loopDataInputRef` = collection dataInput fed from `claimIds`; `inputDataItem` = `claimId` (one element per instance).
+     - shared vars mapped to every instance; `loopDataOutputRef` → `claimResults`, `outputDataItem` = `claimResult` ← B's output.
 - **Output:** `claimResults` (List of per-claim result objects) returned to Main.
 
 ```
-Start → [ MI callActivity → B ]  (parallel over claimIds) → End
+Start → Script_Bootstrap → Get Claim IDs → [ MI callActivity → B ] (parallel over claimIds) → End
 ```
 
 ---
@@ -86,21 +105,20 @@ Response shape (per claim): `{ claimId, claimStpEligible, requiresExaminer, pend
 
 ---
 
-## 5. Data lineage (mock_testing_blueprint payload → per claim)
+## 5. Data lineage (generic — keyed by caseId)
 
-The full start payload from [mock_testing_blueprint.md](mock_testing_blueprint.md) is threaded all the way to each per-claim call:
+The evaluation subprocess is generic: the main process passes only `caseId` + `claimType`; everything else is resolved by the evaluate API per claim (behind the scenes).
 
 ```
-Main start payload                 Main → A            A (MI) → B (per claim)
-──────────────────                 ─────────           ──────────────────────
-caseId, claimType, policyNumber,   same 8 vars   +     same 8 vars +
-applicablePolicies, dateOfDeath,   claimIds[]          claimId (this element)
-uploadedDocuments, policyData,
-bankAccountDetails
-                                                        ↓ POST /v1/claims/evaluate-claim
-                                                        claimResult  ──► collected into
-                                   claimResults ◄────── claimResults (List)
-Aggregate: caseStpEligible = AND(claimResults[*].claimStpEligible)
+Main (Death or TI RunEval)      Main → A            A: getClaimIds(caseId)      A (MI) → B (per claim)
+──────────────────────────      ─────────           ──────────────────────      ──────────────────────
+caseId, claimType          ──►  caseId, claimType ──► claimIds[]  (by caseId) ──► caseId, claimType, claimId
+                                                                                   ↓ POST /v1/claims/evaluate-claim
+                                                                                   (DEATH battery US 10.06–10.29
+                                                                                    OR TI battery US 11.02–11.06,
+                                                                                    selected by claimType)
+                                claimResults ◄──────────────────────────────────── claimResult (collected)
+Aggregate: caseStpEligible = AND(claimResults[*].claimStpEligible)   [Death only; TI is always non-STP → Reviewer]
 ```
 
 ---

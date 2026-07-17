@@ -28,7 +28,7 @@ Values **in flow order**:
 | # | Status | When it is **set** | When it is **used / read** | Comment |
 |---|--------|--------------------|-----------------------------|---------|
 | 1 | `Notification` | First notice of a death/TI event received, before a formal claim | Inbox intake; verifier picks up | Track-B entry point (external notification) |
-| 2 | `For Verification` | Verifier needs to capture external death evidence (Track B) | **Verifier** role inbox filter | Verifier does Promote / Hold / Decline |
+| 2 | `For Verification` | Verifier needs to capture external death evidence (Track B) | **Verifier** role inbox filter | Verifier does Promote / Close (implemented; BRD WB-3 also lists Hold/Decline) |
 | 3 | `Claim Submitted` | Track A: claimant submits · Track B: verifier **Promotes** | Start of the internal pipeline | Promote = the Track-B equivalent of Submit |
 | 4 | `For Examination` | Outcome gateway routes to a human (refer-to-examiner, non-contactable pending, NIGO Day-30 escalation); **all TI** cases | **Examiner** role inbox filter | Distinguishes examiner work from verifier work in the mixed inbox |
 | 5 | `Pending` | A blocking dependency exists (referral, medical review, awaiting docs / claim form) | Examiner worklist; SLA clock | **One** Pending status — the *reason* shows as a task, not a separate status (#32) |
@@ -49,13 +49,12 @@ Values **in flow order**:
 
 ### 1.1 Notification status — Track B verification axis (`pru-claim-verification`)
 
-Before a Track B case becomes a formal claim it exists as a **notification** that the Verifier works. The verification process (`pru-claim-verification.bpmn`) drives a small notification-status axis that is **distinct from** `CASE_STATUS` and feeds into it on Promote. The Verifier's `Update Decision` user task sets `verifierDecision` (`PROMOTE` / `HOLD` / `CLOSE`), which the gateway routes on.
+Before a Track B case becomes a formal claim it exists as a **notification** that the Verifier works. The verification process (`pru-claim-verification.bpmn`) drives a small notification-status axis that is **distinct from** `CASE_STATUS` and feeds into it on Promote. The Verifier's `Claims Verifier` user task sets `verifierDecision` (`PROMOTE` / `CLOSE` — no Hold), which the gateway routes on.
 
 | Notification status | Set by (verification node → mock endpoint) | When it is **set** | When it is **used** | Comment |
 |---------------------|--------------------------------------------|--------------------|---------------------|---------|
 | `FOR_VERIFICATION` | Update Case Status → `POST /v1/claims/status` (status=`FOR_VERIFICATION`) | On process start, before assignment | Verifier inbox filter (→ `CASE_STATUS = For Verification`) | Uses the shared status API (same one NIGO uses) |
 | `VERIFIED_PROMOTED` | Promote → `POST /v1/claims/verification/promote` | Verifier chooses **Promote to Claim** | Generates the `caseId` (one per case, **no claim id** — a case has multiple claims); hands off to **System Claim Process** | Track B equivalent of Track A Submit — formal claim begins (→ `CASE_STATUS = Claim Submitted`) |
-| `ON_HOLD` | Verifier chooses **Hold** (status update handled **internally**) | Verifier chooses **Hold** | Control **loops straight back to the `Claims Verifier` task**, re-assigned to the **same user** (via `ActorId`) | No process node/endpoint for Hold — the verifier keeps working the same case |
 | `NOT_VERIFIED_CLOSED` | Close → `POST /v1/claims/verification/close` | Verifier chooses **Close** | Followed by a closure notification; terminates the case | → `CASE_STATUS = Closed`; process ends via a terminate end-event |
 
 > **Promote hand-off.** On `VERIFIED_PROMOTED` the verification process invokes `prudential-claims-submission.pru-claim-processing` as a **call activity** (`System Claim Process`), passing `caseId`, `claimType`, `policyNumber`, `applicablePolicies`, and event/document context — **no claim id** (the main process derives the claim ids per-case via **Get Claim IDs**). This is the entry point from Track B into the main internal-processing pipeline.

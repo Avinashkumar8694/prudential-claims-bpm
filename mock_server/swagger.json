@@ -1317,6 +1317,41 @@
         }
       }
     },
+    "/api/v1/claims/check-contestability": {
+      "post": {
+        "summary": "Check Contestability (case level)",
+        "description": "Main claim processing: checks contestability across ALL associated policies. ANY policy contestable → contestable=true.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "piid": { "type": "string" }, "caseId": { "type": "string" },
+            "dateOfDeath": { "type": "string" },
+            "policies": { "type": "array", "items": { "type": "object", "properties": {
+              "issueDate": { "type": "string" }, "reinstatementDate": { "type": "string" }
+            } }, "description": "Per-policy dates; contestable if DOD-issue<=730d OR reinstatement within 2yr (ANY policy)" }
+          } } } }
+        },
+        "responses": { "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "success": { "type": "boolean" }, "contestable": { "type": "boolean" }
+        } } } } } }
+      }
+    },
+    "/api/v1/claims/assign-examiner": {
+      "post": {
+        "summary": "Assign Case to Examiner",
+        "description": "Main claim processing: assigns the case to a claims examiner (Refer to Examiner outcome, and the Day-30 pending timeout).",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": {
+            "piid": { "type": "string" }, "caseId": { "type": "string" },
+            "reason": { "type": "string", "example": "REFER" }
+          } } } }
+        },
+        "responses": { "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "object", "properties": {
+          "success": { "type": "boolean" }, "assignedTo": { "type": "string" }
+        } } } } } }
+      }
+    },
     "/api/v1/claims/verification/promote": {
       "post": {
         "summary": "V3. Promote to Claim",

@@ -11,7 +11,6 @@
   <bpmn2:itemDefinition id="_bankAccountDetailsItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_verifierDecisionItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_verifierRemarksItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_verifierUserItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_notificationStatusItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_reqPayloadItem" structureRef="String"/>
@@ -28,8 +27,6 @@
   <bpmn2:itemDefinition id="___VER_DECISION_GroupIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_DECISION_verifierDecisionOutputXItem" structureRef="String"/>
   <bpmn2:itemDefinition id="___VER_DECISION_verifierRemarksOutputXItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="___VER_DECISION_verifierUserOutputXItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="___VER_DECISION_ActorIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_PROMOTE_ContentDataInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_PROMOTE_ContentTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___VER_PROMOTE_HandleResponseErrorsInputXItem" structureRef=""/>
@@ -77,7 +74,6 @@
     <bpmn2:property id="bankAccountDetails" itemSubjectRef="_bankAccountDetailsItem" name="bankAccountDetails"/>
     <bpmn2:property id="verifierDecision" itemSubjectRef="_verifierDecisionItem" name="verifierDecision"/>
     <bpmn2:property id="verifierRemarks" itemSubjectRef="_verifierRemarksItem" name="verifierRemarks"/>
-    <bpmn2:property id="verifierUser" itemSubjectRef="_verifierUserItem" name="verifierUser"/>
     <bpmn2:property id="notificationStatus" itemSubjectRef="_notificationStatusItem" name="notificationStatus"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
     <bpmn2:property id="reqPayload" itemSubjectRef="_reqPayloadItem" name="reqPayload"/>
@@ -87,9 +83,7 @@
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_BOOT" sourceRef="_VER_BOOTSTRAP" targetRef="_VER_UPDATE_STATUS">
     </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_STATUS" sourceRef="_VER_UPDATE_STATUS" targetRef="_VER_MERGE">
-    </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_MERGE" sourceRef="_VER_MERGE" targetRef="_VER_DECISION">
+    <bpmn2:sequenceFlow id="_F_STATUS" sourceRef="_VER_UPDATE_STATUS" targetRef="_VER_DECISION">
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_DECISION" sourceRef="_VER_DECISION" targetRef="_VER_GW">
     </bpmn2:sequenceFlow>
@@ -106,14 +100,6 @@
     <bpmn2:sequenceFlow id="_F_P2" sourceRef="_VER_SENDCONF" targetRef="_VER_SYSCLAIM">
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_P3" sourceRef="_VER_SYSCLAIM" targetRef="_VER_END_PROMOTE">
-    </bpmn2:sequenceFlow>
-    <bpmn2:sequenceFlow id="_F_HOLD" sourceRef="_VER_GW" targetRef="_VER_MERGE" name="Hold">
-      <bpmn2:extensionElements>
-        <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[Hold]]></drools:metaValue>
-        </drools:metaData>
-      </bpmn2:extensionElements>
-      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression" id="_F_HOLD_c" language="http://www.java.com/java"><![CDATA[return "HOLD".equals(verifierDecision);]]></bpmn2:conditionExpression>
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F_CLOSE" sourceRef="_VER_GW" targetRef="_VER_CLOSE" name="Close">
       <bpmn2:extensionElements>
@@ -231,37 +217,28 @@ if (r != null && !r.isEmpty()) { try {
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
-    <bpmn2:exclusiveGateway id="_VER_MERGE" gatewayDirection="Converging">
-      <bpmn2:incoming>_F_STATUS</bpmn2:incoming>
-      <bpmn2:incoming>_F_HOLD</bpmn2:incoming>
-      <bpmn2:outgoing>_F_MERGE</bpmn2:outgoing>
-    </bpmn2:exclusiveGateway>
     <bpmn2:userTask id="_VER_DECISION" name="Claims Verifier">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
           <drools:metaValue><![CDATA[Claims Verifier]]></drools:metaValue>
         </drools:metaData>
       </bpmn2:extensionElements>
-      <bpmn2:incoming>_F_MERGE</bpmn2:incoming>
+      <bpmn2:incoming>_F_STATUS</bpmn2:incoming>
       <bpmn2:outgoing>_F_DECISION</bpmn2:outgoing>
       <bpmn2:ioSpecification id="io__VER_DECISION">
         <bpmn2:dataInput id="_VER_DECISION_TaskNameInputX" drools:dtype="Object" itemSubjectRef="___VER_DECISION_TaskNameInputXItem" name="TaskName"/>
         <bpmn2:dataInput id="_VER_DECISION_SkippableInputX" drools:dtype="Object" itemSubjectRef="___VER_DECISION_SkippableInputXItem" name="Skippable"/>
         <bpmn2:dataInput id="_VER_DECISION_GroupIdInputX" drools:dtype="Object" itemSubjectRef="___VER_DECISION_GroupIdInputXItem" name="GroupId"/>
-        <bpmn2:dataInput id="_VER_DECISION_ActorIdInputX" drools:dtype="Object" itemSubjectRef="___VER_DECISION_ActorIdInputXItem" name="ActorId"/>
         <bpmn2:dataOutput id="_VER_DECISION_verifierDecisionOutputX" drools:dtype="String" itemSubjectRef="___VER_DECISION_verifierDecisionOutputXItem" name="verifierDecision"/>
         <bpmn2:dataOutput id="_VER_DECISION_verifierRemarksOutputX" drools:dtype="String" itemSubjectRef="___VER_DECISION_verifierRemarksOutputXItem" name="verifierRemarks"/>
-        <bpmn2:dataOutput id="_VER_DECISION_verifierUserOutputX" drools:dtype="String" itemSubjectRef="___VER_DECISION_verifierUserOutputXItem" name="verifierUser"/>
         <bpmn2:inputSet id="iset__VER_DECISION">
           <bpmn2:dataInputRefs>_VER_DECISION_TaskNameInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_VER_DECISION_SkippableInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_VER_DECISION_GroupIdInputX</bpmn2:dataInputRefs>
-          <bpmn2:dataInputRefs>_VER_DECISION_ActorIdInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet id="oset__VER_DECISION">
           <bpmn2:dataOutputRefs>_VER_DECISION_verifierDecisionOutputX</bpmn2:dataOutputRefs>
           <bpmn2:dataOutputRefs>_VER_DECISION_verifierRemarksOutputX</bpmn2:dataOutputRefs>
-          <bpmn2:dataOutputRefs>_VER_DECISION_verifierUserOutputX</bpmn2:dataOutputRefs>
         </bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation id="dia__VER_DECISION_tn">
@@ -285,10 +262,8 @@ if (r != null && !r.isEmpty()) { try {
           <bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__VER_DECISION_git">_VER_DECISION_GroupIdInputX</bpmn2:to>
         </bpmn2:assignment>
       </bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__VER_DECISION_actor"><bpmn2:sourceRef>verifierUser</bpmn2:sourceRef><bpmn2:targetRef>_VER_DECISION_ActorIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__VER_DECISION_vd"><bpmn2:sourceRef>_VER_DECISION_verifierDecisionOutputX</bpmn2:sourceRef><bpmn2:targetRef>verifierDecision</bpmn2:targetRef></bpmn2:dataOutputAssociation>
       <bpmn2:dataOutputAssociation id="doa__VER_DECISION_vr"><bpmn2:sourceRef>_VER_DECISION_verifierRemarksOutputX</bpmn2:sourceRef><bpmn2:targetRef>verifierRemarks</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-      <bpmn2:dataOutputAssociation id="doa__VER_DECISION_vu"><bpmn2:sourceRef>_VER_DECISION_verifierUserOutputX</bpmn2:sourceRef><bpmn2:targetRef>verifierUser</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:userTask>
     <bpmn2:exclusiveGateway id="_VER_GW" name="Verifier Decision?" gatewayDirection="Diverging">
       <bpmn2:extensionElements>
@@ -298,7 +273,6 @@ if (r != null && !r.isEmpty()) { try {
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_DECISION</bpmn2:incoming>
       <bpmn2:outgoing>_F_PROMOTE</bpmn2:outgoing>
-      <bpmn2:outgoing>_F_HOLD</bpmn2:outgoing>
       <bpmn2:outgoing>_F_CLOSE</bpmn2:outgoing>
     </bpmn2:exclusiveGateway>
     <bpmn2:callActivity id="_VER_PROMOTE" drools:independent="true" drools:waitForCompletion="true" name="Set Notification Status to Verified_Promoted, Generate Case ID" calledElement="prudential-claims-submission.pru-rest-executor">
@@ -711,11 +685,8 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
       <bpmndi:BPMNShape id="shape__VER_UPDATE_STATUS" bpmnElement="_VER_UPDATE_STATUS">
         <dc:Bounds height="80.0" width="130.0" x="360.0" y="220.0"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape__VER_MERGE" bpmnElement="_VER_MERGE">
-        <dc:Bounds height="56.0" width="56.0" x="540.0" y="232.0"/>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_DECISION" bpmnElement="_VER_DECISION">
-        <dc:Bounds height="80.0" width="140.0" x="640.0" y="220.0"/>
+        <dc:Bounds height="80.0" width="150.0" x="540.0" y="220.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_GW" bpmnElement="_VER_GW">
         <dc:Bounds height="56.0" width="56.0" x="1030.0" y="232.0"/>
@@ -742,7 +713,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <dc:Bounds height="56.0" width="56.0" x="1520.0" y="372.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__VER_NOTE" bpmnElement="_VER_NOTE">
-        <dc:Bounds height="80.0" width="160.0" x="630.0" y="90.0"/>
+        <dc:Bounds height="80.0" width="160.0" x="535.0" y="90.0"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="edge__F_START" bpmnElement="_F_START">
         <di:waypoint xsi:type="dc:Point" x="156.0" y="260.0"/>
@@ -756,12 +727,8 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <di:waypoint xsi:type="dc:Point" x="490.0" y="260.0"/>
         <di:waypoint xsi:type="dc:Point" x="540.0" y="260.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge__F_MERGE" bpmnElement="_F_MERGE">
-        <di:waypoint xsi:type="dc:Point" x="596.0" y="260.0"/>
-        <di:waypoint xsi:type="dc:Point" x="640.0" y="260.0"/>
-      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_DECISION" bpmnElement="_F_DECISION">
-        <di:waypoint xsi:type="dc:Point" x="780.0" y="260.0"/>
+        <di:waypoint xsi:type="dc:Point" x="690.0" y="260.0"/>
         <di:waypoint xsi:type="dc:Point" x="1030.0" y="260.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_PROMOTE" bpmnElement="_F_PROMOTE">
@@ -781,12 +748,6 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <di:waypoint xsi:type="dc:Point" x="1660.0" y="105.0"/>
         <di:waypoint xsi:type="dc:Point" x="1700.0" y="105.0"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge__F_HOLD" bpmnElement="_F_HOLD">
-        <di:waypoint xsi:type="dc:Point" x="1058.0" y="288.0"/>
-        <di:waypoint xsi:type="dc:Point" x="1058.0" y="500.0"/>
-        <di:waypoint xsi:type="dc:Point" x="568.0" y="500.0"/>
-        <di:waypoint xsi:type="dc:Point" x="568.0" y="288.0"/>
-      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__F_CLOSE" bpmnElement="_F_CLOSE">
         <di:waypoint xsi:type="dc:Point" x="1058.0" y="288.0"/>
         <di:waypoint xsi:type="dc:Point" x="1058.0" y="400.0"/>
@@ -801,8 +762,8 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <di:waypoint xsi:type="dc:Point" x="1520.0" y="400.0"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge__VER_NOTE_ASSOC" bpmnElement="_VER_NOTE_ASSOC">
-        <di:waypoint xsi:type="dc:Point" x="710.0" y="220.0"/>
-        <di:waypoint xsi:type="dc:Point" x="710.0" y="170.0"/>
+        <di:waypoint xsi:type="dc:Point" x="615.0" y="220.0"/>
+        <di:waypoint xsi:type="dc:Point" x="615.0" y="170.0"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

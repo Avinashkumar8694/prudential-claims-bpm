@@ -3,11 +3,6 @@
   <bpmn2:itemDefinition id="_claimIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_policyNumberItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_dateOfDeathItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_uploadedDocumentsItem" structureRef="java.util.List"/>
-  <bpmn2:itemDefinition id="_policyDataItem" structureRef="java.lang.Object"/>
-  <bpmn2:itemDefinition id="_bankAccountDetailsItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_claimStpEligibleItem" structureRef="Boolean"/>
   <bpmn2:itemDefinition id="_claimResultItem" structureRef="java.lang.Object"/>
   <bpmn2:itemDefinition id="_baseUrlItem" structureRef="String"/>
@@ -26,11 +21,6 @@
     <bpmn2:property id="claimId" itemSubjectRef="_claimIdItem" name="claimId"/>
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
-    <bpmn2:property id="policyNumber" itemSubjectRef="_policyNumberItem" name="policyNumber"/>
-    <bpmn2:property id="dateOfDeath" itemSubjectRef="_dateOfDeathItem" name="dateOfDeath"/>
-    <bpmn2:property id="uploadedDocuments" itemSubjectRef="_uploadedDocumentsItem" name="uploadedDocuments"/>
-    <bpmn2:property id="policyData" itemSubjectRef="_policyDataItem" name="policyData"/>
-    <bpmn2:property id="bankAccountDetails" itemSubjectRef="_bankAccountDetailsItem" name="bankAccountDetails"/>
     <bpmn2:property id="claimStpEligible" itemSubjectRef="_claimStpEligibleItem" name="claimStpEligible"/>
     <bpmn2:property id="claimResult" itemSubjectRef="_claimResultItem" name="claimResult"/>
     <bpmn2:property id="baseUrl" itemSubjectRef="_baseUrlItem" name="baseUrl"/>
@@ -73,8 +63,6 @@ json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("claimId", kcontext.getVariable("claimId"));
 json.putPOJO("claimType", kcontext.getVariable("claimType"));
-json.putPOJO("policyNumber", kcontext.getVariable("policyNumber"));
-json.putPOJO("dateOfDeath", kcontext.getVariable("dateOfDeath"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
 if (r != null && !r.isEmpty()) { try {

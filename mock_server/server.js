@@ -505,20 +505,23 @@ app.post('/api/v1/claims/validate-bank', (req, res) => {
 });
 
 // 8. Contestability check (MRX)
+// US 10.03 MRX Pull + US 10.04 MRX Non-Disclosure Check (case-level, once, AD-2/AD-29).
+// Compares MRX/MIB/pharmacy records against the SINGLE purchase health question only
+// (not cause of death). Non-disclosure / disclosure-related / indeterminable →
+// mrxDiscrepancy=true (STP-blocking, → examiner). NONDISCLOSURE keyword forces a hit.
 app.post('/api/v1/claims/mrx-check', (req, res) => {
   const { caseId } = req.body;
-  const isContest = caseId && caseId.includes('CONTEST');
+  const key = (caseId || '').toUpperCase();
+  const nonDisclosure = /CONTEST|NONDISCLOSURE|MRX/.test(key);
   res.json({
     success: true,
-    alerts: isContest ? ['SUICIDE_CONTESTABLE_WINDOW'] : [],
-    mrxCheckResult: isContest ? {
-      medicalRecordsMatch: true,
-      preExistingExclusionsChecked: true,
-      isSuicide: true,
-      isContestable: true
-    } : {
-      medicalRecordsMatch: true,
-      preExistingExclusionsChecked: true
+    mrxDiscrepancy: nonDisclosure,                 // US 10.04 → CLAIM_FLAG_REGISTRY.MRx_Discrepancy
+    alerts: nonDisclosure ? ['NON_DISCLOSURE_SUSPECTED'] : [],
+    mrxCheckResult: {
+      recordsRetrieved: true,                      // US 10.03 (async pull complete)
+      comparedAgainst: 'SINGLE_PURCHASE_HEALTH_QUESTION',
+      nonDisclosureSuspected: nonDisclosure,
+      indeterminable: false
     }
   });
 });
@@ -585,18 +588,22 @@ app.post('/api/v1/claims/tax/apply', (req, res) => {
 });
 
 // 12. Calculate Benefit
+// US 10.33 Calculate Benefit Amount (STP-eligible only, AD-7). Benefit = policy FACE
+// AMOUNT per claim; SS GI has NO loans / NO cash value. DCI / post-mortem interest and
+// any withholding are PAYMENT-LANE (out of scope here) — no interest math in this node.
 app.post('/api/v1/claims/calculate', (req, res) => {
-  const { caseId } = req.body;
-  const isMisstate = caseId && caseId.includes('MISSTATE');
-  const outstandingLoans = isMisstate ? 30000.00 : 0.00;
+  const { caseId, faceAmount } = req.body;
+  const face = Number(faceAmount) || 50000.00;   // SS GI aggregate cap per insured is $50k
   res.json({
     success: true,
-    payoutAmount: 250000.00,
+    caseId: caseId || null,
+    payoutAmount: face,
     benefitCalculation: {
-      baseFaceAmount: 250000.00,
-      accruedInterest: 1250.00,
-      outstandingLoans: outstandingLoans,
-      netPayout: 251250.00 - outstandingLoans
+      baseFaceAmount: face,
+      outstandingLoans: 0.00,          // AD-7: no loans
+      cashValue: 0.00,                 // AD-7: no cash value
+      netBenefit: face,
+      interestNote: 'DCI / post-mortem interest applied in the Payment lane, not here'
     }
   });
 });
@@ -747,6 +754,55 @@ app.post('/api/v1/claims/nigo/death-verification', (req, res) => {
   });
 });
 
+// --- MAIN CLAIM PROCESSING: extra endpoints for the rewritten flow ---
+
+// US 10.02 Check Contestability (case level, ANY policy → drives one insured-level MRX,
+// AD-2/AD-29/#35). A policy is contestable if DOD − issue date <= 730 days (2 yrs) OR a
+// reinstatement occurred within 2 years prior to death. Case = ANY policy contestable.
+// At launch every policy is < 2 yrs old, so this defaults to contestable=true when dates
+// are not supplied (or a NONCONTEST keyword can force false for testing).
+app.post('/api/v1/claims/check-contestability', (req, res) => {
+  const { caseId, dateOfDeath, policies } = req.body;
+  const key = (caseId || '').toUpperCase();
+  const DAY = 86400000;
+
+  function policyContestable(p) {
+    if (!p || !dateOfDeath || !p.issueDate) return null; // unknown → fall through to default
+    const dod = new Date(dateOfDeath).getTime();
+    const issue = new Date(p.issueDate).getTime();
+    if (isFinite(dod) && isFinite(issue) && (dod - issue) <= 730 * DAY) return true;
+    if (p.reinstatementDate) {
+      const ri = new Date(p.reinstatementDate).getTime();
+      if (isFinite(ri) && isFinite(dod) && (dod - ri) <= 730 * DAY) return true;
+    }
+    return false;
+  }
+
+  let contestable;
+  if (Array.isArray(policies) && policies.length && dateOfDeath) {
+    const results = policies.map(policyContestable);
+    contestable = results.some(r => r === true);           // ANY policy contestable
+  } else if (/NONCONTEST|NOTCONTEST/.test(key)) {
+    contestable = false;
+  } else {
+    contestable = true;   // launch default: policies < 2yrs → always contestable → MRX runs
+  }
+  res.json({ success: true, caseId: caseId || null, contestable });
+});
+
+// Assign the case to a claims examiner (Refer to Examiner, and the Day-30 timeout).
+app.post('/api/v1/claims/assign-examiner', (req, res) => {
+  const { caseId, reason } = req.body;
+  res.json({
+    success: true,
+    caseId: caseId || null,
+    assignedTo: 'claim-examiner-queue',
+    reason: reason || null,
+    assignedAt: new Date().toISOString()
+  });
+});
+
+
 // --- PROCESS 3: CLAIM VERIFICATION (Track B) ENDPOINTS ---
 // Consumed by pru-claim-verification.bpmn. The verifier reviews an inbound
 // notification in the workbench and decides Promote / Hold / Close.
@@ -830,29 +886,100 @@ app.post('/api/v1/claims/get-claim-ids', (req, res) => {
   res.json({ success: true, caseId: caseId || null, claimIds });
 });
 
-// E2. Evaluate Claim — per-claim evaluation (one claim at a time). Returns the
-// per-claim STP eligibility + flags that the parent aggregates into Case_STP_Eligible.
+// E2. Evaluate Claim — per-claim evaluation (US 10.05–10.30). Runs the full flag
+// battery (US 10.06–10.29), each flag true = exception (AD-28). CLAIM_STP_ELIGIBLE
+// = true iff NO blocking flag is set (US 10.30). Every flag is STP-blocking EXCEPT
+// Suicide_Exclusion (10.10, AD-31 open — treated non-blocking here). Scenario is
+// driven by keywords in caseId/claimId, consistent with the rest of the mock.
 app.post('/api/v1/claims/evaluate-claim', (req, res) => {
-  const { caseId, claimId, claimType } = req.body;
-  const key = `${caseId || ''} ${claimId || ''}`;
-  const hasFailure = /FASTTRACKFAIL|BANKFAIL|CONTEST|MINOR|SANCTION|LAPSE|POLICYFAIL/.test(key);
-  const needsExaminer = /CONTEST|SANCTION|EXAMINER/.test(key);
-  const pendingReq = /NIGO|PARTIAL/.test(key);
-  const claimStpEligible = !hasFailure && !needsExaminer && !pendingReq;
-  console.log(`\x1b[36m[EvaluateClaim]\x1b[0m claim=${claimId} -> stpEligible=${claimStpEligible}`);
+  const { caseId, claimId, claimType, mrxDiscrepancy } = req.body;
+  const key = `${caseId || ''} ${claimId || ''}`.toUpperCase();
+  const has = (re) => re.test(key);
+
+  // ---- TI per-claim evaluation (US 11.01-11.06). TI is ALWAYS non-STP (AD-32):
+  // no STP path, no MRX/records pull; flags enrich the case for the Reviewer.
+  if ((claimType || '').toUpperCase() === 'TI') {
+    const tiFlags = {
+      Contestable: has(/CONTEST/),                                  // 11.02 (measured to claim date)
+      Life_Expectancy_Not_Confirmed: has(/LEUNCONF|LIFEEXP|LENOTCONF/), // 11.03 (<=6mo, CA <=12mo)
+      Owner_Incapacity_Indicated: has(/INCAP|POA|GUARDIAN/),        // 11.04
+      Payout_Account_Changed: has(/ACCTCHANGE|ACCOUNTCHANGE/),      // 11.05
+      // 11.06 shared flags (TI applicability)
+      Requirements_Pending: has(/NIGO|REQPENDING/),                 // TI: no 30-day hold -> reviewer (AD-34)
+      Document_Invalid: has(/DOCINVALID|NEEDSREVIEW/),
+      Policy_NotInForce: has(/LAPSE|NOTINFORCE/),
+      Prior_Claim: has(/PRIORCLAIM|PRIOR/),
+      Policy_Alert: has(/POLICYALERT|ALERT/),
+      Age_Gender_Misstatement: has(/MISSTATE/)
+    };
+    const raised = Object.keys(tiFlags).filter(f => tiFlags[f]);
+    console.log(`\x1b[36m[EvaluateClaim:TI]\x1b[0m claim=${claimId} -> Reviewer (non-STP) flags=[${raised.join(',')}]`);
+    return res.json({
+      success: true,
+      claimId: claimId || null,
+      claimType: 'TI',
+      claimStpEligible: false,     // AD-32: TI is never STP
+      requiresExaminer: false,     // TI routes to the Reviewer, not the examiner outcome gateway
+      reviewerRequired: true,      // mandatory medical-expert review (US 11.08)
+      pendingRequirements: tiFlags.Requirements_Pending,
+      blockingFlags: raised,
+      claimFlags: tiFlags
+    });
+  }
+
+  // US 10.06–10.29 flag battery (true = exception)
+  const flags = {
+    Death_Unverified: has(/UNVERIF|DEATHUNVERIF/),                 // 10.06
+    Manner_Unverified: has(/MANNERUNVERIF/),                       // 10.07
+    Homicide_Hold: has(/HOMICIDE/),                                // 10.08
+    Suicide_ADB_State: has(/SUICIDEADB/),                          // 10.09
+    Suicide_Exclusion: has(/SUICIDE(?!ADB)/),                      // 10.10 (open blocking)
+    Foreign_Death: has(/FOREIGNDEATH|FOREIGN(?!PAYEE)/),           // 10.11
+    MRx_Discrepancy: (mrxDiscrepancy === true) || has(/CONTEST|MRX|NONDISCLOSURE/), // 10.12 (carried from case-level 10.04)
+    Requirements_Pending: has(/NIGO|PARTIAL|PENDINGREQ|REQPENDING/), // 10.13
+    Document_Invalid: has(/DOCINVALID|NEEDSREVIEW/),               // 10.14
+    Policy_NotInForce: has(/LAPSE|POLICYFAIL|NOTINFORCE/),         // 10.15
+    Prior_Claim: has(/PRIORCLAIM|PRIOR/),                          // 10.16
+    Assignment: has(/ASSIGNMENT|ASSIGN(?!EXAM)/),                  // 10.17
+    Policy_Alert: has(/POLICYALERT|ALERT/),                        // 10.18
+    Bene_Change: has(/BENECHANGE/),                                // 10.19
+    Minor_Bene: has(/MINOR/),                                      // 10.20
+    Bene_Deceased: has(/BENEDECEASED|BENEDEC/),                    // 10.21
+    Bene_Incompetent: has(/INCOMPETENT|INCOMP/),                   // 10.22
+    Foreign_Payee: has(/FOREIGNPAYEE/),                            // 10.23
+    Divorce_Review: has(/DIVORCE/),                                // 10.24
+    FL_OK_Spouse: has(/FLOK|FL_OK/),                               // 10.25
+    Bene_Mismatch: has(/MISMATCH|SANCTION|NOMATCH/),               // 10.26
+    Age_Gender_Misstatement: has(/MISSTATE/),                      // 10.27
+    Claimant_NotBene: has(/NOTBENE|CLAIMANTNOTBENE/),              // 10.28
+    Accident_ADB_Investigation: has(/ACCIDENTADB|ACCIDENT|\bADB\b/) // 10.29
+  };
+
+  // Non-contactable pending party forces examiner (US 10.32 contactability rule)
+  const nonContactable = has(/NOCONTACT|NO_CONTACT/);
+
+  // Suicide_Exclusion (10.10) blocking status is OPEN (AD-31) — treat as non-blocking.
+  const NON_BLOCKING = new Set(['Suicide_Exclusion']);
+  const blocking = Object.keys(flags).filter(f => flags[f] && !NON_BLOCKING.has(f));
+  const claimStpEligible = blocking.length === 0;                  // US 10.30
+
+  // Outcome contribution: Requirements_Pending can route to the pending loop ONLY if
+  // it is the sole blocking condition AND the pending party is contactable; anything
+  // else → examiner (US 10.32).
+  const onlyPendingBlocks = blocking.length > 0 && blocking.every(f => f === 'Requirements_Pending');
+  const pendingRequirements = flags.Requirements_Pending && onlyPendingBlocks && !nonContactable;
+  const requiresExaminer = !claimStpEligible && !pendingRequirements;
+
+  console.log(`\x1b[36m[EvaluateClaim]\x1b[0m claim=${claimId} stp=${claimStpEligible} pending=${pendingRequirements} examiner=${requiresExaminer} blocking=[${blocking.join(',')}]`);
   res.json({
     success: true,
     claimId: claimId || null,
     claimType: claimType || 'DEATH',
-    claimStpEligible,
-    requiresExaminer: needsExaminer,
-    pendingRequirements: pendingReq,
-    claimFlags: {
-      contestable: /CONTEST/.test(key),
-      minorBene: /MINOR/.test(key),
-      sanctionsHit: /SANCTION/.test(key),
-      policyNotInForce: /LAPSE|POLICYFAIL/.test(key)
-    }
+    claimStpEligible,            // US 10.30
+    requiresExaminer,            // → Outcome: Refer to Examiner
+    pendingRequirements,         // → Outcome: Pending Requirement (contactable, docs-only)
+    blockingFlags: blocking,
+    claimFlags: flags            // full US 10.06–10.29 set (true = exception)
   });
 });
 
