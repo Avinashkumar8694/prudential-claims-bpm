@@ -18,14 +18,15 @@
 ```mermaid
 graph TD
     MAIN["pru-claim-processing<br/>(main)"] -->|callActivity| A["pru-claim-run-evaluation<br/>(sub-process A)"]
-    A -->|multi-instance parallel<br/>one instance per claimId| B["pru-claim-per-claim-eval<br/>(sub-process B)"]
+    A -->|embedded MI sub-process<br/>Evaluate Claim per claim| MI["(parallel · one instance per claimId)"]
+    MI -->|plain reusable callActivity<br/>Evaluate One Claim| B["pru-claim-per-claim-eval<br/>(sub-process B)"]
     B -->|REST callActivity| RX["pru-rest-executor"]
-    RX -->|POST /v1/claims/evaluate-claim| API[(Integration Layer)]
+    RX -->|POST /claims/evaluate-claim| API[(Integration Layer)]
 ```
 
 - **Main → A**: synchronous call activity (`waitForCompletion=true`). A is a **single generic subprocess keyed by `caseId` (+ `claimType`)** — **both** the death *Run Per Claim Evaluation* and the TI *Run TI Per Claim Evaluation* nodes call the same `pru-claim-run-evaluation`, passing only `caseId` + `claimType`. A fetches the claim ids by caseId and returns the per-claim results. The death vs TI **examination flag batteries run behind the scenes in the evaluate API** (per-claim), not as BPMN nodes.
-- **A → B**: a **multi-instance callActivity**, `isSequential="false"` (parallel). One instance of B per element of `claimIds`. jBPM collects each B's `claimResult` into a result collection.
-- **B → REST**: B calls `POST /v1/claims/evaluate-claim` for its single claim (via the shared `pru-rest-executor`), parses the response, and returns it to A. A returns the collection to Main.
+- **A → (fan-out) → B**: A contains an **embedded multi-instance sub-process** *"Evaluate Claim (per claim)"* (`isSequential="false"`, parallel; one instance per element of `claimIds`). Inside each instance a **plain reusable callActivity** *"Evaluate One Claim"* calls **B**, passing the per-instance `claimId` plus `caseId`/`claimType`; each B's `claimResult` is collected back into `claimResults`. The multi-instance lives on the **embedded wrapper**, not on the call-activity — see the note in §3.
+- **B → REST**: B calls `POST /claims/evaluate-claim` for its single claim (via the shared `pru-rest-executor`), parses the response, and returns it to A. A returns the collection to Main.
 
 This is exactly the pattern requested: *"parallel flow for each claim to another sub-process to process one claim at a time; that process calls a REST API, gets a response and sends it to the parent parallel flow, and the parallel flow sends the response back to the claim-processing flow."*
 
@@ -82,14 +83,16 @@ New main-flow endpoint: `POST /v1/claims/check-contestability` (others reuse exi
 - **Body:**
   1. `Script_Bootstrap` — resolve `baseUrl`.
   2. **Get Claim IDs** (REST → `POST #{baseUrl}/claims/get-claim-ids`) — onExit parses `claimIds[]` (**each id = one claim**).
-  3. **Evaluate Claim (per claim)** — one **multi-instance callActivity** (`isSequential="false"`, parallel) → sub-process B:
-     - `loopDataInputRef` = collection dataInput fed from `claimIds`; `inputDataItem` = `claimId` (one element per instance).
-     - shared vars mapped to every instance; `loopDataOutputRef` → `claimResults`, `outputDataItem` = `claimResult` ← B's output.
-     - **Stunner constraint:** a reusable-subprocess node must expose a *regular* (non-MI) data-input **and** data-output assignment, otherwise the modeler flags *"Reusable Subprocess with no Assignments Data Input/Data Output"*. The MI collection (`IN_COLLECTION`/`OUT_COLLECTION`) and loop item/result (`claimId`/`claimResult`) are treated as MI wiring and don't count. The node therefore carries `caseId`/`claimType` as scalar inputs **and** a harmless `caseId` scalar output round-trip (constant across instances) to satisfy the check.
+  3. **Evaluate Claim (per claim)** — an **embedded multi-instance sub-process** (`isSequential="false"`, parallel):
+     - `loopDataInputRef` = collection dataInput fed from `claimIds`; `inputDataItem` = `claimId` (one element per instance); `loopDataOutputRef` → `claimResults`, `outputDataItem` = `claimResult`.
+     - Inside each instance a **plain reusable callActivity** *"Evaluate One Claim"* → **B**, mapping `claimId` (loop item) + `caseId`/`claimType` (parent scope) in, and `claimResult` out.
+     - **Why an embedded wrapper instead of a multi-instance call-activity:** Stunner's *"Reusable Subprocess with no Assignments Data Input/Data Output"* rule fires when a **call-activity** with a `calledElement` has no data assignments the modeler recognises. On a *multi-instance* call-activity, Stunner treats the collection (`IN_COLLECTION`/`OUT_COLLECTION`) and loop item/result as MI wiring, not assignments — so it always reports the node as having none, and no combination of extra scalar in/out assignments clears it. Moving the multi-instance onto an **embedded sub-process** (a "Multiple Instance Subprocess" node, to which that rule does not apply) and calling B from a **plain** call-activity inside it — which carries ordinary `claimId`/`caseId`/`claimType` in + `claimResult` out assignments (the same shape as the working *System Claim Process* node) — sidesteps the rule while keeping A → B a genuine reusable sub-process call.
 - **Output:** `claimResults` (List of per-claim result objects) returned to Main.
 
 ```
-Start → Script_Bootstrap → Get Claim IDs → [ MI callActivity → B ] (parallel over claimIds) → End
+Start → Script_Bootstrap → Get Claim IDs
+      → [ embedded MI sub-process: Start → «Evaluate One Claim» (callActivity → B) → End ]  (parallel over claimIds)
+      → End
 ```
 
 ---
