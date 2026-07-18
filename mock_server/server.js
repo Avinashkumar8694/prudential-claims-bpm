@@ -884,8 +884,8 @@ app.post('/api/v1/claims/get-claim-ids', (req, res) => {
 // = true iff NO blocking flag is set (US 10.30). Every flag is STP-blocking EXCEPT
 // Suicide_Exclusion (10.10, AD-31 open — treated non-blocking here). Scenario is
 // driven by keywords in caseId/claimId, consistent with the rest of the mock.
-app.post('/api/v1/claims/evaluate-claim', (req, res) => {
-  const { caseId, claimId, claimType, mrxDiscrepancy } = req.body;
+// Evaluate a SINGLE claim and return its result object (US 10.06-10.30 death / US 11.x TI).
+function evaluateOneClaim(caseId, claimId, claimType, mrxDiscrepancy) {
   const key = `${caseId || ''} ${claimId || ''}`.toUpperCase();
   const has = (re) => re.test(key);
 
@@ -907,8 +907,7 @@ app.post('/api/v1/claims/evaluate-claim', (req, res) => {
     };
     const raised = Object.keys(tiFlags).filter(f => tiFlags[f]);
     console.log(`\x1b[36m[EvaluateClaim:TI]\x1b[0m claim=${claimId} -> Reviewer (non-STP) flags=[${raised.join(',')}]`);
-    return res.json({
-      success: true,
+    return {
       claimId: claimId || null,
       claimType: 'TI',
       claimStpEligible: false,     // AD-32: TI is never STP
@@ -917,7 +916,7 @@ app.post('/api/v1/claims/evaluate-claim', (req, res) => {
       pendingRequirements: tiFlags.Requirements_Pending,
       blockingFlags: raised,
       claimFlags: tiFlags
-    });
+    };
   }
 
   // US 10.06–10.29 flag battery (true = exception)
@@ -964,8 +963,7 @@ app.post('/api/v1/claims/evaluate-claim', (req, res) => {
   const requiresExaminer = !claimStpEligible && !pendingRequirements;
 
   console.log(`\x1b[36m[EvaluateClaim]\x1b[0m claim=${claimId} stp=${claimStpEligible} pending=${pendingRequirements} examiner=${requiresExaminer} blocking=[${blocking.join(',')}]`);
-  res.json({
-    success: true,
+  return {
     claimId: claimId || null,
     claimType: claimType || 'DEATH',
     claimStpEligible,            // US 10.30
@@ -973,7 +971,23 @@ app.post('/api/v1/claims/evaluate-claim', (req, res) => {
     pendingRequirements,         // → Outcome: Pending Requirement (contactable, docs-only)
     blockingFlags: blocking,
     claimFlags: flags            // full US 10.06–10.29 set (true = exception)
-  });
+  };
+}
+
+app.post('/api/v1/claims/evaluate-claim', (req, res) => {
+  const { caseId, claimId, claimIds, claimType, mrxDiscrepancy } = req.body;
+
+  // Batch (case-level) call from pru-claim-run-evaluation: ONE request, evaluate EVERY claim
+  // id and return the per-claim results as claimResults[] (replaces the old parallel fan-out).
+  if (Array.isArray(claimIds) && claimIds.length > 0) {
+    const claimResults = claimIds.map(id => evaluateOneClaim(caseId, id, claimType, mrxDiscrepancy));
+    console.log(`\x1b[36m[EvaluateClaim:batch]\x1b[0m case=${caseId} type=${claimType || 'DEATH'} claims=${claimResults.length}`);
+    return res.json({ success: true, caseId: caseId || null, claimType: claimType || 'DEATH', claimResults });
+  }
+
+  // Single-claim call (back-compat for a direct per-claim invocation).
+  const one = evaluateOneClaim(caseId, claimId, claimType, mrxDiscrepancy);
+  res.json({ success: true, ...one });
 });
 
 

@@ -10,21 +10,19 @@
   <bpmn2:itemDefinition id="_resPayloadItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_maxRetryCountItem" structureRef="Integer"/>
   <bpmn2:itemDefinition id="_urlGetClaimIdsItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="__A_MI_INItem" structureRef="java.util.List"/>
-  <bpmn2:itemDefinition id="__A_MI_OUTItem" structureRef="java.util.List"/>
-  <bpmn2:itemDefinition id="_A_claimIdItem" structureRef="String"/>
-  <bpmn2:itemDefinition id="_A_claimResultItem" structureRef="java.lang.Object"/>
-  <bpmn2:itemDefinition id="__A_EVAL_claimIdInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__A_EVAL_caseIdInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__A_EVAL_claimTypeInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__A_EVAL_cidInputXItem" structureRef=""/>
-  <bpmn2:itemDefinition id="__A_EVAL_claimResultOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="_urlEvaluateClaimItem" structureRef="String"/>
   <bpmn2:itemDefinition id="___A_GETIDS_ContentDataInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_ContentTypeInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_HandleResponseErrorsInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_MethodInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_UrlInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___A_GETIDS_ResultOutputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___A_EVAL_ContentDataInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___A_EVAL_ContentTypeInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___A_EVAL_HandleResponseErrorsInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___A_EVAL_MethodInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___A_EVAL_UrlInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="___A_EVAL_ResultOutputXItem" structureRef=""/>
   <bpmn2:error id="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
   <bpmn2:process id="prudential-claims-submission.pru-claim-run-evaluation" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-run-evaluation" isExecutable="true" processType="Public">
@@ -38,10 +36,11 @@
     <bpmn2:property id="resPayload" itemSubjectRef="_resPayloadItem" name="resPayload"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
     <bpmn2:property id="urlGetClaimIds" itemSubjectRef="_urlGetClaimIdsItem" name="urlGetClaimIds"/>
+    <bpmn2:property id="urlEvaluateClaim" itemSubjectRef="_urlEvaluateClaimItem" name="urlEvaluateClaim"/>
     <bpmn2:sequenceFlow id="_A_F1" sourceRef="_A_START" targetRef="_A_BOOT"/>
     <bpmn2:sequenceFlow id="_A_F2" sourceRef="_A_BOOT" targetRef="_A_GETIDS"/>
-    <bpmn2:sequenceFlow id="_A_F3" sourceRef="_A_GETIDS" targetRef="_A_MI"/>
-    <bpmn2:sequenceFlow id="_A_F4" sourceRef="_A_MI" targetRef="_A_END"/>
+    <bpmn2:sequenceFlow id="_A_F3" sourceRef="_A_GETIDS" targetRef="_A_EVAL"/>
+    <bpmn2:sequenceFlow id="_A_F4" sourceRef="_A_EVAL" targetRef="_A_END"/>
     <bpmn2:startEvent id="_A_START" name="Run Per Claim Evaluation">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -64,13 +63,14 @@ if (url == null || url.isEmpty()) { try { url = (String) kcontext.getKieRuntime(
 if (url == null || url.isEmpty()) { url = "http://localhost:3000"; }
 kcontext.setVariable("baseUrl", url);
 kcontext.setVariable("urlGetClaimIds", url + "/claims/get-claim-ids");
+kcontext.setVariable("urlEvaluateClaim", url + "/claims/evaluate-claim");
 if (kcontext.getVariable("maxRetryCount") == null) { kcontext.setVariable("maxRetryCount", Integer.valueOf(3)); }
 System.out.println("[BPM][BOOTSTRAP] process=pru-claim-run-evaluation | piid=" + kcontext.getProcessInstance().getId() + " | caseId=" + kcontext.getVariable("caseId") + " | baseUrl=" + url);]]></bpmn2:script>
     </bpmn2:scriptTask>
     <bpmn2:callActivity id="_A_GETIDS" drools:independent="true" drools:waitForCompletion="true" name="Get Claim IDs" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Get Claim IDs]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:GetClaimIds] process=pru-claim-run-evaluation | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:GetClaimIds] process=pru-claim-run-evaluation | cid=" + kcontext.getVariable("cid") + " | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
@@ -110,63 +110,53 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__A_GETIDS_u"><bpmn2:sourceRef>urlGetClaimIds</bpmn2:sourceRef><bpmn2:targetRef>_A_GETIDS_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__A_GETIDS_r"><bpmn2:sourceRef>_A_GETIDS_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
-    <bpmn2:subProcess id="_A_MI" name="Evaluate Claim (per claim)">
+    <bpmn2:callActivity id="_A_EVAL" drools:independent="true" drools:waitForCompletion="true" name="Evaluate Claim" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
-        <drools:metaData name="elementname">
-          <drools:metaValue><![CDATA[Evaluate Claim (per claim)]]></drools:metaValue>
-        </drools:metaData>
+        <drools:metaData name="elementname"><drools:metaValue><![CDATA[Evaluate Claim]]></drools:metaValue></drools:metaData>
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:EvaluateClaim] process=pru-claim-run-evaluation | cid=" + kcontext.getVariable("cid") + " | caseId=" + kcontext.getVariable("caseId") + " | claimIds=" + kcontext.getVariable("claimIds"));
+com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
+json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
+json.putPOJO("caseId", kcontext.getVariable("caseId"));
+json.putPOJO("claimType", kcontext.getVariable("claimType"));
+json.putPOJO("claimIds", kcontext.getVariable("claimIds"));
+kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
+        <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
+if (r != null && !r.isEmpty()) { try {
+  com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(r);
+  java.util.List results = new java.util.ArrayList();
+  com.fasterxml.jackson.databind.JsonNode arr = root.has("claimResults") ? root.get("claimResults") : root;
+  if (arr != null && arr.isArray()) { for (com.fasterxml.jackson.databind.JsonNode it : arr) { results.add(it); } }
+  else if (arr != null && arr.isObject()) { results.add(arr); }
+  kcontext.setVariable("claimResults", results);
+  System.out.println("[BPM][EXIT:EvaluateClaim] claimResults count=" + results.size());
+} catch(Exception e) { System.out.println("[BPM][EXIT:EvaluateClaim][ERROR] " + e.getMessage()); } }]]></drools:script></drools:onExit-script>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_A_F3</bpmn2:incoming>
       <bpmn2:outgoing>_A_F4</bpmn2:outgoing>
-      <bpmn2:ioSpecification id="io_A_MI">
-        <bpmn2:dataInput id="_A_MI_IN" drools:dtype="java.util.List" itemSubjectRef="__A_MI_INItem" name="IN_COLLECTION"/>
-        <bpmn2:dataOutput id="_A_MI_OUT" drools:dtype="java.util.List" itemSubjectRef="__A_MI_OUTItem" name="OUT_COLLECTION"/>
-        <bpmn2:inputSet id="iset_A_MI"><bpmn2:dataInputRefs>_A_MI_IN</bpmn2:dataInputRefs></bpmn2:inputSet>
-        <bpmn2:outputSet id="oset_A_MI"><bpmn2:dataOutputRefs>_A_MI_OUT</bpmn2:dataOutputRefs></bpmn2:outputSet>
+      <bpmn2:ioSpecification id="io__A_EVAL">
+        <bpmn2:dataInput id="_A_EVAL_ContentDataInputX" drools:dtype="" itemSubjectRef="___A_EVAL_ContentDataInputXItem" name="ContentData"/>
+        <bpmn2:dataInput id="_A_EVAL_ContentTypeInputX" drools:dtype="" itemSubjectRef="___A_EVAL_ContentTypeInputXItem" name="ContentType"/>
+        <bpmn2:dataInput id="_A_EVAL_HandleResponseErrorsInputX" drools:dtype="" itemSubjectRef="___A_EVAL_HandleResponseErrorsInputXItem" name="HandleResponseErrors"/>
+        <bpmn2:dataInput id="_A_EVAL_MethodInputX" drools:dtype="" itemSubjectRef="___A_EVAL_MethodInputXItem" name="Method"/>
+        <bpmn2:dataInput id="_A_EVAL_UrlInputX" drools:dtype="" itemSubjectRef="___A_EVAL_UrlInputXItem" name="Url"/>
+        <bpmn2:dataOutput id="_A_EVAL_ResultOutputX" drools:dtype="" itemSubjectRef="___A_EVAL_ResultOutputXItem" name="Result"/>
+        <bpmn2:inputSet id="iset__A_EVAL">
+          <bpmn2:dataInputRefs>_A_EVAL_ContentDataInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_EVAL_ContentTypeInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_EVAL_HandleResponseErrorsInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_EVAL_MethodInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_A_EVAL_UrlInputX</bpmn2:dataInputRefs>
+        </bpmn2:inputSet>
+        <bpmn2:outputSet id="oset__A_EVAL"><bpmn2:dataOutputRefs>_A_EVAL_ResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
       </bpmn2:ioSpecification>
-      <bpmn2:dataInputAssociation id="dia_A_incol"><bpmn2:sourceRef>claimIds</bpmn2:sourceRef><bpmn2:targetRef>_A_MI_IN</bpmn2:targetRef></bpmn2:dataInputAssociation>
-      <bpmn2:dataOutputAssociation id="doa_A_outcol"><bpmn2:sourceRef>_A_MI_OUT</bpmn2:sourceRef><bpmn2:targetRef>claimResults</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-      <bpmn2:multiInstanceLoopCharacteristics isSequential="false">
-        <bpmn2:loopDataInputRef>_A_MI_IN</bpmn2:loopDataInputRef>
-        <bpmn2:loopDataOutputRef>_A_MI_OUT</bpmn2:loopDataOutputRef>
-        <bpmn2:inputDataItem id="claimId" itemSubjectRef="_A_claimIdItem" name="claimId"/>
-        <bpmn2:outputDataItem id="claimResult" itemSubjectRef="_A_claimResultItem" name="claimResult"/>
-      </bpmn2:multiInstanceLoopCharacteristics>
-      <bpmn2:startEvent id="_A_MI_START">
-        <bpmn2:outgoing>_A_MI_F1</bpmn2:outgoing>
-      </bpmn2:startEvent>
-      <bpmn2:callActivity id="_A_EVAL" drools:independent="true" drools:waitForCompletion="true" name="Evaluate One Claim" calledElement="prudential-claims-submission.pru-claim-per-claim-eval">
-        <bpmn2:extensionElements>
-          <drools:metaData name="elementname"><drools:metaValue><![CDATA[Evaluate One Claim]]></drools:metaValue></drools:metaData>
-        </bpmn2:extensionElements>
-        <bpmn2:incoming>_A_MI_F1</bpmn2:incoming>
-        <bpmn2:outgoing>_A_MI_F2</bpmn2:outgoing>
-        <bpmn2:ioSpecification id="io_A_EVAL">
-          <bpmn2:dataInput id="_A_EVAL_claimIdInputX" drools:dtype="" itemSubjectRef="__A_EVAL_claimIdInputXItem" name="claimId"/>
-          <bpmn2:dataInput id="_A_EVAL_caseIdInputX" drools:dtype="" itemSubjectRef="__A_EVAL_caseIdInputXItem" name="caseId"/>
-          <bpmn2:dataInput id="_A_EVAL_claimTypeInputX" drools:dtype="" itemSubjectRef="__A_EVAL_claimTypeInputXItem" name="claimType"/>
-          <bpmn2:dataInput id="_A_EVAL_cidInputX" drools:dtype="" itemSubjectRef="__A_EVAL_cidInputXItem" name="cid"/>
-          <bpmn2:dataOutput id="_A_EVAL_claimResultOutputX" drools:dtype="" itemSubjectRef="__A_EVAL_claimResultOutputXItem" name="claimResult"/>
-          <bpmn2:inputSet id="iset_A_EVAL">
-            <bpmn2:dataInputRefs>_A_EVAL_claimIdInputX</bpmn2:dataInputRefs>
-            <bpmn2:dataInputRefs>_A_EVAL_caseIdInputX</bpmn2:dataInputRefs>
-            <bpmn2:dataInputRefs>_A_EVAL_claimTypeInputX</bpmn2:dataInputRefs>
-            <bpmn2:dataInputRefs>_A_EVAL_cidInputX</bpmn2:dataInputRefs>
-          </bpmn2:inputSet>
-          <bpmn2:outputSet id="oset_A_EVAL"><bpmn2:dataOutputRefs>_A_EVAL_claimResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
-        </bpmn2:ioSpecification>
-        <bpmn2:dataInputAssociation id="dia_A_EVAL_claimId"><bpmn2:sourceRef>claimId</bpmn2:sourceRef><bpmn2:targetRef>_A_EVAL_claimIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-        <bpmn2:dataInputAssociation id="dia_A_EVAL_caseId"><bpmn2:sourceRef>caseId</bpmn2:sourceRef><bpmn2:targetRef>_A_EVAL_caseIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-        <bpmn2:dataInputAssociation id="dia_A_EVAL_claimType"><bpmn2:sourceRef>claimType</bpmn2:sourceRef><bpmn2:targetRef>_A_EVAL_claimTypeInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-        <bpmn2:dataInputAssociation id="dia_A_EVAL_cid"><bpmn2:sourceRef>cid</bpmn2:sourceRef><bpmn2:targetRef>_A_EVAL_cidInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
-        <bpmn2:dataOutputAssociation id="doa_A_EVAL_result"><bpmn2:sourceRef>_A_EVAL_claimResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>claimResult</bpmn2:targetRef></bpmn2:dataOutputAssociation>
-      </bpmn2:callActivity>
-      <bpmn2:endEvent id="_A_MI_END">
-        <bpmn2:incoming>_A_MI_F2</bpmn2:incoming>
-      </bpmn2:endEvent>
-      <bpmn2:sequenceFlow id="_A_MI_F1" sourceRef="_A_MI_START" targetRef="_A_EVAL"/>
-      <bpmn2:sequenceFlow id="_A_MI_F2" sourceRef="_A_EVAL" targetRef="_A_MI_END"/>
-    </bpmn2:subProcess>
+      <bpmn2:dataInputAssociation id="dia__A_EVAL_cd"><bpmn2:sourceRef>reqPayload</bpmn2:sourceRef><bpmn2:targetRef>_A_EVAL_ContentDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__A_EVAL_ct"><bpmn2:targetRef>_A_EVAL_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__A_EVAL_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__A_EVAL_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__A_EVAL_ctt">_A_EVAL_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__A_EVAL_he"><bpmn2:targetRef>_A_EVAL_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__A_EVAL_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__A_EVAL_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__A_EVAL_het">_A_EVAL_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__A_EVAL_m"><bpmn2:targetRef>_A_EVAL_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__A_EVAL_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__A_EVAL_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__A_EVAL_mt">_A_EVAL_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__A_EVAL_u"><bpmn2:sourceRef>urlEvaluateClaim</bpmn2:sourceRef><bpmn2:targetRef>_A_EVAL_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataOutputAssociation id="doa__A_EVAL_r"><bpmn2:sourceRef>_A_EVAL_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
+    </bpmn2:callActivity>
     <bpmn2:endEvent id="_A_END" name="End">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
@@ -181,17 +171,12 @@ if (r != null && !r.isEmpty()) { try {
       <bpmndi:BPMNShape id="s__A_START" bpmnElement="_A_START"><dc:Bounds height="56.0" width="56.0" x="100.0" y="120.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s__A_BOOT" bpmnElement="_A_BOOT"><dc:Bounds height="80.0" width="120.0" x="200.0" y="108.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="s__A_GETIDS" bpmnElement="_A_GETIDS"><dc:Bounds height="80.0" width="130.0" x="360.0" y="108.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s__A_MI" bpmnElement="_A_MI" isExpanded="true"><dc:Bounds height="170.0" width="440.0" x="520.0" y="63.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s__A_MI_START" bpmnElement="_A_MI_START"><dc:Bounds height="36.0" width="36.0" x="545.0" y="130.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s__A_EVAL" bpmnElement="_A_EVAL"><dc:Bounds height="80.0" width="150.0" x="640.0" y="108.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s__A_MI_END" bpmnElement="_A_MI_END"><dc:Bounds height="36.0" width="36.0" x="880.0" y="130.0"/></bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s__A_END" bpmnElement="_A_END"><dc:Bounds height="56.0" width="56.0" x="1000.0" y="120.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s__A_EVAL" bpmnElement="_A_EVAL"><dc:Bounds height="80.0" width="140.0" x="540.0" y="108.0"/></bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s__A_END" bpmnElement="_A_END"><dc:Bounds height="56.0" width="56.0" x="730.0" y="120.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="e__A_F1" bpmnElement="_A_F1"><di:waypoint xsi:type="dc:Point" x="156.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="200.0" y="148.0"/></bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="e__A_F2" bpmnElement="_A_F2"><di:waypoint xsi:type="dc:Point" x="320.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="360.0" y="148.0"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e__A_F3" bpmnElement="_A_F3"><di:waypoint xsi:type="dc:Point" x="490.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="520.0" y="148.0"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e__A_F4" bpmnElement="_A_F4"><di:waypoint xsi:type="dc:Point" x="960.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="1000.0" y="148.0"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e__A_MI_F1" bpmnElement="_A_MI_F1"><di:waypoint xsi:type="dc:Point" x="581.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="640.0" y="148.0"/></bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e__A_MI_F2" bpmnElement="_A_MI_F2"><di:waypoint xsi:type="dc:Point" x="790.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="880.0" y="148.0"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e__A_F3" bpmnElement="_A_F3"><di:waypoint xsi:type="dc:Point" x="490.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="540.0" y="148.0"/></bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e__A_F4" bpmnElement="_A_F4"><di:waypoint xsi:type="dc:Point" x="680.0" y="148.0"/><di:waypoint xsi:type="dc:Point" x="730.0" y="148.0"/></bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn2:definitions>

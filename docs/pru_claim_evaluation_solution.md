@@ -1,12 +1,12 @@
 # Per-Claim Evaluation Fan-Out — Solution Design
 
-> Adds a **parallel, one-claim-at-a-time** evaluation layer to the main claims process. Before evaluation, a REST call fetches the **array of claim ids** for the case; each id is then evaluated **in parallel** in its own sub-process, and the per-claim results are aggregated back into a single `Case_STP_Eligible` decision.
+> Adds an evaluation layer to the main claims process. A REST call fetches the **array of claim ids** for the case, then a **single** REST call to `/claims/evaluate-claim` evaluates the whole batch and returns the per-claim results, which are aggregated back into a single `Case_STP_Eligible` decision.
 >
 > **New / changed files**
 > - `src/main/resources/org/jbpm/pru-claim-submission.bpmn` — **backup** of the original full pipeline (distinct id `…pru-claim-submission`); the pre-rewrite `pru-claim-processing` logic lives here
 > - `src/main/resources/org/jbpm/pru-claim-processing.bpmn` — **rewritten** to the new outcome-based flow (§2)
-> - `src/main/resources/org/jbpm/pru-claim-run-evaluation.bpmn` — sub-process A (**self-contained**: Get Claim IDs → parallel multi-instance)
-> - `src/main/resources/org/jbpm/pru-claim-per-claim-eval.bpmn` — sub-process B (evaluates one claim via REST)
+> - `src/main/resources/org/jbpm/pru-claim-run-evaluation.bpmn` — sub-process A (**self-contained, linear**: Get Claim IDs → single Evaluate Claim REST call)
+> - `src/main/resources/org/jbpm/pru-claim-per-claim-eval.bpmn` — sub-process B (evaluates one claim via REST) — **no longer called by A** (the per-claim fan-out was replaced by A's single batch call); kept for reference / direct reuse
 > - `mock_server/server.js` + `swagger.json` — evaluation + main-flow endpoints
 >
 > Companions: [claims_solution.md](claims_solution.md), [mock_testing_blueprint.md](mock_testing_blueprint.md), [pru_claim_verification_solution.md](pru_claim_verification_solution.md).
@@ -18,17 +18,16 @@
 ```mermaid
 graph TD
     MAIN["pru-claim-processing<br/>(main)"] -->|callActivity| A["pru-claim-run-evaluation<br/>(sub-process A)"]
-    A -->|embedded MI sub-process<br/>Evaluate Claim per claim| MI["(parallel · one instance per claimId)"]
-    MI -->|plain reusable callActivity<br/>Evaluate One Claim| B["pru-claim-per-claim-eval<br/>(sub-process B)"]
-    B -->|REST callActivity| RX["pru-rest-executor"]
-    RX -->|POST /claims/evaluate-claim| API[(Integration Layer)]
+    A -->|REST callActivity · Get Claim IDs| RX1["pru-rest-executor"]
+    RX1 -->|POST /claims/get-claim-ids| API1[(Integration Layer)]
+    A -->|REST callActivity · Evaluate Claim| RX2["pru-rest-executor"]
+    RX2 -->|POST /claims/evaluate-claim<br/>batch: claimIds| API2[(Integration Layer)]
 ```
 
-- **Main → A**: synchronous call activity (`waitForCompletion=true`). A is a **single generic subprocess keyed by `caseId` (+ `claimType`)** — **both** the death *Run Per Claim Evaluation* and the TI *Run TI Per Claim Evaluation* nodes call the same `pru-claim-run-evaluation`, passing only `caseId` + `claimType`. A fetches the claim ids by caseId and returns the per-claim results. The death vs TI **examination flag batteries run behind the scenes in the evaluate API** (per-claim), not as BPMN nodes.
-- **A → (fan-out) → B**: A contains an **embedded multi-instance sub-process** *"Evaluate Claim (per claim)"* (`isSequential="false"`, parallel; one instance per element of `claimIds`). Inside each instance a **plain reusable callActivity** *"Evaluate One Claim"* calls **B**, passing the per-instance `claimId` plus `caseId`/`claimType`; each B's `claimResult` is collected back into `claimResults`. The multi-instance lives on the **embedded wrapper**, not on the call-activity — see the note in §3.
-- **B → REST**: B calls `POST /claims/evaluate-claim` for its single claim (via the shared `pru-rest-executor`), parses the response, and returns it to A. A returns the collection to Main.
+- **Main → A**: synchronous call activity (`waitForCompletion=true`). A is a **single generic subprocess keyed by `caseId` (+ `claimType`)** — **both** the death *Run Per Claim Evaluation* and the TI *Run TI Per Claim Evaluation* nodes call the same `pru-claim-run-evaluation`, passing `caseId` + `claimType` (+ `cid`). The death vs TI **examination flag batteries run behind the scenes in the evaluate API**, not as BPMN nodes.
+- **A is linear (no parallel fan-out):** `Get Claim IDs` fetches the `claimIds[]` for the case, then a **single** `Evaluate Claim` REST call (`POST /claims/evaluate-claim`) sends the whole `claimIds` batch; the API evaluates every claim and returns `claimResults[]`, which A hands back to Main. The earlier per-claim parallel multi-instance (via sub-process B) was replaced by this one batch call.
 
-This is exactly the pattern requested: *"parallel flow for each claim to another sub-process to process one claim at a time; that process calls a REST API, gets a response and sends it to the parent parallel flow, and the parallel flow sends the response back to the claim-processing flow."*
+This matches the request: *"in pru-claim-run-evaluation directly call the REST node instead of using parallel — remove the parallel, single REST call to `/claims/evaluate-claim`."*
 
 ---
 
@@ -75,24 +74,21 @@ New main-flow endpoint: `POST /v1/claims/check-contestability` (others reuse exi
 
 ---
 
-## 3. Sub-process A — `pru-claim-run-evaluation` (self-contained parallel multi-instance)
+## 3. Sub-process A — `pru-claim-run-evaluation` (self-contained, linear)
 
-**Purpose:** discover the case's claims, fan them out to per-claim evaluation in parallel, and collect the results. **Self-contained** — it fetches the claim ids itself (the main process has no separate "Get Claim IDs" node, matching the diagram).
+**Purpose:** discover the case's claims and evaluate them in **one** REST call, then return the per-claim results. **Self-contained** — it fetches the claim ids itself.
 
-- **Inputs (generic):** `caseId` + `claimType` only. Keyed by caseId — the evaluate API looks up per-claim data by `claimId` behind the scenes. `claimType` selects the death vs TI examination battery.
-- **Body:**
-  1. `Script_Bootstrap` — resolve `baseUrl`.
-  2. **Get Claim IDs** (REST → `POST #{baseUrl}/claims/get-claim-ids`) — onExit parses `claimIds[]` (**each id = one claim**).
-  3. **Evaluate Claim (per claim)** — an **embedded multi-instance sub-process** (`isSequential="false"`, parallel):
-     - `loopDataInputRef` = collection dataInput fed from `claimIds`; `inputDataItem` = `claimId` (one element per instance); `loopDataOutputRef` → `claimResults`, `outputDataItem` = `claimResult`.
-     - Inside each instance a **plain reusable callActivity** *"Evaluate One Claim"* → **B**, mapping `claimId` (loop item) + `caseId`/`claimType` (parent scope) in, and `claimResult` out.
-     - **Why an embedded wrapper instead of a multi-instance call-activity:** Stunner's *"Reusable Subprocess with no Assignments Data Input/Data Output"* rule fires when a **call-activity** with a `calledElement` has no data assignments the modeler recognises. On a *multi-instance* call-activity, Stunner treats the collection (`IN_COLLECTION`/`OUT_COLLECTION`) and loop item/result as MI wiring, not assignments — so it always reports the node as having none, and no combination of extra scalar in/out assignments clears it. Moving the multi-instance onto an **embedded sub-process** (a "Multiple Instance Subprocess" node, to which that rule does not apply) and calling B from a **plain** call-activity inside it — which carries ordinary `claimId`/`caseId`/`claimType` in + `claimResult` out assignments (the same shape as the working *System Claim Process* node) — sidesteps the rule while keeping A → B a genuine reusable sub-process call.
+- **Inputs (generic):** `caseId` + `claimType` + `cid`. Keyed by caseId — the evaluate API looks up per-claim data behind the scenes. `claimType` selects the death vs TI examination battery.
+- **Body (linear — no parallel / multi-instance):**
+  1. `Script_Bootstrap` — resolve `baseUrl` and build the endpoint URL variables (`urlGetClaimIds`, `urlEvaluateClaim`).
+  2. **Get Claim IDs** (REST → `POST /claims/get-claim-ids`, payload `{piid, cid, caseId}`) — onExit parses `claimIds[]`.
+  3. **Evaluate Claim** (REST → `POST /claims/evaluate-claim`, payload `{piid, cid, caseId, claimType, claimIds}`) — a **single, direct** call that evaluates the whole batch; onExit parses `claimResults[]` from the response (accepts a top-level `claimResults` array or a bare array).
 - **Output:** `claimResults` (List of per-claim result objects) returned to Main.
 
+> **Design note:** this replaced an earlier parallel multi-instance fan-out (one instance per claim → sub-process B). Per the request, A now makes a single direct REST call to `/claims/evaluate-claim` for the whole batch. Sub-process B (`pru-claim-per-claim-eval`) is consequently **no longer called by A** — the file is retained for reference / direct reuse but is not on the active path.
+
 ```
-Start → Script_Bootstrap → Get Claim IDs
-      → [ embedded MI sub-process: Start → «Evaluate One Claim» (callActivity → B) → End ]  (parallel over claimIds)
-      → End
+Start → Script_Bootstrap → Get Claim IDs → Evaluate Claim (POST /claims/evaluate-claim, batch) → End
 ```
 
 ---

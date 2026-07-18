@@ -62,7 +62,7 @@ System.out.println("[BPM][BOOTSTRAP] process=pru-claim-per-claim-eval | piid=" +
     <bpmn2:callActivity id="_B_EVAL" drools:independent="true" drools:waitForCompletion="true" name="Evaluate Claim (REST)" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Evaluate Claim (REST)]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:EvaluateClaim] process=pru-claim-per-claim-eval | piid=" + kcontext.getProcessInstance().getId() + " | claimId=" + kcontext.getVariable("claimId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:EvaluateClaim] process=pru-claim-per-claim-eval | piid=" + kcontext.getProcessInstance().getId() + " | cid=" + kcontext.getVariable("cid") + " | caseId=" + kcontext.getVariable("caseId") + " | claimId=" + kcontext.getVariable("claimId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
