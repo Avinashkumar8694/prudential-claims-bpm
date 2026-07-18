@@ -1523,8 +1523,8 @@
     },
     "/api/v1/claims/evaluate-claim": {
       "post": {
-        "summary": "E2. Evaluate Claim (per claim)",
-        "description": "Per-claim evaluation (one claim at a time), called in parallel by the run-evaluation sub-process. Returns per-claim STP eligibility + flags aggregated by the parent into Case_STP_Eligible.",
+        "summary": "E2. Evaluate Claim (case-level)",
+        "description": "Case-level evaluation called once by the run-evaluation sub-process (\"claim evaluation\" node). The request carries NO claim ids — it is keyed only by caseId (+ claimType/cid/piid); the API resolves the case's claims itself and returns claimResults[] (per-claim STP eligibility + flags), which the parent aggregates into Case_STP_Eligible.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1533,10 +1533,9 @@
                 "type": "object",
                 "properties": {
                   "piid": { "type": "string" },
+                  "cid": { "type": "integer" },
                   "caseId": { "type": "string" },
-                  "claimId": { "type": "string" },
-                  "claimType": { "type": "string" },
-                  "policyNumber": { "type": "string" }
+                  "claimType": { "type": "string" }
                 }
               }
             }
@@ -1551,11 +1550,22 @@
                   "type": "object",
                   "properties": {
                     "success": { "type": "boolean" },
-                    "claimId": { "type": "string" },
-                    "claimStpEligible": { "type": "boolean" },
-                    "requiresExaminer": { "type": "boolean" },
-                    "pendingRequirements": { "type": "boolean" },
-                    "claimFlags": { "type": "object" }
+                    "caseId": { "type": "string" },
+                    "claimType": { "type": "string" },
+                    "claimResults": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "claimId": { "type": "string" },
+                          "claimStpEligible": { "type": "boolean" },
+                          "requiresExaminer": { "type": "boolean" },
+                          "pendingRequirements": { "type": "boolean" },
+                          "blockingFlags": { "type": "array", "items": { "type": "string" } },
+                          "claimFlags": { "type": "object" }
+                        }
+                      }
+                    }
                   }
                 }
               }

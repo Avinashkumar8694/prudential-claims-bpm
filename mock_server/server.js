@@ -974,20 +974,30 @@ function evaluateOneClaim(caseId, claimId, claimType, mrxDiscrepancy) {
   };
 }
 
-app.post('/api/v1/claims/evaluate-claim', (req, res) => {
-  const { caseId, claimId, claimIds, claimType, mrxDiscrepancy } = req.body;
+// Derive the claim ids for a case (same convention as /claims/get-claim-ids):
+// a caseId containing MULTI yields 3 claims, otherwise a single claim.
+function claimIdsForCase(caseId) {
+  const yr = new Date().getFullYear();
+  const list = (caseId && caseId.includes('MULTI')) ? ['POLA', 'POLB', 'POLC'] : ['POL12345'];
+  return list.map((p, i) => `CLM-${yr}-${String(1000 + i)}-${String(p).replace(/[^A-Za-z0-9]/g, '')}`);
+}
 
-  // Batch (case-level) call from pru-claim-run-evaluation: ONE request, evaluate EVERY claim
-  // id and return the per-claim results as claimResults[] (replaces the old parallel fan-out).
-  if (Array.isArray(claimIds) && claimIds.length > 0) {
-    const claimResults = claimIds.map(id => evaluateOneClaim(caseId, id, claimType, mrxDiscrepancy));
-    console.log(`\x1b[36m[EvaluateClaim:batch]\x1b[0m case=${caseId} type=${claimType || 'DEATH'} claims=${claimResults.length}`);
-    return res.json({ success: true, caseId: caseId || null, claimType: claimType || 'DEATH', claimResults });
+app.post('/api/v1/claims/evaluate-claim', (req, res) => {
+  const { caseId, claimId, claimType, mrxDiscrepancy } = req.body;
+
+  // Direct single-claim call (back-compat for a per-claim invocation, e.g. pru-claim-per-claim-eval).
+  if (claimId) {
+    const one = evaluateOneClaim(caseId, claimId, claimType, mrxDiscrepancy);
+    return res.json({ success: true, ...one });
   }
 
-  // Single-claim call (back-compat for a direct per-claim invocation).
-  const one = evaluateOneClaim(caseId, claimId, claimType, mrxDiscrepancy);
-  res.json({ success: true, ...one });
+  // Case-level call from pru-claim-run-evaluation ("claim evaluation"): the request carries
+  // NO claim ids -- keyed only by caseId (+ claimType/cid/piid). The API resolves the case's
+  // claims itself (here derived from caseId) and returns the per-claim results as claimResults[].
+  const ids = claimIdsForCase(caseId);
+  const claimResults = ids.map(id => evaluateOneClaim(caseId, id, claimType, mrxDiscrepancy));
+  console.log(`\x1b[36m[EvaluateClaim:case]\x1b[0m case=${caseId} type=${claimType || 'DEATH'} claims=${claimResults.length}`);
+  res.json({ success: true, caseId: caseId || null, claimType: claimType || 'DEATH', claimResults });
 });
 
 
