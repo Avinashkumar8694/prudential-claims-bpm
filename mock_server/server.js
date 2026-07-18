@@ -818,6 +818,7 @@ app.post('/api/v1/claims/verification/promote', (req, res) => {
     notificationId: notificationId || null,
     notificationStatus: 'VERIFIED_PROMOTED',
     caseId: `CASE-${ymd}-${seq}`,
+    cid: seq, // numeric case-level correlation id (fits a Java Integer); threaded into every downstream REST payload
     claimType: claimType || 'DEATH',
     caseStatus: 'CLAIM_SUBMITTED'
   });

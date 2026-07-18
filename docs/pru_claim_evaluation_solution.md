@@ -103,7 +103,7 @@ Start → Script_Bootstrap → Get Claim IDs
 
 - **Inputs:** `claimId` (the loop item) + `caseId`, `claimType`, `policyNumber`, `dateOfDeath`, `uploadedDocuments`, `policyData`, `bankAccountDetails`.
 - **Flow:** `Start → Script_Bootstrap (baseUrl) → Evaluate Claim (REST) → End`.
-  - **Evaluate Claim** = callActivity → `pru-rest-executor`, `POST #{baseUrl}/claims/evaluate-claim` with `{piid, caseId, claimId, claimType}` (every REST payload carries `piid`).
+  - **Evaluate Claim** = callActivity → `pru-rest-executor`, `POST #{baseUrl}/claims/evaluate-claim` with `{piid, cid, caseId, claimId, claimType}` (every REST payload carries `piid` **and** `cid` — the case-level numeric correlation id, threaded in from the parent via the call activities).
   - onExit stores the whole response in `claimResult` (Object) and `claimStpEligible` (Boolean).
 - **Output:** `claimResult` — collected by A's multi-instance output.
 
@@ -131,7 +131,7 @@ Aggregate: caseStpEligible = AND(claimResults[*].claimStpEligible)   [Death only
 
 ## 6. New mock / integration endpoints
 
-The BPMN nodes call `#{baseUrl}/…` — **no `/v1` in the node URLs** (the version lives in `baseUrl`). The mock serves `/api/v1/…`, so for local testing set `INTEGRATION_LAYER_URL=http://localhost:3010/api/v1`. Every REST payload includes `piid`.
+**Endpoint URLs are built once in the bootstrap script** (the script node right after Start): each endpoint's full URL is composed from `baseUrl` and stored in its own `String` process variable (e.g. `urlGetClaimIds = baseUrl + "/claims/get-claim-ids"`), and every REST node maps its `Url` input directly from that variable — no path is hardcoded on any node. There is still **no `/v1` in the paths** (the version lives in `baseUrl`); the mock serves `/api/v1/…`, so for local testing set `INTEGRATION_LAYER_URL=http://localhost:3010/api/v1`. Every REST payload includes `piid` **and** `cid` (the case-level numeric correlation id, propagated verification → processing → A → B).
 
 ### E1 — Get Claim IDs
 ```bash

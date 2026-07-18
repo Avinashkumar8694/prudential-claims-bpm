@@ -112,7 +112,7 @@ The grey data object in the source diagram (*notification, policy, event, insure
 
 ## 5. Node specifications
 
-REST nodes follow the repo convention exactly: a `callActivity → prudential-claims-submission.pru-rest-executor` with an **onEntry** script that builds `reqPayload` (always including `piid`) and an **onExit** script that parses `resPayload`. URLs use `#{baseUrl}/...` (no `/v1` in the node — the version lives in `baseUrl`). User tasks assign the role via the `GroupId` data input (like N13b/N16 in the main process).
+REST nodes follow the repo convention exactly: a `callActivity → prudential-claims-submission.pru-rest-executor` with an **onEntry** script that builds `reqPayload` (always including `piid` **and** `cid` — the case-level numeric correlation id; the Promote onExit captures `cid` from the response and it is then passed into the System Claim Process call activity) and an **onExit** script that parses `resPayload`. **All endpoint URLs are composed once in the `Script_Bootstrap` node** (right after Start) into per-endpoint `String` variables (`urlClaimsStatus`, `urlClaimsVerificationPromote`, …); each REST node maps its `Url` input straight from that variable — no path is hardcoded on a node (still no `/v1` — the version lives in `baseUrl`). User tasks assign the role via the `GroupId` data input (like N13b/N16 in the main process).
 
 | # | Node | Type | Endpoint (`#{baseUrl}` + …) | Reads | Writes |
 |---|------|------|------------------------------|-------|--------|

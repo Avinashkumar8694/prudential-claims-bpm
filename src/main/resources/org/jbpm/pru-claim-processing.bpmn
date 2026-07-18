@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:bpsim="http://www.bpsim.org/schemas/1.0" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_pru_claim_processing_defs" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd http://www.bpsim.org/schemas/1.0 bpsim.xsd http://www.omg.org/spec/DD/20100524/DC DC.xsd http://www.omg.org/spec/DD/20100524/DI DI.xsd " exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_cidItem" structureRef="Integer"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_policyNumberItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_applicablePoliciesItem" structureRef="java.util.List"/>
@@ -45,9 +46,11 @@
   <bpmn2:itemDefinition id="___P_MRX_CHECK_ResultOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_RUN_caseIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_RUN_claimTypeInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P_RUN_cidInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_RUN_claimResultsOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_TIRUN_caseIdInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_TIRUN_claimTypeInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="__P_TIRUN_cidInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="__P_TIRUN_claimResultsOutputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_TI_ASSIGN_TaskNameInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_TI_ASSIGN_SkippableInputXItem" structureRef=""/>
@@ -90,11 +93,20 @@
   <bpmn2:itemDefinition id="___P_REFER_ASSIGN_TaskNameInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_REFER_ASSIGN_SkippableInputXItem" structureRef=""/>
   <bpmn2:itemDefinition id="___P_REFER_ASSIGN_GroupIdInputXItem" structureRef=""/>
+  <bpmn2:itemDefinition id="_urlPolicyStatusItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_urlClaimsCheckContestabilityItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_urlClaimsMrxCheckItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_urlClaimsCalculateItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_urlClaimsNigoSendItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_urlClaimsStatusItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_urlClaimsNigoRerunIdpItem" structureRef="String"/>
+  <bpmn2:itemDefinition id="_urlClaimsNigoUpdateStatusItem" structureRef="String"/>
   <bpmn2:error id="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
   <bpmn2:signal id="_SIG_AI_DONE" name="AIClassificationComplete"/>
   <bpmn2:process id="prudential-claims-submission.pru-claim-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-processing" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
+    <bpmn2:property id="cid" itemSubjectRef="_cidItem" name="cid"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
     <bpmn2:property id="policyNumber" itemSubjectRef="_policyNumberItem" name="policyNumber"/>
     <bpmn2:property id="applicablePolicies" itemSubjectRef="_applicablePoliciesItem" name="applicablePolicies"/>
@@ -113,6 +125,14 @@
     <bpmn2:property id="reqPayload" itemSubjectRef="_reqPayloadItem" name="reqPayload"/>
     <bpmn2:property id="resPayload" itemSubjectRef="_resPayloadItem" name="resPayload"/>
     <bpmn2:property id="maxRetryCount" itemSubjectRef="_maxRetryCountItem" name="maxRetryCount"/>
+    <bpmn2:property id="urlPolicyStatus" itemSubjectRef="_urlPolicyStatusItem" name="urlPolicyStatus"/>
+    <bpmn2:property id="urlClaimsCheckContestability" itemSubjectRef="_urlClaimsCheckContestabilityItem" name="urlClaimsCheckContestability"/>
+    <bpmn2:property id="urlClaimsMrxCheck" itemSubjectRef="_urlClaimsMrxCheckItem" name="urlClaimsMrxCheck"/>
+    <bpmn2:property id="urlClaimsCalculate" itemSubjectRef="_urlClaimsCalculateItem" name="urlClaimsCalculate"/>
+    <bpmn2:property id="urlClaimsNigoSend" itemSubjectRef="_urlClaimsNigoSendItem" name="urlClaimsNigoSend"/>
+    <bpmn2:property id="urlClaimsStatus" itemSubjectRef="_urlClaimsStatusItem" name="urlClaimsStatus"/>
+    <bpmn2:property id="urlClaimsNigoRerunIdp" itemSubjectRef="_urlClaimsNigoRerunIdpItem" name="urlClaimsNigoRerunIdp"/>
+    <bpmn2:property id="urlClaimsNigoUpdateStatus" itemSubjectRef="_urlClaimsNigoUpdateStatusItem" name="urlClaimsNigoUpdateStatus"/>
     <bpmn2:sequenceFlow id="_F1" sourceRef="_P_START" targetRef="_P_BOOT">
     </bpmn2:sequenceFlow>
     <bpmn2:sequenceFlow id="_F2" sourceRef="_P_BOOT" targetRef="_P_CLAIMTYPE">
@@ -213,6 +233,14 @@ if (url == null || url.isEmpty()) { url = System.getenv("INTEGRATION_LAYER_URL")
 if (url == null || url.isEmpty()) { try { url = (String) kcontext.getKieRuntime().getEnvironment().get("INTEGRATION_LAYER_URL"); } catch (Exception e) {} }
 if (url == null || url.isEmpty()) { url = "http://localhost:3000"; }
 kcontext.setVariable("baseUrl", url);
+kcontext.setVariable("urlPolicyStatus", url + "/policy/status");
+kcontext.setVariable("urlClaimsCheckContestability", url + "/claims/check-contestability");
+kcontext.setVariable("urlClaimsMrxCheck", url + "/claims/mrx-check");
+kcontext.setVariable("urlClaimsCalculate", url + "/claims/calculate");
+kcontext.setVariable("urlClaimsNigoSend", url + "/claims/nigo/send");
+kcontext.setVariable("urlClaimsStatus", url + "/claims/status");
+kcontext.setVariable("urlClaimsNigoRerunIdp", url + "/claims/nigo/rerun-idp");
+kcontext.setVariable("urlClaimsNigoUpdateStatus", url + "/claims/nigo/update-status");
 if (kcontext.getVariable("maxRetryCount") == null) { kcontext.setVariable("maxRetryCount", Integer.valueOf(3)); }
 System.out.println("[BPM][BOOTSTRAP] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId") + " | claimType=" + kcontext.getVariable("claimType") + " | baseUrl=" + url);]]></bpmn2:script>
     </bpmn2:scriptTask>
@@ -232,6 +260,7 @@ System.out.println("[BPM][BOOTSTRAP] process=pru-claim-processing | caseId=" + k
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:SetPendDeath] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
 json.put("status", "PENDING_DEATH_CLAIM");
@@ -260,7 +289,7 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:
       <bpmn2:dataInputAssociation id="dia__P_SETPEND_ct"><bpmn2:targetRef>_P_SETPEND_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_ctt">_P_SETPEND_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SETPEND_he"><bpmn2:targetRef>_P_SETPEND_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_het">_P_SETPEND_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SETPEND_m"><bpmn2:targetRef>_P_SETPEND_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_mf"><![CDATA[PUT]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_mt">_P_SETPEND_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_SETPEND_u"><bpmn2:targetRef>_P_SETPEND_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SETPEND_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_uf"><![CDATA[#{baseUrl}/policy/status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SETPEND_ut">_P_SETPEND_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_SETPEND_u"><bpmn2:sourceRef>urlPolicyStatus</bpmn2:sourceRef><bpmn2:targetRef>_P_SETPEND_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_SETPEND_r"><bpmn2:sourceRef>_P_SETPEND_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:callActivity id="_P_CHECKCONTEST" drools:independent="true" drools:waitForCompletion="true" name="Check contestability. ANY policy = contestable" calledElement="prudential-claims-submission.pru-rest-executor">
@@ -269,6 +298,7 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:CheckContestability] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
 json.putPOJO("dateOfDeath", kcontext.getVariable("dateOfDeath"));
@@ -302,7 +332,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_ct"><bpmn2:targetRef>_P_CHECKCONTEST_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_ctt">_P_CHECKCONTEST_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_he"><bpmn2:targetRef>_P_CHECKCONTEST_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_het">_P_CHECKCONTEST_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_m"><bpmn2:targetRef>_P_CHECKCONTEST_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_mt">_P_CHECKCONTEST_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_u"><bpmn2:targetRef>_P_CHECKCONTEST_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CHECKCONTEST_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_uf"><![CDATA[#{baseUrl}/claims/check-contestability]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CHECKCONTEST_ut">_P_CHECKCONTEST_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_CHECKCONTEST_u"><bpmn2:sourceRef>urlClaimsCheckContestability</bpmn2:sourceRef><bpmn2:targetRef>_P_CHECKCONTEST_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_CHECKCONTEST_r"><bpmn2:sourceRef>_P_CHECKCONTEST_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:exclusiveGateway id="_P_CONTEST_GW" name="Contestable?" gatewayDirection="Diverging">
@@ -321,6 +351,7 @@ if (r != null && !r.isEmpty()) { try {
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:MRXPull] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
@@ -348,7 +379,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_ct"><bpmn2:targetRef>_P_MRX_PULL_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_ctt">_P_MRX_PULL_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_he"><bpmn2:targetRef>_P_MRX_PULL_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_het">_P_MRX_PULL_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_m"><bpmn2:targetRef>_P_MRX_PULL_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_mt">_P_MRX_PULL_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_u"><bpmn2:targetRef>_P_MRX_PULL_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_PULL_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_uf"><![CDATA[#{baseUrl}/claims/mrx-check]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_PULL_ut">_P_MRX_PULL_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_MRX_PULL_u"><bpmn2:sourceRef>urlClaimsMrxCheck</bpmn2:sourceRef><bpmn2:targetRef>_P_MRX_PULL_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_MRX_PULL_r"><bpmn2:sourceRef>_P_MRX_PULL_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:callActivity id="_P_MRX_CHECK" drools:independent="true" drools:waitForCompletion="true" name="MRX check, Set MRX_Discrepancy Flag" calledElement="prudential-claims-submission.pru-rest-executor">
@@ -357,6 +388,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:MRXCheck] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
@@ -389,7 +421,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_ct"><bpmn2:targetRef>_P_MRX_CHECK_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_ctt">_P_MRX_CHECK_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_he"><bpmn2:targetRef>_P_MRX_CHECK_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_het">_P_MRX_CHECK_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_m"><bpmn2:targetRef>_P_MRX_CHECK_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_mt">_P_MRX_CHECK_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_u"><bpmn2:targetRef>_P_MRX_CHECK_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_MRX_CHECK_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_uf"><![CDATA[#{baseUrl}/claims/mrx-check]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_MRX_CHECK_ut">_P_MRX_CHECK_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_MRX_CHECK_u"><bpmn2:sourceRef>urlClaimsMrxCheck</bpmn2:sourceRef><bpmn2:targetRef>_P_MRX_CHECK_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_MRX_CHECK_r"><bpmn2:sourceRef>_P_MRX_CHECK_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:exclusiveGateway id="_P_CONTEST_MERGE" gatewayDirection="Converging">
@@ -409,15 +441,18 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:ioSpecification id="io__P_RUNEVAL">
         <bpmn2:dataInput id="_P_RUN_caseIdInputX" drools:dtype="" itemSubjectRef="__P_RUN_caseIdInputXItem" name="caseId"/>
         <bpmn2:dataInput id="_P_RUN_claimTypeInputX" drools:dtype="" itemSubjectRef="__P_RUN_claimTypeInputXItem" name="claimType"/>
+        <bpmn2:dataInput id="_P_RUN_cidInputX" drools:dtype="" itemSubjectRef="__P_RUN_cidInputXItem" name="cid"/>
         <bpmn2:dataOutput id="_P_RUN_claimResultsOutputX" drools:dtype="" itemSubjectRef="__P_RUN_claimResultsOutputXItem" name="claimResults"/>
         <bpmn2:inputSet id="iset__P_RUNEVAL">
           <bpmn2:dataInputRefs>_P_RUN_caseIdInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P_RUN_claimTypeInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_RUN_cidInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet id="oset__P_RUNEVAL"><bpmn2:dataOutputRefs>_P_RUN_claimResultsOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation id="dia_P_RUN_caseId"><bpmn2:sourceRef>caseId</bpmn2:sourceRef><bpmn2:targetRef>_P_RUN_caseIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia_P_RUN_claimType"><bpmn2:sourceRef>claimType</bpmn2:sourceRef><bpmn2:targetRef>_P_RUN_claimTypeInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_P_RUN_cid"><bpmn2:sourceRef>cid</bpmn2:sourceRef><bpmn2:targetRef>_P_RUN_cidInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa_P_RUN_res"><bpmn2:sourceRef>_P_RUN_claimResultsOutputX</bpmn2:sourceRef><bpmn2:targetRef>claimResults</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:scriptTask id="_P_AGGREGATE" name="Aggregate Case_STP_Eligible = All Claim_STP_Eligible" scriptFormat="http://www.java.com/java">
@@ -479,15 +514,18 @@ System.out.println("[BPM][AGGREGATE] caseStpEligible=" + allStp + " | outcome=" 
       <bpmn2:ioSpecification id="io__P_TI_RUNEVAL">
         <bpmn2:dataInput id="_P_TIRUN_caseIdInputX" drools:dtype="" itemSubjectRef="__P_TIRUN_caseIdInputXItem" name="caseId"/>
         <bpmn2:dataInput id="_P_TIRUN_claimTypeInputX" drools:dtype="" itemSubjectRef="__P_TIRUN_claimTypeInputXItem" name="claimType"/>
+        <bpmn2:dataInput id="_P_TIRUN_cidInputX" drools:dtype="" itemSubjectRef="__P_TIRUN_cidInputXItem" name="cid"/>
         <bpmn2:dataOutput id="_P_TIRUN_claimResultsOutputX" drools:dtype="" itemSubjectRef="__P_TIRUN_claimResultsOutputXItem" name="claimResults"/>
         <bpmn2:inputSet id="iset__P_TI_RUNEVAL">
           <bpmn2:dataInputRefs>_P_TIRUN_caseIdInputX</bpmn2:dataInputRefs>
           <bpmn2:dataInputRefs>_P_TIRUN_claimTypeInputX</bpmn2:dataInputRefs>
+          <bpmn2:dataInputRefs>_P_TIRUN_cidInputX</bpmn2:dataInputRefs>
         </bpmn2:inputSet>
         <bpmn2:outputSet id="oset__P_TI_RUNEVAL"><bpmn2:dataOutputRefs>_P_TIRUN_claimResultsOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet>
       </bpmn2:ioSpecification>
       <bpmn2:dataInputAssociation id="dia_P_TIRUN_caseId"><bpmn2:sourceRef>caseId</bpmn2:sourceRef><bpmn2:targetRef>_P_TIRUN_caseIdInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia_P_TIRUN_claimType"><bpmn2:sourceRef>claimType</bpmn2:sourceRef><bpmn2:targetRef>_P_TIRUN_claimTypeInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia_P_TIRUN_cid"><bpmn2:sourceRef>cid</bpmn2:sourceRef><bpmn2:targetRef>_P_TIRUN_cidInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa_P_TIRUN_res"><bpmn2:sourceRef>_P_TIRUN_claimResultsOutputX</bpmn2:sourceRef><bpmn2:targetRef>claimResults</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:scriptTask id="_P_TI_CONSOLIDATE" name="Consolidate TI Flags for the Case" scriptFormat="http://www.java.com/java">
@@ -542,6 +580,7 @@ System.out.println("[BPM][TI-CONSOLIDATE] process=pru-claim-processing | caseId=
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:CalcBenefit] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("applicablePolicies", kcontext.getVariable("applicablePolicies"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
@@ -573,7 +612,7 @@ if (r != null && !r.isEmpty()) { try {
       <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_ct"><bpmn2:targetRef>_P_CALCBENEFIT_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_ctt">_P_CALCBENEFIT_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_he"><bpmn2:targetRef>_P_CALCBENEFIT_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_het">_P_CALCBENEFIT_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_m"><bpmn2:targetRef>_P_CALCBENEFIT_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_mt">_P_CALCBENEFIT_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_u"><bpmn2:targetRef>_P_CALCBENEFIT_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_CALCBENEFIT_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_uf"><![CDATA[#{baseUrl}/claims/calculate]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_CALCBENEFIT_ut">_P_CALCBENEFIT_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_CALCBENEFIT_u"><bpmn2:sourceRef>urlClaimsCalculate</bpmn2:sourceRef><bpmn2:targetRef>_P_CALCBENEFIT_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_CALCBENEFIT_r"><bpmn2:sourceRef>_P_CALCBENEFIT_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:endEvent id="_P_END_PAYMENT" name="Payment Process">
@@ -590,6 +629,7 @@ if (r != null && !r.isEmpty()) { try {
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:SendRequirementEmail] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
@@ -617,7 +657,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_ct"><bpmn2:targetRef>_P_SENDEMAIL_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_ctt">_P_SENDEMAIL_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_he"><bpmn2:targetRef>_P_SENDEMAIL_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_het">_P_SENDEMAIL_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_m"><bpmn2:targetRef>_P_SENDEMAIL_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_mt">_P_SENDEMAIL_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_u"><bpmn2:targetRef>_P_SENDEMAIL_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_SENDEMAIL_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_uf"><![CDATA[#{baseUrl}/claims/nigo/send]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_SENDEMAIL_ut">_P_SENDEMAIL_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_SENDEMAIL_u"><bpmn2:sourceRef>urlClaimsNigoSend</bpmn2:sourceRef><bpmn2:targetRef>_P_SENDEMAIL_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_SENDEMAIL_r"><bpmn2:sourceRef>_P_SENDEMAIL_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:callActivity id="_P_UPDATE_PENDING" drools:independent="true" drools:waitForCompletion="true" name="Update Case AND claim status to Pending Req" calledElement="prudential-claims-submission.pru-rest-executor">
@@ -626,6 +666,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:UpdatePendingReq] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.put("status", "PENDING_REQUIREMENTS");
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
@@ -654,7 +695,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_ct"><bpmn2:targetRef>_P_UPDATE_PENDING_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_ctt">_P_UPDATE_PENDING_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_he"><bpmn2:targetRef>_P_UPDATE_PENDING_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_het">_P_UPDATE_PENDING_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_m"><bpmn2:targetRef>_P_UPDATE_PENDING_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_mt">_P_UPDATE_PENDING_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_u"><bpmn2:targetRef>_P_UPDATE_PENDING_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_PENDING_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_uf"><![CDATA[#{baseUrl}/claims/status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_PENDING_ut">_P_UPDATE_PENDING_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_UPDATE_PENDING_u"><bpmn2:sourceRef>urlClaimsStatus</bpmn2:sourceRef><bpmn2:targetRef>_P_UPDATE_PENDING_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_UPDATE_PENDING_r"><bpmn2:sourceRef>_P_UPDATE_PENDING_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:userTask id="_P_WAIT" name="Update followup to 30 days">
@@ -704,6 +745,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:AIClassify] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.putPOJO("uploadedDocuments", kcontext.getVariable("uploadedDocuments"));
 json.put("signalName", "AIClassificationComplete");
@@ -733,7 +775,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_ct"><bpmn2:targetRef>_P_AI_CLASSIFY_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_ctt">_P_AI_CLASSIFY_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_he"><bpmn2:targetRef>_P_AI_CLASSIFY_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_het">_P_AI_CLASSIFY_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_m"><bpmn2:targetRef>_P_AI_CLASSIFY_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_mt">_P_AI_CLASSIFY_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_u"><bpmn2:targetRef>_P_AI_CLASSIFY_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_AI_CLASSIFY_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_uf"><![CDATA[#{baseUrl}/claims/nigo/rerun-idp]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_AI_CLASSIFY_ut">_P_AI_CLASSIFY_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_AI_CLASSIFY_u"><bpmn2:sourceRef>urlClaimsNigoRerunIdp</bpmn2:sourceRef><bpmn2:targetRef>_P_AI_CLASSIFY_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_AI_CLASSIFY_r"><bpmn2:sourceRef>_P_AI_CLASSIFY_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:intermediateCatchEvent id="_P_AI_SIGNAL" name="AI Classification Complete">
@@ -757,6 +799,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
         <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:UpdateCaseData] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
+json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
@@ -784,7 +827,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_ct"><bpmn2:targetRef>_P_UPDATE_CASEDATA_ContentTypeInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_ct"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_ctf"><![CDATA[application/json]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_ctt">_P_UPDATE_CASEDATA_ContentTypeInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_he"><bpmn2:targetRef>_P_UPDATE_CASEDATA_HandleResponseErrorsInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_he"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_hef"><![CDATA[true]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_het">_P_UPDATE_CASEDATA_HandleResponseErrorsInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
       <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_m"><bpmn2:targetRef>_P_UPDATE_CASEDATA_MethodInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_m"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_mf"><![CDATA[POST]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_mt">_P_UPDATE_CASEDATA_MethodInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
-      <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_u"><bpmn2:targetRef>_P_UPDATE_CASEDATA_UrlInputX</bpmn2:targetRef><bpmn2:assignment id="asg__P_UPDATE_CASEDATA_u"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_uf"><![CDATA[#{baseUrl}/claims/nigo/update-status]]></bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="asg__P_UPDATE_CASEDATA_ut">_P_UPDATE_CASEDATA_UrlInputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>
+      <bpmn2:dataInputAssociation id="dia__P_UPDATE_CASEDATA_u"><bpmn2:sourceRef>urlClaimsNigoUpdateStatus</bpmn2:sourceRef><bpmn2:targetRef>_P_UPDATE_CASEDATA_UrlInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>
       <bpmn2:dataOutputAssociation id="doa__P_UPDATE_CASEDATA_r"><bpmn2:sourceRef>_P_UPDATE_CASEDATA_ResultOutputX</bpmn2:sourceRef><bpmn2:targetRef>resPayload</bpmn2:targetRef></bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
     <bpmn2:userTask id="_P_ASSIGN_TIMEOUT" name="Assign case to examiner">

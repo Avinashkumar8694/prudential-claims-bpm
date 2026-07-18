@@ -25,7 +25,7 @@
 
 ## 2. Death system lane — node → rule → API (US 10.01–10.39)
 
-Legend: **API** = the mock/integration endpoint the node calls (`#{baseUrl}/…` — no `/v1` in the node URL; the version lives in `baseUrl`); **script** = in-process logic (no REST). Every REST payload carries `piid`. *STP?* = does a `true` result block STP.
+Legend: **API** = the mock/integration endpoint the node calls (its full URL is built once in the bootstrap script node into a `url…` process variable — no path hardcoded on the node, and no `/v1` in the path; the version lives in `baseUrl`); **script** = in-process logic (no REST). Every REST payload carries `piid` **and** `cid` (the case-level numeric correlation id). *STP?* = does a `true` result block STP.
 
 | Node (BPMN) | US | Rule | API / impl | STP? |
 |-------------|----|------|-----------|------|
