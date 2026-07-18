@@ -57,7 +57,7 @@ Before a Track B case becomes a formal claim it exists as a **notification** tha
 | `VERIFIED_PROMOTED` | Promote → `POST /v1/claims/verification/promote` | Verifier chooses **Promote to Claim** | Generates the `caseId` (one per case, **no claim id** — a case has multiple claims); hands off to **System Claim Process** | Track B equivalent of Track A Submit — formal claim begins (→ `CASE_STATUS = Claim Submitted`) |
 | `NOT_VERIFIED_CLOSED` | Close → `POST /v1/claims/verification/close` | Verifier chooses **Close** | Followed by a closure notification; terminates the case | → `CASE_STATUS = Closed`; process ends via a terminate end-event |
 
-> **Promote hand-off.** On `VERIFIED_PROMOTED` the verification process invokes `prudential-claims-submission.pru-claim-processing` as a **call activity** (`System Claim Process`), passing `caseId`, `claimType`, `policyNumber`, `applicablePolicies`, and event/document context — **no claim id** (the main process derives the claim ids per-case via **Get Claim IDs**). This is the entry point from Track B into the main internal-processing pipeline.
+> **Promote hand-off.** On `VERIFIED_PROMOTED` the verification process invokes `prudential-claims-submission.pru-claims-examination` as a **call activity** (`System Claim Process`), passing `caseId`, `claimType`, `policyNumber`, `applicablePolicies`, and event/document context — **no claim id** (the main process derives the claim ids per-case via **Get Claim IDs**). This is the entry point from Track B into the main internal-processing pipeline.
 
 ---
 

@@ -447,7 +447,7 @@ System.out.println("[BPM][EXIT] pru-claim-verification | resLen=" + (r != null ?
         <bpmn2:targetRef>resPayload</bpmn2:targetRef>
       </bpmn2:dataOutputAssociation>
     </bpmn2:callActivity>
-    <bpmn2:callActivity id="_VER_SYSCLAIM" drools:independent="true" drools:waitForCompletion="true" name="System Claim Process" calledElement="prudential-claims-submission.pru-claim-processing">
+    <bpmn2:callActivity id="_VER_SYSCLAIM" drools:independent="true" drools:waitForCompletion="true" name="System Claim Process" calledElement="prudential-claims-submission.pru-claims-examination">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname">
           <drools:metaValue><![CDATA[System Claim Process]]></drools:metaValue>

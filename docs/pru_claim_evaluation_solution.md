@@ -3,8 +3,8 @@
 > Adds an evaluation layer to the main claims process. Sub-process A makes a **single** REST call to `/claims/evaluate-claim`, keyed by `caseId`; the API evaluates every claim on the case and returns the per-claim results, which are aggregated back into a single `Case_STP_Eligible` decision.
 >
 > **New / changed files**
-> - `src/main/resources/org/jbpm/pru-claim-submission.bpmn` — **backup** of the original full pipeline (distinct id `…pru-claim-submission`); the pre-rewrite `pru-claim-processing` logic lives here
-> - `src/main/resources/org/jbpm/pru-claim-processing.bpmn` — **rewritten** to the new outcome-based flow (§2)
+> - `src/main/resources/org/jbpm/pru-claim-submission.bpmn` — **backup** of the original full pipeline (distinct id `…pru-claim-submission`); the pre-rewrite `pru-claims-examination` logic lives here
+> - `src/main/resources/org/jbpm/pru-claims-examination.bpmn` — **rewritten** to the new outcome-based flow (§2)
 > - `src/main/resources/org/jbpm/pru-claim-run-evaluation.bpmn` — sub-process A (**linear, 3 nodes**: Script_Bootstrap → *claim evaluation* → End)
 > - `src/main/resources/org/jbpm/pru-claim-per-claim-eval.bpmn` — sub-process B (evaluates one claim via REST) — **no longer called by A** (the per-claim fan-out was replaced by A's single call); kept for reference / direct reuse
 > - `mock_server/server.js` + `swagger.json` — evaluation + main-flow endpoints
@@ -17,7 +17,7 @@
 
 ```mermaid
 graph TD
-    MAIN["pru-claim-processing<br/>(main)"] -->|callActivity| A["pru-claim-run-evaluation<br/>(sub-process A)"]
+    MAIN["pru-claims-examination<br/>(main)"] -->|callActivity| A["pru-claim-run-evaluation<br/>(sub-process A)"]
     A -->|Start → Script_Bootstrap → claim evaluation → End| CE["claim evaluation<br/>(REST callActivity)"]
     CE -->|pru-rest-executor| RX["pru-rest-executor"]
     RX -->|POST /claims/evaluate-claim<br/>keyed by caseId| API[(Integration Layer)]
@@ -30,7 +30,7 @@ This matches the request: *"in pru-claim-run-evaluation directly call the REST n
 
 ---
 
-## 2. The rewritten `pru-claim-processing.bpmn` flow
+## 2. The rewritten `pru-claims-examination.bpmn` flow
 
 The main process was **fully replaced** with the outcome-based flow below (the original full submission→payment pipeline is preserved in `pru-claim-submission.bpmn`):
 
@@ -155,7 +155,7 @@ STP eligibility is driven by scenario keywords in `caseId`/`claimId` (`CONTEST`,
 
 ```bash
 # 3-claim parallel fan-out: start the main process with a MULTI caseId
-curl -X POST "$KIE/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/processes/prudential-claims-submission.pru-claim-processing/instances" \
+curl -X POST "$KIE/server/containers/prudential-claims-bpm_1.0.0-SNAPSHOT/processes/prudential-claims-submission.pru-claims-examination/instances" \
   -H 'Content-Type: application/json' \
   -d '{ "caseId":"CASE-DEATH-MULTI-201", "policyNumber":"POL-12345", "claimType":"DEATH",
         "applicablePolicies":["POL-1","POL-2","POL-3"], "dateOfDeath":"2025-04-01",

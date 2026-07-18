@@ -1,6 +1,6 @@
 # System Claim Assessment — Node Rules → API Mapping
 
-> Grounds every node of `pru-claim-processing` (and the evaluation sub-processes) in the **WS2 System Claim Assessment BRD** (Features 10–11) and the **WS2 Upload Pending Requirement BRD** (Feature 12). For each node: the BRD user story, the exact rule, and the mock/integration API that implements it.
+> Grounds every node of `pru-claims-examination` (and the evaluation sub-processes) in the **WS2 System Claim Assessment BRD** (Features 10–11) and the **WS2 Upload Pending Requirement BRD** (Feature 12). For each node: the BRD user story, the exact rule, and the mock/integration API that implements it.
 >
 > Sources: `docs/WS2_System_Claim_Assessment_BRD.docx` (US 10.01–10.39, 11.01–11.08), `docs/WS2_Upload_Pending_Requirement_BRD.docx` (US 12.01).
 > Companions: [pru_claim_evaluation_solution.md](pru_claim_evaluation_solution.md), [claims_flags.md](claims_flags.md), [claims_status.md](claims_status.md).
@@ -63,7 +63,7 @@ Legend: **API** = the mock/integration endpoint the node calls (its full URL is 
 | Consolidate TI Flags | 11.07 | Roll up per-claim flags to a case view; **no STP roll-up, no Outcome gateway** — always to reviewer. |
 | Assign TI Case to Reviewer | 11.08 | Every TI case → reviewer (sole TI outcome); shared handoff with US 10.39. |
 
-> **BPMN note (implemented).** The TI branch is now built in `pru-claim-processing`: the **Claim Type** gate routes TI to **Run TI Per Claim Evaluation** (callActivity → `pru-claim-run-evaluation` with `claimType=TI`, reusing subprocess A/B) → **Consolidate TI Flags for the Case** (script, sets `outcome=REVIEWER`) → **Assign TI Case to Reviewer** (**human task**, `Reviewer` group — shared reviewer/examiner handoff per US 11.08/10.39) → **End (Claim Reviewer)**. There is **no** STP/Outcome gateway on the TI branch (TI is always non-STP, AD-32). The `evaluate-claim` endpoint returns the TI flag set (Contestable, Life_Expectancy_Not_Confirmed, Owner_Incapacity_Indicated, Payout_Account_Changed + shared) with `claimStpEligible=false` and `reviewerRequired=true` when `claimType=TI`. Mandatory medical-expert review itself is reviewer-side (Examiner/Workbench BRDs).
+> **BPMN note (implemented).** The TI branch is now built in `pru-claims-examination`: the **Claim Type** gate routes TI to **Run TI Per Claim Evaluation** (callActivity → `pru-claim-run-evaluation` with `claimType=TI`, reusing subprocess A/B) → **Consolidate TI Flags for the Case** (script, sets `outcome=REVIEWER`) → **Assign TI Case to Reviewer** (**human task**, `Reviewer` group — shared reviewer/examiner handoff per US 11.08/10.39) → **End (Claim Reviewer)**. There is **no** STP/Outcome gateway on the TI branch (TI is always non-STP, AD-32). The `evaluate-claim` endpoint returns the TI flag set (Contestable, Life_Expectancy_Not_Confirmed, Owner_Incapacity_Indicated, Payout_Account_Changed + shared) with `claimStpEligible=false` and `reviewerRequired=true` when `claimType=TI`. Mandatory medical-expert review itself is reviewer-side (Examiner/Workbench BRDs).
 
 ---
 

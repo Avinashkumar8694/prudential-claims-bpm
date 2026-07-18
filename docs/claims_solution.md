@@ -608,7 +608,7 @@ gantt
 
 ## Process 1: `pru-claim-internal-processing`
 
-> ⚠️ **Superseded.** The `pru-claim-processing` BPMN has since been **rewritten** to the outcome-based flow (Claim Type gate → Set Pend Death → Check contestability → MRX → Run Per Claim Evaluation → Aggregate → Outcome {STP / Pending-Requirement 30-day loop / Refer-to-Examiner}). See [pru_claim_evaluation_solution.md](pru_claim_evaluation_solution.md) §2. The **original** full submission→payment pipeline documented below is preserved verbatim in `pru-claim-submission.bpmn`.
+> ⚠️ **Superseded.** The `pru-claims-examination` BPMN has since been **rewritten** to the outcome-based flow (Claim Type gate → Set Pend Death → Check contestability → MRX → Run Per Claim Evaluation → Aggregate → Outcome {STP / Pending-Requirement 30-day loop / Refer-to-Examiner}). See [pru_claim_evaluation_solution.md](pru_claim_evaluation_solution.md) §2. The **original** full submission→payment pipeline documented below is preserved verbatim in `pru-claim-submission.bpmn`.
 
 ### Process Variables
 

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:bpsim="http://www.bpsim.org/schemas/1.0" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_pru_claim_processing_defs" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd http://www.bpsim.org/schemas/1.0 bpsim.xsd http://www.omg.org/spec/DD/20100524/DC DC.xsd http://www.omg.org/spec/DD/20100524/DI DI.xsd " exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/bpmn20" xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:bpsim="http://www.bpsim.org/schemas/1.0" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:drools="http://www.jboss.org/drools" id="_pru_claims_examination_defs" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd http://www.jboss.org/drools drools.xsd http://www.bpsim.org/schemas/1.0 bpsim.xsd http://www.omg.org/spec/DD/20100524/DC DC.xsd http://www.omg.org/spec/DD/20100524/DI DI.xsd " exporter="jBPM Process Modeler" exporterVersion="2.0" targetNamespace="http://www.omg.org/bpmn20">
   <bpmn2:itemDefinition id="_caseIdItem" structureRef="String"/>
   <bpmn2:itemDefinition id="_cidItem" structureRef="Integer"/>
   <bpmn2:itemDefinition id="_claimTypeItem" structureRef="String"/>
@@ -104,7 +104,7 @@
   <bpmn2:error id="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException" errorCode="org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"/>
   <bpmn2:error id="TERMINATE_CASE" errorCode="TERMINATE_CASE"/>
   <bpmn2:signal id="_SIG_AI_DONE" name="AIClassificationComplete"/>
-  <bpmn2:process id="prudential-claims-submission.pru-claim-processing" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claim-processing" isExecutable="true" processType="Public">
+  <bpmn2:process id="prudential-claims-submission.pru-claims-examination" drools:packageName="org.jbpm" drools:version="1.0" drools:adHoc="false" name="pru-claims-examination" isExecutable="true" processType="Public">
     <bpmn2:property id="caseId" itemSubjectRef="_caseIdItem" name="caseId"/>
     <bpmn2:property id="cid" itemSubjectRef="_cidItem" name="cid"/>
     <bpmn2:property id="claimType" itemSubjectRef="_claimTypeItem" name="claimType"/>
@@ -242,7 +242,7 @@ kcontext.setVariable("urlClaimsStatus", url + "/claims/status");
 kcontext.setVariable("urlClaimsNigoRerunIdp", url + "/claims/nigo/rerun-idp");
 kcontext.setVariable("urlClaimsNigoUpdateStatus", url + "/claims/nigo/update-status");
 if (kcontext.getVariable("maxRetryCount") == null) { kcontext.setVariable("maxRetryCount", Integer.valueOf(3)); }
-System.out.println("[BPM][BOOTSTRAP] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId") + " | claimType=" + kcontext.getVariable("claimType") + " | baseUrl=" + url);]]></bpmn2:script>
+System.out.println("[BPM][BOOTSTRAP] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId") + " | claimType=" + kcontext.getVariable("claimType") + " | baseUrl=" + url);]]></bpmn2:script>
     </bpmn2:scriptTask>
     <bpmn2:exclusiveGateway id="_P_CLAIMTYPE" name="Claim Type" gatewayDirection="Diverging">
       <bpmn2:extensionElements>
@@ -257,7 +257,7 @@ System.out.println("[BPM][BOOTSTRAP] process=pru-claim-processing | caseId=" + k
     <bpmn2:callActivity id="_P_SETPEND" drools:independent="true" drools:waitForCompletion="true" name="Set Pol Status to Pend Death to all associated claims" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Set Pol Status to Pend Death to all associated claims]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:SetPendDeath] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:SetPendDeath] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
@@ -295,7 +295,7 @@ kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:
     <bpmn2:callActivity id="_P_CHECKCONTEST" drools:independent="true" drools:waitForCompletion="true" name="Check contestability. ANY policy = contestable" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Check contestability. ANY policy = contestable]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:CheckContestability] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:CheckContestability] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
@@ -348,14 +348,14 @@ if (r != null && !r.isEmpty()) { try {
     <bpmn2:callActivity id="_P_MRX_PULL" drools:independent="true" drools:waitForCompletion="true" name="MRX Pull" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[MRX Pull]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:MRXPull] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:MRXPull] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+System.out.println("[BPM][EXIT] pru-claims-examination | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_CONTEST_YES</bpmn2:incoming>
       <bpmn2:outgoing>_F_MRXPULL</bpmn2:outgoing>
@@ -385,7 +385,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
     <bpmn2:callActivity id="_P_MRX_CHECK" drools:independent="true" drools:waitForCompletion="true" name="MRX check, Set MRX_Discrepancy Flag" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[MRX check, Set MRX_Discrepancy Flag]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:MRXCheck] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:MRXCheck] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
@@ -541,7 +541,7 @@ System.out.println("[BPM][AGGREGATE] caseStpEligible=" + allStp + " | outcome=" 
 java.util.List results = (java.util.List) kcontext.getVariable("claimResults");
 int total = results != null ? results.size() : 0;
 kcontext.setVariable("outcome", "REVIEWER");
-System.out.println("[BPM][TI-CONSOLIDATE] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId") + " | tiClaims=" + total + " | outcome=REVIEWER (TI always non-STP)");]]></bpmn2:script>
+System.out.println("[BPM][TI-CONSOLIDATE] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId") + " | tiClaims=" + total + " | outcome=REVIEWER (TI always non-STP)");]]></bpmn2:script>
     </bpmn2:scriptTask>
     <bpmn2:userTask id="_P_TI_ASSIGN" name="Assign TI Case to Reviewer">
       <bpmn2:extensionElements>
@@ -577,7 +577,7 @@ System.out.println("[BPM][TI-CONSOLIDATE] process=pru-claim-processing | caseId=
     <bpmn2:callActivity id="_P_CALCBENEFIT" drools:independent="true" drools:waitForCompletion="true" name="Calculate Benefit Amount" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Calculate Benefit Amount]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:CalcBenefit] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:CalcBenefit] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
@@ -626,14 +626,14 @@ if (r != null && !r.isEmpty()) { try {
     <bpmn2:callActivity id="_P_SENDEMAIL" drools:independent="true" drools:waitForCompletion="true" name="Send Requirement eMail to Claimant" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Send Requirement eMail to Claimant]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:SendRequirementEmail] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:SendRequirementEmail] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+System.out.println("[BPM][EXIT] pru-claims-examination | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_PENDING</bpmn2:incoming>
       <bpmn2:outgoing>_F_SEND</bpmn2:outgoing>
@@ -663,7 +663,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
     <bpmn2:callActivity id="_P_UPDATE_PENDING" drools:independent="true" drools:waitForCompletion="true" name="Update Case AND claim status to Pending Req" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Update Case AND claim status to Pending Req]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:UpdatePendingReq] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:UpdatePendingReq] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
@@ -671,7 +671,7 @@ json.putPOJO("caseId", kcontext.getVariable("caseId"));
 json.put("status", "PENDING_REQUIREMENTS");
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+System.out.println("[BPM][EXIT] pru-claims-examination | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_SEND</bpmn2:incoming>
       <bpmn2:outgoing>_F_TOPEND</bpmn2:outgoing>
@@ -742,7 +742,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
     <bpmn2:callActivity id="_P_AI_CLASSIFY" drools:independent="true" drools:waitForCompletion="true" name="Run AI classification, extraction and validation" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Run AI classification, extraction and validation]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:AIClassify] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:AIClassify] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
@@ -751,7 +751,7 @@ json.putPOJO("uploadedDocuments", kcontext.getVariable("uploadedDocuments"));
 json.put("signalName", "AIClassificationComplete");
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+System.out.println("[BPM][EXIT] pru-claims-examination | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_AI_REST</bpmn2:incoming>
       <bpmn2:outgoing>_F_AI_REST_J</bpmn2:outgoing>
@@ -796,14 +796,14 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
     <bpmn2:callActivity id="_P_UPDATE_CASEDATA" drools:independent="true" drools:waitForCompletion="true" name="Update Case data" calledElement="prudential-claims-submission.pru-rest-executor">
       <bpmn2:extensionElements>
         <drools:metaData name="elementname"><drools:metaValue><![CDATA[Update Case data]]></drools:metaValue></drools:metaData>
-        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:UpdateCaseData] process=pru-claim-processing | caseId=" + kcontext.getVariable("caseId"));
+        <drools:onEntry-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[System.out.println("[BPM][ENTRY:UpdateCaseData] process=pru-claims-examination | caseId=" + kcontext.getVariable("caseId"));
 com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
 json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));
 json.putPOJO("cid", kcontext.getVariable("cid"));
 json.putPOJO("caseId", kcontext.getVariable("caseId"));
 kcontext.setVariable("reqPayload", json.toString());]]></drools:script></drools:onEntry-script>
         <drools:onExit-script scriptFormat="http://www.java.com/java"><drools:script><![CDATA[String r = (String) kcontext.getVariable("resPayload");
-System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
+System.out.println("[BPM][EXIT] pru-claims-examination | resLen=" + (r != null ? String.valueOf(r.length()) : "null"));]]></drools:script></drools:onExit-script>
       </bpmn2:extensionElements>
       <bpmn2:incoming>_F_AI</bpmn2:incoming>
       <bpmn2:outgoing>_F_LOOP</bpmn2:outgoing>
@@ -898,7 +898,7 @@ System.out.println("[BPM][EXIT] pru-claim-processing | resLen=" + (r != null ? S
     <bpmn2:association id="_P_NOTE_RUN_A" sourceRef="_P_RUNEVAL" targetRef="_P_NOTE_RUN" associationDirection="None"/>
   </bpmn2:process>
   <bpmndi:BPMNDiagram id="_P_DIAG">
-    <bpmndi:BPMNPlane id="_P_PLANE" bpmnElement="prudential-claims-submission.pru-claim-processing">
+    <bpmndi:BPMNPlane id="_P_PLANE" bpmnElement="prudential-claims-submission.pru-claims-examination">
       <bpmndi:BPMNShape id="shape__P_START" bpmnElement="_P_START"><dc:Bounds height="56.0" width="56.0" x="60.0" y="172.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P_BOOT" bpmnElement="_P_BOOT"><dc:Bounds height="70.0" width="110.0" x="150.0" y="160.0"/></bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape__P_CLAIMTYPE" bpmnElement="_P_CLAIMTYPE"><dc:Bounds height="56.0" width="56.0" x="300.0" y="172.0"/></bpmndi:BPMNShape>

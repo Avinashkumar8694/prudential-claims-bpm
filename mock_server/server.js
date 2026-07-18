@@ -861,11 +861,12 @@ app.post('/api/v1/claims/verification/closure-notice', (req, res) => {
 });
 
 
-// --- PROCESS 4: PER-CLAIM EVALUATION (fan-out) ENDPOINTS ---
-// Consumed by pru-claim-processing (Get Claim IDs) and the pru-claim-run-evaluation
-// / pru-claim-per-claim-eval sub-processes (parallel one-claim-at-a-time evaluation).
+// --- PROCESS 4: CLAIM EVALUATION ENDPOINTS ---
+// evaluate-claim is called once (case-level) by pru-claim-run-evaluation's "claim evaluation"
+// node (invoked from pru-claims-examination). get-claim-ids is retained for reference /
+// direct reuse but is no longer on the active path (evaluate-claim resolves claims by caseId).
 
-// E1. Get Claim IDs — returns the array of claim ids for the case (one per claim).
+// E1. Get Claim IDs — returns the array of claim ids for the case (one per claim). [reference]
 app.post('/api/v1/claims/get-claim-ids', (req, res) => {
   const { caseId, applicablePolicies } = req.body;
   const policies = (applicablePolicies && applicablePolicies.length) ? applicablePolicies : ['POL12345'];

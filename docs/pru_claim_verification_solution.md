@@ -1,6 +1,6 @@
 # Process 3: `pru-claim-verification` — Solution Design
 
-> The **Claim Verification** process (Track B). A verifier reviews an inbound **notification** in the workbench and decides **Promote** or **Close**. On Promote it generates the **Case ID** (claim ids are generated per-case downstream — a case has multiple claims) and hands off to the main claims pipeline (`pru-claim-processing`) as a **sub-process**.
+> The **Claim Verification** process (Track B). A verifier reviews an inbound **notification** in the workbench and decides **Promote** or **Close**. On Promote it generates the **Case ID** (claim ids are generated per-case downstream — a case has multiple claims) and hands off to the main claims pipeline (`pru-claims-examination`) as a **sub-process**.
 >
 > - **BPMN:** [src/main/resources/org/jbpm/pru-claim-verification.bpmn](../src/main/resources/org/jbpm/pru-claim-verification.bpmn)
 > - **Process id:** `prudential-claims-submission.pru-claim-verification`
@@ -12,17 +12,17 @@
 
 The WS2 solution has two claim-entry tracks (Workbench BRD, terms key *Track A / Track B*):
 
-- **Track A** — the claimant submits online; a formal claim exists from submission. This drives `pru-claim-processing` directly.
+- **Track A** — the claimant submits online; a formal claim exists from submission. This drives `pru-claims-examination` directly.
 - **Track B** — a death/TI event is reported as a **notification** first (e.g. via an external notifier, FNOL channel, or bulk feed). It is **not yet a claim** — there is no Case ID or Claim ID. A **Verifier** must review it and either **Promote** it to a formal claim or **Close** it.
 
 > Workbench BRD: *"the Verifier receives Track B notifications for external verification and Promote / Hold / Decline"* and *"The Verifier Promote action is the equivalent of the claimant Submit action for Track A — formal claim submission begins here."*
 
-`pru-claim-verification` is the Track B front door. On Promote it becomes the caller of `pru-claim-processing`.
+`pru-claim-verification` is the Track B front door. On Promote it becomes the caller of `pru-claims-examination`.
 
 ```mermaid
 graph LR
     N[Track B Notification] --> V[pru-claim-verification]
-    V -- Promote --> P[pru-claim-processing]
+    V -- Promote --> P[pru-claims-examination]
     V -- Close --> C[Closed + closure notice]
     A[Track A Online Submit] --> P
 ```
@@ -48,7 +48,7 @@ This is the key modelling decision, so it is called out explicitly.
 
 So the object exists in the domain; it needed an identifier. Following the repo's ID conventions (`CASE_ID = CASE-YYYYMMDD-NNNNN`, `CLM-YYYY-NNNNN`), the suggested format is **`NOTIF-YYYY-NNNNN`**.
 
-**How it is supplied.** `notificationId` is a **process input variable** — it is provided when the verification process instance is *started* (by the notification-intake integration / FNOL channel), exactly the way `caseId` is the input key when `pru-claim-processing` is started in the [mock_testing_blueprint.md](mock_testing_blueprint.md). It is **not** generated inside this process.
+**How it is supplied.** `notificationId` is a **process input variable** — it is provided when the verification process instance is *started* (by the notification-intake integration / FNOL channel), exactly the way `caseId` is the input key when `pru-claims-examination` is started in the [mock_testing_blueprint.md](mock_testing_blueprint.md). It is **not** generated inside this process.
 
 **Lifecycle of the identifiers:**
 
@@ -64,7 +64,7 @@ So the object exists in the domain; it needed an identifier. Following the repo'
 
 ## 3. Process variables
 
-All process variables, with **provenance** (where the value comes from). Types match `pru-claim-processing` where the variable is forwarded to it (so the sub-process call is type-safe).
+All process variables, with **provenance** (where the value comes from). Types match `pru-claims-examination` where the variable is forwarded to it (so the sub-process call is type-safe).
 
 | Variable | Type | Provenance / how obtained | Notes |
 |----------|------|---------------------------|-------|
@@ -76,7 +76,7 @@ All process variables, with **provenance** (where the value comes from). Types m
 | `uploadedDocuments` | List | Process input (notification's documents) | S3 refs of evidence captured at notification |
 | `policyData` | Object | Process input | Optional; may be null at notification time |
 | `bankAccountDetails` | Object | Process input | Usually **null** at verification (collected later via the claim form); mapped through for completeness |
-| `baseUrl` | String | **Set by `Script_Bootstrap`** from `INTEGRATION_LAYER_URL` (else `http://localhost:3000`) | Same bootstrap pattern as `pru-claim-processing` |
+| `baseUrl` | String | **Set by `Script_Bootstrap`** from `INTEGRATION_LAYER_URL` (else `http://localhost:3000`) | Same bootstrap pattern as `pru-claims-examination` |
 | `verifierDecision` | String | **Output of the `Claims Verifier` user task** | `PROMOTE` \| `CLOSE`; drives the gateway |
 | `verifierRemarks` | String | Output of the `Claims Verifier` user task | Free-text rationale; forwarded to promote/close APIs |
 | `notificationStatus` | String | **Set from API responses** (status / promote / close) | `FOR_VERIFICATION` → `VERIFIED_PROMOTED` / `NOT_VERIFIED_CLOSED` |
@@ -98,7 +98,7 @@ graph TD
 
     GW -- "Promote to Claim" --> PR["Set Verified_Promoted,<br/>Generate Case ID<br/>(POST promote)"]
     PR --> SC["Send email confirmation + claim forms<br/>(POST send-confirmation)"]
-    SC --> SYS["System Claim Process<br/>(callActivity → pru-claim-processing)"]
+    SC --> SYS["System Claim Process<br/>(callActivity → pru-claims-examination)"]
     SYS --> EP([Promoted to System Claim Process])
 
     GW -- "Close" --> CL["Set Not_Verified_Closed<br/>(POST close)"]
@@ -122,7 +122,7 @@ REST nodes follow the repo convention exactly: a `callActivity → prudential-cl
 | 3 | Verifier Decision? | Exclusive gateway | — | `verifierDecision` | — |
 | 4 | Set Verified_Promoted + Generate Case ID | REST (POST) | `/v1/claims/verification/promote` | `notificationId`, `claimType`, `policyNumber`, `applicablePolicies`, `verifierRemarks` | `notificationStatus`, `caseId` (no claim id) |
 | 5 | Send confirmation + claim forms | REST (POST) | `/v1/claims/verification/send-confirmation` | `caseId`, `applicablePolicies` | — |
-| 6 | **System Claim Process** | **callActivity → `pru-claim-processing`** | — | 8 vars (see §6) | `caseId` (round-trip) |
+| 6 | **System Claim Process** | **callActivity → `pru-claims-examination`** | — | 8 vars (see §6) | `caseId` (round-trip) |
 | 7 | Set Not_Verified_Closed | REST (POST) | `/v1/claims/verification/close` | `notificationId`, `caseId`, `verifierRemarks` | `notificationStatus` |
 | 8 | Generate and send Closure Notification | REST (POST) | `/v1/claims/verification/closure-notice` | `notificationId`, `caseId` | — |
 
@@ -137,11 +137,11 @@ REST nodes follow the repo convention exactly: a `callActivity → prudential-cl
 
 ---
 
-## 6. The sub-process hand-off (Promote → `pru-claim-processing`)
+## 6. The sub-process hand-off (Promote → `pru-claims-examination`)
 
-The **System Claim Process** node is `<bpmn2:callActivity … calledElement="prudential-claims-submission.pru-claim-processing" drools:independent="true" drools:waitForCompletion="true">` (same call style as the NIGO sub-process in the main flow).
+The **System Claim Process** node is `<bpmn2:callActivity … calledElement="prudential-claims-submission.pru-claims-examination" drools:independent="true" drools:waitForCompletion="true">` (same call style as the NIGO sub-process in the main flow).
 
-Its data-input mapping **mirrors the `pru-claim-processing` start payload** documented in [mock_testing_blueprint.md](mock_testing_blueprint.md) §"Start Process Instance", so Track B enters the main pipeline identically to Track A:
+Its data-input mapping **mirrors the `pru-claims-examination` start payload** documented in [mock_testing_blueprint.md](mock_testing_blueprint.md) §"Start Process Instance", so Track B enters the main pipeline identically to Track A:
 
 | Verification variable | → main process variable | Type | Origin |
 |-----------------------|-------------------------|------|--------|
@@ -228,7 +228,7 @@ curl -X PUT "$KIE/server/containers/{container}/tasks/{taskId}/states/completed"
   -d '{ "verifierDecision": "PROMOTE", "verifierRemarks": "Death evidence confirmed" }'
 ```
 
-**3. On PROMOTE** the process auto-calls `pru-claim-processing` with the mapped payload (§6) — no separate start needed.
+**3. On PROMOTE** the process auto-calls `pru-claims-examination` with the mapped payload (§6) — no separate start needed.
 
 ---
 
@@ -244,5 +244,5 @@ curl -X PUT "$KIE/server/containers/{container}/tasks/{taskId}/states/completed"
 - **Decision set.** WB-3 lists the verifier decision as *Promote / Hold / Decline*. This process implements **Promote** and **Close** only — there is no **Hold** decision (removed: no action was attached to it), and **Close** is used in place of *Decline* per the drawn diagram. If the canonical term is *Decline*, only the label/enum value needs changing.
 - **"Generate and send Closure Notification"** is modelled as a **service (REST) task** (consistent with the Promote-branch email node), even though the diagram drew it with a person icon. Flip to a user task if a manual send is intended.
 - **`bankAccountDetails` at verification** is typically null (collected later via the claim form); it is mapped through so the sub-process contract is complete when the notification does carry it.
-- **Process id vs blueprint label.** The blueprint's start URL uses `pru-claim-internal-processing`, but the deployed process id is `prudential-claims-submission.pru-claim-processing` — which is what this process's `calledElement` targets. Worth reconciling the blueprint naming separately.
+- **Process id vs blueprint label.** The blueprint's start URL uses `pru-claim-internal-processing`, but the deployed process id is `prudential-claims-submission.pru-claims-examination` — which is what this process's `calledElement` targets. Worth reconciling the blueprint naming separately.
 - **No `kmodule.xml` change** is required (processes are auto-discovered); **no SVG** is required (Business Central regenerates it on import).
