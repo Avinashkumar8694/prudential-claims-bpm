@@ -1,6 +1,6 @@
 # SDK project descriptor & extra files
 
-How the `@neutrinos/bpmn-sdk` generates/round-trips the whole kjar, and how to include artifacts it
+How the `@fabrixly/bpmn-sdk` generates/round-trips the whole kjar, and how to include artifacts it
 does not synthesize from JSON (`.wid`, `.drl`/`.dmn`, Java classes, forms).
 
 ## The `descriptor` on a Project

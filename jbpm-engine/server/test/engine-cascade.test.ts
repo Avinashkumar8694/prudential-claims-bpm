@@ -94,6 +94,42 @@ test('a child that is aborted fails the waiting parent when there is no error bo
   assert.strictEqual(reloaded.status, 'failed');
 });
 
+// A child that fails SYNCHRONOUSLY — inside startChild()'s own call, never parking in a wait.
+const failFastChildEngine = (key: string) => ({
+  id: key, name: key,
+  processes: [{
+    id: `${key}.process`, name: key, package: 'com.acme', vars: [],
+    nodes: [
+      { id: 'cs', type: 'start', name: 'Start' },
+      { id: 'boom', type: 'script', name: 'Boom', lang: 'js', code: "throw new Error('boom');" },
+      { id: 'ce', type: 'end', name: 'End' },
+    ],
+    flows: [{ from: 'cs', to: 'boom' }, { from: 'boom', to: 'ce' }],
+  }],
+});
+
+test('a call activity whose child fails synchronously does not hang the parent (no wait on a dead child)', async () => {
+  const { ctx } = newCtx();
+  const child = await deploy(ctx, 'FailFastChild', failFastChildEngine);
+  const parent = await deploy(ctx, 'FailFastParent', (k) => parentEngine(k, child.procId, false));
+  const instSvc = new InstanceService(ctx);
+
+  const p = await instSvc.start({ workflowId: parent.wf.id, environment: 'prod' }, 'bob');
+  assert.notStrictEqual(p.status, 'waiting', 'parent must not be left waiting on an already-dead child');
+  assert.strictEqual(p.status, 'failed', 'child failed synchronously with no boundary to catch it');
+});
+
+test('a call activity whose child fails synchronously IS caught by the parent error boundary', async () => {
+  const { ctx } = newCtx();
+  const child = await deploy(ctx, 'FailFastChild2', failFastChildEngine);
+  const parent = await deploy(ctx, 'FailFastParent2', (k) => parentEngine(k, child.procId, true));
+  const instSvc = new InstanceService(ctx);
+
+  const p = await instSvc.start({ workflowId: parent.wf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(p.status, 'completed', 'parent recovered via the error boundary');
+  assert.strictEqual(p.variables.recovered, true);
+});
+
 test('a child failure is caught by the parent error boundary and recovers', async () => {
   const { ctx } = newCtx();
   const child = await deploy(ctx, 'Child', childEngine);

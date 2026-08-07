@@ -7,6 +7,6 @@ export const def: NodeDef = {
     { key: 'process', label: 'Process id / key', widget: 'text', placeholder: 'child-workflow.process' },
     { key: 'inputs', label: 'Inputs (childVar ← $parentVar or value)', widget: 'keyval' },
     { key: 'outputs', label: 'Outputs (parentVar ← childVar)', widget: 'keyval' },
-    { key: 'independent', label: 'Independent (don’t wait)', widget: 'bool' },
+    { key: 'independent', label: 'Independent (don’t wait)', widget: 'bool', help: 'Fire-and-forget: the parent continues immediately and the child keeps running standalone even after the parent completes or aborts' },
   ] }],
 };

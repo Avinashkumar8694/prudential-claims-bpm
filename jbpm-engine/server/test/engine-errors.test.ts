@@ -9,6 +9,7 @@ import { WorkflowService } from '../src/modules/workflows/service.ts';
 import { VersionService } from '../src/modules/versions/service.ts';
 import { DeploymentService } from '../src/modules/deployments/service.ts';
 import { InstanceService } from '../src/modules/instances/service.ts';
+import { Collections, type Instance } from '../src/domain.ts';
 
 const newCtx = () => { let n = 0; return makeContext({ store: new MemoryStore(), tenantId: 't1', clock: fakeClock().clock, newId: () => `id${++n}` }); };
 
@@ -62,4 +63,30 @@ test('error code match routes an error-throw end to the matching catch', async (
   assert.strictEqual(inst.status, 'completed');
   assert.strictEqual((inst.variables['errorInfo'] as any).code, 'VALIDATION');
   assert.ok(inst.history.some((h) => h.nodeId === 'rec'));
+});
+
+test('an event sub-process with an error start (jBPM\'s other global-error-handler idiom) catches and runs its own nodes', async () => {
+  // matches this project's own pru-sample-global-error / pru-api-error-handler shape: a subprocess
+  // node with on.error, never reached by a normal sequence flow, triggered only when its declared
+  // error is raised anywhere in the process — always process-wide/interrupting. It runs as a nested
+  // child instance (same as a normal sub-process), so its own node visits live in the CHILD's history.
+  const ctx = newCtx();
+  const inst = await run(ctx,
+    [{ id: 's', type: 'start' }, { id: 'bad', type: 'script', name: 'Boom', code: 'throw new Error("x");' },
+     { id: 'e', type: 'end' },
+     {
+       id: 'errSub', type: 'subprocess', name: 'Global Error Handler', on: { error: 'SCRIPT_ERROR' },
+       nodes: [{ id: 'errStart', type: 'start' }, { id: 'cleanup', type: 'manual', name: 'Cleanup' }, { id: 'errEnd', type: 'end' }],
+       flows: [{ id: 'ef1', from: 'errStart', to: 'cleanup' }, { id: 'ef2', from: 'cleanup', to: 'errEnd' }],
+     }],
+    [{ id: 'f1', from: 's', to: 'bad' }, { id: 'f2', from: 'bad', to: 'e' }]);
+  assert.strictEqual(inst.status, 'completed');
+  assert.strictEqual((inst.variables['errorInfo'] as any).code, 'SCRIPT_ERROR');
+  assert.ok(!inst.history.some((h) => h.nodeId === 'e'), 'the interrupted main flow never reached its own end');
+  const errSubVisit = inst.history.find((h) => h.nodeId === 'errSub');
+  const childId = /^sub:(.+)$/.exec(errSubVisit?.outcome || '')?.[1];
+  assert.ok(childId, 'the error sub-process ran as a nested child instance');
+  const child = await ctx.store.repo<Instance>(Collections.instances).get(childId!);
+  assert.strictEqual(child?.status, 'completed');
+  assert.ok(child?.history.some((h) => h.nodeId === 'cleanup'), 'ran the event sub-process\'s own internal nodes');
 });

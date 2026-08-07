@@ -22,37 +22,65 @@ export interface TimerSpec { duration?: string; cycle?: string; date?: string; }
 export interface EventDef {
   signal?: string; message?: string; error?: string; escalation?: string;
   condition?: string; lang?: Lang; timer?: TimerSpec | string;
+  /** Throw-side only (throw/send/end): a $var reference (e.g. "$claimId") resolved against the
+   *  instance's variables and used to narrow delivery to only the waiting instance(s) whose OWN
+   *  correlationKey (set at start()) matches — see execution-engine.ts's broadcast(). Omit for the
+   *  default "deliver to every instance waiting on this name" behavior. */
+  correlationKey?: string;
 }
 interface Base { id?: string; name?: string; }
+// Real jBPM's generic onEntry-script/onExit-script action hooks — attachable to any activity, not
+// just the http/REST wrapper (which has its own `exitScript`, pre-dating this and kept separate since
+// it auto-generates a default body). Independent dialects since a real jBPM project's onEntry/onExit
+// pair could in principle differ (the underlying ProcessModel keeps them independent too).
+interface WithLifecycle { onEntry?: string; onExit?: string; onEntryLang?: Lang; onExitLang?: Lang; }
 export interface EngineStart extends Base { type: 'start'; on?: EventDef; }
 export interface EngineEnd extends Base { type: 'end'; result?: 'terminate'; throw?: EventDef; }
 export interface EngineScript extends Base { type: 'script'; lang?: Lang; code: string; }
-export interface EngineHttp extends Base { type: 'http'; method?: HttpMethod; url: string; headers?: Record<string, string>; body?: Record<string, string | number | boolean>; resultTo?: Record<string, string>; }
-export interface EngineCall extends Base { type: 'call'; process: string; inputs?: Record<string, string>; outputs?: Record<string, string>; }
-export interface EngineForEach extends Base { type: 'forEach'; process: string; over: string; as?: string; collectInto?: string; itemResult?: string; parallel?: boolean; pass?: string[]; }
-export interface EngineUserTask extends Base { type: 'userTask'; group?: string; assignee?: string; form?: string; skippable?: boolean; }
-export interface EngineRule extends Base { type: 'rule'; ruleflowGroup?: string; dmn?: { namespace: string; model: string; decision: string }; }
-export interface EngineSend extends Base { type: 'send'; message: string; implementation?: string; }
-export interface EngineReceive extends Base { type: 'receive'; message: string; implementation?: string; }
-export interface EngineManual extends Base { type: 'manual'; }
+export interface EngineHttp extends Base { type: 'http'; method?: HttpMethod; url: string; headers?: Record<string, string>; body?: Record<string, string | number | boolean>; resultTo?: Record<string, string>;
+  /** wrapper-script dialect for the generated jBPM onEntry/onExit (default 'java') */
+  lang?: Lang;
+  /** extra script appended to the onExit wrapper (same dialect); also honored by the Node engine after resultTo, with `resPayload` in scope */
+  exitScript?: string; }
+export interface EngineCall extends Base, WithLifecycle { type: 'call'; process: string; inputs?: Record<string, string>; outputs?: Record<string, string>; }
+export interface EngineForEach extends Base, WithLifecycle { type: 'forEach'; process: string; over: string; as?: string; collectInto?: string; itemResult?: string; parallel?: boolean; pass?: string[]; }
+export interface EngineUserTask extends Base, WithLifecycle {
+  type: 'userTask'; group?: string; assignee?: string; form?: string; skippable?: boolean;
+  businessAdmin?: string; excludedOwners?: string[]; priority?: number;
+  /** ISO duration/date/cycle (same shape as TimerSpec) or a plain ISO duration string, e.g. "PT8H". */
+  dueDate?: TimerSpec | string;
+}
+export interface EngineRule extends Base, WithLifecycle { type: 'rule'; ruleflowGroup?: string; dmn?: { namespace: string; model: string; decision: string }; }
+export interface EngineSend extends Base, WithLifecycle {
+  type: 'send'; message: string; implementation?: string;
+  /** $var reference — see EventDef.correlationKey's doc comment (same semantics, throw-side field). */
+  correlationKey?: string;
+}
+export interface EngineReceive extends Base, WithLifecycle { type: 'receive'; message: string; implementation?: string; }
+export interface EngineManual extends Base, WithLifecycle { type: 'manual'; }
 export interface EngineGateway extends Base { type: 'gateway'; mode: GatewayMode; default?: string; direction?: 'Diverging' | 'Converging'; }
 export interface EngineCatch extends Base { type: 'catch'; event: EventDef; }
 export interface EngineThrow extends Base { type: 'throw'; event: EventDef; }
 // on: host node id, a list of host ids, or '*' (all activities = process-wide error handler).
 // On export a multi/global error-catch expands to one BPMN boundary event per host activity.
 export interface EngineBoundary extends Base { type: 'boundary'; on: string | string[]; event: EventDef; interrupting?: boolean; }
-export interface EngineSubprocess extends Base { type: 'subprocess'; transaction?: boolean; on?: { error?: string }; nodes: EngineNode[]; flows: EngineFlow[]; }
+export interface EngineSubprocess extends Base, WithLifecycle { type: 'subprocess'; transaction?: boolean; on?: { error?: string }; nodes: EngineNode[]; flows: EngineFlow[]; }
 export interface EngineRaw extends Base { type: 'raw'; raw?: string; }
+// generic custom WorkItemHandler task (jBPM's <bpmn2:task drools:taskName="X">, e.g. its built-in
+// "Rest" REST work item, or any customer WorkItemHandler) — matches the Node engine's own `workItem`
+// node contract 1:1 (see jbpm-engine/server/src/engine/nodes/work-item/handler.ts).
+export interface EngineWorkItem extends Base, WithLifecycle { type: 'workItem'; handler: string; params?: Record<string, string | number | boolean>; resultTo?: Record<string, string>; }
 export type EngineNode =
   | EngineStart | EngineEnd | EngineScript | EngineHttp | EngineCall | EngineForEach | EngineUserTask
   | EngineRule | EngineSend | EngineReceive | EngineManual | EngineGateway | EngineCatch | EngineThrow
-  | EngineBoundary | EngineSubprocess | EngineRaw;
+  | EngineBoundary | EngineSubprocess | EngineWorkItem | EngineRaw;
 export interface EngineProcess {
   id: string; name?: string; package?: string;
   types?: EngineType[]; vars?: EngineVar[];
   lanes?: { id?: string; name?: string; nodes: string[] }[];
   data?: { id?: string; name?: string; type?: string; collection?: boolean }[];
-  signals?: string[]; errors?: string[]; messages?: string[]; escalations?: string[];
+  /** error declarations: a bare string (id = code), or { name, code } when the BPMN error id differs from its errorCode */
+  signals?: string[]; errors?: Array<string | { name: string; code: string }>; messages?: string[]; escalations?: string[];
   nodes: EngineNode[]; flows: EngineFlow[];
 }
 export interface EngineDeployment { runtime?: string; env?: Record<string, string>; handlers?: string[]; }
@@ -172,6 +200,8 @@ export interface EngineEnum { type: string; field: string; values: string[]; }
 export interface EngineProject {
   id?: string; gav?: Gav; deployment?: EngineDeployment; types?: EngineType[];
   assets?: Record<string, { kind: string; model: any } | string>;
+  /** non-BPM binary files (icons, PDFs, decision-table spreadsheets, …), base64-encoded, path -> content */
+  binaryAssets?: Record<string, string>;
   rulesets?: EngineRuleset[];   // simple engine rules -> generated .drl (SDK fills package/imports/DRL syntax)
   decisions?: EngineDecisionModel[];  // simple decision tables -> generated .dmn (SDK fills FEEL + DMN XML)
   guidedTables?: EngineGuidedTable[]; // tabular rulesets -> generated .gdst (Business Central editor XML)
@@ -251,6 +281,129 @@ function fieldJavaType(f: EngineTypeField, resolve: (t: string) => string): stri
 
 const langUri = (l?: Lang) => LANG_URI[l || 'java'] || LANG_URI.java;
 const jstr = (v: any) => JSON.stringify(String(v)); // Java string literal
+const isWordUsed = (code: string, name: string) => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(code);
+
+// ---- export-time compatibility preambles (see jbpm-engine/docs/15-scripting-and-jbpm-export.md) ----
+// The Node engine offers two additive conveniences beyond what real jBPM natively understands: a
+// `vars.x` object (any dialect) and, for Java SCRIPTS specifically (never conditions — those already
+// get bare-name binding from real jBPM's own compiler), bare variable names. Both round-trip to
+// jBPM XML that runs unmodified on a real jBPM/KIE server ONLY because this prepends a small,
+// generated preamble that defines the same names in terms of real kcontext — the exported text is
+// then plain, valid Java/JS with no dependency on this engine at all.
+
+/** Real jBPM's JS runtime has no `vars` concept. Plain ES5 (`Object.defineProperty`, no `Proxy` —
+ *  Nashorn doesn't implement it, and the target engine isn't known at export time) so this preamble
+ *  runs correctly on either real jBPM JS runtime. A no-op if `vars` isn't referenced, or there are no
+ *  declared process variables to bind (only DECLARED variables round-trip this way — see the doc
+ *  above for that documented limitation). */
+function jsVarsPreamble(code: string, varNames: string[]): string {
+  if (!/\bvars\s*[.[]/.test(code) || varNames.length === 0) return '';
+  let out = 'var vars = {};\n';
+  for (const name of varNames) {
+    const lit = jstr(name);
+    out += `Object.defineProperty(vars, ${lit}, { enumerable: true, get: function(){ return kcontext.getVariable(${lit}); }, set: function(v){ kcontext.setVariable(${lit}, v); } });\n`;
+  }
+  return out;
+}
+
+/** Real jBPM's Java SCRIPT dialect (script task / onEntry / onExit) has no bare-name binding — only
+ *  `kcontext.getVariable(...)` is in scope there. If this engine's own additive bare-name convenience
+ *  was used authoring a script, prepend the equivalent typed local declaration for each declared
+ *  variable actually referenced (a bare-word scan — cheap, and the worst case of a false positive is
+ *  one unused extra local, which javac doesn't error on) so the exported text is plain, valid,
+ *  kcontext-based Java that runs unmodified on real jBPM. `varType` values are already-resolved Java
+ *  type strings (see `makeTypeResolver` above), matching what real jBPM's own generated code would
+ *  declare for that variable's structureRef. */
+function javaBareNamePreamble(code: string, varType: Record<string, string>): string {
+  let out = '';
+  for (const [name, type] of Object.entries(varType)) {
+    if (!isWordUsed(code, name)) continue;
+    out += `${type} ${name} = (${type}) kcontext.getVariable(${jstr(name)});\n`;
+  }
+  return out;
+}
+
+// A THIRD engine convenience, beyond `vars`/bare-name: `instance`/`node` (JS) and a handful of
+// meta-locals (Java) as a simpler alternative to `kcontext.getProcessInstance().getX()` chains — see
+// jbpm-engine/server/src/engine/sandbox.ts's buildInstanceGlobal/buildNodeGlobal (JS) and
+// java-runtime/src/bpmscript/ScriptRunner.java's META_LOCALS (Java) for the execution-side twins this
+// must stay textually consistent with. Like `vars`/bare-name, a no-op unless actually referenced.
+
+/** Real jBPM's JS runtime has no `instance`/`node` concept either. Same ES5-only constraint as
+ *  jsVarsPreamble (no arrow functions/Proxy — Nashorn support unknown at export time). `instance.
+ *  state` intentionally re-derives this engine's OWN status vocabulary from the real STATE_* int
+ *  (see sandbox.ts's stateFor for the forward mapping this reverses) — note this is lossy in one
+ *  direction already accepted for that field: real jBPM's ACTIVE state doesn't distinguish "running"
+ *  from "blocked at a node", so it always reads back as "running" (check `instance.activeNodes.
+ *  length` if you need to know whether it's actually blocked). `instance.activeNodes` iterates the
+ *  real `java.util.List` returned by getNodeInstances() via `.size()`/`.get(i)`, not `for...of` —
+ *  works identically on Nashorn and GraalVM, unlike list/array duck-typing which isn't guaranteed. */
+function jsInstanceNodePreamble(code: string): string {
+  let out = '';
+  if (isWordUsed(code, 'instance')) {
+    out += 'var instance = {\n'
+      + '  id: kcontext.getProcessInstance().getId(),\n'
+      + '  processId: kcontext.getProcessInstance().getProcessId(),\n'
+      + '  processName: kcontext.getProcessInstance().getProcessName(),\n'
+      + '  correlationKey: kcontext.getProcessInstance().getCorrelationKey(),\n'
+      + '  parentId: kcontext.getProcessInstance().getParentProcessInstanceId(),\n'
+      + '  state: (function(s){ return s===0?"pending":s===2?"completed":s===3?"aborted":s===4?"suspended":"running"; })(kcontext.getProcessInstance().getState()),\n'
+      + '  variables: kcontext.getProcessInstance().getVariables(),\n'
+      + '  activeNodes: (function(){ var list = kcontext.getProcessInstance().getNodeInstances(); var out = []; for (var i = 0; i < list.size(); i++) { var ni = list.get(i); out.push({ id: ni.getId(), nodeId: ni.getNodeId(), name: ni.getNodeName() }); } return out; })(),\n'
+      + '  signal: function(type, payload){ kcontext.getKieRuntime().signalEvent(type, payload, kcontext.getProcessInstance().getId()); },\n'
+      + '  signalOther: function(targetId, type, payload){ kcontext.getKieRuntime().signalEvent(type, payload, targetId); },\n'
+      + '  broadcast: function(type, payload){ kcontext.getKieRuntime().signalEvent(type, payload); },\n'
+      + '  abort: function(){ kcontext.getKieRuntime().abortProcessInstance(kcontext.getProcessInstance().getId()); },\n'
+      + '  abortOther: function(targetId){ kcontext.getKieRuntime().abortProcessInstance(targetId); }\n'
+      + '};\n';
+  }
+  if (isWordUsed(code, 'node')) {
+    out += 'var node = { id: kcontext.getNodeInstance().getId(), nodeId: kcontext.getNodeInstance().getNodeId(), name: kcontext.getNodeInstance().getNodeName() };\n';
+  }
+  return out;
+}
+
+/** Java twin of jsInstanceNodePreamble — flat String locals, not an object (Java has no object-literal
+ *  syntax), matching ScriptRunner.java's META_LOCALS exactly (name + expression, both lists must stay
+ *  in sync). Unlike `javaBareNamePreamble`, no `state`/`activeNodes` equivalent — a Java author
+ *  targeting jBPM export already needs `kcontext.getProcessInstance().getState()`/`.getNodeInstances()`
+ *  directly for those (real jBPM's own STATE_* int / List<NodeInstance>, not a reinterpretation). */
+const JAVA_META_LOCALS: Array<[string, string]> = [
+  ['instanceId', 'kcontext.getProcessInstance().getId()'],
+  ['processId', 'kcontext.getProcessInstance().getProcessId()'],
+  ['processName', 'kcontext.getProcessInstance().getProcessName()'],
+  ['correlationKey', 'kcontext.getProcessInstance().getCorrelationKey()'],
+  ['parentInstanceId', 'kcontext.getProcessInstance().getParentProcessInstanceId()'],
+  ['currentNodeId', 'kcontext.getNodeInstance().getNodeId()'],
+  ['currentNodeName', 'kcontext.getNodeInstance().getNodeName()'],
+];
+function javaMetaLocalsPreamble(code: string, varType: Record<string, string>): string {
+  let out = '';
+  for (const [name, expr] of JAVA_META_LOCALS) {
+    if (varType[name]) continue; // a declared process variable of the same name always wins
+    if (!isWordUsed(code, name)) continue;
+    out += `String ${name} = ${expr};\n`;
+  }
+  return out;
+}
+
+/** Java-dialect-only: composes a preamble with a flow condition's text, respecting real jBPM's own
+ *  "bare boolean expression OR full body ending in an explicit return" Java condition convention (see
+ *  ScriptRunner.java's conditionBody — source-verified against real jBPM). A preamble is a sequence
+ *  of local declarations, so in COMPILED Java it can only precede a `return` statement, never sit
+ *  inside a bare expression — if the condition text has no explicit `return` yet and a preamble needs
+ *  to be added, wrap the ORIGINAL text in `return (...)` first, THEN prepend the preamble in front of
+ *  that. A no-op (returns `when` untouched) if the preamble is empty, so conditions that don't
+ *  reference the Java meta-locals are never rewritten. NOT used for JS conditions: real jBPM's JS
+ *  condition dialect evaluates via plain script-engine `eval` (the last expression's value, no
+ *  function wrapper), so forcing a `return` there would risk an "illegal return statement" on a real
+ *  jBPM/Nashorn server — a preamble of declarations can simply precede the original text as-is, with
+ *  or without its own `return`, exactly as authored. */
+function withJavaConditionPreamble(when: string, preamble: string): string {
+  if (!preamble) return when;
+  const body = /\breturn\b/.test(when) ? when : `return (${when});`;
+  return preamble + body;
+}
 
 function setEvent(nd: Node, ev: any): void {
   if (!ev) { nd.eventType = 'none'; return; }
@@ -285,9 +438,32 @@ export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): P
   const variables = (ep.vars || []).map((v) => { const sr = resolve(v.type); varType[v.name] = sr; return { name: v.name, type: sr }; });
   const ensure = (name: string, sr: string) => { if (!variables.some((x) => x.name === name)) { variables.push({ name, type: sr }); varType[name] = sr; } };
 
-  const sig = new Set(ep.signals || []); const err = new Set(ep.errors || []);
+  const sig = new Set(ep.signals || []);
+  const errCode: Record<string, string> = {};
+  for (const e of ep.errors || []) if (typeof e === 'object') errCode[e.name] = e.code;
+  const err = new Set((ep.errors || []).map((e) => (typeof e === 'string' ? e : e.name)));
   const msg = new Set(ep.messages || []); const esc = new Set(ep.escalations || []);
 
+  // Real jBPM's generic onEntry/onExit action hooks — same preamble treatment already applied to
+  // script tasks (jsVarsPreamble/jsInstanceNodePreamble for JS, javaBareNamePreamble/
+  // javaMetaLocalsPreamble for Java) so a `vars`/`instance`/`node`/meta-local reference in an
+  // onEntry/onExit script still exports to plain, real-jBPM-runnable text. Declared-variable bare
+  // names need no preamble here either (real jBPM's own build-time codegen auto-binds those for
+  // onEntry/onExit exactly like it does for script tasks — same JavaActionBuilder mechanism).
+  const lifecycle = (n: WithLifecycle): Partial<Node> => {
+    const out: Partial<Node> = {};
+    if (n.onEntry) {
+      out.onEntry = (n.onEntryLang === 'js' ? jsVarsPreamble(n.onEntry, Object.keys(varType)) + jsInstanceNodePreamble(n.onEntry)
+        : javaBareNamePreamble(n.onEntry, varType) + javaMetaLocalsPreamble(n.onEntry, varType)) + n.onEntry;
+      out.onEntryFormat = langUri(n.onEntryLang);
+    }
+    if (n.onExit) {
+      out.onExit = (n.onExitLang === 'js' ? jsVarsPreamble(n.onExit, Object.keys(varType)) + jsInstanceNodePreamble(n.onExit)
+        : javaBareNamePreamble(n.onExit, varType) + javaMetaLocalsPreamble(n.onExit, varType)) + n.onExit;
+      out.onExitFormat = langUri(n.onExitLang);
+    }
+    return out;
+  };
   const conv = (n: EngineNode): Node => {
     const base: Node = { id: n.id!, type: 'raw', name: n.name };
     switch (n.type) {
@@ -299,9 +475,35 @@ export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): P
         else { nd.subtype = 'none'; nd.eventType = 'none'; }
         return nd;
       }
-      case 'script': return { ...base, type: 'scriptTask', script: n.code, scriptFormat: langUri(n.lang) };
+      case 'script': {
+        const code = n.code || '';
+        const preamble = n.lang === 'js' ? jsVarsPreamble(code, Object.keys(varType)) + jsInstanceNodePreamble(code)
+          : n.lang === 'java' ? javaBareNamePreamble(code, varType) + javaMetaLocalsPreamble(code, varType) : '';
+        return { ...base, type: 'scriptTask', script: preamble + code, scriptFormat: langUri(n.lang) };
+      }
       case 'http': {
         ensure('reqPayload', 'String'); ensure('resPayload', 'String'); ensure('baseUrl', 'String');
+        if (n.lang === 'js') {
+          // JavaScript wrapper scripts (kcontext API is the same; JSON via native JS)
+          const entryJs = 'var json = {};\n'
+            + 'json.piid = String(kcontext.getProcessInstance().getId());\n'
+            + Object.entries(n.body || {}).map(([k, v]) =>
+              (typeof v === 'string' && v.startsWith('$')) ? `json[${jstr(k)}] = kcontext.getVariable(${jstr(v.slice(1))});\n`
+                : `json[${jstr(k)}] = ${typeof v === 'number' || typeof v === 'boolean' ? v : jstr(v)};\n`).join('')
+            + 'kcontext.setVariable("reqPayload", JSON.stringify(json));';
+          const setsJs = Object.entries(n.resultTo || {}).map(([vn, jp]) => {
+            const path = String(jp).replace(/^\$\.?/, '');
+            const acc = path === '' || path === '$' ? 'root' : 'root' + path.split('.').map((p) => `[${jstr(p)}]`).join('');
+            return `    if (root != null) kcontext.setVariable(${jstr(vn)}, ${acc});\n`;
+          }).join('');
+          const exitJs = 'var response = kcontext.getVariable("resPayload");\n'
+            + 'if (response != null && String(response) !== "") { try {\n'
+            + '  var root = JSON.parse(String(response));\n'
+            + setsJs + '} catch(e) {} }'
+            + (n.exitScript ? '\n' + jsVarsPreamble(n.exitScript, Object.keys(varType)) + jsInstanceNodePreamble(n.exitScript) + n.exitScript : '');
+          return { ...base, type: 'callActivity', subtype: 'rest', url: n.url, method: n.method || 'POST',
+            onEntry: entryJs, onExit: exitJs, onEntryFormat: LANG_URI.js, onExitFormat: LANG_URI.js };
+        }
         const entry = 'com.fasterxml.jackson.databind.node.ObjectNode json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\n'
           + 'json.put("piid", String.valueOf(kcontext.getProcessInstance().getId()));\n'
           + Object.entries(n.body || {}).map(([k, v]) =>
@@ -312,25 +514,31 @@ export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): P
         const exit = 'String response = (String) kcontext.getVariable("resPayload");\n'
           + 'if (response != null && !response.isEmpty()) { try {\n'
           + '  com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response);\n'
-          + sets + '} catch(Exception e) {} }';
+          + sets + '} catch(Exception e) {} }'
+          + (n.exitScript ? '\n' + javaBareNamePreamble(n.exitScript, varType) + javaMetaLocalsPreamble(n.exitScript, varType) + n.exitScript : '');
         return { ...base, type: 'callActivity', subtype: 'rest', url: n.url, method: n.method || 'POST', onEntry: entry, onExit: exit };
       }
       case 'call': return { ...base, type: 'callActivity', subtype: 'reusable', calledElement: n.process,
         dataInputs: Object.entries(n.inputs || {}).map(([k, v]) => ({ name: k, value: String(v).replace(/^\$/, '') })),
-        dataOutputs: Object.entries(n.outputs || {}).map(([k, v]) => ({ name: k, to: String(v) })) };
+        dataOutputs: Object.entries(n.outputs || {}).map(([k, v]) => ({ name: k, to: String(v) })), ...lifecycle(n) };
       case 'forEach': return { ...base, type: 'callActivity', subtype: 'multiInstance', calledElement: n.process,
-        multiInstance: { isSequential: n.parallel === false, collectionIn: n.over, collectionOut: n.collectInto || `${n.over}Results`, itemVar: n.as || 'item', itemOutVar: n.itemResult || 'itemResult', passthru: n.pass || [] } };
-      case 'userTask': return { ...base, type: 'userTask', taskName: n.form || n.name, group: n.group || n.assignee || 'user', skippable: n.skippable !== false };
-      case 'rule': return { ...base, type: 'businessRuleTask', ruleFlowGroup: n.ruleflowGroup, implementation: n.dmn ? 'http://www.jboss.org/drools/dmn' : '##unspecified' };
-      case 'send': { if (n.message) msg.add(n.message); return { ...base, type: 'sendTask', messageRef: n.message, implementation: n.implementation || '##WebService' }; }
-      case 'receive': { if (n.message) msg.add(n.message); return { ...base, type: 'receiveTask', messageRef: n.message, implementation: n.implementation || 'Other' }; }
-      case 'manual': return { ...base, type: 'manualTask' };
+        multiInstance: { isSequential: n.parallel === false, collectionIn: n.over, collectionOut: n.collectInto || `${n.over}Results`, itemVar: n.as || 'item', itemOutVar: n.itemResult || 'itemResult', passthru: n.pass || [] }, ...lifecycle(n) };
+      case 'userTask': return { ...base, type: 'userTask', taskName: n.form || n.name, group: n.group || n.assignee, skippable: n.skippable !== false, ...lifecycle(n) };
+      case 'rule': return { ...base, type: 'businessRuleTask', ruleFlowGroup: n.ruleflowGroup, implementation: n.dmn ? 'http://www.jboss.org/drools/dmn' : '##unspecified', ...lifecycle(n) };
+      case 'send': { if (n.message) msg.add(n.message); return { ...base, type: 'sendTask', messageRef: n.message, implementation: n.implementation || '##WebService', ...lifecycle(n) }; }
+      case 'receive': { if (n.message) msg.add(n.message); return { ...base, type: 'receiveTask', messageRef: n.message, implementation: n.implementation || 'Other', ...lifecycle(n) }; }
+      case 'manual': return { ...base, type: 'manualTask', ...lifecycle(n) };
+      case 'workItem': {
+        const workParams: Record<string, string> = {};
+        for (const [k, v] of Object.entries(n.params || {})) workParams[k] = typeof v === 'string' && v.startsWith('$') ? v : String(v);
+        return { ...base, type: 'genericTask', handlerName: n.handler, workParams, workResultTo: n.resultTo || {}, ...lifecycle(n) };
+      }
       case 'gateway': { const map: Record<string, Node['type']> = { exclusive: 'exclusiveGateway', parallel: 'parallelGateway', inclusive: 'inclusiveGateway', event: 'eventBasedGateway', complex: 'complexGateway' }; return { ...base, type: map[n.mode] || 'exclusiveGateway', gatewayDirection: n.direction || 'Diverging', default: n.default }; }
       case 'catch': { const nd: Node = { ...base, type: 'intermediateCatchEvent' }; setEvent(nd, n.event); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); return nd; }
       case 'throw': { const nd: Node = { ...base, type: 'intermediateThrowEvent' }; setEvent(nd, n.event); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); if (nd.escalationRef) esc.add(nd.escalationRef); return nd; }
       case 'boundary': { const host = Array.isArray(n.on) ? (n.on.find((h) => h !== '*') ?? n.on[0]) : n.on; const nd: Node = { ...base, type: 'boundaryEvent', attachedTo: host, cancelActivity: n.interrupting !== false }; setEvent(nd, n.event); if (nd.errorRef) err.add(nd.errorRef); if (nd.signalName) sig.add(nd.signalName); if (nd.messageRef) msg.add(nd.messageRef); if (nd.escalationRef) esc.add(nd.escalationRef); return nd; }
       case 'subprocess': {
-        const nd: Node = { ...base, type: 'subProcess', subtype: n.transaction ? 'transaction' : (n.on ? 'event' : 'embedded') };
+        const nd: Node = { ...base, type: 'subProcess', subtype: n.transaction ? 'transaction' : (n.on ? 'event' : 'embedded'), ...lifecycle(n) };
         if (n.on && n.on.error) { nd.error = n.on.error; err.add(n.on.error); }
         nd.nodes = (n.nodes || []).map(conv);
         nd.flows = (n.flows || []).map(convFlow);
@@ -339,14 +547,27 @@ export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): P
       default: return { ...base, type: 'raw', bpmnLocal: n.type, raw: n.raw || `<!-- ${n.type} -->` };
     }
   };
-  const convFlow = (f: EngineFlow): Flow => ({ id: f.id || `${f.from}__${f.to}`, sourceRef: f.from, targetRef: f.to, ...(f.when ? { condition: f.when, conditionLanguage: langUri(f.lang) } : {}) });
+  // Declared-var bare-name binding needs NO preamble here — real jBPM's own build-time codegen
+  // (JavaActionBuilder/JavaReturnValueEvaluatorBuilder) ALREADY auto-binds every declared process
+  // variable as a bare identifier for conditions, in both dialects. Only THIS engine's own additive
+  // names (`vars`/`instance`/`node`/the Java meta-locals — none of which real jBPM's codegen knows
+  // about) need a preamble injected here, and only if the condition text actually references one.
+  const convFlow = (f: EngineFlow): Flow => {
+    if (!f.when) return { id: f.id || `${f.from}__${f.to}`, sourceRef: f.from, targetRef: f.to };
+    // JS: a preamble of declarations can simply precede the original text unchanged (see
+    // withJavaConditionPreamble's doc for why this differs from the Java branch below).
+    const condition = f.lang === 'js' ? (jsVarsPreamble(f.when, Object.keys(varType)) + jsInstanceNodePreamble(f.when)) + f.when
+      : f.lang === 'java' ? withJavaConditionPreamble(f.when, javaMetaLocalsPreamble(f.when, varType))
+      : f.when;
+    return { id: f.id || `${f.from}__${f.to}`, sourceRef: f.from, targetRef: f.to, condition, conditionLanguage: langUri(f.lang) };
+  };
 
   const nodes = ep.nodes.map(conv);
   const flows = ep.flows.map(convFlow);
 
   // Expand a multi-host / global (*) error-catch into one BPMN boundary event per host activity
   // (BPMN boundaries attach to a single activity). Each clone shares the catch's outgoing (recovery) flow.
-  const ACTIVITY = new Set<Node['type']>(['scriptTask', 'userTask', 'businessRuleTask', 'sendTask', 'receiveTask', 'manualTask', 'callActivity', 'subProcess']);
+  const ACTIVITY = new Set<Node['type']>(['scriptTask', 'userTask', 'businessRuleTask', 'sendTask', 'receiveTask', 'manualTask', 'callActivity', 'subProcess', 'genericTask']);
   const activityIds = () => nodes.filter((x) => ACTIVITY.has(x.type)).map((x) => x.id);
   for (const en of ep.nodes) {
     if (en.type !== 'boundary') continue;
@@ -370,7 +591,7 @@ export function fromEngine(ep: EngineProcess, sharedTypes: EngineType[] = []): P
     id: ep.id, name: ep.name || ep.id, packageName: ep.package || 'org.jbpm', processType: 'Public', isExecutable: true,
     declarations: {
       signals: [...sig].map((n) => ({ id: `_sig_${n}`, name: n })),
-      errors: [...err].map((n) => ({ id: n, errorCode: n })),
+      errors: [...err].map((n) => ({ id: n, errorCode: errCode[n] ?? n })),
       messages: [...msg].map((n) => ({ id: n, name: n })),
       escalations: [...esc].map((n) => ({ id: n, escalationCode: n, name: n })),
     },
@@ -871,6 +1092,7 @@ export function fromEngineProject(ep: EngineProject): Project {
     },
     workDefinitions,      // -> global/WorkDefinitions.wid (defaults + any custom)
     files,
+    ...(ep.binaryAssets && Object.keys(ep.binaryAssets).length ? { binaryFiles: ep.binaryAssets } : {}),
   };
   return { root: ep.id || '.', descriptor, processes };
 }
@@ -904,6 +1126,7 @@ export function toEngineProject(project: Project): EngineProject {
     }
   }
   const dep = (project.descriptor && project.descriptor.deployment) || {};
+  const binaryFiles = project.descriptor && project.descriptor.binaryFiles;
   return {
     id: project.root,
     gav: project.descriptor && project.descriptor.gav,
@@ -914,6 +1137,7 @@ export function toEngineProject(project: Project): EngineProject {
     },
     types,
     assets,
+    ...(binaryFiles && Object.keys(binaryFiles).length ? { binaryAssets: binaryFiles } : {}),
     processes: project.processes.map(toEngine),
   };
 }
@@ -928,6 +1152,13 @@ export function toEngine(m: ProcessModel): EngineProcess {
       : n.eventType === 'timer' ? { timer: { duration: n.timeDuration, cycle: n.timeCycle, date: n.timeDate } }
         : n.eventType === 'conditional' ? { condition: n.conditionExpr, lang: dialectToLang(n.conditionExprLanguage) } : undefined;
   const gwMode: Record<string, string> = { exclusiveGateway: 'exclusive', parallelGateway: 'parallel', inclusiveGateway: 'inclusive', eventBasedGateway: 'event', complexGateway: 'complex' };
+  // Reverse of fromEngine's lifecycle() — onEntry/onExit round-trip byte-for-byte here (no preamble
+  // to strip: real jBPM projects never contain this engine's own vars/instance/node/meta-local
+  // preamble, since that's this engine's own addition, not something a real jBPM project authors).
+  const revLifecycle = (n: Node): Partial<EngineNode> => ({
+    ...(n.onEntry ? { onEntry: n.onEntry, onEntryLang: dialectToLang(n.onEntryFormat) } : {}),
+    ...(n.onExit ? { onExit: n.onExit, onExitLang: dialectToLang(n.onExitFormat) } : {}),
+  });
   // toEngine is a best-effort reverse: jBPM fields may be undefined and don't always satisfy the
   // strict EngineNode union (e.g. an http node with no reversible url), so the builder returns `any`.
   const conv = (n: Node): any => {
@@ -936,21 +1167,33 @@ export function toEngine(m: ProcessModel): EngineProcess {
       case 'startEvent': return { ...b, type: 'start', ...(ev(n) ? { on: ev(n) } : {}) };
       case 'endEvent': return n.eventType === 'terminate' || n.subtype === 'terminate' ? { ...b, type: 'end', result: 'terminate' } : { ...b, type: 'end', ...(ev(n) ? { throw: ev(n) } : {}) };
       case 'scriptTask': return { ...b, type: 'script', lang: dialectToLang(n.scriptFormat), code: n.script };
-      case 'userTask': return { ...b, type: 'userTask', name: n.name, group: n.group, form: n.taskName };
-      case 'businessRuleTask': return { ...b, type: 'rule', ruleflowGroup: n.ruleFlowGroup };
-      case 'sendTask': return { ...b, type: 'send', message: n.messageRef };
-      case 'receiveTask': return { ...b, type: 'receive', message: n.messageRef };
-      case 'manualTask': return { ...b, type: 'manual', name: n.name };
+      case 'userTask': return { ...b, type: 'userTask', name: n.name, group: n.group, form: n.taskName, ...revLifecycle(n) };
+      case 'businessRuleTask': return { ...b, type: 'rule', ruleflowGroup: n.ruleFlowGroup, ...revLifecycle(n) };
+      case 'sendTask': return { ...b, type: 'send', message: n.messageRef, ...revLifecycle(n) };
+      case 'receiveTask': return { ...b, type: 'receive', message: n.messageRef, ...revLifecycle(n) };
+      case 'manualTask': return { ...b, type: 'manual', name: n.name, ...revLifecycle(n) };
+      case 'genericTask': {
+        const params: Record<string, string | number | boolean> = {};
+        for (const [k, v] of Object.entries(n.workParams || {})) params[k] = v;
+        return { ...b, type: 'workItem', handler: n.handlerName, params, resultTo: n.workResultTo || {}, ...revLifecycle(n) };
+      }
       case 'exclusiveGateway': case 'parallelGateway': case 'inclusiveGateway': case 'eventBasedGateway': case 'complexGateway':
-        return { ...b, type: 'gateway', mode: gwMode[n.type], default: n.default };
+        return { ...b, type: 'gateway', mode: gwMode[n.type], default: n.default, direction: n.gatewayDirection };
       case 'intermediateCatchEvent': return { ...b, type: 'catch', event: ev(n) };
       case 'intermediateThrowEvent': return { ...b, type: 'throw', event: ev(n) };
       case 'boundaryEvent': return { ...b, type: 'boundary', on: n.attachedTo, event: ev(n), interrupting: n.cancelActivity };
-      case 'subProcess': return { ...b, type: 'subprocess', transaction: n.subtype === 'transaction' || undefined, on: n.error ? { error: n.error } : undefined, nodes: (n.nodes || []).map(conv), flows: (n.flows || []).map((f) => ({ id: f.id, from: f.sourceRef, to: f.targetRef, ...(f.condition ? { when: f.condition, lang: dialectToLang(f.conditionLanguage) } : {}) })) };
+      case 'subProcess': {
+        const innerNodes = (n.nodes || []).map(conv);
+        // jBPM marks an event subprocess via triggeredByEvent="true" (captured as subtype 'event' by
+        // the parser); the trigger itself is whatever start event lives inside (usually an error start).
+        const errStart = n.subtype === 'event' ? (n.nodes || []).find((x) => x.type === 'startEvent' && x.eventType === 'error') : undefined;
+        const on = n.subtype === 'event' ? (errStart?.errorRef ? { error: errStart.errorRef } : {}) : undefined;
+        return { ...b, type: 'subprocess', transaction: n.subtype === 'transaction' || undefined, on, nodes: innerNodes, flows: (n.flows || []).map((f) => ({ id: f.id, from: f.sourceRef, to: f.targetRef, ...(f.condition ? { when: f.condition, lang: dialectToLang(f.conditionLanguage) } : {}) })), ...revLifecycle(n) };
+      }
       case 'callActivity':
-        if (n.subtype === 'multiInstance' && n.multiInstance) return { ...b, type: 'forEach', process: n.calledElement, over: n.multiInstance.collectionIn, as: n.multiInstance.itemVar, collectInto: n.multiInstance.collectionOut, itemResult: n.multiInstance.itemOutVar, parallel: !n.multiInstance.isSequential, pass: n.multiInstance.passthru };
-        if (n.subtype === 'rest') return { ...b, type: 'http', method: n.method, url: n.url }; // body/resultTo not reversed
-        return { ...b, type: 'call', process: n.calledElement };
+        if (n.subtype === 'multiInstance' && n.multiInstance) return { ...b, type: 'forEach', process: n.calledElement, over: n.multiInstance.collectionIn, as: n.multiInstance.itemVar, collectInto: n.multiInstance.collectionOut, itemResult: n.multiInstance.itemOutVar, parallel: !n.multiInstance.isSequential, pass: n.multiInstance.passthru, ...revLifecycle(n) };
+        if (n.subtype === 'rest') return { ...b, type: 'http', method: n.method, url: n.url, ...(String(n.onExitFormat || '').includes('javascript') ? { lang: 'js' as Lang } : {}) }; // body/resultTo not reversed
+        return { ...b, type: 'call', process: n.calledElement, ...revLifecycle(n) };
       default: return { ...b, type: 'raw', raw: n.raw };
     }
   };
@@ -958,7 +1201,7 @@ export function toEngine(m: ProcessModel): EngineProcess {
     id: m.id, name: m.name, package: m.packageName,
     vars: (m.variables || []).map((v) => ({ name: v.name, type: SR_TO_ENGINE[v.type] || v.type })),
     signals: (m.declarations?.signals || []).map((s) => s.name),
-    errors: (m.declarations?.errors || []).map((e) => e.id),
+    errors: (m.declarations?.errors || []).map((e) => (e.id === e.errorCode ? e.id : { name: e.id, code: e.errorCode })),
     messages: (m.declarations?.messages || []).map((x) => x.id),
     escalations: (m.declarations?.escalations || []).map((x) => x.id),
     lanes: (m.lanes || []).map((l) => ({ id: l.id, name: l.name, nodes: l.flowNodeRefs })),

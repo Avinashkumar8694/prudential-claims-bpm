@@ -1,6 +1,8 @@
 // Node handler registry — maps an engine node type to its backend handler. Each node lives in its own
 // folder (nodes/<type>/handler.ts) with all of its run-time logic. Add a node = add a folder + entry.
 import type { NodeHandler } from './types.ts';
+import type { EngineNode } from '../../sdk/index.ts';
+import type { Instance } from '../../domain.ts';
 import { handler as start } from './start/handler.ts';
 import { handler as end } from './end/handler.ts';
 import { handler as manual } from './manual/handler.ts';
@@ -13,15 +15,23 @@ import { handler as receive } from './receive/handler.ts';
 import { handler as catchEvent } from './catch/handler.ts';
 import { handler as throwEvent } from './throw/handler.ts';
 import { handler as send } from './send/handler.ts';
-import { handler as call } from './call/handler.ts';
+import { handler as call, mapChildOutputs as mapCallOutputs } from './call/handler.ts';
 import { handler as forEach } from './for-each/handler.ts';
-import { handler as subprocess } from './subprocess/handler.ts';
+import { handler as subprocess, mapChildOutputs as mapSubprocessOutputs } from './subprocess/handler.ts';
 import { handler as workItem } from './work-item/handler.ts';
 
 export const NODE_HANDLERS: Record<string, NodeHandler> = {
   start, end, manual, script, http, rule, gateway, userTask, receive,
   catch: catchEvent, throw: throwEvent, send, call, forEach, subprocess, workItem,
   // 'boundary' has no active handler — it is spawned by the error router and follows its outgoing flow.
+};
+
+/** Node types whose child-completion output-mapping logic execution-engine.ts's tryResumeParent needs
+ *  to reuse for the ASYNC path (child instead waited, completing later) — a deliberately sparse
+ *  capability map, not a mirror of NODE_HANDLERS. Only call/subprocess ever produce a
+ *  `wait:{kind:'child'}` today. */
+export const CHILD_OUTPUT_MAPPERS: Partial<Record<string, (n: EngineNode, child: Instance) => Record<string, unknown>>> = {
+  call: mapCallOutputs, subprocess: mapSubprocessOutputs,
 };
 
 // per-node UI config (palette + ports + property schema), co-located with each handler

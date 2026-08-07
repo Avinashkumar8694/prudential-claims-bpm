@@ -21,7 +21,7 @@ const SKIP_DIRS = new Set(['node_modules', 'target', '.git', 'dist', 'bpmn-sdk',
 // binary files can't round-trip as UTF-8 text, so they're the only things NOT captured; everything
 // else (rules, decisions, forms, java, wid, properties, AND any arbitrary .xml/.md/.json/config/…)
 // is carried verbatim so a jBPM project round-trips losslessly, never dropping a file.
-const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.otf', '.eot', '.zip', '.jar', '.gz', '.tar', '.class', '.xls', '.xlsx', '.sxls', '.pdf', '.so', '.dll']);
+const BINARY_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.woff', '.woff2', '.ttf', '.otf', '.eot', '.zip', '.jar', '.gz', '.tar', '.class', '.xls', '.xlsx', '.sxls', '.doc', '.docx', '.ppt', '.pptx', '.pdf', '.so', '.dll']);
 
 function collectAssets(dir: string, projectDir: string, out: Record<string, string>, bin: Record<string, string>): void {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

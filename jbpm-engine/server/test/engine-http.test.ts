@@ -58,3 +58,31 @@ test('service task failure raises SERVICE_ERROR and is recovered by an Error Cat
   assert.strictEqual((inst.variables['errorInfo'] as any).code, 'SERVICE_ERROR');
   assert.ok(inst.history.some((h) => h.nodeId === 'rec'));
 });
+
+test('a host-specific catch with a custom jBPM-style error name (not "SERVICE_ERROR") still catches a REST failure on that host', async () => {
+  // mirrors a mechanically-converted real jBPM project, where the boundary's errorRef is whatever
+  // custom name/errorCode the original BPMN declared (e.g. "REST_API_FAILURE"), not the runtime's
+  // own internal vocabulary — a host-specific catch matches any failure from its host regardless.
+  const inst = await deployRun(newCtx(),
+    [{ id: 's', type: 'start' },
+     { id: 'call', type: 'http', name: 'Boom', method: 'GET', url: '/boom' },
+     { id: 'c', type: 'boundary', name: 'On error', on: ['call'], event: { error: 'REST_API_FAILURE' }, interrupting: true },
+     { id: 'rec', type: 'manual', name: 'Fallback' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 'call' }, { id: 'f2', from: 'call', to: 'e' }, { id: 'f3', from: 'c', to: 'rec' }, { id: 'f4', from: 'rec', to: 'e' }],
+    [], {});
+  assert.strictEqual(inst.status, 'completed', 'recovered via the custom-named error catch');
+  assert.strictEqual((inst.variables['errorInfo'] as any).code, 'SERVICE_ERROR');
+  assert.ok(inst.history.some((h) => h.nodeId === 'rec'));
+});
+
+test('a global catch with a custom jBPM-style error name defaults to catching SERVICE_ERROR', async () => {
+  const inst = await deployRun(newCtx(),
+    [{ id: 's', type: 'start' },
+     { id: 'call', type: 'http', name: 'Boom', method: 'GET', url: '/boom' },
+     { id: 'g', type: 'boundary', name: 'Global handler', on: ['*'], event: { error: 'REST_API_FAILURE' } },
+     { id: 'rec', type: 'manual', name: 'Cleanup' }, { id: 'e', type: 'end' }],
+    [{ id: 'f1', from: 's', to: 'call' }, { id: 'f2', from: 'call', to: 'e' }, { id: 'f3', from: 'g', to: 'rec' }, { id: 'f4', from: 'rec', to: 'e' }],
+    [], {});
+  assert.strictEqual(inst.status, 'completed', 'recovered via the global custom-named error catch');
+  assert.ok(inst.history.some((h) => h.nodeId === 'rec'));
+});

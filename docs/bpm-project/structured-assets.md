@@ -9,7 +9,7 @@ Beyond carrying assets as verbatim text, the SDK exposes **structured JSON codec
 One efficient mechanism covers the majority (a generic XML tree), plus small typed models for the rest.
 
 ```ts
-import { parseAsset, buildAsset, assetKind } from '@neutrinos/bpmn-sdk';
+import { parseAsset, buildAsset, assetKind } from '@fabrixly/bpmn-sdk';
 
 const asset = parseAsset('rules/classify.drl', drlText);  // -> { kind:'drl', model:{...} }
 asset.model.rules.push({ name:'New', attributes:['ruleflow-group "classify"'], when:'$c: Claim()', then:'…' });

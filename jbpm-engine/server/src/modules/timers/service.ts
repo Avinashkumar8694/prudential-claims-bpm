@@ -4,7 +4,7 @@ import type { AppContext } from '../../context.ts';
 import { Collections, type TimerJob } from '../../domain.ts';
 import { InstanceService } from '../instances/service.ts';
 import type { EngineEvent } from '../../engine/execution-engine.ts';
-import { computeDue } from '../../engine/duration.ts';
+import { computeDue, parseCycleRepeatCount } from '../../engine/duration.ts';
 
 export class TimerService {
   private instances: InstanceService;
@@ -32,16 +32,26 @@ export class TimerService {
           // recurring start (cron/cycle) → schedule the next occurrence
           if (job.cycle) await this.reschedule(job, nowIso);
         } else {
-          await this.instances.fireTimer(job);
+          const inst = await this.instances.fireTimer(job);
+          // A non-interrupting boundary timer doesn't remove its host token — if it's also declared
+          // with a cycle, that means "keep pinging every period" (e.g. an SLA reminder), so reschedule
+          // for the next occurrence. An interrupting boundary (or a plain catch-timer, which always
+          // consumes its own wait) removes the token, so this naturally stops recurring on its own —
+          // no separate "which kind was this" check needed.
+          if (job.cycle && inst.tokens.some((t) => t.id === job.tokenId)) await this.reschedule(job, nowIso);
         }
       } catch { /* token gone / instance finished / deployment inactive — ignore */ }
     }
     return fired;
   }
 
+  /** Schedules the next occurrence of a recurring (cycled) job — unless its ISO-8601 repeat count
+   *  ("R3/PT1H" = 3 times; "R/PT1H" = unbounded) has already been reached. */
   private async reschedule(job: TimerJob, nowIso: string): Promise<void> {
+    const limit = parseCycleRepeatCount(job.cycle!);
+    if (limit !== null && job.fired >= limit) return;
     const next: TimerJob = {
-      ...job, id: this.ctx.newId(), status: 'scheduled', fired: 0,
+      ...job, id: this.ctx.newId(), status: 'scheduled', fired: job.fired,
       dueAt: computeDue({ cycle: job.cycle }, nowIso),
     };
     await this.repo().put(next);

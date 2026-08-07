@@ -1,5 +1,5 @@
 {
-  "name": "@neutrinos/bpmn-sdk",
+  "name": "@fabrixly/bpmn-sdk",
   "version": "0.1.0",
   "description": "Round-trip a jBPM BPM project (BPMN 2.0) to/from a clean JSON model, and generate importable BPMN from JSON. TypeScript, zero runtime dependencies.",
   "keywords": [

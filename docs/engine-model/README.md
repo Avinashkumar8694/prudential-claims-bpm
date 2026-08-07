@@ -118,7 +118,7 @@ Your engine never sees the 16 REST ports — that's the converter's job.
 
 ## Conversion API (implemented)
 ```ts
-import { fromEngine, fromEngineProject, toEngine, toEngineProject, makeTypeResolver, writeProject } from '@neutrinos/bpmn-sdk';
+import { fromEngine, fromEngineProject, toEngine, toEngineProject, makeTypeResolver, writeProject } from '@fabrixly/bpmn-sdk';
 
 const model   = fromEngine(engineProcess);          // engine process -> jBPM ProcessModel
 const project = fromEngineProject(engineProject);   // + vars/types(.java)/deployment/assets/lanes

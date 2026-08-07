@@ -20,6 +20,19 @@ export function serializeProcess(proc: ProcessModel): string {
     `<bpmn2:extensionElements><drools:metaData name="elementname">` +
     `<drools:metaValue>${cdata(name)}</drools:metaValue></drools:metaData></bpmn2:extensionElements>`;
 
+  /** Like meta(), but also emits onEntry-script/onExit-script when present — real jBPM's generic
+   *  action-hook mechanism, attachable to any activity (used by userTask/bizTask/msgTask/manualTask/
+   *  genericTask/subProcess/miCall/reusable callActivity below; restCall has its own variant since it
+   *  auto-generates a default onEntry/onExit body rather than omitting it when unset). All pieces
+   *  share the ONE <extensionElements> an element may have — never emit two. */
+  function extBlock(nd: Node): string {
+    const parts: string[] = [];
+    if (nd.name != null) parts.push(`<drools:metaData name="elementname"><drools:metaValue>${cdata(nd.name)}</drools:metaValue></drools:metaData>`);
+    if (nd.onEntry) parts.push(`<drools:onEntry-script scriptFormat="${nd.onEntryFormat || JAVA}"><drools:script>${cdata(nd.onEntry)}</drools:script></drools:onEntry-script>`);
+    if (nd.onExit) parts.push(`<drools:onExit-script scriptFormat="${nd.onExitFormat || JAVA}"><drools:script>${cdata(nd.onExit)}</drools:script></drools:onExit-script>`);
+    return parts.length ? `<bpmn2:extensionElements>${parts.join('')}</bpmn2:extensionElements>` : '';
+  }
+
   function itemDef(id: string, structureRef: string) {
     if (seenItem.has(id)) return;
     seenItem.add(id);
@@ -113,8 +126,8 @@ export function serializeProcess(proc: ProcessModel): string {
       `<bpmn2:assignment id="${uid()}"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="${uid()}">${cdata(v)}</bpmn2:from>` +
       `<bpmn2:to xsi:type="bpmn2:tFormalExpression" id="${uid()}">${nd.id}_${p}InputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>`;
     const ext = `<bpmn2:extensionElements><drools:metaData name="elementname"><drools:metaValue>${cdata(nd.name)}</drools:metaValue></drools:metaData>` +
-      `<drools:onEntry-script scriptFormat="${JAVA}"><drools:script>${cdata(entry)}</drools:script></drools:onEntry-script>` +
-      `<drools:onExit-script scriptFormat="${JAVA}"><drools:script>${cdata(exit)}</drools:script></drools:onExit-script></bpmn2:extensionElements>`;
+      `<drools:onEntry-script scriptFormat="${nd.onEntryFormat || JAVA}"><drools:script>${cdata(entry)}</drools:script></drools:onEntry-script>` +
+      `<drools:onExit-script scriptFormat="${nd.onExitFormat || JAVA}"><drools:script>${cdata(exit)}</drools:script></drools:onExit-script></bpmn2:extensionElements>`;
     const iospec = `<bpmn2:ioSpecification id="${uid()}">${di}<bpmn2:dataOutput id="${nd.id}_ResultOutputX" drools:dtype="" itemSubjectRef="__${nd.id}_ResultOutputXItem" name="Result"/>` +
       `<bpmn2:inputSet id="${uid()}">${refs}</bpmn2:inputSet><bpmn2:outputSet id="${uid()}"><bpmn2:dataOutputRefs>${nd.id}_ResultOutputX</bpmn2:dataOutputRefs></bpmn2:outputSet></bpmn2:ioSpecification>`;
     const assocs = `<bpmn2:dataInputAssociation id="${uid()}"><bpmn2:sourceRef>reqPayload</bpmn2:sourceRef><bpmn2:targetRef>${nd.id}_ContentDataInputX</bpmn2:targetRef></bpmn2:dataInputAssociation>` +
@@ -146,14 +159,44 @@ export function serializeProcess(proc: ProcessModel): string {
     pass.forEach((v) => { assoc += `<bpmn2:dataInputAssociation id="${uid()}"><bpmn2:sourceRef>${v}</bpmn2:sourceRef><bpmn2:targetRef>${nd.id}_${v}</bpmn2:targetRef></bpmn2:dataInputAssociation>`; });
     assoc += `<bpmn2:dataOutputAssociation id="${uid()}"><bpmn2:sourceRef>${nd.id}_outcoll</bpmn2:sourceRef><bpmn2:targetRef>${mi.collectionOut}</bpmn2:targetRef></bpmn2:dataOutputAssociation>`;
     const loop = `<bpmn2:multiInstanceLoopCharacteristics${mi.isSequential ? ' isSequential="true"' : ''}><bpmn2:loopDataInputRef>${nd.id}_incoll</bpmn2:loopDataInputRef><bpmn2:loopDataOutputRef>${nd.id}_outcoll</bpmn2:loopDataOutputRef><bpmn2:inputDataItem id="${nd.id}_item" name="${mi.itemVar}"/><bpmn2:outputDataItem id="${nd.id}_itemout" name="${mi.itemOutVar}"/></bpmn2:multiInstanceLoopCharacteristics>`;
-    return `<bpmn2:callActivity id="${nd.id}" drools:independent="false" drools:waitForCompletion="true" name="${escAttr(nd.name)}" calledElement="${nd.calledElement}">${meta(nd.name)}${inout(nd)}<bpmn2:ioSpecification id="${uid()}">${dins.join('')}${douts.join('')}<bpmn2:inputSet id="${uid()}">${inrefs}</bpmn2:inputSet><bpmn2:outputSet id="${uid()}">${outrefs}</bpmn2:outputSet></bpmn2:ioSpecification>${assoc}${loop}</bpmn2:callActivity>`;
+    return `<bpmn2:callActivity id="${nd.id}" drools:independent="false" drools:waitForCompletion="true" name="${escAttr(nd.name)}" calledElement="${nd.calledElement}">${extBlock(nd)}${inout(nd)}<bpmn2:ioSpecification id="${uid()}">${dins.join('')}${douts.join('')}<bpmn2:inputSet id="${uid()}">${inrefs}</bpmn2:inputSet><bpmn2:outputSet id="${uid()}">${outrefs}</bpmn2:outputSet></bpmn2:ioSpecification>${assoc}${loop}</bpmn2:callActivity>`;
+  }
+
+  function genericTask(nd: Node): string {
+    // <bpmn2:task drools:taskName="X"> — generic custom WorkItemHandler task (e.g. jBPM's built-in
+    // "Rest" REST work item, or any customer WorkItemHandler bound by name).
+    const params = nd.workParams || {};
+    const ports = Object.keys(params);
+    ports.forEach((p) => itemDef(`__${nd.id}_${p}InputXItem`, ''));
+    const din = (p: string) => `<bpmn2:dataInput id="${nd.id}_${p}InputX" drools:dtype="" itemSubjectRef="__${nd.id}_${p}InputXItem" name="${p}"/>`;
+    const dinAssoc = (p: string, v: string) => v.startsWith('$')
+      ? `<bpmn2:dataInputAssociation id="${uid()}"><bpmn2:sourceRef>${v.slice(1)}</bpmn2:sourceRef><bpmn2:targetRef>${nd.id}_${p}InputX</bpmn2:targetRef></bpmn2:dataInputAssociation>`
+      : `<bpmn2:dataInputAssociation id="${uid()}"><bpmn2:targetRef>${nd.id}_${p}InputX</bpmn2:targetRef><bpmn2:assignment id="${uid()}"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="${uid()}">${cdata(v)}</bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="${uid()}">${nd.id}_${p}InputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>`;
+    const resultTo = nd.workResultTo || {};
+    const outPorts = Object.keys(resultTo).map((varName) => resultTo[varName]);
+    outPorts.forEach((p) => itemDef(`__${nd.id}_${p}OutputXItem`, ''));
+    const dout = (p: string) => `<bpmn2:dataOutput id="${nd.id}_${p}OutputX" drools:dtype="" itemSubjectRef="__${nd.id}_${p}OutputXItem" name="${p}"/>`;
+    const doutAssoc = (varName: string, p: string) => `<bpmn2:dataOutputAssociation id="${uid()}"><bpmn2:sourceRef>${nd.id}_${p}OutputX</bpmn2:sourceRef><bpmn2:targetRef>${varName}</bpmn2:targetRef></bpmn2:dataOutputAssociation>`;
+    const dins = ports.map(din).join('');
+    const douts = outPorts.map(dout).join('');
+    const inrefs = ports.map((p) => `<bpmn2:dataInputRefs>${nd.id}_${p}InputX</bpmn2:dataInputRefs>`).join('');
+    const outrefs = outPorts.map((p) => `<bpmn2:dataOutputRefs>${nd.id}_${p}OutputX</bpmn2:dataOutputRefs>`).join('');
+    const iospec = (ports.length || outPorts.length)
+      ? `<bpmn2:ioSpecification id="${uid()}">${dins}${douts}<bpmn2:inputSet id="${uid()}">${inrefs}</bpmn2:inputSet><bpmn2:outputSet id="${uid()}">${outrefs}</bpmn2:outputSet></bpmn2:ioSpecification>`
+      : '';
+    const assocs = ports.map((p) => dinAssoc(p, params[p])).join('') + Object.entries(resultTo).map(([varName, p]) => doutAssoc(varName, p)).join('');
+    return `<bpmn2:task id="${nd.id}" drools:taskName="${escAttr(nd.handlerName || '')}" name="${escAttr(nd.name || nd.handlerName || '')}">${extBlock(nd)}${inout(nd)}${iospec}${assocs}</bpmn2:task>`;
   }
 
   function userTask(nd: Node): string {
-    (['TaskName', 'Skippable', 'GroupId'] as const).forEach((p) => itemDef(`__${nd.id}_${p}InputXItem`, ''));
+    const ports = ['TaskName', 'Skippable', ...(nd.group ? ['GroupId'] : [])];
+    ports.forEach((p) => itemDef(`__${nd.id}_${p}InputXItem`, ''));
     const din = (p: string) => `<bpmn2:dataInput id="${nd.id}_${p}InputX" drools:dtype="Object" itemSubjectRef="__${nd.id}_${p}InputXItem" name="${p}"/>`;
     const asg = (p: string, v: string) => `<bpmn2:dataInputAssociation id="${uid()}"><bpmn2:targetRef>${nd.id}_${p}InputX</bpmn2:targetRef><bpmn2:assignment id="${uid()}"><bpmn2:from xsi:type="bpmn2:tFormalExpression" id="${uid()}">${cdata(v)}</bpmn2:from><bpmn2:to xsi:type="bpmn2:tFormalExpression" id="${uid()}">${nd.id}_${p}InputX</bpmn2:to></bpmn2:assignment></bpmn2:dataInputAssociation>`;
-    return `<bpmn2:userTask id="${nd.id}" name="${escAttr(nd.name)}">${meta(nd.name)}${inout(nd)}<bpmn2:ioSpecification id="${uid()}">${din('TaskName')}${din('Skippable')}${din('GroupId')}<bpmn2:inputSet id="${uid()}"><bpmn2:dataInputRefs>${nd.id}_TaskNameInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>${nd.id}_SkippableInputX</bpmn2:dataInputRefs><bpmn2:dataInputRefs>${nd.id}_GroupIdInputX</bpmn2:dataInputRefs></bpmn2:inputSet><bpmn2:outputSet id="${uid()}"/></bpmn2:ioSpecification>${asg('TaskName', nd.taskName || nd.name || 'Task')}${asg('Skippable', String(nd.skippable !== false))}${asg('GroupId', nd.group || 'user')}</bpmn2:userTask>`;
+    const dins = ports.map(din).join('');
+    const refs = ports.map((p) => `<bpmn2:dataInputRefs>${nd.id}_${p}InputX</bpmn2:dataInputRefs>`).join('');
+    const asgs = asg('TaskName', nd.taskName || nd.name || 'Task') + asg('Skippable', String(nd.skippable !== false)) + (nd.group ? asg('GroupId', nd.group) : '');
+    return `<bpmn2:userTask id="${nd.id}" name="${escAttr(nd.name)}">${extBlock(nd)}${inout(nd)}<bpmn2:ioSpecification id="${uid()}">${dins}<bpmn2:inputSet id="${uid()}">${refs}</bpmn2:inputSet><bpmn2:outputSet id="${uid()}"/></bpmn2:ioSpecification>${asgs}</bpmn2:userTask>`;
   }
 
   const gatewayEl: Record<string, string> = {
@@ -174,14 +217,14 @@ export function serializeProcess(proc: ProcessModel): string {
 
   function bizTask(nd: Node): string {
     const a = (nd.ruleFlowGroup ? ` drools:ruleFlowGroup="${escAttr(nd.ruleFlowGroup)}"` : '') + ` implementation="${nd.implementation || '##unspecified'}"`;
-    return `<bpmn2:businessRuleTask id="${nd.id}"${a} name="${escAttr(nd.name)}">${meta(nd.name)}${inout(nd)}${simpleIo(nd)}</bpmn2:businessRuleTask>`;
+    return `<bpmn2:businessRuleTask id="${nd.id}"${a} name="${escAttr(nd.name)}">${extBlock(nd)}${inout(nd)}${simpleIo(nd)}</bpmn2:businessRuleTask>`;
   }
   function msgTask(el: string, nd: Node): string {
     const a = (nd.messageRef ? ` messageRef="${nd.messageRef}"` : '') + (nd.operationRef ? ` operationRef="${nd.operationRef}"` : '') + (nd.implementation ? ` implementation="${nd.implementation}"` : '');
-    return `<bpmn2:${el} id="${nd.id}"${a} name="${escAttr(nd.name)}">${meta(nd.name)}${inout(nd)}${simpleIo(nd)}</bpmn2:${el}>`;
+    return `<bpmn2:${el} id="${nd.id}"${a} name="${escAttr(nd.name)}">${extBlock(nd)}${inout(nd)}${simpleIo(nd)}</bpmn2:${el}>`;
   }
   function manualTask(nd: Node): string {
-    return `<bpmn2:manualTask id="${nd.id}" name="${escAttr(nd.name)}">${meta(nd.name)}${inout(nd)}</bpmn2:manualTask>`;
+    return `<bpmn2:manualTask id="${nd.id}" name="${escAttr(nd.name)}">${extBlock(nd)}${inout(nd)}</bpmn2:manualTask>`;
   }
 
   function subProcess(nd: Node): string {
@@ -198,7 +241,7 @@ export function serializeProcess(proc: ProcessModel): string {
       (nd.flows || []).forEach((f) => { inner += flowXml(f); });
       (nd.nodes || []).forEach((cn) => { if (cn.position) place(cn.id, cn.position); inner += emitNode(cn); });
     }
-    return `<bpmn2:${tag} id="${nd.id}" name="${escAttr(nd.name || '')}"${trig}>${meta(nd.name)}${inout(nd)}${inner}</bpmn2:${tag}>`;
+    return `<bpmn2:${tag} id="${nd.id}" name="${escAttr(nd.name || '')}"${trig}>${extBlock(nd)}${inout(nd)}${inner}</bpmn2:${tag}>`;
   }
 
   function emitNode(nd: Node): string {
@@ -224,13 +267,14 @@ export function serializeProcess(proc: ProcessModel): string {
       case 'sendTask': return msgTask('sendTask', nd);
       case 'receiveTask': return msgTask('receiveTask', nd);
       case 'manualTask': return manualTask(nd);
+      case 'genericTask': return genericTask(nd);
       case 'exclusiveGateway': case 'parallelGateway': case 'inclusiveGateway':
       case 'eventBasedGateway': case 'complexGateway': return gateway(nd);
       case 'subProcess': return subProcess(nd);
       case 'callActivity':
         if (nd.subtype === 'multiInstance') return miCall(nd);
         if (nd.subtype === 'rest' || nd.rest) return restCall(nd);
-        return `<bpmn2:callActivity id="${nd.id}" drools:independent="${nd.independent !== false}" drools:waitForCompletion="${nd.waitForCompletion !== false}" name="${escAttr(nd.name)}" calledElement="${nd.calledElement}">${meta(nd.name)}${inout(nd)}${simpleIo(nd)}</bpmn2:callActivity>`;
+        return `<bpmn2:callActivity id="${nd.id}" drools:independent="${nd.independent !== false}" drools:waitForCompletion="${nd.waitForCompletion !== false}" name="${escAttr(nd.name)}" calledElement="${nd.calledElement}">${extBlock(nd)}${inout(nd)}${simpleIo(nd)}</bpmn2:callActivity>`;
       case 'raw': return nd.raw || '';
       default: throw new Error(`Unknown node type: ${(nd as Node).type} (${(nd as Node).id})`);
     }

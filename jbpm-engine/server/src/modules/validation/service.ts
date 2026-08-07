@@ -8,10 +8,10 @@ export { validateProcess };
 export type { ValidationResult, Problem };
 
 export class ValidationService {
-  validate(process: EngineProcess): ValidationResult { return validateProcess(process); }
+  validate(process: EngineProcess): Promise<ValidationResult> { return validateProcess(process); }
 
-  validateProject(project: EngineProject): ValidationResult {
-    const results = (project.processes || []).map((p) => validateProcess(p));
+  async validateProject(project: EngineProject): Promise<ValidationResult> {
+    const results = await Promise.all((project.processes || []).map((p) => validateProcess(p)));
     return {
       ok: results.every((r) => r.ok),
       errors: results.flatMap((r) => r.errors),
@@ -21,8 +21,8 @@ export class ValidationService {
   }
 
   /** Throw VALIDATION_FAILED if the process has errors (used to gate publish/deploy). */
-  assertValid(process: EngineProcess, action = 'save'): void {
-    const res = this.validate(process);
+  async assertValid(process: EngineProcess, action = 'save'): Promise<void> {
+    const res = await this.validate(process);
     if (!res.ok) throw new ApiError('VALIDATION_FAILED', `Cannot ${action}: ${res.errors.length} validation error(s)`, res.errors);
   }
 }

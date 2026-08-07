@@ -6,7 +6,7 @@ export type NodeType =
   | 'exclusiveGateway' | 'parallelGateway' | 'inclusiveGateway' | 'eventBasedGateway' | 'complexGateway'
   | 'businessRuleTask' | 'sendTask' | 'receiveTask' | 'manualTask'
   | 'boundaryEvent' | 'intermediateCatchEvent' | 'intermediateThrowEvent'
-  | 'subProcess' | 'raw';
+  | 'subProcess' | 'genericTask' | 'raw';
 
 export type EventType =
   | 'none' | 'message' | 'timer' | 'signal' | 'error' | 'escalation'
@@ -83,6 +83,9 @@ export interface Node {
   method?: string;
   onEntry?: string;
   onExit?: string;
+  /** dialect URI for onEntry/onExit wrapper scripts; defaults to Java */
+  onEntryFormat?: string;
+  onExitFormat?: string;
   reqExtra?: string;
   setVars?: string[];
   rest?: boolean;
@@ -144,6 +147,15 @@ export interface Node {
   // raw (verbatim passthrough for unmodeled elements)
   raw?: string;
   bpmnLocal?: string;
+
+  // genericTask: <bpmn2:task drools:taskName="X"> — jBPM's generic custom-WorkItemHandler task
+  // (e.g. the built-in "Rest" REST work item, or any customer WorkItemHandler bound by name).
+  /** the WorkItemHandler name (drools:taskName), e.g. "Rest", "Email", a custom handler class's registered name */
+  handlerName?: string;
+  /** input port name -> literal value, or "$varName" for a process-variable reference */
+  workParams?: Record<string, string>;
+  /** process variable name -> output port name (e.g. { claimResult: "Result" }) */
+  workResultTo?: Record<string, string>;
 }
 
 export interface ProcessModel {

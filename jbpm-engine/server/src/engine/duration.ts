@@ -6,6 +6,15 @@ export function parseDuration(iso: string): number {
   return ((((w * 7 + d) * 24 + h) * 60 + min) * 60 + s) * 1000;
 }
 
+/** ISO-8601 recurring-interval repeat count: "R3/PT1H" -> 3, "R/PT1H" (or no leading R) -> null
+ *  (infinite/unbounded). Previously `computeDue` silently dropped this — every cycle repeated forever
+ *  regardless of a declared count. */
+export function parseCycleRepeatCount(cycle: string): number | null {
+  const m = /^R(\d*)\//.exec(cycle.trim());
+  if (!m) return null;
+  return m[1] ? Number(m[1]) : null;
+}
+
 /** Next fire time (ISO) from a timer spec (duration | cycle | date), given now (ISO). */
 export function computeDue(timer: any, nowIso: string): string {
   const nowMs = Date.parse(nowIso);

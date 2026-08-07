@@ -29,6 +29,9 @@ const schemas = {
   ProcessDef: { type: 'object', properties: { processId: { type: 'string' }, name: { type: 'string' }, package: { type: 'string' }, deploymentId: { type: 'string' }, environment: { type: 'string' }, version: { type: 'string' }, nodes: { type: 'integer' }, instances: { type: 'object', properties: { total: { type: 'integer' }, active: { type: 'integer' } } } } },
   DurStats: { type: 'object', properties: { count: { type: 'integer' }, avgMs: { type: 'integer' }, minMs: { type: 'integer' }, maxMs: { type: 'integer' } } },
   Summary: { type: 'object', properties: { instances: { type: 'object' }, tasks: { type: 'object' }, deployments: { type: 'object' }, jobs: { type: 'object' } } },
+  User: { type: 'object', properties: { id: { type: 'string' }, username: { type: 'string' }, roles: { type: 'array', items: { type: 'string' } }, groups: { type: 'array', items: { type: 'string' } }, active: { type: 'boolean' }, createdAt: { type: 'string' } } },
+  Group: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' } } },
+  Role: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, permissions: { type: 'array', items: { type: 'string' } } } },
 };
 
 // ---- paths (grouped by tag) ----
@@ -105,11 +108,12 @@ const paths: Record<string, any> = {
   '/instances/{id}/resume': { post: { tags: ['Instances'], summary: 'Resume the subtree', parameters: [idParam()], responses: ok(ref('Instance')) } },
   '/instances/{id}/abort': { post: { tags: ['Instances'], summary: 'Abort (cascades to active children)', parameters: [idParam()], responses: ok(ref('Instance')) } },
 
-  '/tasks': { get: { tags: ['Human Tasks'], summary: 'List tasks', parameters: [q('assignee', 'Owned by user'), q('group', 'Group queue'), q('status', 'Task status')], responses: ok(listOf('Task')) } },
+  '/tasks': { get: { tags: ['Human Tasks'], summary: 'List tasks', parameters: [q('assignee', 'Owned by user'), q('group', 'Group queue'), q('status', 'Task status'), q('overdue', 'true = only tasks past their dueAt and not yet completed/skipped')], responses: ok(listOf('Task')) } },
   '/tasks/{id}': { get: { tags: ['Human Tasks'], summary: 'Get a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/claim': { post: { tags: ['Human Tasks'], summary: 'Claim a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/release': { post: { tags: ['Human Tasks'], summary: 'Release a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/complete': { post: { tags: ['Human Tasks'], summary: 'Complete a task (resumes the instance)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object' } } }), responses: ok(ref('Task')) } },
+  '/tasks/{id}/skip': { post: { tags: ['Human Tasks'], summary: 'Skip a task without completing it (only if the node is declared skippable)', parameters: [idParam()], responses: ok(ref('Task')) } },
 
   '/query/process-definitions': { get: { tags: ['Query & Analytics'], summary: 'All active process definitions with live stats', responses: ok(listOf('ProcessDef')) } },
   '/query/process-definitions/{processId}/instances': { get: { tags: ['Query & Analytics'], summary: 'Instances of a process definition', parameters: [idParam('processId', 'Process id'), q('status', 'Filter by status')], responses: ok(listOf('Instance')) } },
@@ -123,6 +127,30 @@ const paths: Record<string, any> = {
   '/query/analytics/processes': { get: { tags: ['Query & Analytics'], summary: 'Process turn-around-time + status mix', responses: ok({ type: 'object' }) } },
   '/query/analytics/summary': { get: { tags: ['Query & Analytics'], summary: 'Dashboard summary counts', responses: ok(ref('Summary')) } },
   '/query/jobs': { get: { tags: ['Query & Analytics'], summary: 'Timer jobs', parameters: [q('status', 'scheduled|fired|cancelled')], responses: ok(listOf('TimerJob')) } },
+
+  '/auth/login': { post: { tags: ['IAM'], security: [], summary: 'Log in — issues a JWT (Bearer token) for every other endpoint', requestBody: jsonBody({ type: 'object', properties: { username: { type: 'string' }, password: { type: 'string' } } }), responses: { ...ok({ type: 'object', properties: { token: { type: 'string' }, user: ref('User') } }), '401': { description: 'Invalid credentials', content: { 'application/json': { schema: ref('Error') } } } } } },
+  '/users': {
+    get: { tags: ['IAM'], summary: 'List users (admin)', responses: ok(listOf('User')) },
+    post: { tags: ['IAM'], summary: 'Create a user (admin)', requestBody: jsonBody({ type: 'object', properties: { username: { type: 'string' }, password: { type: 'string' }, roles: { type: 'array', items: { type: 'string' } }, groups: { type: 'array', items: { type: 'string' } } } }), responses: created(ref('User')) },
+  },
+  '/users/{id}': {
+    get: { tags: ['IAM'], summary: 'Get a user (admin)', parameters: [idParam()], responses: ok(ref('User')) },
+    patch: { tags: ['IAM'], summary: 'Update a user’s roles/groups/active flag (admin)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { roles: { type: 'array', items: { type: 'string' } }, groups: { type: 'array', items: { type: 'string' } }, active: { type: 'boolean' } } }), responses: ok(ref('User')) },
+  },
+  '/users/{id}/password': { post: { tags: ['IAM'], summary: 'Set a user’s password (admin)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { password: { type: 'string' } } }), responses: { '204': { description: 'Changed' } } } },
+  '/groups': {
+    get: { tags: ['IAM'], summary: 'List groups (admin)', responses: ok(listOf('Group')) },
+    post: { tags: ['IAM'], summary: 'Create a group (admin)', requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' } } }), responses: created(ref('Group')) },
+  },
+  '/groups/{id}': { delete: { tags: ['IAM'], summary: 'Delete a group (admin)', parameters: [idParam()], responses: { '204': { description: 'Deleted' } } } },
+  '/roles': {
+    get: { tags: ['IAM'], summary: 'List roles (admin)', responses: ok(listOf('Role')) },
+    post: { tags: ['IAM'], summary: 'Create a role (admin)', requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, permissions: { type: 'array', items: { type: 'string' } } } }), responses: created(ref('Role')) },
+  },
+  '/roles/{id}': {
+    patch: { tags: ['IAM'], summary: 'Replace a role’s permissions (admin; the built-in "admin" role is immutable)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { permissions: { type: 'array', items: { type: 'string' } } } }), responses: ok(ref('Role')) },
+    delete: { tags: ['IAM'], summary: 'Delete a role (admin; the built-in "admin" role cannot be deleted)', parameters: [idParam()], responses: { '204': { description: 'Deleted' } } },
+  },
 };
 
 export const openapiSpec = {
@@ -130,18 +158,19 @@ export const openapiSpec = {
   info: {
     title: 'jBPM-style BPM Engine API',
     version: '0.1.0',
-    description: 'Node-native BPM engine REST API — authoring, versioning, deployment lifecycle, runtime process instances, human tasks, and KIE-Server-style query & analytics. Set the `X-User` header to act as a user.',
+    description: 'Node-native BPM engine REST API — authoring, versioning, deployment lifecycle, runtime process instances, human tasks, KIE-Server-style query & analytics, and IAM (users/groups/roles). `POST /auth/login` issues a JWT; send it as `Authorization: Bearer <token>` on every other request. Each route requires a permission granted by one of the caller’s roles — see `DEFAULT_ROLES` in modules/iam/service.ts.',
   },
   servers: [{ url: '/api', description: 'This server' }],
   tags: [
     { name: 'Catalog' }, { name: 'Authoring' }, { name: 'Projects' }, { name: 'Processes' }, { name: 'Assets' },
     { name: 'Versioning' }, { name: 'Deployments' }, { name: 'Instances' }, { name: 'Human Tasks' },
-    { name: 'Query & Analytics' }, { name: 'Import/Export' },
+    { name: 'Query & Analytics' }, { name: 'Import/Export' }, { name: 'IAM' },
   ],
   components: {
     schemas,
-    parameters: { XUser: { name: 'X-User', in: 'header', required: false, schema: { type: 'string' }, description: 'Acting user' } },
+    securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
   },
+  security: [{ bearerAuth: [] }],
   paths,
 };
 

@@ -1,7 +1,7 @@
 # jBPM Engine (Node.js) — Documentation
 
 A **fully-featured, Node.js-native BPM engine with a visual workflow builder UI**, built on top of
-[`@neutrinos/bpmn-sdk`](../../bpmn-sdk). It authors processes in the SDK's clean *engine (nodejs)*
+[`@fabrixly/bpmn-sdk`](../../bpmn-sdk). It authors processes in the SDK's clean *engine (nodejs)*
 JSON model, executes them in a Node token-based interpreter, manages **deployments with branching +
 per-branch versioning + deployment tags**, exposes **per-instance execution details with the live
 executing flow**, and can **export any workflow as a deployable jBPM (Business Central) kjar**.
@@ -42,7 +42,7 @@ with zero Java/KIE server required, and a one-click escape hatch to export to re
 | Layer | Choice | Why |
 |-------|--------|-----|
 | Backend | **Node 20 + TypeScript + Express** | Small, ubiquitous, matches SDK toolchain |
-| Authoring model | **`@neutrinos/bpmn-sdk` engine JSON** | Already the project's source of truth; converts to/from BPMN |
+| Authoring model | **`@fabrixly/bpmn-sdk` engine JSON** | Already the project's source of truth; converts to/from BPMN |
 | Execution | **Custom Node token interpreter** | Runs in Node; reuses SDK rule/DMN/tree/scorecard evaluators |
 | Persistence | **File store now, Postgres later** (repository interface) | Zero-setup dev; swappable in prod |
 | Realtime | **WebSocket (ws)** | Live instance/flow updates to the UI |

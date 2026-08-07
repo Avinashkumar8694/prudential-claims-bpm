@@ -1,4 +1,4 @@
-// @neutrinos/bpmn-sdk — round-trip a jBPM BPM project (BPMN 2.0) <-> JSON.
+// @fabrixly/bpmn-sdk — round-trip a jBPM BPM project (BPMN 2.0) <-> JSON.
 export { parseBpmn, parseBpmnAll } from './parse.js';
 export { serializeProcess } from './serialize.js';
 export { parseProject, writeProject, walk } from './project.js';
@@ -18,7 +18,7 @@ export type {
   EngineForm, FormField, FormWidget, EngineEnum,
   EngineStart, EngineEnd, EngineScript, EngineHttp, EngineCall, EngineForEach, EngineUserTask,
   EngineRule, EngineSend, EngineReceive, EngineManual, EngineGateway, EngineCatch, EngineThrow,
-  EngineBoundary, EngineSubprocess, EngineRaw,
+  EngineBoundary, EngineSubprocess, EngineWorkItem, EngineRaw,
 } from './engine.js';
 export {
   assetKind, parseAsset, buildAsset,

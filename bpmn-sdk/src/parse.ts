@@ -63,6 +63,16 @@ export function parseBpmnAll(xml: string): ProcessModel[] {
     const asg = kid(a, 'assignment'); if (!asg) return undefined;
     return cdataText(kid(asg, 'from'));
   };
+  /** onEntry-script/onExit-script extensionElements — real jBPM's generic action-hook mechanism,
+   *  attachable to any activity (not just the REST call-activity wrapper this engine used to special-
+   *  case). Shared so every activity case below parses it identically. */
+  function applyOnEntryExit(el: ElementNode, nd: Node): void {
+    const ext = kid(el, 'extensionElements');
+    if (!ext) return;
+    const onE = kids(ext, 'onEntry-script')[0]; const onX = kids(ext, 'onExit-script')[0];
+    if (onE) { nd.onEntry = cdataText(kid(onE, 'script')); const f = attr(onE, 'scriptFormat'); if (f) nd.onEntryFormat = f; }
+    if (onX) { nd.onExit = cdataText(kid(onX, 'script')); const f = attr(onX, 'scriptFormat'); if (f) nd.onExitFormat = f; }
+  }
   function applyEventDef(nd: Node, el: ElementNode) {
     const sg = kid(el, 'signalEventDefinition'); if (sg) { nd.eventType = 'signal'; nd.signalName = sigName(sg.attrs.signalRef); return; }
     const er = kid(el, 'errorEventDefinition'); if (er) { nd.eventType = 'error'; nd.errorRef = er.attrs.errorRef; return; }
@@ -101,13 +111,14 @@ export function parseBpmnAll(xml: string): ProcessModel[] {
         case 'intermediateThrowEvent': { const nd: Node = { ...base, type: 'intermediateThrowEvent' }; applyEventDef(nd, el); nodes.push(nd); break; }
         case 'boundaryEvent': { const nd: Node = { ...base, type: 'boundaryEvent', attachedTo: el.attrs.attachedToRef, cancelActivity: el.attrs.cancelActivity !== 'false' }; applyEventDef(nd, el); nodes.push(nd); break; }
         case 'scriptTask': nodes.push({ ...base, type: 'scriptTask', script: cdataText(kid(el, 'script')), scriptFormat: el.attrs.scriptFormat }); break;
-        case 'userTask': nodes.push({ ...base, type: 'userTask', taskName: assignTo(el, '_TaskNameInputX'), skippable: assignTo(el, '_SkippableInputX') !== 'false', group: assignTo(el, '_GroupIdInputX') }); break;
-        case 'businessRuleTask': nodes.push({ ...base, type: 'businessRuleTask', ruleFlowGroup: attr(el, 'drools:ruleFlowGroup'), implementation: el.attrs.implementation }); break;
-        case 'sendTask': nodes.push({ ...base, type: 'sendTask', messageRef: el.attrs.messageRef, operationRef: el.attrs.operationRef, implementation: el.attrs.implementation }); break;
-        case 'receiveTask': nodes.push({ ...base, type: 'receiveTask', messageRef: el.attrs.messageRef, implementation: el.attrs.implementation }); break;
-        case 'manualTask': nodes.push({ ...base, type: 'manualTask' }); break;
+        case 'userTask': { const nd: Node = { ...base, type: 'userTask', taskName: assignTo(el, '_TaskNameInputX'), skippable: assignTo(el, '_SkippableInputX') !== 'false', group: assignTo(el, '_GroupIdInputX') }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
+        case 'businessRuleTask': { const nd: Node = { ...base, type: 'businessRuleTask', ruleFlowGroup: attr(el, 'drools:ruleFlowGroup'), implementation: el.attrs.implementation }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
+        case 'sendTask': { const nd: Node = { ...base, type: 'sendTask', messageRef: el.attrs.messageRef, operationRef: el.attrs.operationRef, implementation: el.attrs.implementation }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
+        case 'receiveTask': { const nd: Node = { ...base, type: 'receiveTask', messageRef: el.attrs.messageRef, implementation: el.attrs.implementation }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
+        case 'manualTask': { const nd: Node = { ...base, type: 'manualTask' }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
         case 'subProcess': case 'transaction': {
           const nd: Node = { ...base, type: 'subProcess', subtype: tag === 'transaction' ? 'transaction' : (el.attrs.triggeredByEvent === 'true' ? 'event' : 'embedded') };
+          applyOnEntryExit(el, nd);
           const inner = parseContainer(el);
           nd.nodes = inner.nodes; nd.flows = inner.flows;
           nodes.push(nd); break;
@@ -128,10 +139,33 @@ export function parseBpmnAll(xml: string): ProcessModel[] {
             nd.subtype = 'rest';
             const url = assignTo(el, '_UrlInputX'); nd.url = url ? url.replace('#{baseUrl}', '') : undefined;
             nd.method = assignTo(el, '_MethodInputX') || 'POST';
-            const ext = kid(el, 'extensionElements');
-            if (ext) { const onE = kids(ext, 'onEntry-script')[0]; const onX = kids(ext, 'onExit-script')[0]; if (onE) nd.onEntry = cdataText(kid(onE, 'script')); if (onX) nd.onExit = cdataText(kid(onX, 'script')); }
           } else { nd.subtype = 'reusable'; }
+          applyOnEntryExit(el, nd);
           nodes.push(nd); break;
+        }
+        case 'task': {
+          // generic custom WorkItemHandler task: <bpmn2:task drools:taskName="X"> — e.g. jBPM's
+          // built-in "Rest" REST work item, or any customer WorkItemHandler bound by name.
+          const handlerName = attr(el, 'drools:taskName');
+          if (!handlerName) { if (!RAW_SKIP.has(tag)) nodes.push({ ...base, type: 'raw', bpmnLocal: tag, raw: stringifyNode(el) }); break; }
+          const portName = (ref: string, suffix: string) => ref.startsWith(`${el.attrs.id}_`) && ref.endsWith(suffix) ? ref.slice(el.attrs.id.length + 1, -suffix.length) : ref;
+          const workParams: Record<string, string> = {};
+          for (const a of kids(el, 'dataInputAssociation')) {
+            const port = portName(targetText(a), 'InputX');
+            const asg = kid(a, 'assignment');
+            const value = asg ? cdataText(kid(asg, 'from')) : sourceText(a);
+            if (port && value !== undefined) workParams[port] = asg ? (value || '') : `$${value}`;
+          }
+          const workResultTo: Record<string, string> = {};
+          for (const a of kids(el, 'dataOutputAssociation')) {
+            const port = portName(sourceText(a), 'OutputX');
+            const varName = targetText(a);
+            if (port && varName) workResultTo[varName] = port;
+          }
+          const nd: Node = { ...base, type: 'genericTask', handlerName, workParams, workResultTo };
+          applyOnEntryExit(el, nd);
+          nodes.push(nd);
+          break;
         }
         default:
           if (!RAW_SKIP.has(tag)) nodes.push({ ...base, type: 'raw', bpmnLocal: tag, raw: stringifyNode(el) });

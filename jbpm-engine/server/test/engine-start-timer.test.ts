@@ -77,6 +77,23 @@ test('recurring start (R/…) reschedules the next occurrence after firing', asy
   assert.strictEqual(fired.length, 1, 'the first occurrence is marked fired');
 });
 
+test('a bounded repeat count (R2/…) stops rescheduling after exactly that many occurrences', async () => {
+  const { store, ctx } = newCtx();
+  await publishDeploy(ctx, 'R2/PT1H');
+  const timers = new TimerService(ctx);
+  const repo = store.repo<TimerJob>(Collections.timers);
+  const instSvc = new InstanceService(ctx);
+
+  // fakeClock() (no arg) starts at 2025-01-01T00:00:00Z — the deployment activates then, so the first
+  // PT1H occurrence is due at 2025-01-01T01:00.
+  await timers.tick('2025-01-01T01:00:01.000Z');   // 1st occurrence
+  assert.strictEqual((await repo.query((t) => t.kind === 'start' && t.status === 'scheduled')).length, 1, 'rescheduled after the 1st firing (limit not reached yet)');
+  await timers.tick('2025-01-01T02:00:01.000Z');   // 2nd occurrence — hits the R2 limit
+  assert.strictEqual((await repo.query((t) => t.kind === 'start' && t.status === 'scheduled')).length, 0, 'not rescheduled — repeat count exhausted');
+  await timers.tick('2025-01-01T03:00:01.000Z');
+  assert.strictEqual((await instSvc.list({})).length, 2, 'exactly 2 instances were ever started, never a 3rd');
+});
+
 test('deactivating the deployment cancels its scheduled starts', async () => {
   const { store, ctx } = newCtx();
   const { dep } = await publishDeploy(ctx, 'PT1H');

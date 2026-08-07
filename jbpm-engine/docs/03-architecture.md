@@ -28,7 +28,7 @@
 │  Runtime evaluators (from SDK examples/functions):  rule-engine, dmn-engine,  │
 │  decision-tree, guided-table, scorecard, form, enumeration, properties        │
 │                                                                               │
-│  @neutrinos/bpmn-sdk:  fromEngine/toEngine, validateModel, serializeProcess,  │
+│  @fabrixly/bpmn-sdk:  fromEngine/toEngine, validateModel, serializeProcess,  │
 │                        fromEngineProject/toEngineProject, writeProject        │
 │                                                                               │
 │  Stores (repository interfaces)  ── file (dev) │ Postgres (prod) ──           │
@@ -45,7 +45,7 @@
 2. **Domain services** (`src/modules/*`) — the business logic; pure, store-injected, unit-testable.
 3. **Execution** (`src/engine`) — the token interpreter + node handlers + timer/task/signal services.
 4. **Persistence** (`src/store`) — `Repository<T>` interfaces + `FileStore`/`PgStore` implementations.
-5. **Integration** (`src/sdk`) — thin wrappers over `@neutrinos/bpmn-sdk` + the runtime evaluators.
+5. **Integration** (`src/sdk`) — thin wrappers over `@fabrixly/bpmn-sdk` + the runtime evaluators.
 6. **Infra** (`src/infra`) — config, logger, metrics, WS hub, scheduler, auth, errors.
 
 **Dependency rule:** api → services → (engine, store, sdk) → infra. No upward imports.

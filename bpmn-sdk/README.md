@@ -1,4 +1,4 @@
-# @neutrinos/bpmn-sdk
+# @fabrixly/bpmn-sdk
 
 Round-trip a **jBPM BPM project** (BPMN 2.0 `.bpmn` files) ↔ a clean, typed **JSON model**, and
 generate importable BPMN from JSON. Written in **TypeScript**, ships **ESM + CJS + type
@@ -9,14 +9,14 @@ documented `node.json` shapes and the field vocabulary in `_mappings-reference.m
 
 ## Install
 ```bash
-npm install @neutrinos/bpmn-sdk
+npm install @fabrixly/bpmn-sdk
 ```
 > Rename `name` in `package.json` to your own scope/registry before publishing (`npm publish`).
 
 ## Use in an app
 ```ts
-import { parseBpmn, serializeProcess, parseProject, writeProject, validateModel } from '@neutrinos/bpmn-sdk';
-import type { ProcessModel } from '@neutrinos/bpmn-sdk';
+import { parseBpmn, serializeProcess, parseProject, writeProject, validateModel } from '@fabrixly/bpmn-sdk';
+import type { ProcessModel } from '@fabrixly/bpmn-sdk';
 import fs from 'node:fs';
 
 // BPMN -> JSON
@@ -33,7 +33,7 @@ writeProject(project, '/path/to/out', { scaffold: false }); // .bpmn only
 // Validate
 const { ok, errors, warnings } = validateModel(model);
 ```
-CommonJS works too: `const { parseBpmn } = require('@neutrinos/bpmn-sdk');`
+CommonJS works too: `const { parseBpmn } = require('@fabrixly/bpmn-sdk');`
 
 ### Generate a COMPLETE deployable project from JSON
 `writeProject` emits the whole kjar, not just `.bpmn` — `pom.xml`, `META-INF/kmodule.xml`, and

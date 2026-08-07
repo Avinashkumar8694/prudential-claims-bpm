@@ -25,11 +25,26 @@ export interface HandlerCtx {
   dep: Deployment;
   app: AppContext;
   joins: Record<string, Set<string>>;
+  /** the current active token's id — the genuine node-*instance*-level id (as opposed to `node.id`,
+   *  the node *definition* id), matching real jBPM's `NodeInstance.getId()` vs `.getNode().getId()`
+   *  distinction (see kcontext.getNodeInstance() in script/condition handlers). */
+  tokenId: string;
   outgoing(nodeId: string): EngineFlow[];
   incoming(nodeId: string): EngineFlow[];
   emit(e: EngineEvent): void;
-  startChild(dep: Deployment, processId: string, vars: Record<string, unknown>, parentTokenId: string): Promise<Instance>;
-  broadcast(name: string): Promise<void>;
+  /** `independent`: decouple the child's lifecycle from the parent's — see `Instance.independent`. */
+  startChild(dep: Deployment, processId: string, vars: Record<string, unknown>, parentTokenId: string, independent?: boolean): Promise<Instance>;
+  /** `correlationValue`, when given, narrows delivery to instances whose OWN correlationKey matches
+   *  (see execution-engine.ts's broadcast() doc comment) instead of every instance waiting on `name`. */
+  broadcast(name: string, correlationValue?: string): Promise<void>;
+  /** Deliver a signal to a SPECIFIC instance by id (matches real jBPM's targeted
+   *  kcontext.getKieRuntime().signalEvent(type, event, processInstanceId), as opposed to
+   *  broadcast()'s session-wide delivery) — a no-op if the id doesn't resolve to a live instance in
+   *  this tenant. */
+  signal(targetInstanceId: string, name: string, payload?: unknown): Promise<void>;
+  /** Abort a SPECIFIC instance by id (matches real jBPM's kcontext.getKieRuntime().
+   *  abortProcessInstance(id)) — a no-op if the id doesn't resolve to a live instance in this tenant. */
+  abort(targetInstanceId: string): Promise<void>;
   /** Run compensation handlers for completed activities in reverse order (all, or a single host). */
   compensate(ref?: string): Promise<Record<string, unknown>>;
   resolveCalled?: (processId: string) => Promise<{ dep: Deployment; processId: string } | undefined>;

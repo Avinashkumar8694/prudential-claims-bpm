@@ -1,8 +1,8 @@
 {
-  "name": "@neutrinos/jbpm-engine",
+  "name": "@fabrixly/jbpm-engine",
   "version": "0.1.0",
   "private": true,
-  "description": "Node.js-native BPM engine + visual workflow builder, built on @neutrinos/bpmn-sdk",
+  "description": "Node.js-native BPM engine + visual workflow builder, built on @fabrixly/bpmn-sdk",
   "workspaces": [
     "server",
     "app"

@@ -7,7 +7,7 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
       execution-engine, deployment/branching/versioning, roadmap, checklist
 - [x] monorepo root `package.json` (workspaces: server, app) + `.gitignore`
 - [x] `server/` scaffold: package.json, tsconfig, config, Express app, `/api/health`
-- [x] `server/` SDK wrapper (`src/sdk`) re-exporting `@neutrinos/bpmn-sdk` + runtime evaluators
+- [x] `server/` SDK wrapper (`src/sdk`) re-exporting `@fabrixly/bpmn-sdk` + runtime evaluators
 - [x] `server/` store: `Repository<T>` + `FileStore`
 - [x] `app/` Angular scaffold: sidenav, builder header + palette + canvas placeholder, footer, routing (builds clean)
 - [x] `npm install` verified for both workspaces; server boots + `/api/health` OK; app `ng build` OK

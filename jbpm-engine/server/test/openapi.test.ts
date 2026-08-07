@@ -5,18 +5,25 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import { openapiSpec } from '../src/http/openapi.ts';
 import { buildRoutes } from '../src/http/routes.ts';
+import { buildAuthRoutes } from '../src/http/auth-routes.ts';
 
 // Express path (":id") ↔ OpenAPI path ("{id}")
 const toExpress = (p: string) => p.replace(/\{([^}]+)\}/g, ':$1');
 
-function routerRoutes(): Set<string> {
-  const r: any = buildRoutes();
-  const out = new Set<string>();
-  for (const layer of r.stack) {
+function collect(router: any, out: Set<string>, prefix = '') {
+  for (const layer of router.stack) {
     const route = layer.route;
     if (!route) continue;
-    for (const m of Object.keys(route.methods)) if (route.methods[m]) out.add(`${m.toUpperCase()} ${route.path}`);
+    for (const m of Object.keys(route.methods)) if (route.methods[m]) out.add(`${m.toUpperCase()} ${prefix}${route.path}`);
   }
+}
+
+// app.ts mounts buildAuthRoutes() at /api/auth (unauthenticated) and buildRoutes() at /api (behind
+// requireAuth) — both contribute to the documented surface, so both need to be checked here.
+function routerRoutes(): Set<string> {
+  const out = new Set<string>();
+  collect(buildRoutes(), out);
+  collect(buildAuthRoutes(), out, '/auth');
   return out;
 }
 

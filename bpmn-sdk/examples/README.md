@@ -131,7 +131,7 @@ asserted (`test/engine-rules-runtime.test.mjs`).
 ## Using the SDK from your own app
 Replace the relative `../../dist/index.mjs` import with the package name:
 ```js
-import { writeProject, fromEngineProject } from '@neutrinos/bpmn-sdk';
+import { writeProject, fromEngineProject } from '@fabrixly/bpmn-sdk';
 ```
 Build the `ProcessModel`/`Project` (or engine model) however your designer produces it, then
 `writeProject(project, dir)`.

@@ -1,8 +1,11 @@
 # 14 — Error Handling (Error Catch / Boundary / Global)
 
-A single, simple **Error Catch** node covers jBPM's two error-handling shapes — **boundary error events**
-(attached to specific activities) and a **process-wide error handler** (event sub-process) — chosen by
-*which nodes it catches from*.
+Two jBPM error-handling shapes are both first-class here: a **boundary error event** (`type:
+'boundary'`) attached to specific activities, and jBPM's *other* native idiom, an **event
+sub-process with an error start event** (`type: 'subprocess'` with `on.error`) — the process-wide
+handler shape a mechanically-converted real jBPM project (this project's own sample included) is
+actually built from. Both route through the same matching/routing logic below; an event
+sub-process catch is always process-wide (there's no host list to select — see §1).
 
 ## 1. Model (engine JSON)
 
@@ -16,39 +19,66 @@ An error catch is a `boundary` node:
 }
 ```
 - `on` — a single id, a **list of ids** (boundary on each), or `["*"]` (global/process-wide).
-- `event.error` — a specific **error code**, or `*`/blank for **any** error.
+- `event.error` — jBPM's declared error name/id (e.g. `"REST_API_FAILURE"`, matching what a real
+  BPMN project's `errorRef` says) — see §2 for how this maps to a runtime code; it does **not**
+  need to be one of the built-in codes below.
 - The node's **outgoing flow is the recovery path** — connect it to the nodes that handle the error.
 - When caught, the variable **`errorInfo` = `{ code, node, message }`** is set for the recovery path.
+
+An **event sub-process** catch is the same idea with a different shape: `{ "type": "subprocess",
+"on": { "error": "<declared name>" }, "nodes": [...], "flows": [...] }` — no host list (always
+process-wide/interrupting), and its `nodes`/`flows` run as a nested child instance when triggered
+(the same mechanism a normal sub-process invocation uses), starting from whichever node inside it
+is `type: 'start'`.
 
 **Selecting all nodes ⇒ a global error handler for the process.** Selecting specific nodes ⇒ per-node
 boundary catches. One node concept, both behaviors — configured in the Properties panel with a node
 checklist + an “All nodes (process-wide)” toggle.
 
-## 2. Error taxonomy (what can be caught)
+## 2. Error taxonomy (what can be caught) — and why a catch's *name* doesn't need to match it
 
 | Code | Raised when |
 |------|-------------|
 | `SCRIPT_ERROR` | a Script task throws |
-| `SERVICE_ERROR` | a Service (REST) task fails — non-2xx / network / timeout *(when HTTP exec lands)* |
-| `RULE_ERROR` | a Business Rule / DMN evaluation fails *(when rule exec lands)* |
+| `SERVICE_ERROR` | a Service (REST) task fails — non-2xx / network / timeout |
+| `RULE_ERROR` | a Business Rule / DMN evaluation fails |
 | `CALL_ERROR` | a called sub-process errors or isn't deployed |
 | `RUNTIME_ERROR` | any other handler exception |
-| *custom* | an **error-throw End** (`end.throw.error = "MY_CODE"`) or a coded error you raise |
+| *custom* | an **error-throw End** (`end.throw.error = "MY_CODE"`) raises exactly that literal code |
 
-A catch with `event.error = "SCRIPT_ERROR"` matches only that; `*`/blank matches **any** of the above.
-The set of built-ins is exported from the engine (`ENGINE_ERRORS`) and shown as suggestions in the UI.
+These five are the only codes a node *execution failure* can ever actually raise, and which one is
+possible is fully determined by the failing node's type — an `http` node can only ever produce
+`SERVICE_ERROR`, never `SCRIPT_ERROR`. jBPM error declarations, by contrast, are named for human/XML
+readability (`REST_API_FAILURE` with `errorCode`
+`org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException`) — a mechanically-converted real jBPM
+project's `event.error`/`on.error` is almost never one of the five codes above verbatim. So matching
+works differently depending on scope:
+- **Host-specific** (`on` is a real node id or id list, not `["*"]`): matches **any** error from that
+  host, regardless of the catch's declared name — since a single host can only ever raise one
+  category of failure anyway, the name was never load-bearing there. `REST_API_FAILURE`,
+  `HR_SERVICE_FAILURE`, anything — all work without the author needing to know this runtime's
+  internal vocabulary.
+- **Global** (`on: ["*"]`, or any event sub-process catch, which is always global): an **exact**
+  name match wins first (so an author-thrown custom error, e.g. `end.throw.error = "VALIDATION"`
+  paired with a catch named `"VALIDATION"`, matches precisely). Failing that, if the raised code
+  actually came from a node execution failure (i.e. is one of the five above) and the catch's name
+  is *not* itself one of the five, the catch is treated as meaning `SERVICE_ERROR` — the dominant
+  real-world "global error handler" case (this project's own `pru-sample-global-error` /
+  `pru-api-error-handler` are exactly that pattern). A catch named `""`/`"*"`/`"ANY"` is a true
+  catch-all regardless.
 
 ## 3. Runtime behavior (matching + routing)
 
 When a node raises an error, the engine finds the **best** matching error catch, in order:
-1. attached to the failing node **and** code matches
-2. attached to the failing node, **any**-error
-3. global (`*`) **and** code matches
-4. global, **any**-error
+1. host-specific — attached to the failing node (any code, per §2)
+2. global, exact name match or the `SERVICE_ERROR` default (per §2)
+3. global, catch-all (`""`/`"*"`/`"ANY"`)
 
 If found: the failing token is cancelled, `errorInfo` is set, and a token is placed on the catch →
-its recovery flow runs. A **global** catch is process-interrupting (cancels all other tokens). If **no**
-catch matches, the instance goes `failed` (unchanged behavior). Fully covered by
+its recovery flow runs (or, for an event sub-process catch, its internal nodes run as a nested
+child instance). A **global** catch (including any event sub-process catch) is process-interrupting
+(cancels all other tokens); a host-specific boundary only cancels its own host. If **no** catch
+matches, the instance goes `failed` (unchanged behavior). Fully covered by
 `server/test/engine-errors.test.ts`.
 
 ## 4. Validation (Phase 7 rules)

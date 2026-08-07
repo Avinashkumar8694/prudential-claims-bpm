@@ -7,3 +7,5 @@ target/
 .classpath
 node_modules/
 # dist
+jbpm-engine/java-runtime/out/
+.DS_Store

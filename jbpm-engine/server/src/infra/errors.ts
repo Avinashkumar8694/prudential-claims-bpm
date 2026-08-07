@@ -21,6 +21,8 @@ export class ApiError extends Error {
 export const notFound = (what: string) => new ApiError('NOT_FOUND', `${what} not found`);
 export const validation = (message: string, details?: unknown) => new ApiError('VALIDATION_FAILED', message, details);
 export const conflict = (message: string, details?: unknown) => new ApiError('CONFLICT', message, details);
+export const forbidden = (message: string, details?: unknown) => new ApiError('FORBIDDEN', message, details);
+export const authRequired = (message = 'authentication required') => new ApiError('AUTH_REQUIRED', message);
 
 // wrap an async route so thrown errors reach the error middleware
 export const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>

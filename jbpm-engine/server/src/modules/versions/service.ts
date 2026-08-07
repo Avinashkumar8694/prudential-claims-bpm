@@ -64,7 +64,7 @@ export class VersionService {
     if (v.state === 'published') throw conflict('version already published');
     const proc = v.engine.processes?.[0];
     if (!proc) throw validation('version has no process');
-    new ValidationService().assertValid(proc, 'publish');   // no invalid/unconnected process is published
+    await new ValidationService().assertValid(proc, 'publish');   // no invalid/unconnected process is published
     v.state = 'published'; v.label = label ?? v.label;
     await this.ve().put(v);
 
@@ -84,7 +84,7 @@ export class VersionService {
     const v = await this.mine(id);
     const proc = v.engine.processes?.[0];
     if (!proc) throw validation('version has no process');
-    return new ValidationService().validate(proc);
+    return await new ValidationService().validate(proc);
   }
 
   async diff(aId: string, bId: string): Promise<DiffResult> {

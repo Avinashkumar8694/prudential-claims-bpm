@@ -3,6 +3,8 @@
 // Errors block publish/deploy; warnings are advisory. See docs/08 + docs/09.
 import type { EngineFlow, EngineNode, EngineProcess } from '../../sdk/index.ts';
 import { NODE_DEF_BY_TYPE } from '../../engine/nodes/index.ts';
+import { validateJavaSupport } from '../../engine/java-compat.ts';
+import { validateJava } from '../../engine/java-sidecar.ts';
 
 export type Severity = 'error' | 'warning';
 export interface Problem { rule: string; severity: Severity; message: string; nodeId?: string; flowId?: string; }
@@ -59,7 +61,7 @@ function buildCtx(process: EngineProcess): GraphCtx {
   return { process, nodes, flows, byId, outgoing, incoming, starts, ends, reachable, boundaryByHost };
 }
 
-export interface Rule { id: string; description: string; run(ctx: GraphCtx): Problem[]; }
+export interface Rule { id: string; description: string; run(ctx: GraphCtx): Problem[] | Promise<Problem[]>; }
 const P = (rule: string, severity: Severity, message: string, extra: Partial<Problem> = {}): Problem => ({ rule, severity, message, ...extra });
 const deg = (ctx: GraphCtx, id: string) => ({ in: (ctx.incoming.get(id) || []).length, out: (ctx.outgoing.get(id) || []).length });
 
@@ -229,21 +231,96 @@ export const RULES: Rule[] = [
     return out;
   } },
 
-  { id: 'condition-lang', description: 'Flow conditions must be js to execute in the Node runtime', run: (c) => {
+  { id: 'condition-lang', description: 'Flow conditions must be js or java to execute in the Node runtime', run: (c) => {
     const out: Problem[] = [];
-    for (const f of c.flows) if (f.when && f.lang && f.lang !== 'js')
-      out.push(P('condition-lang', 'warning', `Connection condition is "${f.lang}" and will not evaluate at runtime (use js)`, { flowId: f.id }));
+    for (const f of c.flows) if (f.when && f.lang && f.lang !== 'js' && f.lang !== 'java')
+      out.push(P('condition-lang', 'warning', `Connection condition is "${f.lang}" and will not evaluate at runtime (use js or java)`, { flowId: f.id }));
     return out;
   } },
 
   { id: 'node-name', description: 'Nodes should be named', run: (c) => c.nodes.filter((n) => !n.name || !n.name.trim()).map((n) => P('node-name', 'warning', `${n.type} "${n.id}" has no name`, { nodeId: n.id })) },
+
+  // Recurses into subprocess/event-subprocess children itself (unlike the other rules above, which
+  // only see the top-level process.nodes/flows) so a Java script buried inside an embedded or event
+  // subprocess is checked too, not silently skipped. Two layers, cheapest first: (1) the sync
+  // denylist (java-compat.ts) — fast, no network, catches operationally-unsafe constructs; (2) for
+  // anything that passes, a real dry compile against the JVM sidecar (java-sidecar.ts) — ground
+  // truth for whether the exact script text actually compiles, using the identical wrapper shape
+  // execution uses, so this can never drift out of sync with what running the script actually does.
+  {
+    id: 'java-support',
+    description: 'lang:"java" scripts and conditions must actually compile and stay inside the supported subset (see docs/bpm-nodes/_scripting-java.md)',
+    run: async (c) => {
+      const out: Problem[] = [];
+      const pending: Promise<void>[] = [];
+      // real jBPM's Java dialect binds every DECLARED process variable as a bare, typed local
+      // identifier for BOTH scripts/onEntry/onExit and conditions (confirmed against jBPM's own
+      // JavaActionBuilder codegen — not condition-specific) — subprocess-nested code shares the
+      // top-level process's variable scope (embedded subprocesses have no vars of their own),
+      // matching how gateway/handler.ts and script/handler.ts resolve this same map at runtime.
+      //
+      // Passing the SAME varTypes here for scripts too (not just conditions) isn't just about
+      // correctness of the bare-name binding itself — the JVM sidecar's compiled-class cache keys on
+      // (code, varTypes shape) together (see ScriptRunner.classNameFor), so this dry-compile at
+      // publish time ACTUALLY pre-warms the exact cache entry real execution will look up. Passing a
+      // different varTypes shape here (e.g. omitting it for scripts, as an earlier version of this
+      // code did) computes a DIFFERENT cache key — meaning the dry-compile still validates the script
+      // compiles, but doesn't save the first real instance from a fresh compile-on-cache-miss, quietly
+      // defeating the "compile once at deploy time" intent JVM sidecar dry-compilation exists for.
+      const varTypes: Record<string, string> = {};
+      for (const v of c.process.vars || []) if (v.name) varTypes[v.name] = v.type;
+      // http/handler.ts's exitScript execution always adds a synthesized `resPayload: 'String'` entry
+      // on top of the declared vars (see its own comment: real exit scripts constantly reference
+      // resPayload, e.g. `resPayload.isEmpty()`) — the dry-compile here must use the IDENTICAL shape,
+      // or it computes a different cache key than real execution and (same reasoning as above) fails
+      // to actually pre-warm the cache for this node.
+      const httpVarTypes: Record<string, string> = { resPayload: 'String', ...varTypes };
+      const check = (code: string, asCondition: boolean, types: Record<string, string>, describe: (msg: string) => Problem) => {
+        const denylist = validateJavaSupport(code);
+        for (const msg of denylist.errors) out.push(describe(msg));
+        if (denylist.errors.length) return; // don't also dry-compile something already rejected
+        pending.push(validateJava(code, asCondition, types).then((res) => {
+          if (!res.ok) out.push(describe(res.error));
+        }));
+      };
+      const walk = (nodes: EngineNode[], flows: EngineFlow[]) => {
+        for (const n of nodes) {
+          const a = n as any;
+          if (n.type === 'script' && a.lang === 'java' && a.code) {
+            check(String(a.code), false, varTypes, (msg) => P('java-support', 'error', `Script "${label(n)}": ${msg}`, { nodeId: n.id }));
+          }
+          if (n.type === 'http' && a.lang === 'java' && a.exitScript) {
+            check(String(a.exitScript), false, httpVarTypes, (msg) => P('java-support', 'error', `Exit script "${label(n)}": ${msg}`, { nodeId: n.id }));
+          }
+          // onEntry/onExit — real jBPM's generic action-hook mechanism, attachable to any activity
+          // (userTask/businessRuleTask/sendTask/receiveTask/manualTask/subProcess/call/forEach/
+          // workItem — see execution-engine.ts's runLifecycle). Skipped for 'http', whose onEntry/
+          // onExit is the separate, already-checked exitScript mechanism above.
+          if (n.type !== 'http') {
+            if (a.onEntry && a.onEntryLang === 'java') check(String(a.onEntry), false, varTypes, (msg) => P('java-support', 'error', `onEntry "${label(n)}": ${msg}`, { nodeId: n.id }));
+            if (a.onExit && a.onExitLang === 'java') check(String(a.onExit), false, varTypes, (msg) => P('java-support', 'error', `onExit "${label(n)}": ${msg}`, { nodeId: n.id }));
+          }
+          if (Array.isArray(a.nodes)) walk(a.nodes, a.flows || []);
+        }
+        for (const f of flows) {
+          if (f.when && f.lang === 'java') {
+            check(f.when, true, varTypes, (msg) => P('java-support', 'error', `Connection condition "${f.id}": ${msg}`, { flowId: f.id }));
+          }
+        }
+      };
+      walk(c.process.nodes || [], c.process.flows || []);
+      await Promise.all(pending);
+      return out;
+    },
+  },
 ];
 
 export interface ValidationResult { ok: boolean; errors: Problem[]; warnings: Problem[]; problems: Problem[]; }
 
-export function validateProcess(process: EngineProcess): ValidationResult {
+export async function validateProcess(process: EngineProcess): Promise<ValidationResult> {
   const ctx = buildCtx(process);
-  const problems = RULES.flatMap((r) => r.run(ctx));
+  const perRule = await Promise.all(RULES.map((r) => r.run(ctx)));
+  const problems = perRule.flat();
   const errors = problems.filter((p) => p.severity === 'error');
   const warnings = problems.filter((p) => p.severity === 'warning');
   return { ok: errors.length === 0, errors, warnings, problems };

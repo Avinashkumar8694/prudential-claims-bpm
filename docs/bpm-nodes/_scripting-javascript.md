@@ -18,13 +18,30 @@ All have direct access to **process variables by name**, to **globals**, and to 
 (`org.kie.api.runtime.process.ProcessContext`).
 
 ## 2. Runtime (READ THIS FIRST)
-JS runs server-side through a JSR-223 engine:
+JS runs server-side through a JSR-223 engine — jBPM ships **no** engine of its own.
+`org.jbpm.process.instance.impl.JavaScriptAction` (script tasks / onEntry / onExit) and
+`JavaScriptReturnValueEvaluator` (gateway conditions) both do exactly:
+```java
+ScriptEngineManager factory = new ScriptEngineManager();
+ScriptEngine engine = factory.getEngineByName("JavaScript");
+engine.put("kcontext", context);   // no null-check on `engine` first
+```
 - **JDK 8 / 11** → Nashorn (built in) → works out of the box.
-- **JDK 15+** → Nashorn **removed** (JEP 372). JS scripts **fail at runtime** unless a JS engine is on
-  the KIE-server classpath — **GraalVM JS** (registers as `JavaScript` / `js` / `graal.js`) or
-  standalone `nashorn-core`.
+- **JDK 15+** → Nashorn **removed** (JEP 372) → `getEngineByName("JavaScript")` returns `null`, and
+  the very next line throws a bare, unhelpful `NullPointerException` — **not** a clean "no JS engine
+  found" error. Fix by putting a JS engine on the KIE-server classpath — **GraalVM JS** (registers as
+  `JavaScript` / `js` / `graal.js`) or standalone `nashorn-core`.
+- A **fresh `ScriptEngineManager` is constructed on every single execution** (not cached/reused) —
+  a real per-call cost, independent of which engine ends up handling it.
 - **GraalVM JS is "secure by default"** — Java host access must be enabled for `kcontext`/Java interop
   (via the ScriptEngine's `polyglot.js.allowHostAccess` / `allowAllAccess`, configured on the server).
+- **JavaScript cannot be used for data-assignment expressions** (dataInputAssociation/
+  dataOutputAssociation `from`/`to` mappings) — `JavaScriptProcessDialect.getAssignmentBuilder()`/
+  `.getProcessClassBuilder()` throw `UnsupportedOperationException`. It's valid only for actions
+  (scripts) and constraints (conditions), never for a data mapping expression.
+- No generic JSR-223 dialect registry exists — jBPM's `ProcessDialectRegistry` hardcodes exactly
+  four dialects (java, mvel, JavaScript, FEEL). Groovy/Python/Ruby are **not** available without
+  implementing and registering a custom `ProcessDialect` yourself.
 
 Verify on your target JDK before using JS. Java/MVEL have none of these constraints.
 
@@ -35,6 +52,43 @@ kcontext.setVariable("status", "PENDING");           // write a process variable
 var piid = kcontext.getProcessInstance().getId();
 ```
 Process variables are also visible **directly by name** in conditions and scripts (e.g. `claimType`).
+
+### 3.1 `instance`/`node`: the Node.js-engine-only alternative to `kcontext` chains
+
+`kcontext` above is real jBPM API — needed if this script runs (or might one day run) inside an actual
+jBPM/KIE server, via import or export. If a script is being authored fresh for the Node.js engine only,
+two plain objects cover the same ground with no `kcontext` at all — this engine's own invention, not
+jBPM API:
+
+```js
+vars.status = "seen:" + vars.claimType;      // vars: process variables (see docs/bpm-nodes, "vars object")
+kcontext.setVariable("pid", instance.processId);
+```
+
+| `instance.*` | Equivalent `kcontext` call |
+|---|---|
+| `instance.id` | `kcontext.getProcessInstance().getId()` |
+| `instance.processId` / `.processName` | `.getProcessId()` / `.getProcessName()` |
+| `instance.correlationKey` | `.getCorrelationKey()` |
+| `instance.parentId` | `.getParentProcessInstanceId()` |
+| `instance.state` | `.getState()` — but as THIS engine's own status string (`"running"`/`"waiting"`/`"completed"`/`"aborted"`/`"suspended"`), not jBPM's `STATE_*` int |
+| `instance.variables` | `.getVariables()` |
+| `instance.activeNodes` | `.getNodeInstances()` — plain array of `{id, nodeId, name}` |
+| `instance.signal(type, payload)` | `kcontext.getKieRuntime().signalEvent(type, payload, kcontext.getProcessInstance().getId())` (self) |
+| `instance.signalOther(id, type, payload)` | `kcontext.getKieRuntime().signalEvent(type, payload, id)` (targeted) |
+| `instance.broadcast(type, payload)` | `kcontext.getKieRuntime().signalEvent(type, payload)` (untargeted) |
+| `instance.abort()` / `.abortOther(id)` | `kcontext.getKieRuntime().abortProcessInstance(...)` (self / targeted) |
+| `node.id` / `.nodeId` / `.name` | `kcontext.getNodeInstance().getId()` / `.getNodeId()` / `.getNodeName()` |
+
+Mix freely with `kcontext` in the same script — both read/write the identical underlying data and
+queue into the identical pending-action list, so e.g. `instance.signal(...)` and `kcontext.
+getKieRuntime().signalEvent(...)` behave identically. Exporting a script that uses `instance`/`node`
+still produces plain, real-jBPM-runnable JS: bpmn-sdk prepends a small ES5 preamble (only when the name
+is actually referenced) that computes the same object from real `kcontext` — verified this session
+against a real Nashorn engine, not just this engine's own tests. See `jbpm-engine/docs/
+15-scripting-and-jbpm-export.md`'s "Two ways to write this" section for the full reference and the
+`instance.state` caveat (it's always `"running"` for an active instance on the exported/reverse path,
+since jBPM's own `ACTIVE` state doesn't distinguish "running" from "blocked at a node" either).
 
 ## 4. Type mapping — reading process variables INTO JavaScript
 A process variable's `structureRef` is a **Java type**; in JS you receive the **Java object** (not a

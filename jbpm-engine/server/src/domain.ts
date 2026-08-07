@@ -64,6 +64,10 @@ export interface Instance extends Entity {
   history: NodeVisit[];
   error?: { nodeId: string; message: string; stack?: string; at: string };
   parentInstanceId?: string; parentTokenId?: string;
+  // Set when spawned by a call activity with independent:true (fire-and-forget) — this child's
+  // lifecycle is decoupled from its parent's: it survives the parent's completion/abort instead of
+  // being cascade-torn-down with it (see execution-engine.ts's abortDescendants).
+  independent?: boolean;
   // Compensation stack: activities completed successfully that have a compensation handler attached,
   // in completion order. A compensate throw runs the matching entries in reverse (LIFO).
   compensations?: Array<{ host: string; handler: string }>;
@@ -74,6 +78,13 @@ export type TaskStatus = 'created' | 'reserved' | 'inprogress' | 'completed' | '
 export interface Task extends Entity {
   id: string; tenantId: string; instanceId: string; tokenId: string; nodeId: string;
   name: string; formName?: string; group?: string; assignee?: string;
+  /** may act on this task (reassign/claim/complete) regardless of group/assignee/excludedOwners. */
+  businessAdmin?: string;
+  /** users who may NOT claim/complete this task even if they're in `group` (segregation of duties,
+   *  e.g. the claim's own submitter can't also approve it) — not enforced against `businessAdmin`. */
+  excludedOwners?: string[];
+  /** higher = more urgent; used for inbox sort order only, no behavioral effect. */
+  priority?: number;
   status: TaskStatus;
   inputs: Record<string, unknown>; outputs?: Record<string, unknown>;
   createdAt: string; dueAt?: string; completedAt?: string; completedBy?: string;
@@ -95,7 +106,32 @@ export interface AuditEvent extends Entity {
 }
 
 // Collection names (repository keys)
+// ---- IAM: users, groups, roles/permissions (single-tenant — see docs/07-security.md) ----
+export interface Role extends Entity {
+  id: string; tenantId: string;
+  name: string;   // 'admin' | 'author' | 'release' | 'operator' | 'worker' | 'viewer', or a custom name
+  /** action strings this role grants (e.g. 'workflow:edit', 'instance:abort'); '*' grants everything. */
+  permissions: string[];
+}
+
+export interface Group extends Entity {
+  id: string; tenantId: string;
+  name: string;   // matches the plain-string names userTask.group / Task.group already use
+  description?: string;
+}
+
+export interface User extends Entity {
+  id: string; tenantId: string;
+  username: string;         // login name, unique within the tenant
+  passwordHash: string;     // scrypt-hashed; never serialized back out by the API
+  roles: string[];          // Role names
+  groups: string[];         // Group names
+  active: boolean;
+  createdAt: string;
+}
+
 export const Collections = {
   workflows: 'workflows', branches: 'branches', versions: 'versions', deployments: 'deployments',
   instances: 'instances', tasks: 'tasks', timers: 'timers', audit: 'audit',
+  users: 'users', groups: 'groups', roles: 'roles',
 } as const;

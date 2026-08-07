@@ -81,7 +81,7 @@ rules); `update` is the explicit setter+`update()` equivalent; `raw` is the esca
 ## Helpers (exported)
 ```ts
 import { compileConstraint, compilePattern, compileLhs, compileAction,
-         compileFunction, compileDeclare, compileQuery, writeDrl, buildAsset } from '@neutrinos/bpmn-sdk';
+         compileFunction, compileDeclare, compileQuery, writeDrl, buildAsset } from '@fabrixly/bpmn-sdk';
 compilePattern({ fact:'Claim', bind:'$c', constraints:[{field:'amount',op:'>',value:100000}] });
 // "$c : Claim( amount > 100000 )"
 compileLhs({ not: { fact:'Reviewer' } });                 // "not Reviewer(  )"

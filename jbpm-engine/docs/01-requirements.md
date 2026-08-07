@@ -4,7 +4,7 @@
 
 Build a Node.js-native BPM platform that replicates the **authoring** and **operations** experience of
 jBPM / Business Central, without a Java/KIE runtime. Processes are authored in the
-`@neutrinos/bpmn-sdk` engine JSON model, executed by a Node interpreter, and can be exported to a real
+`@fabrixly/bpmn-sdk` engine JSON model, executed by a Node interpreter, and can be exported to a real
 jBPM kjar at any time.
 
 **In scope**
@@ -98,7 +98,7 @@ jBPM kjar at any time.
 
 ## 5. Constraints & assumptions
 
-- Reuses `@neutrinos/bpmn-sdk` as the authoring & conversion source of truth.
+- Reuses `@fabrixly/bpmn-sdk` as the authoring & conversion source of truth.
 - Script tasks author code in `js` | `java` | `mvel`; **only `js` executes natively** in Node
   (sandboxed). `java`/`mvel` are preserved for export and flagged as non-executable at runtime.
 - Single-writer per instance (actor-style) to keep token semantics simple in v1.

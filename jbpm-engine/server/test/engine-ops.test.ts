@@ -62,6 +62,51 @@ test('call activity spawns a linked child instance; related() + parent-resume wo
   assert.strictEqual(parentDone.variables.result, 'approved', 'child output mapped into parent variable');
 });
 
+test('independent:true call activity fires the child and continues without waiting', async () => {
+  const ctx = newCtx();
+  // child: start -> userTask -> end (parks at the user task — would normally block the parent)
+  await deployWorkflow(ctx, 'Indep Child WF', (key, name) => ({
+    id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
+      nodes: [{ id: 'start', type: 'start' }, { id: 'approve', type: 'userTask', name: 'Approve', group: 'ops' }, { id: 'end', type: 'end' }],
+      flows: [{ from: 'start', to: 'approve' }, { from: 'approve', to: 'end' }] }],
+  }));
+  const { wf: parentWf } = await deployWorkflow(ctx, 'Indep Parent WF', (key, name) => ({
+    id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
+      nodes: [{ id: 'start', type: 'start' }, { id: 'call', type: 'call', process: 'indep-child-wf.process', independent: true }, { id: 'end', type: 'end' }],
+      flows: [{ from: 'start', to: 'call' }, { from: 'call', to: 'end' }] }],
+  }));
+
+  const instSvc = new InstanceService(ctx);
+  const parent = await instSvc.start({ workflowId: parentWf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(parent.status, 'completed', 'parent does not wait for an independent child');
+
+  const rel = await instSvc.related(parent.id);
+  assert.strictEqual(rel.children.length, 1, 'the child was still dispatched');
+  assert.strictEqual(rel.children[0]!.status, 'waiting', 'child keeps running independently at its own user task');
+});
+
+test('independent:true call activity: a later child failure never propagates back to the (already-completed) parent', async () => {
+  const ctx = newCtx();
+  // child fails synchronously (no catch) — independent dispatch must not raise this in the parent.
+  await deployWorkflow(ctx, 'Indep Failing Child WF', (key, name) => ({
+    id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
+      nodes: [{ id: 'start', type: 'start' }, { id: 'boom', type: 'script', lang: 'js', code: "throw new Error('boom');" }, { id: 'end', type: 'end' }],
+      flows: [{ from: 'start', to: 'boom' }, { from: 'boom', to: 'end' }] }],
+  }));
+  const { wf: parentWf } = await deployWorkflow(ctx, 'Indep Failing Parent WF', (key, name) => ({
+    id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
+      nodes: [{ id: 'start', type: 'start' }, { id: 'call', type: 'call', process: 'indep-failing-child-wf.process', independent: true }, { id: 'end', type: 'end' }],
+      flows: [{ from: 'start', to: 'call' }, { from: 'call', to: 'end' }] }],
+  }));
+
+  const instSvc = new InstanceService(ctx);
+  const parent = await instSvc.start({ workflowId: parentWf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(parent.status, 'completed', 'an independent child\'s failure does not fail the parent');
+
+  const rel = await instSvc.related(parent.id);
+  assert.strictEqual(rel.children[0]!.status, 'failed', 'the child itself still recorded its own failure');
+});
+
 test('signal delivery resumes a waiting catch-signal token', async () => {
   const ctx = newCtx();
   const { wf } = await deployWorkflow(ctx, 'Signal WF', (key, name) => ({
