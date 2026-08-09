@@ -21,6 +21,7 @@ the engine itself; read this folder if you're *running* or *using* it.
 | 10 | [Security & quotas](10-security-and-quotas.md) | Rate limits, per-tenant quotas, the script sandbox, SSRF protection, secrets |
 | 11 | [Importing & exporting real jBPM](11-importing-and-exporting-jbpm.md) | kjar import, Java-dialect scripts, DMN/DRL recovery, export back to a `.bpmn2` project |
 | 12 | [Reports & analytics](12-reports-and-analytics.md) | The Reports page: process, task, and SLA views |
+| 13 | [Multi-version deploy sequence](13-multi-version-deploy-sequence.md) | Full request/response trace: deploying the same project twice, one instance per version, then fetching tasks and signals — plus exactly when each identifier (`workflowId`, `versionId`, `deploymentId`, `instanceId`) is generated |
 
 ## Reference
 
