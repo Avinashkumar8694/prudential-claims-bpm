@@ -9,4 +9,6 @@ export const def: NodeDef = {
   schema: [GENERAL, { title: 'Event', fields: [
     { key: 'event', label: 'Catch', widget: 'event', options: ['timer', 'message', 'signal', 'condition'] },
   ] }],
+  diagram: { icon: 'clock', color: '#7c3aed', shape: 'circle' },
+  typeLabel: 'Catch event',
 };

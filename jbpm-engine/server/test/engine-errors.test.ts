@@ -9,6 +9,7 @@ import { WorkflowService } from '../src/modules/workflows/service.ts';
 import { VersionService } from '../src/modules/versions/service.ts';
 import { DeploymentService } from '../src/modules/deployments/service.ts';
 import { InstanceService } from '../src/modules/instances/service.ts';
+import { validateProcess } from '../src/modules/validation/rules.ts';
 import { Collections, type Instance } from '../src/domain.ts';
 
 const newCtx = () => { let n = 0; return makeContext({ store: new MemoryStore(), tenantId: 't1', clock: fakeClock().clock, newId: () => `id${++n}` }); };
@@ -89,4 +90,30 @@ test('an event sub-process with an error start (jBPM\'s other global-error-handl
   const child = await ctx.store.repo<Instance>(Collections.instances).get(childId!);
   assert.strictEqual(child?.status, 'completed');
   assert.ok(child?.history.some((h) => h.nodeId === 'cleanup'), 'ran the event sub-process\'s own internal nodes');
+});
+
+test('an event sub-process with a CATCH-ALL error start (on: {error: \'\'}) validates and catches, same as a named one', async () => {
+  // The only other test above for this construct uses a NAMED code ('SCRIPT_ERROR', truthy) — the
+  // catch-all form is declared with an empty string, same convention as a boundary/end/throw catch-all
+  // elsewhere in this file. rules.ts's own isEventSub() used a truthy check on `on.error`, so `''`
+  // (falsy) was wrongly treated as "not an event sub-process at all", subjecting it to the ordinary
+  // node-connected/reachable rules an event sub-process is specifically exempt from (it has no
+  // incoming/outgoing sequence flow by design) — every process using this exact, legitimate config
+  // failed to publish at all, with a confusing "not connected" error that had nothing to do with the
+  // real intent. Caught testing this live via the native builder, not by any existing test.
+  const nodes = [{ id: 's', type: 'start' }, { id: 'bad', type: 'script', name: 'Boom', code: 'throw new Error("x");' },
+     { id: 'e', type: 'end' },
+     {
+       id: 'errSub', type: 'subprocess', name: 'Global Error Handler', on: { error: '' },
+       nodes: [{ id: 'errStart', type: 'start' }, { id: 'cleanup', type: 'manual', name: 'Cleanup' }, { id: 'errEnd', type: 'end' }],
+       flows: [{ id: 'ef1', from: 'errStart', to: 'cleanup' }, { id: 'ef2', from: 'cleanup', to: 'errEnd' }],
+     }];
+  const flows = [{ id: 'f1', from: 's', to: 'bad' }, { id: 'f2', from: 'bad', to: 'e' }];
+
+  const validation = await validateProcess({ id: 'p', name: 'p', package: 'com.acme', vars: [], nodes, flows } as any);
+  assert.strictEqual(validation.ok, true, `catch-all event sub-process should validate cleanly: ${JSON.stringify(validation.errors)}`);
+
+  const inst = await run(newCtx(), nodes, flows);
+  assert.strictEqual(inst.status, 'completed', 'catch-all event sub-process still catches at runtime (this path was never broken, only validation was)');
+  assert.strictEqual((inst.variables['errorInfo'] as any).code, 'SCRIPT_ERROR');
 });

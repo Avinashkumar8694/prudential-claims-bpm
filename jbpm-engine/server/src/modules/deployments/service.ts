@@ -4,6 +4,7 @@ import type { AppContext } from '../../context.ts';
 import { Collections, type Deployment, type TimerJob, type Version } from '../../domain.ts';
 import { conflict, notFound, validation } from '../../infra/errors.ts';
 import { computeDue } from '../../engine/duration.ts';
+import { NotificationService } from '../notifications/service.ts';
 
 export class DeploymentService {
   constructor(private ctx: AppContext) {}
@@ -19,6 +20,17 @@ export class DeploymentService {
 
   async listByWorkflow(workflowId: string): Promise<Deployment[]> {
     return (await this.dp().query((d) => d.tenantId === this.ctx.tenantId && d.workflowId === workflowId))
+      .sort((a, b) => b.deployedAt.localeCompare(a.deployedAt));
+  }
+
+  /** Cross-project listing (mirrors InstanceService.list) — powers the top-level Deployments page,
+   *  which browses across every project rather than requiring one to be picked first. */
+  async list(filter: { workflowId?: string; environment?: string; status?: string }): Promise<Deployment[]> {
+    return (await this.dp().query((d) =>
+      d.tenantId === this.ctx.tenantId &&
+      (!filter.workflowId || d.workflowId === filter.workflowId) &&
+      (!filter.environment || d.environment === filter.environment) &&
+      (!filter.status || d.status === filter.status)))
       .sort((a, b) => b.deployedAt.localeCompare(a.deployedAt));
   }
 
@@ -70,6 +82,14 @@ export class DeploymentService {
     d.status = 'active'; d.undeployedAt = undefined;
     await this.dp().put(d);
     await this.ctx.audit({ actor, kind: 'deployment.activated', workflowId: d.workflowId, deploymentId: id, data: { environment: d.environment } });
+    if (actor && actor !== 'system') {
+      await new NotificationService(this.ctx).notify({
+        userId: actor, kind: 'deployment-succeeded',
+        title: `Deployment is live on ${d.environment}`,
+        body: d.versionLabel ? `version ${d.versionNumber} (${d.versionLabel})` : `version ${d.versionNumber ?? ''}`.trim(),
+        link: `/deployments`, deploymentId: d.id,
+      });
+    }
     await this.syncStartTimers(d);
     return d;
   }

@@ -28,6 +28,7 @@
 import vm from 'node:vm';
 import { executeJava, executeJavaCondition, type ActiveNodeInstance, type PendingAction } from './java-sidecar.ts';
 import { installJsCompat } from './js-compat.ts';
+import { acquireScriptSlot } from '../infra/quotas.ts';
 
 /** matches real jBPM's org.kie.api.runtime.process.ProcessInstance state constants — see
  *  KContext.ProcessInstance's STATE_* fields (java-runtime) for the Java-dialect twin. */
@@ -175,9 +176,23 @@ export interface ScriptOpts extends KContextInfo {
    *  own build-time codegen; not an extension this engine invented. This map is what makes the
    *  binding possible on the JVM-sidecar side (see java-sidecar.ts's executeJava). */
   varTypes?: Record<string, string>;
+  /** per-tenant concurrent-script quota (SystemSettings.maxConcurrentScripts; 0/undefined =
+   *  unlimited) — checked here, the single choke point both dialects and both call sites (script
+   *  task, HTTP task exit-script) funnel through, so it can't be bypassed by adding a new caller. */
+  tenantId?: string;
+  maxConcurrentScripts?: number;
 }
 
 export async function runScript(code: string, vars: Record<string, unknown>, timeoutMs: number, opts: ScriptOpts = {}): Promise<void> {
+  const release = opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.maxConcurrentScripts) : undefined;
+  try {
+    await runScriptBody(code, vars, timeoutMs, opts);
+  } finally {
+    release?.();
+  }
+}
+
+async function runScriptBody(code: string, vars: Record<string, unknown>, timeoutMs: number, opts: ScriptOpts): Promise<void> {
   if (opts.lang === 'java') {
     const result = await executeJava({
       code, vars, env: opts.env, instanceId: opts.instanceId, varTypes: opts.varTypes,

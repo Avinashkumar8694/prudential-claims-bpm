@@ -144,3 +144,55 @@ test('a child failure is caught by the parent error boundary and recovers', asyn
   assert.strictEqual(reloaded.status, 'completed', 'parent recovered via the error boundary');
   assert.strictEqual(reloaded.variables.recovered, true);
 });
+
+// A parent with two parallel branches: one calls a child that parks (so it never finishes on its
+// own), the other reaches a terminate end event. Real BPMN: a Terminate End Event ends the WHOLE
+// process instance, cancelling every other token in it — including one still waiting on a non-
+// independent call activity's child. Without cascading, that child would be orphaned forever (its
+// parent is gone, nothing will ever resume/abort it). This is the exact scenario
+// execution-engine.ts's "settle final status" cleanup (the same abortDescendants() abort() itself
+// uses) claims to cover in its comment — assert it actually does, instead of trusting the comment.
+const terminateParentEngine = (key: string, childProcId: string, independent: boolean) => ({
+  id: key, name: key,
+  processes: [{
+    id: `${key}.process`, name: key, package: 'com.acme', vars: [],
+    nodes: [
+      { id: 'ps', type: 'start', name: 'Start' },
+      { id: 'fork', type: 'gateway', mode: 'parallel' },
+      { id: 'callBranch', type: 'call', name: 'Call child', process: childProcId, independent },
+      { id: 'afterCall', type: 'end', name: 'After call (never reached)' },
+      { id: 'termBranch', type: 'end', name: 'Terminate', result: 'terminate' },
+    ],
+    flows: [
+      { from: 'ps', to: 'fork' },
+      { from: 'fork', to: 'callBranch' }, { from: 'callBranch', to: 'afterCall' },
+      { from: 'fork', to: 'termBranch' },
+    ],
+  }],
+});
+
+test('a terminate end event cascades to abort a still-waiting non-independent call-activity child on a parallel branch', async () => {
+  const { ctx } = newCtx();
+  const child = await deploy(ctx, 'TermChild', childEngine);
+  const parent = await deploy(ctx, 'TermParent', (k) => terminateParentEngine(k, child.procId, false));
+  const instSvc = new InstanceService(ctx);
+
+  const p = await instSvc.start({ workflowId: parent.wf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(p.status, 'completed', 'terminate ends the instance immediately, discarding the sibling branch');
+  const kids = (await instSvc.related(p.id)).children;
+  assert.strictEqual(kids.length, 1);
+  assert.strictEqual(kids[0]!.status, 'aborted', 'the in-flight child on the OTHER branch was cascaded, not orphaned');
+});
+
+test('a terminate end event does NOT cascade to an independent call-activity child', async () => {
+  const { ctx } = newCtx();
+  const child = await deploy(ctx, 'TermChildIndep', childEngine);
+  const parent = await deploy(ctx, 'TermParentIndep', (k) => terminateParentEngine(k, child.procId, true));
+  const instSvc = new InstanceService(ctx);
+
+  const p = await instSvc.start({ workflowId: parent.wf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(p.status, 'completed');
+  const kids = (await instSvc.related(p.id)).children;
+  assert.strictEqual(kids.length, 1);
+  assert.strictEqual(kids[0]!.status, 'waiting', 'independent child keeps running standalone past the parent terminating');
+});

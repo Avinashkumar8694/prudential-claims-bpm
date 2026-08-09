@@ -106,6 +106,18 @@ export class IamService {
     await this.ctx.audit({ actor, kind: 'user.password_changed', data: { userId: id } });
   }
 
+  /** Self-service variant of setPassword — for a user changing their OWN password (no admin:iam
+   *  needed), gated by knowing the current password rather than by permission. */
+  async changeOwnPassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
+    const u = await this.users().get(id);
+    if (!u || u.tenantId !== this.ctx.tenantId) throw notFound('User');
+    if (!(await verifyPassword(currentPassword || '', u.passwordHash))) throw forbidden('current password is incorrect');
+    if (!newPassword || newPassword.length < 8) throw validation('new password must be at least 8 characters');
+    u.passwordHash = await hashPassword(newPassword);
+    await this.users().put(u);
+    await this.ctx.audit({ actor: u.username, kind: 'user.password_changed', data: { userId: id, self: true } });
+  }
+
   // ---- groups ----
   async listGroups(): Promise<Group[]> { return (await this.groups().query((g) => g.tenantId === this.ctx.tenantId)).sort((a, b) => a.name.localeCompare(b.name)); }
   async createGroup(input: { name: string; description?: string }, actor: string): Promise<Group> {

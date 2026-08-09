@@ -93,6 +93,23 @@ export function boundaryTimerHosts(nodes: EngineNode[], hostNodeId: string): Eng
   return nodes.filter((b) => b.type === 'boundary' && (b as any).event?.timer && onList(b).includes(hostNodeId));
 }
 
+/** Boundary nodes with a message/signal/escalation trigger attached to `hostNodeId` — given a
+ *  WAITING token of their own (mirroring boundaryTimerHosts' TimerJob) the moment that host starts
+ *  waiting, so broadcast()/signalInstance() can find and resume them exactly like any other catch.
+ *  Escalation has no dedicated WaitSpec kind (see domain.ts) and buckets into 'signal' — consistent
+ *  with throw/handler.ts's own broadcast(name), which never distinguished escalation from signal on
+ *  the SENDING side either. */
+export function messageBoundaryHosts(nodes: EngineNode[], hostNodeId: string): { node: EngineNode; kind: 'message' | 'signal'; name: string }[] {
+  return nodes
+    .filter((b) => b.type === 'boundary' && onList(b).includes(hostNodeId))
+    .flatMap((b) => {
+      const ev = (b as any).event || {};
+      const name = ev.message || ev.signal || ev.escalation;
+      if (!name) return [];
+      return [{ node: b, kind: (ev.message ? 'message' : 'signal') as 'message' | 'signal', name }];
+    });
+}
+
 /** Boundary nodes with a compensation trigger attached to `hostNodeId` — recorded when that host
  *  completes normally, so a LATER compensation throw can find and run them (LIFO). Returns the
  *  matching boundary NODES (same shape as {@link boundaryTimerHosts}), not pre-resolved compensation

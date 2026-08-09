@@ -7,4 +7,6 @@ export const def: NodeDef = {
     { key: 'transaction', label: 'Transaction', widget: 'bool' },
     { key: 'on.error', label: 'Event sub-process on error', widget: 'text', help: 'Error code that triggers this as an event sub-process' },
   ] }],
+  diagram: { icon: 'projects', color: '#4f46e5', shape: 'rectangle' },
+  typeLabel: 'Sub-process',
 };

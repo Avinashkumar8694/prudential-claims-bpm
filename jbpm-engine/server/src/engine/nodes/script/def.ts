@@ -6,4 +6,6 @@ export const def: NodeDef = {
   schema: [GENERAL, { title: 'Script (JavaScript)', fields: [
     { key: 'code', label: 'Script body', widget: 'code', placeholder: 'kcontext.setVariable("x", 1);', help: 'Runs as JavaScript against kcontext (getVariable/setVariable).' },
   ] }],
+  diagram: { icon: 'code', color: '#0891b2', shape: 'rectangle' },
+  typeLabel: 'Script task',
 };

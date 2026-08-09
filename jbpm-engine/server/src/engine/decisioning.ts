@@ -29,7 +29,11 @@ function resolveOutput(r: any): unknown { return r && typeof r === 'object' && '
 export function evaluateDmn(engine: EngineProject, ref: { namespace?: string; model: string; decision: string }, vars: Vars): Vars {
   const model = (engine.decisions || []).find((m: any) => m.name === ref.model || m.namespace === ref.namespace);
   if (!model) throw new Error(`DMN model "${ref.model}" not found`);
-  const decision = (model as any).decisions.find((d: any) => d.name === ref.decision);
+  // Real jBPM/PAM's businessRuleTask DMN wiring never names a decision explicitly (namespace/model
+  // are passed as literal dataInputAssociation values; there's no third "decision" input in that
+  // convention — see bpmn-sdk's parse.ts) — an unnamed ref defaults to the model's first decision,
+  // the only reasonable reading when the model declares just one (the overwhelmingly common case).
+  const decision = ref.decision ? (model as any).decisions.find((d: any) => d.name === ref.decision) : (model as any).decisions[0];
   if (!decision) throw new Error(`DMN decision "${ref.decision}" not found`);
 
   const matches = decision.rules.filter((rule: any) =>

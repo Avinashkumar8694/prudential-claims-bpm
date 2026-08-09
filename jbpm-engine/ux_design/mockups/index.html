@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>jBPM Engine — UX Mockups</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div style="max-width:860px; margin:0 auto; padding:56px 24px;">
+  <h1>jBPM Engine — UX Design Mockups</h1>
+  <p class="muted" style="margin-top:8px;">
+    A connected, click-through prototype — every sidenav item, tab, card, and node links to a real
+    page in this set. Built with the app's real design tokens (<code>app/src/styles.css</code>) plus
+    a small "modern polish" layer (gradients, icon chips, property-window modal — see
+    <code>shared.css</code>). Rendered PNGs of every screen live in
+    <a href="../images/" style="color:var(--primary); font-weight:600;">../images/</a>.
+    Start at <a href="login.html" style="color:var(--primary); font-weight:600;">login.html</a> and click through.
+    See <a href="../README.md" style="color:var(--primary); font-weight:600;">../README.md</a> for the full design doc set.
+  </p>
+
+  <div class="section-title" style="margin-top:32px;">Foundations — read these first</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-color:var(--primary);" href="ui-states.html">
+      <div><b>Interaction states</b><div class="muted" style="font-size:12.5px;">empty · zero-results · loading · error · permission-denied · toasts · bulk results · pagination &amp; sort</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-color:var(--primary);" href="dialogs.html">
+      <div><b>Action dialogs</b><div class="muted" style="font-size:12.5px;">Signal · destructive confirm · delegate/forward · schedule job · create project · deploy pre-flight</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-color:var(--primary);" href="list-mechanics.html">
+      <div><b>List mechanics — PIID, filters, column picker</b><div class="muted" style="font-size:12.5px;">How every list filters, paginates and column-picks. PIID is pinned and can never be hidden.</div></div><span class="badge active">new</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:32px;">Entry</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="login.html">
+      <div><b>Login</b><div class="muted" style="font-size:12.5px;">KEEP, restyled</div></div><span class="badge">keep</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="home-dashboard.html">
+      <div><b>Home dashboard</b><div class="muted" style="font-size:12.5px;">NEW — KPIs, my tasks, activity feed, all links live</div></div><span class="badge active">new</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Build workspace</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="projects-list.html">
+      <div><b>Projects list</b><div class="muted" style="font-size:12.5px;">ENRICH — stat chips per card, click a card to open it</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="project-overview.html">
+      <div><b>Project Overview</b><div class="muted" style="font-size:12.5px;">NEW — what opening a project looks like: stats, processes, assets, activity, contributors</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="project-workspace.html">
+      <div><b>Processes &amp; Canvas</b><div class="muted" style="font-size:12.5px;">ENRICH — full node palette (every event/task/gateway/subprocess kind), edges, minimap</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="process-node-modal.html">
+      <div><b>Node property window — User Task</b><div class="muted" style="font-size:12.5px;">double-click modal: assignment, data I/O, reassignment, SLA, MI</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="process-event-modal.html">
+      <div><b>Node property window — Timer event</b><div class="muted" style="font-size:12.5px;">polymorphic event widget (duration/cycle/date)</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="assets-overview.html">
+      <div><b>Assets — every kind</b><div class="muted" style="font-size:12.5px;">all 10 asset kinds the engine supports, each linking to its editor</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="asset-detail.html">
+      <div><b>Asset detail — version history, metadata, lock</b><div class="muted" style="font-size:12.5px;">NEW — jBPM's lock/force-unlock model, check-in comments, referenced-by</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="assets-form-builder.html">
+      <div><b>Form Builder</b><div class="muted" style="font-size:12.5px;">NEW — visual form designer</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="data-object-editor.html">
+      <div><b>Data Object editor</b><div class="muted" style="font-size:12.5px;">NEW — typed field list editor</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="decision-table-editor.html">
+      <div><b>Decision Table editor</b><div class="muted" style="font-size:12.5px;">NEW — guided decision table grid</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="access-tab.html">
+      <div><b>Access (per-project)</b><div class="muted" style="font-size:12.5px;">NEW — cheapest high-value screen, backend already exists</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="project-settings.html">
+      <div><b>Project Settings</b><div class="muted" style="font-size:12.5px;">ENRICH — environment overrides, scheduled start</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="process-variables-modal.html">
+      <div><b>Process &amp; Global Variables</b><div class="muted" style="font-size:12.5px;">NEW — variables modal + process-level SLA</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="version-history.html">
+      <div><b>Branches &amp; Version History</b><div class="muted" style="font-size:12.5px;">NEW — branch switcher, publish/rollback, version diff</div></div><span class="badge active">new</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Operations</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="deployments.html">
+      <div><b>Deployments</b><div class="muted" style="font-size:12.5px;">ENRICH — health chip, compare/diff</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="instances-list.html">
+      <div><b>Instances (list only)</b><div class="muted" style="font-size:12.5px;">NEW — persistent left filter rail (full jBPM filter set); click a row to open it, ⋮ menu jumps to its Tasks / Errors</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="start-instance-form.html">
+      <div><b>Start New Instance</b><div class="muted" style="font-size:12.5px;">NEW — pick a deployed process, fill its generated start form (jBPM's New Process Instance flow)</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="process-instance-detail.html">
+      <div><b>Instance page — Details / Diagram / Variables / Logs / Documents</b><div class="muted" style="font-size:12.5px;">NEW — dedicated page per instance with View Process/Tasks/Errors quick links, every tab a real linked page</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="instance-diagram-tab.html">
+      <div><b>Instance page — Diagram tab</b><div class="muted" style="font-size:12.5px;">ENRICH — modern canvas, curved connectors, port dots, minimap</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="execution-errors.html">
+      <div><b>Execution Errors</b><div class="muted" style="font-size:12.5px;">NEW — same list+detail shape reused for Jobs &amp; Timers, Audit Log</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="jobs-timers.html">
+      <div><b>Jobs &amp; Timers</b><div class="muted" style="font-size:12.5px;">NEW — live countdown, trigger/cancel</div></div><span class="badge active">new</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">People &amp; insight</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="task-inbox.html">
+      <div><b>Task Inbox (list only)</b><div class="muted" style="font-size:12.5px;">ENRICH — list-only now; click a row to open its own task page</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="task-detail.html">
+      <div><b>Task page — Work / Details / Assignments / Comments / Admin / Logs</b><div class="muted" style="font-size:12.5px;">NEW — dedicated page per task, every tab a real linked page (click through them)</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="reports-analytics.html">
+      <div><b>Reports &amp; Analytics</b><div class="muted" style="font-size:12.5px;">NEW — charts, surfaces the unused analytics backend</div></div><span class="badge active">new</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Governance</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="admin-iam.html">
+      <div><b>Admin — Users</b><div class="muted" style="font-size:12.5px;">ENRICH — workload chip</div></div><span class="badge">enrich</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="roles-permissions.html">
+      <div><b>Admin — Roles</b><div class="muted" style="font-size:12.5px;">KEEP — permission checkboxes, usage count</div></div><span class="badge">keep</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="audit-log.html">
+      <div><b>Audit Log</b><div class="muted" style="font-size:12.5px;">NEW — before/after diff view</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="system-settings.html">
+      <div><b>System Settings</b><div class="muted" style="font-size:12.5px;">NEW — global config, SLA thresholds, audit retention</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="settings-account.html">
+      <div><b>Account Settings</b><div class="muted" style="font-size:12.5px;">KEEP — theme + own password</div></div><span class="badge">keep</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Global chrome</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="notifications-panel.html">
+      <div><b>Notifications panel</b><div class="muted" style="font-size:12.5px;">NEW — bell dropdown, grouped Today/Earlier, click-through to the entity</div></div><span class="badge active">new</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Scopes, analytics &amp; governance added in the gap-fill pass</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="task-inbox-available.html">
+      <div><b>Tasks — Available scope</b><div class="muted" style="font-size:12.5px;">NEW — group queue you can claim from</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="task-inbox-all.html">
+      <div><b>Tasks — All (admin scope)</b><div class="muted" style="font-size:12.5px;">NEW — every task in flight, with owner + status</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="reports-tasks.html">
+      <div><b>Reports — Tasks tab</b><div class="muted" style="font-size:12.5px;">NEW — workload by assignee, status mix, per-task durations</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="admin-groups.html">
+      <div><b>Admin — Groups</b><div class="muted" style="font-size:12.5px;">NEW — members, usage, delete-blocked-while-referenced</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="version-history.html">
+      <div><b>Version History &amp; branches</b><div class="muted" style="font-size:12.5px;">NEW — publish, rollback, diff</div></div><span class="badge active">new</span>
+    </a>
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center;" href="notifications-panel.html">
+      <div><b>Notifications panel</b><div class="muted" style="font-size:12.5px;">NEW — bell open state</div></div><span class="badge active">new</span>
+    </a>
+  </div>
+
+  <div class="section-title" style="margin-top:28px;">Future vision</div>
+  <div style="display:grid; gap:12px; margin-top:8px;">
+    <a class="card" style="padding:16px; display:flex; justify-content:space-between; align-items:center; border-color:var(--purple);" href="case-overview-future.html">
+      <div><b>Case Overview</b><div class="muted" style="font-size:12.5px;">FUTURE — deferred until the engine supports case constructs</div></div><span class="badge" style="background:var(--purple-bg); color:var(--purple);">future</span>
+    </a>
+  </div>
+</div>
+</body>
+</html>

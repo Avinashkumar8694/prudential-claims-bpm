@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Access — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — per-project Access tab (ux_design/04)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem active" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <a class="btn ghost sm" href="projects-list.html">← Projects</a>
+      <div class="crumbs"><b>Claims Onboarding</b> <span class="badge">CLM-104</span></div>
+      <div class="spacer"></div>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content">
+      <h1>Access</h1>
+      <p class="muted" style="margin:4px 0 14px;">Which roles can view, edit, run or deploy this project.</p>
+      <div class="tabs">
+        <a class="tab" href="project-overview.html">Overview</a>
+        <a class="tab" href="project-workspace.html">Processes</a>
+        <a class="tab" href="assets-overview.html">Assets</a>
+        <a class="tab active" href="access-tab.html">Access</a>
+        <a class="tab" href="project-settings.html">Settings</a>
+      </div>
+
+      <div class="row" style="margin-bottom:14px;">
+        <p class="muted" style="font-size:13px;">Controls which roles can view, edit, run, or deploy this project. Falls back to the global role permissions if no override is set here.</p>
+        <div class="spacer"></div>
+        <button class="btn primary sm">+ Add role</button>
+      </div>
+
+      <div class="card" style="max-width:720px;">
+        <table>
+          <thead><tr><th>Role</th><th>Actions</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td><b>builder</b></td>
+              <td><span class="badge active">view</span> <span class="badge active">edit</span> <span class="badge active">run</span> <span class="badge active">deploy</span></td>
+              <td><button class="btn sm">Edit</button></td>
+            </tr>
+            <tr>
+              <td><b>analyst</b></td>
+              <td><span class="badge active">view</span> <span class="badge active">run</span></td>
+              <td><button class="btn sm">Edit</button> <button class="btn sm danger">Remove</button></td>
+            </tr>
+            <tr>
+              <td><b>reviewer</b></td>
+              <td><span class="badge active">view</span></td>
+              <td><button class="btn sm">Edit</button> <button class="btn sm danger">Remove</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="section-title">Editing: analyst</div>
+      <div class="card" style="max-width:420px; padding:16px;">
+        <div class="row" style="flex-wrap:wrap; gap:10px;">
+          <label class="row" style="gap:6px;"><input type="checkbox" checked /> view</label>
+          <label class="row" style="gap:6px;"><input type="checkbox" /> edit</label>
+          <label class="row" style="gap:6px;"><input type="checkbox" checked /> run</label>
+          <label class="row" style="gap:6px;"><input type="checkbox" /> deploy</label>
+        </div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn primary sm">Save</button>
+          <button class="btn sm">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

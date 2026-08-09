@@ -92,3 +92,15 @@ test('user/group CRUD: duplicate names rejected, groups deletable, users updatab
   assert.deepStrictEqual(updated.roles, ['worker']);
   assert.deepStrictEqual(updated.groups, ['ops']);
 });
+
+test('changeOwnPassword: requires the correct current password, enforces min length, actually changes it', async () => {
+  const ctx = newCtx();
+  const iam = new IamService(ctx);
+  const dave = await iam.createUser({ username: 'dave', password: 'password123' }, 'admin');
+  await assert.rejects(() => iam.changeOwnPassword(dave.id, 'wrong-password', 'newpassword123'), /current password is incorrect/);
+  await assert.rejects(() => iam.changeOwnPassword(dave.id, 'password123', 'short'), /at least 8/);
+  await iam.changeOwnPassword(dave.id, 'password123', 'newpassword123');
+  await assert.rejects(() => iam.login('dave', 'password123'), /invalid/);
+  const { user } = await iam.login('dave', 'newpassword123');
+  assert.strictEqual(user.username, 'dave');
+});

@@ -358,6 +358,13 @@ export function writeForm(model: any): string {
 // ---- dispatcher ----
 export function parseAsset(path: string, content: string): Asset {
   const kind = assetKind(path);
+  // .rdrl is ambiguous across real jBPM history: newer Business Central "Guided Rule" assets are
+  // genuinely XML, but older jBPM 5/6-era projects (e.g. the classic jbpm-playground examples) use the
+  // same .rdrl extension for a plain-text DRL rule file. Extension alone can't disambiguate, so sniff
+  // the actual content — real XML always starts with '<' once whitespace is trimmed; plain DRL never
+  // does (it opens with `package`/`rule`/an import, etc.) — and fall back to the DRL parser rather than
+  // feeding non-XML text into the XML parser, which produces a meaningless, unusable model.
+  if (kind === 'guidedRule' && !content.trimStart().startsWith('<')) return { kind: 'drl', path, model: parseDrl(content) };
   if (XML_KINDS.has(kind)) return { kind, path, model: { xml: parseXml(content) } };
   switch (kind) {
     case 'properties': return { kind, path, model: { props: parseProperties(content) } };

@@ -8,7 +8,7 @@
 | **Tampering** | Versions/deployments | Immutable published versions & deployment snapshots; optimistic locks; audit |
 | **Repudiation** | Any action | Append-only audit with actor, time, before/after (redacted) |
 | **Information disclosure** | Variables, secrets, payloads | Tenant isolation on every query; secrets never in engine JSON; payload redaction in logs/audit |
-| **Denial of service** | Script tasks, HTTP tasks, timers | Sandbox CPU/time budget; per-tenant rate limits; timer/instance quotas; outbound allowlist |
+| **Denial of service** | Script tasks, HTTP tasks, timers | Sandbox CPU/time budget; per-tenant rate limits — **implemented**; timer/instance/script quotas — **implemented**; outbound allowlist — **implemented** |
 | **Elevation of privilege** | RBAC | Deny-by-default; role checks server-side on every route; no client-trust |
 
 ## 2. AuthN / AuthZ — **implemented**
@@ -57,13 +57,18 @@
   fails with `SCRIPT_TIMEOUT` (retryable).
 - `java`/`mvel` are never evaluated (no engine) — preserved verbatim for export only.
 
-## 5. Outbound (HTTP service tasks)
+## 5. Outbound (HTTP service tasks) — allowlist **implemented**, secrets pending
 
 - Base URL comes from the **deployment env** (`INTEGRATION_LAYER_URL`), not author-controlled arbitrary
-  hosts. An **allowlist** of hosts/ports per tenant restricts outbound calls (SSRF protection):
-  block link-local/metadata IPs (169.254.169.254), private ranges unless explicitly allowed.
+  hosts — a *relative* `url` is always appended to it and is never gated. An **absolute** `url` (an
+  author can put anything there) IS gated: `infra/outbound-guard.ts`'s `assertOutboundAllowed` blocks
+  it if the hostname (or its resolved IP, for a real DNS name) falls in a private/link-local/loopback
+  range — this includes the classic cloud-metadata SSRF target, 169.254.169.254, via the same
+  link-local rule, no special case needed. Override per-deployment via the `OUTBOUND_ALLOWLIST` env
+  var (comma-separated hostnames or `.suffix` domains). A blocked call fails the node with
+  `errorCode: 'SSRF_BLOCKED'`, catchable by an Error Catch like any other node failure.
 - Secrets referenced by name (`{{secret:NAME}}`) are injected at call time from the secret store;
-  never stored in engine JSON, never logged.
+  never stored in engine JSON, never logged. — **not yet built** (see §6).
 
 ## 6. Secrets management
 
@@ -79,16 +84,32 @@
 - File/zip import: size limits, path traversal guards, only expected asset extensions; scan for zip
   bombs (entry count/uncompressed size caps).
 
-## 8. Transport & headers
+## 8. Transport & headers — partial
 
-- TLS everywhere (terminate at proxy). HSTS, secure cookies if used.
-- CORS locked to the app origin(s). Security headers (CSP, X-Content-Type-Options, frame-ancestors).
+- TLS everywhere (terminate at proxy). HSTS, secure cookies if used. — **not built** (proxy's job; no
+  proxy config lives in this repo).
+- CORS: locked to `APP_ORIGIN` when set; defaults to `*` in dev if unset — **set `APP_ORIGIN` in any
+  non-dev environment**, this is not enforced automatically.
+- Security headers — **implemented** (`app.ts`): `X-Content-Type-Options: nosniff`,
+  `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, and `Content-Security-Policy: default-src
+  'none'` on every JSON API response (the one HTML response, `/api/docs`'s Swagger UI, is exempted so
+  its CDN-hosted assets keep working).
 - CSRF: token auth in `Authorization` header (not cookies) avoids CSRF; if cookies used, add CSRF token.
 
-## 9. Rate limiting & quotas
+## 9. Rate limiting & quotas — **implemented**
 
-- Per-principal + per-tenant rate limits on auth, start-instance, deploy, import.
-- Quotas: max active instances, max timers, max concurrent scripts per tenant.
+- Per-principal (JWT `sub`) rate limits, in-memory/single-process (`http/rate-limit.ts`): login is
+  limited per-IP (no user yet at that point); start-instance, deploy, and import are limited per-user.
+  A caller over the limit gets `429 RATE_LIMITED`. Not a distributed limiter — if this server is ever
+  run multi-instance behind a load balancer, this needs to move to a shared store.
+- Per-tenant quotas on `SystemSettings` (configured via the existing System Settings API/UI —
+  `PATCH /settings`, "Resource quotas" card): `maxActiveInstances` (top-level instances
+  running/waiting), `maxActiveTimers` (scheduled boundary/catch TimerJobs), `maxConcurrentScripts`
+  (script-task/exit-script executions running at this instant, tracked in-memory per tenant —
+  `infra/quotas.ts`). All three default to `0` (unlimited) so existing tenants are unaffected until an
+  admin opts in. A breach raises `429 QUOTA_EXCEEDED` at the API layer, or — for a quota hit mid-flow
+  (a timer that couldn't be scheduled) — a catchable `errorCode: 'QUOTA_EXCEEDED'` node failure, same
+  as any other engine error.
 
 ## 10. Audit & observability
 

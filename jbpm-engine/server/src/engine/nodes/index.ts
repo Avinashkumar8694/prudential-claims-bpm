@@ -16,7 +16,7 @@ import { handler as catchEvent } from './catch/handler.ts';
 import { handler as throwEvent } from './throw/handler.ts';
 import { handler as send } from './send/handler.ts';
 import { handler as call, mapChildOutputs as mapCallOutputs } from './call/handler.ts';
-import { handler as forEach } from './for-each/handler.ts';
+import { handler as forEach, buildMultiInstanceResult } from './for-each/handler.ts';
 import { handler as subprocess, mapChildOutputs as mapSubprocessOutputs } from './subprocess/handler.ts';
 import { handler as workItem } from './work-item/handler.ts';
 
@@ -33,6 +33,12 @@ export const NODE_HANDLERS: Record<string, NodeHandler> = {
 export const CHILD_OUTPUT_MAPPERS: Partial<Record<string, (n: EngineNode, child: Instance) => Record<string, unknown>>> = {
   call: mapCallOutputs, subprocess: mapSubprocessOutputs,
 };
+
+// forEach's own child-settlement logic (parallel/sequential fan-out, MULTIINSTANCE_ERROR on any
+// failed sibling, wait-for-the-rest otherwise) — reused by execution-engine.ts's tryResumeParent/
+// tryFailParent for the ASYNC path, same reasoning as CHILD_OUTPUT_MAPPERS above but for a node type
+// that waits on N children instead of one.
+export { buildMultiInstanceResult };
 
 // per-node UI config (palette + ports + property schema), co-located with each handler
 import { def as startDef } from './start/def.ts';

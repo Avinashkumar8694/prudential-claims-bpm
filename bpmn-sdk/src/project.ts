@@ -15,11 +15,14 @@ export function walk(dir: string, ext: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Parse a jBPM project's .bpmn files (under src/main/resources) into one model. */
+/** Parse a jBPM project's .bpmn/.bpmn2 files (under src/main/resources) into one model. Real jBPM
+ *  projects use both extensions interchangeably — the classic jbpm-playground examples (evaluation,
+ *  human-resources, purchases, ...) all use .bpmn2, while newer/bpmn.io-authored files use .bpmn — so
+ *  a project importing only one extension silently drops every process built with the other. */
 export function parseProject(projectDir: string): Project {
   const resRoot = fs.existsSync(path.join(projectDir, 'src/main/resources'))
     ? path.join(projectDir, 'src/main/resources') : projectDir;
-  const files = walk(resRoot, '.bpmn');
+  const files = [...walk(resRoot, '.bpmn2'), ...walk(resRoot, '.bpmn')];
   const processes = files.map((f) => {
     const model = parseBpmn(fs.readFileSync(f, 'utf8'));
     model.sourcePath = path.relative(projectDir, f);

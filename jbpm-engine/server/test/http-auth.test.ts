@@ -78,6 +78,19 @@ test('a viewer role is forbidden from admin-only IAM routes', async () => {
   assert.strictEqual(res.status, 403);
 });
 
+test('GET /auth/me returns the caller\'s identity and resolved permissions, and needs its own valid token', async () => {
+  const noToken = await fetch(`${base}/auth/me`);
+  assert.strictEqual(noToken.status, 401, '/me is not one of the public auth routes');
+
+  const token = await login('viewer-vic', 'password123');
+  const res = await fetch(`${base}/auth/me`, { headers: { authorization: `Bearer ${token}` } });
+  assert.strictEqual(res.status, 200);
+  const body = await res.json() as any;
+  assert.strictEqual(body.user.username, 'viewer-vic');
+  assert.deepStrictEqual(body.user.roles, ['viewer']);
+  assert.deepStrictEqual(body.permissions.sort(), ['query:read', 'workflow:view'].sort());
+});
+
 test('the admin role can create a workflow end-to-end over real HTTP', async () => {
   const token = await login('admin', 'bootstrap-pw-123');
   const res = await fetch(`${base}/workflows`, {

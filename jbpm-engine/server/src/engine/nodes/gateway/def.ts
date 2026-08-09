@@ -13,4 +13,6 @@ export const def: NodeDef = {
     { key: 'direction', label: 'Direction', widget: 'select', options: ['Diverging', 'Converging'] },
     { key: 'default', label: 'Default flow id', widget: 'text', help: 'Taken when no condition matches (exclusive/inclusive)' },
   ] }],
+  diagram: { icon: 'branch', color: '#f59e0b', shape: 'diamond' },
+  typeLabel: 'Gateway',
 };

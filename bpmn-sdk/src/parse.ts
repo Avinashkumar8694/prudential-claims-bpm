@@ -112,7 +112,13 @@ export function parseBpmnAll(xml: string): ProcessModel[] {
         case 'boundaryEvent': { const nd: Node = { ...base, type: 'boundaryEvent', attachedTo: el.attrs.attachedToRef, cancelActivity: el.attrs.cancelActivity !== 'false' }; applyEventDef(nd, el); nodes.push(nd); break; }
         case 'scriptTask': nodes.push({ ...base, type: 'scriptTask', script: cdataText(kid(el, 'script')), scriptFormat: el.attrs.scriptFormat }); break;
         case 'userTask': { const nd: Node = { ...base, type: 'userTask', taskName: assignTo(el, '_TaskNameInputX'), skippable: assignTo(el, '_SkippableInputX') !== 'false', group: assignTo(el, '_GroupIdInputX') }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
-        case 'businessRuleTask': { const nd: Node = { ...base, type: 'businessRuleTask', ruleFlowGroup: attr(el, 'drools:ruleFlowGroup'), implementation: el.attrs.implementation }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
+        case 'businessRuleTask': {
+          const nd: Node = { ...base, type: 'businessRuleTask', ruleFlowGroup: attr(el, 'drools:ruleFlowGroup'), implementation: el.attrs.implementation };
+          if (el.attrs.implementation === 'http://www.jboss.org/drools/dmn') {
+            nd.dmnNamespace = assignTo(el, '_namespaceInputX'); nd.dmnModel = assignTo(el, '_modelInputX');
+          }
+          applyOnEntryExit(el, nd); nodes.push(nd); break;
+        }
         case 'sendTask': { const nd: Node = { ...base, type: 'sendTask', messageRef: el.attrs.messageRef, operationRef: el.attrs.operationRef, implementation: el.attrs.implementation }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
         case 'receiveTask': { const nd: Node = { ...base, type: 'receiveTask', messageRef: el.attrs.messageRef, implementation: el.attrs.implementation }; applyOnEntryExit(el, nd); nodes.push(nd); break; }
         case 'manualTask': { const nd: Node = { ...base, type: 'manualTask' }; applyOnEntryExit(el, nd); nodes.push(nd); break; }

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Task — Logs — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — Task page: Logs tab (ux_design/06)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem active" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <a class="btn ghost sm" href="task-inbox.html">← Tasks</a>
+      <div class="crumbs"><b>Review claim #4021</b></div>
+      <div class="spacer"></div>
+      <a class="btn sm" href="process-instance-detail.html">View instance →</a>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content">
+      <div class="row" style="margin-bottom:2px;">
+        <h1>Review claim #4021</h1>
+        <span class="sla risk">🟠 due in 15m</span>
+      </div>
+      <p class="muted" style="margin-bottom:16px;">Claim Intake · Instance #1091 · Priority: High · Owner: unclaimed</p>
+
+      <div class="tabs">
+        <a class="tab" href="task-detail.html">Work</a>
+        <a class="tab" href="task-detail-details.html">Details</a>
+        <a class="tab" href="task-detail-assignments.html">Assignments</a>
+        <a class="tab" href="task-detail-comments.html">Comments</a>
+        <a class="tab" href="task-detail-admin.html">Admin</a>
+        <a class="tab active" href="task-detail-logs.html">Logs</a>
+      </div>
+
+      <div class="card" style="padding:18px; max-width:640px; font-family:var(--font-mono); font-size:12px; display:flex; flex-direction:column; gap:2px;">
+        <div class="row" style="padding:6px 8px; border-radius:6px;"><span class="muted" style="width:150px;">08-07 14:02:45</span><span>task created · Ready</span></div>
+        <div class="row" style="padding:6px 8px; border-radius:6px; background:var(--surface-2);"><span class="muted" style="width:150px;">08-07 14:05:10</span><span>assigned to group claims-team</span></div>
+        <div class="row" style="padding:6px 8px; border-radius:6px;"><span class="muted" style="width:150px;">08-07 16:10:02</span><span style="color:var(--amber);">SLA at risk (80% of due time elapsed)</span></div>
+        <div class="row" style="padding:6px 8px; border-radius:6px; background:var(--surface-2);"><span class="muted" style="width:150px;">now</span><span>waiting on claim — not yet started</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

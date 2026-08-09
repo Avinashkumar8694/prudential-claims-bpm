@@ -3,11 +3,13 @@
 export {
   fromEngine, toEngine, fromEngineProject, toEngineProject, makeTypeResolver,
   validateModel, serializeProcess, parseBpmn, parseProject, writeProject, autowire,
+  dmnToDecisionModel,
 } from '@fabrixly/bpmn-sdk';
 
 export type {
   EngineProject, EngineProcess, EngineNode, EngineFlow, EngineVar, EngineType,
   ProcessModel, ValidationResult, Project,
+  Asset, EngineForm, FormField, EngineRuleset, EngineRuleDef, DrlModel, DrlRule, EngineDecisionModel,
 } from '@fabrixly/bpmn-sdk';
 
 import { fromEngine, validateModel } from '@fabrixly/bpmn-sdk';

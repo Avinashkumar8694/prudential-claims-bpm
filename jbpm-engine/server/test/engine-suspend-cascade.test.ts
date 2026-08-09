@@ -82,3 +82,63 @@ test('suspending a parent suspends its active child; the tree does no work until
   assert.strictEqual((await instSvc.get(kid.id)).status, 'completed');
   assert.strictEqual((await instSvc.get(p.id)).status, 'completed', 'parent resumed by the child after resume');
 });
+
+// A suspended instance's whole point is "nothing touches it until resume" — retry/signal/variable-edit
+// must all be refused the same way task completion already was above, not just the one path that
+// happened to be tested. retryNode() in particular has no defensive check of its own (see
+// execution-engine.ts) and will force status back to 'running' if the service layer doesn't block it —
+// same resurrection risk as the completed/aborted case this refused it for first.
+test('retry, signal, and variable edits are refused on a suspended instance', async () => {
+  const { ctx } = newCtx();
+  const child = await deploy(ctx, 'Child2', childEngine);
+  const instSvc = new InstanceService(ctx);
+  const inst = await instSvc.start({ workflowId: child.wf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(inst.status, 'waiting');
+
+  await instSvc.suspend(inst.id, 'alice');
+  assert.strictEqual((await instSvc.get(inst.id)).status, 'suspended');
+
+  await assert.rejects(instSvc.retry(inst.id, 'wait', 'ops'), /suspended/);
+  await assert.rejects(instSvc.signal(inst.id, 'anything', undefined, 'ops'), /suspended/);
+  await assert.rejects(instSvc.updateVariables(inst.id, { x: 1 }, 'ops'), /suspended/);
+  assert.strictEqual((await instSvc.get(inst.id)).status, 'suspended', 'none of the rejected calls mutated the instance');
+});
+
+test('suspend/resume reject an instance that is not in the expected state', async () => {
+  const { ctx } = newCtx();
+  const child = await deploy(ctx, 'Child3', childEngine);
+  const instSvc = new InstanceService(ctx);
+  const inst = await instSvc.start({ workflowId: child.wf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(inst.status, 'waiting');
+
+  // can't resume something that was never suspended
+  await assert.rejects(instSvc.resumeInstance(inst.id, 'alice'), /only a suspended instance/);
+
+  await instSvc.suspend(inst.id, 'alice');
+  // can't suspend something that's already suspended (no active/waiting instance to pause)
+  await assert.rejects(instSvc.suspend(inst.id, 'alice'), /only a running or waiting instance/);
+
+  await instSvc.abort(inst.id, 'alice');
+  await assert.rejects(instSvc.resumeInstance(inst.id, 'alice'), /only a suspended instance/);
+  await assert.rejects(instSvc.suspend(inst.id, 'alice'), /only a running or waiting instance/);
+});
+
+test('task actions other than complete/skip are refused once the owning instance is gone', async () => {
+  const { store, ctx } = newCtx();
+  const child = await deploy(ctx, 'Child4', childEngine);
+  const instSvc = new InstanceService(ctx);
+  const taskSvc = new TaskService(ctx);
+  const inst = await instSvc.start({ workflowId: child.wf.id, environment: 'prod' }, 'bob');
+  const task = (await store.repo<Task>(Collections.tasks).query((t) => t.status === 'created'))[0]!;
+
+  await instSvc.abort(inst.id, 'alice');
+  await assert.rejects(taskSvc.claim(task.id, 'carol'), /aborted/);
+  await assert.rejects(taskSvc.release(task.id, 'carol'), /aborted/);
+  await assert.rejects(taskSvc.start(task.id, 'carol'), /aborted/);
+  await assert.rejects(taskSvc.stop(task.id, 'carol'), /aborted/);
+  await assert.rejects(taskSvc.saveOutputs(task.id, { a: 1 }, 'carol'), /aborted/);
+  await assert.rejects(taskSvc.delegate(task.id, 'dave', 'carol'), /aborted/);
+  await assert.rejects(taskSvc.forward(task.id, { user: 'dave' }, 'carol'), /aborted/);
+  await assert.rejects(taskSvc.update(task.id, { priority: 5 }, 'carol'), /aborted/);
+  await assert.rejects(taskSvc.remind(task.id, 'carol'), /aborted/);
+});

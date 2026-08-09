@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>List Mechanics — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — filters, column picker, PIID (ux_design/03 §1)</div>
+<div style="max-width:1120px; margin:0 auto; padding:40px 24px;">
+  <h1>List mechanics</h1>
+  <p class="muted" style="margin-top:6px; margin-bottom:8px; max-width:740px;">
+    Every list screen in this design is built from these three parts. They are specified once here
+    and reused verbatim, so Instances, Tasks, Errors, Jobs, Audit, Deployments and Projects all
+    filter, sort and column-pick identically.
+  </p>
+  <p style="margin-bottom:28px; max-width:740px; font-size:13px; padding:12px 14px; background:var(--primary-50); border-radius:var(--radius-sm); border:1px solid var(--primary);">
+    <b>Rule: the process instance id (PIID) is never optional.</b> It is the identifier operators
+    paste into a filter, quote in a ticket, and trace across Instances → Tasks → Errors → Jobs →
+    Audit. It is pinned as the first column on every list where an instance is involved, rendered
+    monospace, and click-to-copy. It cannot be hidden by the column picker.
+  </p>
+
+  <!-- PIID -->
+  <div class="section-title" style="margin-top:0;">1 · PIID — the identity column</div>
+  <div class="card" style="margin-bottom:12px;">
+    <table>
+      <thead><tr>
+        <th style="width:150px;">PIID <span class="muted" style="text-transform:none; letter-spacing:0; font-weight:400;">· pinned</span></th>
+        <th>Process</th><th>Status</th><th>Correlation key</th><th>Started</th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><span style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">PI-1092</span>
+              <span class="muted" title="Copy" style="cursor:pointer; margin-left:4px;">⧉</span></td>
+          <td>Claim Intake</td><td><span class="badge failed">failed</span></td>
+          <td style="font-family:var(--font-mono); font-size:12px;">CLM-4021</td><td>2h ago</td>
+        </tr>
+        <tr>
+          <td><span style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">PI-1091</span>
+              <span class="muted" title="Copy" style="cursor:pointer; margin-left:4px;">⧉</span></td>
+          <td>Claim Intake</td><td><span class="badge running">running</span></td>
+          <td style="font-family:var(--font-mono); font-size:12px;">CLM-4020</td><td>2h 14m ago</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted" style="font-size:12px; margin-bottom:28px;">
+    PIID also appears — same format, same monospace treatment — on Tasks, Execution Errors, Jobs &amp; Timers
+    and Audit Log rows, so one id ties the whole console together. Correlation key sits beside it as the
+    <i>business</i> identifier (the claim number), which is what a business user searches by.
+  </p>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+    <!-- COLUMN PICKER -->
+    <div>
+      <div class="section-title" style="margin-top:0;">2 · Column picker (open)</div>
+      <div class="card" style="width:320px; padding:0; box-shadow:var(--shadow-pop);">
+        <div class="row" style="padding:12px 14px; border-bottom:1px solid var(--border);">
+          <b style="font-size:13px;">Columns</b><div class="spacer"></div>
+          <a class="muted" style="font-size:11.5px; cursor:pointer;">Reset</a>
+        </div>
+        <div style="padding:8px 14px; max-height:420px; overflow:auto;">
+          <div class="section-title" style="margin-top:4px;">Always shown</div>
+          <label class="row" style="gap:8px; font-size:13px; padding:5px 0; opacity:.6;">
+            <input type="checkbox" checked disabled /> <span>PIID</span>
+            <div class="spacer"></div><span class="badge">pinned</span>
+          </label>
+
+          <div class="section-title">Standard</div>
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> Process</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> Status</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> Initiator</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> Started</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> Duration</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" /> Ended</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> Correlation key</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" /> Parent PIID</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> Errors</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" checked /> SLA</label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><span class="muted" style="cursor:grab;">⠿</span><input type="checkbox" /> Deployment</label>
+          </div>
+
+          <div class="section-title">Process variables</div>
+          <p class="muted" style="font-size:11.5px; margin-bottom:6px;">
+            Available because the list is filtered to one process (<b>Claim Intake</b>). Add a
+            variable as an ad hoc column to turn this list into a purpose-built report.
+          </p>
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><input type="checkbox" checked /> claim.amount <span class="badge">number</span></label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><input type="checkbox" /> claim.status <span class="badge">string</span></label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><input type="checkbox" /> claimant.firstName <span class="badge">string</span></label>
+            <label class="row" style="gap:8px; font-size:13px; padding:5px 0;"><input type="checkbox" /> reviewNotes <span class="badge">string</span></label>
+          </div>
+        </div>
+        <div class="row" style="padding:10px 14px; border-top:1px solid var(--border);">
+          <span class="muted" style="font-size:11.5px;">8 of 15 shown</span>
+          <div class="spacer"></div><button class="btn primary sm">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FILTER BUILDER -->
+    <div>
+      <div class="section-title" style="margin-top:0;">3 · Advanced filter builder (open)</div>
+      <div class="card" style="width:420px; padding:0; box-shadow:var(--shadow-pop);">
+        <div class="row" style="padding:12px 14px; border-bottom:1px solid var(--border);">
+          <b style="font-size:13px;">Advanced filter</b><div class="spacer"></div>
+          <span class="muted" style="cursor:pointer;">✕</span>
+        </div>
+        <div style="padding:14px;">
+          <div class="field" style="margin-bottom:14px;">
+            <label>Ask <span class="muted" style="font-weight:400;">— resolves into editable conditions below</span></label>
+            <div class="row"><input placeholder="e.g. failed claims over £5000 started this week" style="flex:1;" /><button class="btn sm">→</button></div>
+          </div>
+
+          <div class="section-title" style="margin-top:0;">Conditions</div>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="row" style="gap:6px;">
+              <select style="flex:1.1;"><option>Status</option><option>PIID</option><option>Correlation key</option><option>Initiator</option><option>Parent PIID</option><option>claim.amount</option></select>
+              <select style="flex:.9;"><option>is one of</option><option>is</option><option>is not</option></select>
+              <input value="failed" style="flex:1;" />
+              <span class="muted" style="cursor:pointer;">✕</span>
+            </div>
+            <div class="row" style="gap:6px;">
+              <select style="flex:1.1;"><option>claim.amount</option></select>
+              <select style="flex:.9;"><option>&gt;</option><option>&gt;=</option><option>=</option><option>&lt;</option><option>between</option></select>
+              <input value="5000" style="flex:1;" />
+              <span class="muted" style="cursor:pointer;">✕</span>
+            </div>
+            <div class="row" style="gap:6px;">
+              <select style="flex:1.1;"><option>Started</option></select>
+              <select style="flex:.9;"><option>after</option><option>before</option><option>between</option></select>
+              <input value="2026-08-01" style="flex:1;" />
+              <span class="muted" style="cursor:pointer;">✕</span>
+            </div>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn sm">+ Add condition</button>
+            <div class="spacer"></div>
+            <span class="muted" style="font-size:11.5px;">match <b>all</b> · <a style="color:var(--primary); cursor:pointer;">any</a></span>
+          </div>
+
+          <div class="section-title">Operators by field type</div>
+          <div class="row" style="flex-wrap:wrap; gap:5px;">
+            <span class="badge">text: is · is not · contains · starts with</span>
+            <span class="badge">number: = ≠ &gt; &lt; between</span>
+            <span class="badge">date: before · after · between · last N days</span>
+            <span class="badge">enum: is one of</span>
+          </div>
+        </div>
+        <div class="row" style="padding:10px 14px; border-top:1px solid var(--border);">
+          <button class="btn sm">☆ Save as filter</button>
+          <div class="spacer"></div>
+          <button class="btn sm">Clear</button><button class="btn primary sm">Apply</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- APPLIED CHIPS + SAVED -->
+  <div class="section-title">4 · Applied conditions read back as removable chips (never a hidden filter)</div>
+  <div class="filterbar" style="margin-bottom:12px;">
+    <span class="chip on">Status is one of: failed ✕</span>
+    <span class="chip on">claim.amount &gt; 5000 ✕</span>
+    <span class="chip on">Started after 2026-08-01 ✕</span>
+    <span class="chip">+ Add condition</span>
+    <div class="spacer"></div>
+    <span class="muted" style="font-size:12px;">3 conditions · 4 results</span>
+    <span class="chip">☆ Save</span>
+    <span class="chip">⚏ Columns</span>
+  </div>
+
+  <div class="section-title">5 · Saved filters</div>
+  <div class="card" style="width:340px; padding:4px;">
+    <div class="panel-list">
+      <div class="prow" style="justify-content:space-between;"><span>★ My team, failed</span><span class="badge">default</span></div>
+      <div class="prow" style="justify-content:space-between;"><span>☆ SLA at risk this week</span><span class="muted">⋮</span></div>
+      <div class="prow" style="justify-content:space-between;"><span>☆ High-value claims</span><span class="muted">⋮</span></div>
+      <div class="prow" style="color:var(--primary);">+ Save current filter…</div>
+    </div>
+  </div>
+  <p class="muted" style="font-size:12px; margin-top:8px;">Per-user. ⋮ = rename · set as default · delete. The default auto-applies on page load.</p>
+</div>
+</body>
+</html>

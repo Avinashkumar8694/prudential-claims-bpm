@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Projects — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">ENRICH — Projects list (stat chips) (ux_design/04)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem active" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs"><b>Projects</b></div>
+      <div class="spacer"></div>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+      <button class="btn sm">Import jBPM</button>
+      <button class="btn primary sm">+ New Project</button>
+    </div>
+
+    <div class="content">
+      <h1>Projects</h1>
+      <p class="muted" style="margin:4px 0 14px;">Every process project you can access, grouped by folder.</p>
+      <div class="row" style="margin-bottom:16px;">
+        <span class="chip on">All</span>
+        <span class="chip">Unfiled</span>
+        <span class="chip">Claims</span>
+        <span class="chip">Onboarding</span>
+        <span class="chip">Archived</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px;">
+        <a class="card" style="padding:18px; display:block;" href="project-overview.html">
+          <div class="row"><h3>Claims Onboarding</h3><div class="spacer"></div><span class="muted">⋮</span></div>
+          <p class="muted" style="font-size:12px; margin:4px 0 14px;">CLM-104 · Updated 2h ago</p>
+          <div class="row" style="gap:14px;">
+            <span class="badge">4 processes</span>
+            <span class="badge running">12 active</span>
+          </div>
+          <p class="muted" style="font-size:11.5px; margin-top:10px;">Last deployed to prod · 5m ago</p>
+        </a>
+
+        <a class="card" style="padding:18px; display:block;" href="project-overview.html">
+          <div class="row"><h3>Payout Processing</h3><div class="spacer"></div><span class="muted">⋮</span></div>
+          <p class="muted" style="font-size:12px; margin:4px 0 14px;">PAY-021 · Updated 1d ago</p>
+          <div class="row" style="gap:14px;">
+            <span class="badge">2 processes</span>
+            <span class="badge running">3 active</span>
+          </div>
+          <p class="muted" style="font-size:11.5px; margin-top:10px;">Last deployed to staging · 1d ago</p>
+        </a>
+
+        <a class="card" style="padding:18px; display:block;" href="project-overview.html">
+          <div class="row"><h3>Fraud Review</h3><div class="spacer"></div><span class="muted">⋮</span></div>
+          <p class="muted" style="font-size:12px; margin:4px 0 14px;">FRD-009 · Updated 3d ago</p>
+          <div class="row" style="gap:14px;">
+            <span class="badge">1 process</span>
+            <span class="badge inactive">0 active</span>
+          </div>
+          <p class="muted" style="font-size:11.5px; margin-top:10px;">Not deployed yet</p>
+        </a>
+
+        <div class="card" style="padding:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-style:dashed; color:var(--muted); cursor:pointer;">
+          <div style="font-size:26px; margin-bottom:6px;">+</div>
+          <div style="font-size:13px; font-weight:600;">New project</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

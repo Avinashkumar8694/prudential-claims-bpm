@@ -9,6 +9,8 @@ export const def: NodeDef = {
   schema: [GENERAL, { title: 'Event', fields: [
     { key: 'event', label: 'Throw', widget: 'event', options: ['signal', 'message', 'escalation', 'compensation'] },
     { key: 'event.ref', label: 'Compensate activity (optional)', widget: 'text', help: 'Host node id to compensate; blank = compensate all completed activities' },
-    { key: 'event.correlationKey', label: 'Correlate to ($var)', widget: 'text', placeholder: '$claimId', help: 'Deliver only to the waiting instance whose own correlationKey matches this variable’s value; blank = deliver to every instance waiting on this name' },
+    { key: 'event.correlationKey', label: 'Correlate to', widget: 'varRef', varSource: 'ownRef', placeholder: '$claimId', help: 'Deliver only to the waiting instance whose own correlationKey matches this variable’s value; blank = deliver to every instance waiting on this name' },
   ] }],
+  diagram: { icon: 'mail', color: '#7c3aed', shape: 'circle' },
+  typeLabel: 'Throw event',
 };

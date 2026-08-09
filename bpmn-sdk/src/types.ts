@@ -111,6 +111,11 @@ export interface Node {
   // businessRule / send / receive / manual tasks
   ruleFlowGroup?: string;
   implementation?: string;
+  // businessRuleTask, implementation="http://www.jboss.org/drools/dmn" only: real jBPM/PAM passes the
+  // DMN namespace/model as literal dataInputAssociation values (dataInput names "namespace"/"model"),
+  // not static XML attributes — see parse.ts's businessRuleTask case.
+  dmnNamespace?: string;
+  dmnModel?: string;
   messageRef?: string;
   operationRef?: string;
 

@@ -8,6 +8,8 @@ import { WorkflowService } from '../src/modules/workflows/service.ts';
 import { VersionService } from '../src/modules/versions/service.ts';
 import { DeploymentService } from '../src/modules/deployments/service.ts';
 import { InstanceService } from '../src/modules/instances/service.ts';
+import { TaskService } from '../src/modules/tasks/service.ts';
+import { Collections, type Task } from '../src/domain.ts';
 
 const newCtx = () => { let n = 0; return makeContext({ store: new MemoryStore(), tenantId: 't1', clock: fakeClock().clock, newId: () => `id${++n}` }); };
 async function deploy(ctx: AppContext, name: string, mk: (k: string, n: string) => any) {
@@ -37,6 +39,31 @@ test('throw signal resumes another instance waiting on it (cross-instance broadc
 
   const after = await inst.get(a.id);
   assert.strictEqual(after.status, 'completed', 'waiter resumed by the broadcast signal');
+});
+
+test('throw escalation resumes a catch configured for escalation (not just plain signal)', async () => {
+  // Escalation has no dedicated WaitSpec kind — it buckets into 'signal' on both the catch side (see
+  // catch/handler.ts) and the throw/end-throw side (see throw/handler.ts, end/handler.ts). This is the
+  // one case none of the other signal/message tests in this file exercise: a catch node configured
+  // with event.escalation specifically, not event.signal — the catch handler was previously missing
+  // this branch entirely and fell through to a plain 'condition' wait that broadcast() never resolves,
+  // so the waiter parked forever no matter how many times the matching escalation was thrown.
+  const ctx = newCtx();
+  const waiter = await deploy(ctx, 'Escalation Waiter', (key, name) => ({ id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
+    nodes: [{ id: 's', type: 'start' }, { id: 'w', type: 'catch', name: 'Await Delay', event: { escalation: 'Delay' } }, { id: 'e', type: 'end' }],
+    flows: [{ id: 'f1', from: 's', to: 'w' }, { id: 'f2', from: 'w', to: 'e' }] }] }));
+  const thrower = await deploy(ctx, 'Escalation Thrower', (key, name) => ({ id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
+    nodes: [{ id: 's', type: 'start' }, { id: 't', type: 'throw', name: 'Fire Delay', event: { escalation: 'Delay' } }, { id: 'e', type: 'end' }],
+    flows: [{ id: 'f1', from: 's', to: 't' }, { id: 'f2', from: 't', to: 'e' }] }] }));
+
+  const inst = new InstanceService(ctx);
+  const a = await inst.start({ workflowId: waiter.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(a.status, 'waiting');
+  assert.strictEqual(a.tokens[0]!.waitFor?.kind, 'signal', 'escalation catch waits via the signal-bucket kind, not a dead-end condition wait');
+  await inst.start({ workflowId: thrower.id, environment: 'prod' }, 'bob');
+
+  const after = await inst.get(a.id);
+  assert.strictEqual(after.status, 'completed', 'waiter resumed by the broadcast escalation');
 });
 
 test('an end event with a signal/message/escalation throw broadcasts before completing', async () => {
@@ -141,4 +168,61 @@ test('multi-instance fails the whole node (does not silently drop the result) wh
 
   const p = await new InstanceService(ctx).start({ workflowId: parent.id, environment: 'prod', variables: { items: [1, 2, 3] } }, 'bob');
   assert.strictEqual(p.status, 'failed', 'a failing item fails the whole multi-instance node, not a silently incomplete result');
+});
+
+test('multi-instance parallel:true parks (not fails) when a per-item child waits on a human task, then resumes once every sibling completes', async () => {
+  const ctx = newCtx();
+  await deploy(ctx, 'Approver', (key, name) => ({ id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [{ name: 'item', type: 'int' }, { name: 'decision', type: 'string' }],
+    nodes: [{ id: 's', type: 'start' }, { id: 't', type: 'userTask', name: 'Approve', group: 'ops' }, { id: 'e', type: 'end' }],
+    flows: [{ id: 'f1', from: 's', to: 't' }, { id: 'f2', from: 't', to: 'e' }] }] }));
+  const parent = await deploy(ctx, 'Approval Batch', (key, name) => ({ id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [{ name: 'items', type: 'list' }, { name: 'results', type: 'list' }],
+    nodes: [{ id: 's', type: 'start' }, { id: 'mi', type: 'forEach', name: 'Per item', process: 'approver.process', over: 'items', as: 'item', itemResult: 'decision', collectInto: 'results', parallel: true }, { id: 'e', type: 'end' }],
+    flows: [{ id: 'f1', from: 's', to: 'mi' }, { id: 'f2', from: 'mi', to: 'e' }] }] }));
+
+  const instSvc = new InstanceService(ctx);
+  const taskSvc = new TaskService(ctx);
+  const p = await instSvc.start({ workflowId: parent.id, environment: 'prod', variables: { items: [1, 2] } }, 'bob');
+  assert.strictEqual(p.status, 'waiting', 'parks instead of failing while children are still running their own task');
+  assert.ok(p.tokens.some((t) => t.waitFor?.kind === 'multiInstance'), 'forEach token records a multiInstance wait');
+
+  const rel = await instSvc.related(p.id);
+  assert.strictEqual(rel.children.length, 2, 'both items start their child immediately (parallel)');
+  const tasks = await ctx.store.repo<Task>(Collections.tasks).query((t) => rel.children.some((c) => c.id === t.instanceId));
+  assert.strictEqual(tasks.length, 2);
+
+  await taskSvc.complete(tasks[0]!.id, { decision: 'ok-1' }, 'carol');
+  assert.strictEqual((await instSvc.get(p.id)).status, 'waiting', 'still waiting on the second sibling');
+
+  await taskSvc.complete(tasks[1]!.id, { decision: 'ok-2' }, 'carol');
+  const done = await instSvc.get(p.id);
+  assert.strictEqual(done.status, 'completed', 'resumes once every sibling has settled');
+  assert.strictEqual((done.variables.results as unknown[]).length, 2, 'collected both results');
+  assert.ok((done.variables.results as string[]).includes('ok-1') && (done.variables.results as string[]).includes('ok-2'));
+});
+
+test('multi-instance sequential (default) starts the next item only once the previous child\'s task is completed', async () => {
+  const ctx = newCtx();
+  await deploy(ctx, 'Seq Approver', (key, name) => ({ id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [{ name: 'item', type: 'int' }, { name: 'decision', type: 'string' }],
+    nodes: [{ id: 's', type: 'start' }, { id: 't', type: 'userTask', name: 'Approve', group: 'ops' }, { id: 'e', type: 'end' }],
+    flows: [{ id: 'f1', from: 's', to: 't' }, { id: 'f2', from: 't', to: 'e' }] }] }));
+  const parent = await deploy(ctx, 'Seq Approval Batch', (key, name) => ({ id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [{ name: 'items', type: 'list' }, { name: 'results', type: 'list' }],
+    nodes: [{ id: 's', type: 'start' }, { id: 'mi', type: 'forEach', name: 'Per item', process: 'seq-approver.process', over: 'items', as: 'item', itemResult: 'decision', collectInto: 'results' }, { id: 'e', type: 'end' }],
+    flows: [{ id: 'f1', from: 's', to: 'mi' }, { id: 'f2', from: 'mi', to: 'e' }] }] }));
+
+  const instSvc = new InstanceService(ctx);
+  const taskSvc = new TaskService(ctx);
+  const p = await instSvc.start({ workflowId: parent.id, environment: 'prod', variables: { items: [1, 2, 3] } }, 'bob');
+  assert.strictEqual(p.status, 'waiting');
+  assert.strictEqual((await instSvc.related(p.id)).children.length, 1, 'sequential starts only the first item up front');
+
+  for (let i = 0; i < 3; i++) {
+    const rel = await instSvc.related(p.id);
+    assert.strictEqual(rel.children.length, i + 1, `item ${i + 1} started only after the previous one settled`);
+    const openTask = (await ctx.store.repo<Task>(Collections.tasks).query((t) => t.instanceId === rel.children[i]!.id && t.status === 'created'))[0]!;
+    await taskSvc.complete(openTask.id, { decision: `ok-${i + 1}` }, 'carol');
+  }
+
+  const done = await instSvc.get(p.id);
+  assert.strictEqual(done.status, 'completed', 'resumes once the last item in sequence completes');
+  assert.deepStrictEqual(done.variables.results, ['ok-1', 'ok-2', 'ok-3'], 'results collected in item order');
 });

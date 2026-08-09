@@ -1,10 +1,12 @@
 import { Component, EventEmitter, Input, Output, signal } from '@angular/core';
 import type { Problem } from '../../core/models';
+import { IconComponent } from '../../shared/icon.component';
 
 // Collapsible problems strip (like a designer's "Problems" view). Click a problem to jump to its node.
 @Component({
   selector: 'app-problems-panel',
   standalone: true,
+  imports: [IconComponent],
   template: `
     <div class="problems" [class.collapsed]="collapsed()">
       <div class="ph" (click)="collapsed.set(!collapsed())">
@@ -12,13 +14,13 @@ import type { Problem } from '../../core/models';
         <span class="lbl">Problems</span>
         @if (errorCount) { <span class="pill err">{{ errorCount }} error{{ errorCount === 1 ? '' : 's' }}</span> }
         @if (warnCount) { <span class="pill warn">{{ warnCount }} warning{{ warnCount === 1 ? '' : 's' }}</span> }
-        @if (!errorCount && !warnCount) { <span class="pill ok">✓ No problems</span> }
+        @if (!errorCount && !warnCount) { <span class="pill ok"><app-icon name="check" [size]="13" /> No problems</span> }
       </div>
       @if (!collapsed() && problems.length) {
         <div class="plist">
           @for (p of problems; track $index) {
             <div class="prow" [class.err]="p.severity === 'error'" (click)="pick.emit(p.nodeId || p.flowId || '')">
-              <span class="ic">{{ p.severity === 'error' ? '⛔' : '⚠️' }}</span>
+              <app-icon class="ic" [name]="p.severity === 'error' ? 'error' : 'warning'" [size]="14" />
               <span class="msg">{{ p.message }}</span>
               <span class="rule">{{ p.rule }}</span>
             </div>
@@ -32,12 +34,12 @@ import type { Problem } from '../../core/models';
     .problems.collapsed { max-height: 34px; }
     .ph { display: flex; align-items: center; gap: 8px; padding: 8px 14px; cursor: pointer; font-size: 13px; user-select: none; }
     .chev { color: var(--muted); width: 12px; } .lbl { font-weight: 600; }
-    .pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
-    .pill.err { background: #fdeaea; color: var(--red); } .pill.warn { background: #fef3e2; color: #b45309; } .pill.ok { background: #e7f7ee; color: var(--green); }
+    .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+    .pill.err { background: var(--red-bg); color: var(--red); } .pill.warn { background: #fef3e2; color: #b45309; } .pill.ok { background: var(--green-bg); color: var(--green); }
     .plist { overflow: auto; }
     .prow { display: flex; align-items: center; gap: 10px; padding: 7px 14px; border-top: 1px solid #f1f2f6; cursor: pointer; font-size: 13px; }
-    .prow:hover { background: #f8f9fc; }
-    .ic { flex: 0 0 auto; } .msg { flex: 1; } .rule { color: var(--muted); font-size: 11px; font-family: ui-monospace, Menlo, monospace; }
+    .prow:hover { background: var(--surface-2); }
+    .ic { flex: 0 0 auto; } .msg { flex: 1; } .rule { color: var(--muted); font-size: 12px; font-family: ui-monospace, Menlo, monospace; }
   `],
 })
 export class ProblemsPanelComponent {
@@ -45,5 +47,8 @@ export class ProblemsPanelComponent {
   @Input() errorCount = 0;
   @Input() warnCount = 0;
   @Output() pick = new EventEmitter<string>();
-  collapsed = signal(false);
+  // Collapsed by default: expanded it consumed ~40% of the builder's height, squeezing the canvas —
+  // the thing you're actually working in — into a strip. The header still shows the problem count,
+  // so nothing is hidden; you opt in to the detail.
+  collapsed = signal(true);
 }

@@ -125,9 +125,37 @@ test('signal delivery resumes a waiting catch-signal token', async () => {
   assert.deepStrictEqual(done.variables['Approve'], { by: 'ops' }, 'signal payload bound to a variable');
 });
 
-test('node re-trigger drops a fresh token and re-runs the node', async () => {
+// Fixture has a real wait point (an unresolved signal catch) so the instance stays 'running'/'waiting'
+// — not completed — while we exercise retry. A completed instance is a separate, terminal case (see
+// the "rejected on a terminal instance" tests below): retrying a node there would silently resurrect
+// a finished process (flip it back to 'running' and let it run further, possibly re-completing or
+// failing) rather than erroring, which is exactly the bug this fixture used to paper over by using a
+// process with no wait point at all — it always completed immediately, so this test never actually
+// exercised "retry while still active" vs. "retry after completion" as two different cases.
+test('node re-trigger drops a fresh token and re-runs the node (while the instance is still active)', async () => {
   const ctx = newCtx();
   const { wf } = await deployWorkflow(ctx, 'Retry WF', (key, name) => ({
+    id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
+      nodes: [
+        { id: 'start', type: 'start' }, { id: 'work', type: 'manual', name: 'Work' },
+        { id: 'wait', type: 'catch', event: { signal: 'NEVER' } }, { id: 'end', type: 'end' },
+      ],
+      flows: [{ from: 'start', to: 'work' }, { from: 'work', to: 'wait' }, { from: 'wait', to: 'end' }] }],
+  }));
+  const instSvc = new InstanceService(ctx);
+  const inst = await instSvc.start({ workflowId: wf.id, environment: 'prod' }, 'bob');
+  assert.strictEqual(inst.status, 'waiting');
+  const firstVisits = inst.history.filter((h) => h.nodeId === 'work').length;
+
+  await instSvc.retry(inst.id, 'work', 'ops');
+  const after = await instSvc.get(inst.id);
+  assert.strictEqual(after.status, 'waiting', 'still parked at the signal catch — retry does not force completion');
+  assert.strictEqual(after.history.filter((h) => h.nodeId === 'work').length, firstVisits + 1, 'work node ran again');
+});
+
+test('retry and signal are rejected on a terminal (completed) instance', async () => {
+  const ctx = newCtx();
+  const { wf } = await deployWorkflow(ctx, 'Terminal Retry WF', (key, name) => ({
     id: key, name, processes: [{ id: `${key}.process`, name, package: 'com.acme', vars: [],
       nodes: [{ id: 'start', type: 'start' }, { id: 'work', type: 'manual', name: 'Work' }, { id: 'end', type: 'end' }],
       flows: [{ from: 'start', to: 'work' }, { from: 'work', to: 'end' }] }],
@@ -135,10 +163,11 @@ test('node re-trigger drops a fresh token and re-runs the node', async () => {
   const instSvc = new InstanceService(ctx);
   const inst = await instSvc.start({ workflowId: wf.id, environment: 'prod' }, 'bob');
   assert.strictEqual(inst.status, 'completed');
-  const firstVisits = inst.history.filter((h) => h.nodeId === 'work').length;
+  const historyLenBefore = inst.history.length;
 
-  await instSvc.retry(inst.id, 'work', 'ops');
+  await assert.rejects(instSvc.retry(inst.id, 'work', 'ops'), /completed/);
+  await assert.rejects(instSvc.signal(inst.id, 'anything', undefined, 'ops'), /completed/);
   const after = await instSvc.get(inst.id);
-  assert.strictEqual(after.status, 'completed');
-  assert.strictEqual(after.history.filter((h) => h.nodeId === 'work').length, firstVisits + 1, 'work node ran again');
+  assert.strictEqual(after.status, 'completed', 'rejection did not mutate the instance');
+  assert.strictEqual(after.history.length, historyLenBefore, 'no new history entries from the rejected calls');
 });

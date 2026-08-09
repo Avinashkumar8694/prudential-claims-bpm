@@ -25,7 +25,13 @@ export interface GraphCtx {
 const isStart = (n: EngineNode) => n.type === 'start';
 const isEnd = (n: EngineNode) => n.type === 'end';
 const isBoundary = (n: EngineNode) => n.type === 'boundary';
-const isEventSub = (n: EngineNode) => n.type === 'subprocess' && !!(n as any).on?.error;
+// Presence check, not truthy: a catch-all event sub-process is declared with `on: { error: '' }` (the
+// same convention already fixed for boundary/end/throw catches elsewhere in this file — see the
+// node-config rule below) — a truthy check here treats that legitimate catch-all as "not an event
+// sub-process at all", wrongly subjecting it to the ordinary connectivity/reachability rules an event
+// sub-process is specifically exempt from (it has no incoming/outgoing flow by design; see boundary/
+// handler.ts's own isErrorCatch, which already gets this right via hasOwnProperty).
+const isEventSub = (n: EngineNode) => n.type === 'subprocess' && !!(n as any).on && Object.prototype.hasOwnProperty.call((n as any).on, 'error');
 const label = (n: EngineNode) => n.name || n.id || n.type;
 
 function buildCtx(process: EngineProcess): GraphCtx {
@@ -128,6 +134,24 @@ export const RULES: Rule[] = [
     return out;
   } },
 
+  // A node type absent from NODE_DEF_BY_TYPE (chiefly 'raw' — the SDK's escape hatch for a BPMN
+  // construct it doesn't structurally understand, e.g. an ad-hoc sub-process or an unrecognized service
+  // task implementation) is invisible to every other structural rule here: connection-cardinality and
+  // flow-direction both guard on `NODE_DEF_BY_TYPE[n.type]` and silently skip it, and it renders on the
+  // canvas with no real configuration surface. Without this rule, importing a real jBPM project with one
+  // of these constructs reports "no problems" while actually having silently dropped part of the
+  // process's logic — caught by testing real jbpm-playground/businessautomation-cop examples, where an
+  // ad-hoc sub-process's entire nested task list disappears into one opaque raw blob with zero warning.
+  { id: 'unsupported-construct', description: 'Every node type must be understood by this engine (not the raw/opaque fallback)', run: (c) => {
+    const out: Problem[] = [];
+    for (const n of c.nodes) {
+      if (!NODE_DEF_BY_TYPE[n.type]) {
+        out.push(P('unsupported-construct', 'warning', `"${label(n)}" (${n.type}) is a construct this engine doesn't structurally support — imported as opaque data; it will not execute as intended and needs manual reconstruction`, { nodeId: n.id }));
+      }
+    }
+    return out;
+  } },
+
   { id: 'node-connected', description: 'Activities/gateways/events must be connected (no floating nodes)', run: (c) => {
     const out: Problem[] = [];
     for (const n of c.nodes) {
@@ -185,10 +209,36 @@ export const RULES: Rule[] = [
         case 'call': if (!a.process) out.push(P('node-config', 'error', `Call activity "${label(n)}" has no called process`, { nodeId: n.id })); break;
         case 'forEach': if (!a.process) out.push(P('node-config', 'error', `Multi-instance "${label(n)}" has no process`, { nodeId: n.id }));
           if (!a.over) out.push(P('node-config', 'error', `Multi-instance "${label(n)}" has no collection`, { nodeId: n.id })); break;
-        case 'rule': if (!a.ruleflowGroup && !a.dmn) out.push(P('node-config', 'error', `Business rule "${label(n)}" references neither a ruleflow group nor a DMN decision`, { nodeId: n.id })); break;
+        case 'rule': if (!a.ruleflowGroup && !a.dmn && !a.decisionTree && !a.scorecard) out.push(P('node-config', 'error', `Business rule "${label(n)}" references no ruleflow group, DMN decision, decision tree, or scorecard`, { nodeId: n.id })); break;
         case 'send': if (!a.message) out.push(P('node-config', 'error', `Send task "${label(n)}" has no message`, { nodeId: n.id })); break;
         case 'receive': if (!a.message) out.push(P('node-config', 'error', `Receive task "${label(n)}" has no message`, { nodeId: n.id })); break;
         case 'gateway': if (!a.mode) out.push(P('node-config', 'error', `Gateway "${label(n)}" has no mode`, { nodeId: n.id })); break;
+        // A throw kind (error/signal/message/escalation) is "selected" the moment its key exists on
+        // throw/event — the properties panel writes e.g. `{ signal: '' }` the instant you pick Signal
+        // from the dropdown, before you've typed a name. Both end/handler.ts and throw/handler.ts
+        // check the NAME truthily (`throw?.signal`, `ev.signal`, etc.), so a blank one is silently a
+        // no-op at runtime (an "error end" that just completes normally, a "throw signal" that throws
+        // nothing) — the process still runs, just not as configured, with no error anywhere. Catching
+        // it here at publish time, the same way the DRL/DMN check above already does, is far safer
+        // than a live instance silently completing when the author expects it to fail or broadcast.
+        case 'end': case 'throw': {
+          const o = (n.type === 'end' ? a.throw : a.event) || {};
+          const label2 = n.type === 'end' ? 'End' : 'Throw';
+          for (const k of ['error', 'signal', 'message', 'escalation']) {
+            if (k in o && !String(o[k] ?? '').trim()) out.push(P('node-config', 'error', `${label2} "${label(n)}" is set to throw ${k === 'error' ? 'an error' : k} but has no ${k === 'error' ? 'code' : 'name'}`, { nodeId: n.id }));
+          }
+          break;
+        }
+        // A blank message/signal on a catch falls through catch/handler.ts's if-chain to a
+        // condition-wait instead — silently waiting on the wrong thing, forever, rather than the
+        // message/signal the author actually picked.
+        case 'catch': {
+          const o = a.event || {};
+          for (const k of ['message', 'signal']) {
+            if (k in o && !String(o[k] ?? '').trim()) out.push(P('node-config', 'error', `Catch "${label(n)}" is set to wait on a ${k} but has no name`, { nodeId: n.id }));
+          }
+          break;
+        }
       }
     }
     return out;

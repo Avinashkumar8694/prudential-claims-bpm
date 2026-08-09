@@ -1,256 +1,396 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { JsonPipe, SlicePipe } from '@angular/common';
-import { ApiService } from '../../core/api.service';
-import { RealtimeService } from '../../core/realtime.service';
-import type { Deployment, Instance } from '../../core/models';
+import { SlicePipe } from '@angular/common';
+import { InstanceApiService } from '../../core/api/instance-api.service';
+import { DeploymentApiService } from '../../core/api/deployment-api.service';
+import { WorkflowApiService } from '../../core/api/workflow-api.service';
+import { ToastService } from '../../shared/toast.service';
+import { ModalService } from '../../shared/modal.service';
+import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
+import type { Deployment, Instance, Workflow } from '../../core/models';
+import { IconComponent } from '../../shared/icon.component';
 
-const VISUAL: Record<string, { icon: string; color: string }> = {
-  start: { icon: '▶', color: '#16a34a' }, end: { icon: '■', color: '#dc2626' }, script: { icon: '{ }', color: '#0891b2' },
-  http: { icon: '🌐', color: '#0d9488' }, userTask: { icon: '👤', color: '#2563eb' }, rule: { icon: '📐', color: '#ea580c' },
-  send: { icon: '📤', color: '#16a34a' }, receive: { icon: '📥', color: '#16a34a' }, manual: { icon: '✋', color: '#64748b' },
-  gateway: { icon: '◇', color: '#f59e0b' }, catch: { icon: '⏱', color: '#7c3aed' }, throw: { icon: '📣', color: '#7c3aed' },
-  boundary: { icon: '⚠', color: '#dc2626' }, subprocess: { icon: '▭', color: '#4f46e5' }, call: { icon: '⇥', color: '#4f46e5' }, forEach: { icon: '⇶', color: '#4f46e5' }, workItem: { icon: '⚙', color: '#0891b2' },
-};
-const NW = 150, NH = 52;
-type Tab = 'details' | 'variables' | 'logs' | 'diagram';
-const STATES: { key: string; label: string; match: (s: string) => boolean }[] = [
-  { key: '', label: 'All', match: () => true },
-  { key: 'active', label: 'Active', match: (s) => s === 'running' || s === 'waiting' },
-  { key: 'completed', label: 'Completed', match: (s) => s === 'completed' },
-  { key: 'aborted', label: 'Aborted', match: (s) => s === 'aborted' },
-  { key: 'failed', label: 'Errors', match: (s) => s === 'failed' },
-  { key: 'suspended', label: 'Suspended', match: (s) => s === 'suspended' },
-];
+const STATUSES = ['running', 'waiting', 'suspended', 'failed', 'completed', 'aborted'] as const;
+interface SavedFilter { name: string; stateSet: string[]; errorsOnly: boolean; q: string; qBy: string; projectFilter: string; isDefault?: boolean; }
+const SAVED_KEY = 'instances.savedFilters';
 
+// Top-level page (like Tasks/Deployments) — a running instance always belongs to one project, but
+// browsing/managing instances is a cross-project concern (jBPM's own Manage > Process Instances works
+// the same way). Detail lives at its own route (/instances/:id, see instance-detail.component.ts) —
+// this page is list + persistent filter rail only, matching ux_design/mockups/instances-list.html.
 @Component({
   selector: 'app-instances',
   standalone: true,
-  imports: [RouterLink, FormsModule, JsonPipe, SlicePipe],
+  imports: [IconComponent, RouterLink, FormsModule, SlicePipe, BreadcrumbComponent],
   template: `
     <div class="page">
+      <div class="crumbwrap"><app-breadcrumb [crumbs]="[{ label: 'Instances' }]" /></div>
       <header class="pagehead">
-        <a class="icon-btn" [routerLink]="wfId ? ['/projects', wfId] : ['/projects']" title="Back">‹</a>
         <h1>Process Instances</h1>
         <span class="spacer"></span>
-        <button class="btn" (click)="reload()">↻ Refresh</button>
+        <button class="btn" (click)="reload()"><app-icon name="refresh" [size]="14" /> Refresh</button>
+        <a class="btn primary" [routerLink]="['/instances/start']"><app-icon name="play" [size]="14" /> New Instance</a>
       </header>
+      <p class="muted sub">Every process instance the engine is tracking, filterable by state and variables.</p>
 
-      <div class="split">
+      <div class="layout">
+        <!-- FILTER RAIL (ux_design/mockups/instances-list.html) — persistent, not a flyout. -->
+        <aside class="rail card">
+          <div class="rail-h">
+            <span class="section-title">Filters</span>
+            <span class="spacer"></span>
+            <button class="btn ghost sm" (click)="resetFilters()">Reset</button>
+          </div>
+
+          <div class="section-title">State</div>
+          @for (st of statuses; track st) {
+            <label class="ck">
+              <input type="checkbox" [checked]="stateSet().has(st)" (change)="toggleState(st)" />
+              <span class="dot" [style.background]="statusColor(st)"></span>{{ st }}
+              <span class="spacer"></span><span class="ct">{{ countByStatus()[st] || 0 }}</span>
+            </label>
+          }
+          <label class="ck errs">
+            <input type="checkbox" [checked]="errorsOnly()" (change)="errorsOnly.set(!errorsOnly())" />
+            Has errors only
+          </label>
+
+          <div class="section-title">Filter by</div>
+          <input class="rail-in" placeholder="PIID / correlation key" [ngModel]="q()" (ngModelChange)="q.set($event); page.set(1)" aria-label="Filter by id or correlation key" />
+          <input class="rail-in" placeholder="Initiator" [ngModel]="qBy()" (ngModelChange)="qBy.set($event); page.set(1)" aria-label="Filter by initiator" />
+
+          <div class="section-title">Project</div>
+          <select class="rail-in" [ngModel]="projectFilter()" (ngModelChange)="setProjectFilter($event)" aria-label="Filter by project">
+            <option value="">All projects</option>
+            @for (w of workflows(); track w.id) { <option [value]="w.id">{{ w.name }}</option> }
+          </select>
+
+          <div class="section-title">Saved filters</div>
+          @if (savedFilters().length) {
+            <div class="savedlist">
+              @for (sf of savedFilters(); track sf.name) {
+                <div class="savedrow">
+                  <button class="lnkbtn" (click)="applySaved(sf)"><app-icon [name]="sf.isDefault ? 'success' : 'file'" [size]="12" /> {{ sf.name }}</button>
+                  <button class="btn ghost sm" (click)="deleteSaved(sf.name)" title="Delete"><app-icon name="close" [size]="11" /></button>
+                </div>
+              }
+            </div>
+          } @else { <p class="muted sm">None yet.</p> }
+          <button class="btn sm" style="width:100%; margin-top:6px;" (click)="saveCurrentFilter()">+ Save current filters</button>
+        </aside>
+
         <!-- LIST -->
-        <div class="list card">
-          <div class="filters">
-            @for (st of states; track st.key) {
-              <button class="fchip" [class.on]="stateFilter === st.key" (click)="setFilter(st.key)">{{ st.label }} <span class="ct">{{ countFor(st) }}</span></button>
+        <div class="listcol">
+          @if (selectedIds().size) {
+            <div class="bulkbar">
+              <span>{{ selectedIds().size }} selected</span>
+              <button class="btn sm" (click)="bulkSuspend()">Suspend</button>
+              <button class="btn sm" (click)="bulkResume()">Resume</button>
+              <button class="btn sm danger" (click)="bulkAbort()">Abort</button>
+              <span class="spacer"></span>
+            </div>
+          }
+          <div class="list card">
+            <table>
+              <thead><tr>
+                <th></th>
+                <th>PIID</th><th>Process</th><th>Status</th><th>Initiator</th>
+                <th class="sortable" (click)="sortDesc.set(!sortDesc())">Started <span class="sort-ic">{{ sortDesc() ? '▼' : '▲' }}</span></th>
+                <th>Duration</th><th>Errors</th><th></th>
+              </tr></thead>
+              <tbody>
+                @for (i of paged(); track i.id) {
+                  <tr [class.sel]="selectedIds().has(i.id)">
+                    <td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="selectedIds().has(i.id)" (change)="toggleSelect(i.id)" /></td>
+                    <td class="mono piid"><a [routerLink]="['/instances', i.id]" [title]="i.id">{{ shortId(i.id) }}</a></td>
+                    <td><a class="plain" [routerLink]="['/instances', i.id]">{{ procName(i) }}</a><div class="proj muted">{{ projectName(i.workflowId) }}</div></td>
+                    <td><span class="badge" [style.color]="statusColor(i.status)">{{ i.status }}</span></td>
+                    <td>{{ i.startedBy }}</td>
+                    <td class="muted">{{ ago(i.startedAt) }}</td>
+                    <td class="muted">{{ duration(i) }}</td>
+                    <td><span class="err-badge" [class.has]="i.status === 'failed'">{{ i.status === 'failed' ? 1 : 0 }}</span></td>
+                    <td class="menucell" (click)="$event.stopPropagation()">
+                      <button class="kebab" (click)="openMenu($event, i.id)" aria-label="Row actions" aria-haspopup="menu"><app-icon name="more" [size]="15" /></button>
+                    </td>
+                  </tr>
+                }
+                @if (filtered().length === 0) {
+                  <tr><td colspan="9">
+                    @if (hasFilters()) {
+                      <div class="empty-state">
+                        <div class="es-icon"><app-icon name="search" [size]="24" /></div>
+                        <h3>No instances match these filters</h3>
+                        <p>Loosen the state checkboxes or clear the text filters on the left.</p>
+                        <button class="btn" (click)="resetFilters()">Reset filters</button>
+                      </div>
+                    } @else {
+                      <div class="empty-state">
+                        <div class="es-icon"><app-icon name="instances" [size]="24" /></div>
+                        <h3>No instances yet</h3>
+                        <p>Start one from a deployed process to see it here.</p>
+                        <a class="btn" [routerLink]="['/instances/start']">Start an instance</a>
+                      </div>
+                    }
+                  </td></tr>
+                }
+              </tbody>
+            </table>
+            @if (filtered().length > 0) {
+              <div class="pager">
+                <span class="muted">Showing {{ pageStart() + 1 }}–{{ pageEnd() }} of {{ filtered().length }}</span>
+                <span class="spacer"></span>
+                <span class="muted">Rows</span>
+                <select class="rows-sel" [ngModel]="pageSize()" (ngModelChange)="pageSize.set(+$event); page.set(1)" aria-label="Rows per page">
+                  <option [value]="10">10</option><option [value]="20">20</option><option [value]="50">50</option><option [value]="100">100</option>
+                </select>
+                <button class="btn sm" [disabled]="page() === 1" (click)="page.set(page() - 1)">‹ Prev</button>
+                <button class="btn sm" [disabled]="pageEnd() >= filtered().length" (click)="page.set(page() + 1)">Next ›</button>
+              </div>
             }
           </div>
-          <table>
-            <thead><tr><th>Id</th><th>Process</th><th>Version</th><th>Last update</th><th>Errors</th><th></th></tr></thead>
-            <tbody>
-              @for (i of filtered(); track i.id) {
-                <tr (click)="open(i.id)" [class.sel]="sel()?.id === i.id">
-                  <td class="mono">{{ i.id | slice:0:8 }}</td>
-                  <td>{{ procName(i) }}<div class="st"><span class="dot" [style.background]="statusColor(i.status)"></span>{{ i.status }}</div></td>
-                  <td class="muted">{{ version(i) }}</td>
-                  <td class="muted">{{ (i.endedAt || i.startedAt) | slice:0:19 }}</td>
-                  <td><span class="err-badge" [class.has]="i.status === 'failed'">{{ i.status === 'failed' ? 1 : 0 }}</span></td>
-                  <td><button class="kebab" (click)="$event.stopPropagation(); open(i.id)">⋮</button></td>
-                </tr>
-              }
-              @if (filtered().length === 0) { <tr><td colspan="6" class="muted pad">No instances match this filter.</td></tr> }
-            </tbody>
-          </table>
         </div>
-
-        <!-- DETAIL -->
-        @if (sel(); as s) {
-          <div class="detail card">
-            <div class="d-head">
-              <div><b>{{ s.id | slice:0:8 }}</b> · {{ procName(s) }}
-                <span class="badge" [style.color]="statusColor(s.status)">{{ s.status }}</span></div>
-              <span class="spacer"></span>
-              @if (s.status !== 'completed' && s.status !== 'aborted') {
-                <button class="btn" (click)="suspendResume(s)">{{ s.status === 'suspended' ? 'Resume' : 'Suspend' }}</button>
-                <button class="btn danger" (click)="abort(s)">Abort</button>
-              }
-            </div>
-            @if (s.error) { <div class="err-box">⚠ {{ s.error.nodeId }}: {{ s.error.message }}</div> }
-
-            <nav class="tabs">
-              @for (t of tabs; track t.key) { <button [class.active]="tab() === t.key" (click)="tab.set(t.key)">{{ t.label }}</button> }
-            </nav>
-
-            <div class="tabbody">
-              @switch (tab()) {
-                @case ('diagram') {
-                  <div class="diagram-wrap">
-                    <aside class="rel">
-                      <div class="rel-h">Parent instance</div>
-                      @if (parent()) { <button class="chip-btn" (click)="open(parent()!.id)">⬆ {{ parent()!.id | slice:0:8 }}</button> } @else { <div class="muted sm">None</div> }
-                      <div class="rel-h">Sub-process instances</div>
-                      @if (children().length) { @for (c of children(); track c.id) { <button class="chip-btn" (click)="open(c.id)">⬇ {{ c.id | slice:0:8 }} <span class="badge" [style.color]="statusColor(c.status)">{{ c.status }}</span></button> } } @else { <div class="muted sm">None</div> }
-                    </aside>
-                    <div class="dcanvas">
-                      <div class="legend">Node badges show <b>execution count</b>. <span class="lg active"></span> active · <span class="lg visited"></span> visited</div>
-                      <div class="dwrap" [style.height.px]="dh()" [style.width.px]="dw()">
-                        <svg class="edges" [attr.width]="dw()" [attr.height]="dh()">
-                          <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c2c8d4"/></marker></defs>
-                          @for (e of graph().flows; track $index) { <path [attr.d]="edge(e)" class="ge" marker-end="url(#ar)" /> }
-                        </svg>
-                        @for (n of laid(); track n.id) {
-                          <div class="gn" [style.left.px]="n.x" [style.top.px]="n.y" [style.width.px]="NW"
-                               [class.active]="isActive(n.id)" [class.visited]="count(n.id) > 0" [class.picked]="picked() === n.id" (click)="picked.set(n.id)">
-                            <span class="gc" [style.background]="visual(n.type).color">{{ visual(n.type).icon }}</span>
-                            <span class="gnm">{{ n.name || n.id }}</span>
-                            @if (count(n.id) > 0) { <span class="bc" title="executed {{ count(n.id) }}×">{{ count(n.id) }}</span> }
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  </div>
-                  <div class="ops">
-                    <div class="op"><label>Signal / message</label><div class="row"><input placeholder="signal name" [(ngModel)]="sigName" /><button class="btn primary" [disabled]="!sigName" (click)="sendSignal(s)">Send</button></div></div>
-                    <div class="op"><label>Re-trigger node {{ picked() ? '(' + picked() + ')' : '' }}</label><div class="row"><button class="btn" [disabled]="!picked()" (click)="retry(s)">Re-trigger selected node</button><span class="muted sm">Works after completion too — replays the node.</span></div></div>
-                  </div>
-                }
-                @case ('variables') {
-                  @if (varRows(s).length) { <table class="kv"><tbody>@for (kv of varRows(s); track kv[0]) { <tr><td class="k">{{ kv[0] }}</td><td class="v">{{ kv[1] }}</td></tr> }</tbody></table> } @else { <p class="muted pad">No variables.</p> }
-                }
-                @case ('logs') {
-                  <table class="logs"><thead><tr><th>#</th><th>Node</th><th>Type</th><th>Entered</th><th>Exited</th><th>Outcome</th></tr></thead>
-                    <tbody>@for (h of s.history; track $index) { <tr><td class="muted">{{ $index + 1 }}</td><td><b>{{ nodeName(h.nodeId) }}</b></td><td class="muted">{{ h.type }}</td><td class="muted mono">{{ h.enteredAt | slice:11:19 }}</td><td class="muted mono">{{ h.exitedAt | slice:11:19 }}</td><td>{{ h.outcome }}</td></tr> }</tbody></table>
-                  @if (!s.history.length) { <p class="muted pad">No log entries.</p> }
-                }
-                @default {
-                  <table class="kv"><tbody>
-                    <tr><td class="k">Status</td><td><span class="badge" [style.color]="statusColor(s.status)">{{ s.status }}</span></td></tr>
-                    <tr><td class="k">Process</td><td>{{ procName(s) }}</td></tr>
-                    <tr><td class="k">Version</td><td>{{ version(s) }}</td></tr>
-                    <tr><td class="k">Started</td><td class="mono">{{ s.startedAt | slice:0:19 }}</td></tr>
-                    <tr><td class="k">Ended</td><td class="mono">{{ (s.endedAt || '—') | slice:0:19 }}</td></tr>
-                    <tr><td class="k">Correlation</td><td>{{ s.correlationKey || '—' }}</td></tr>
-                    <tr><td class="k">Nodes executed</td><td>{{ s.history.length }}</td></tr>
-                  </tbody></table>
-                }
-              }
-            </div>
-          </div>
-        } @else { <div class="detail card empty"><p class="muted">Select a process instance.</p></div> }
       </div>
+
+      <!-- Rendered fixed + outside .list on purpose: .list scrolls horizontally (min-width: 720px
+           table), and any scrolling ancestor also clips this menu's overflow-y, cutting it down to a
+           sliver. Positioning it here at page level, placed via the kebab's own screen coordinates,
+           sidesteps that entirely. -->
+      @if (menuInstance(); as i) {
+        <div class="rowmenu card" [style.top.px]="menuPos().top" [style.left.px]="menuPos().left" (click)="$event.stopPropagation()">
+          <a class="mrow" [routerLink]="['/tasks']" [queryParams]="{instanceId: i.id}" (click)="menuFor.set(null)"><app-icon name="tasks" [size]="13" /> View tasks</a>
+          <a class="mrow" [routerLink]="['/errors']" [queryParams]="{instanceId: i.id}" (click)="menuFor.set(null)"><app-icon name="warning" [size]="13" /> View errors</a>
+          @if (i.status === 'running' || i.status === 'waiting' || i.status === 'suspended') {
+            <button class="mrow" (click)="suspendResume(i); menuFor.set(null)">{{ i.status === 'suspended' ? 'Resume' : 'Suspend' }}</button>
+          }
+          @if (i.status !== 'completed' && i.status !== 'aborted') {
+            <button class="mrow danger" (click)="abort(i); menuFor.set(null)">Abort</button>
+          }
+        </div>
+      }
     </div>
   `,
   styles: [`
     .page { padding: 20px 24px; }
-    .pagehead { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-    .icon-btn { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--border); background: #fff; color: var(--muted); }
+    .crumbwrap { margin-bottom: 10px; }
+    .pagehead { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
     h1 { font-size: 19px; margin: 0; }
-    .split { display: grid; grid-template-columns: minmax(420px, 560px) 1fr; gap: 16px; align-items: start; }
-    .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
-    .fchip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; color: var(--muted); }
-    .fchip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
-    .fchip .ct { opacity: .7; margin-left: 4px; }
-    .list table, .detail table { width: 100%; border-collapse: collapse; }
+    .sub { margin: 0 0 14px; font-size: 13px; }
+    .layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
+    .rail { padding: 16px; position: sticky; top: 16px; }
+    .rail-h { display: flex; align-items: center; margin-bottom: 2px; }
+    .section-title { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; margin: 12px 0 6px; display: block; }
+    .ck { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 4px 2px; cursor: pointer; text-transform: capitalize; }
+    .ck .ct { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+    .ck.errs { margin-top: 6px; text-transform: none; }
+    .rail-in { width: 100%; margin-bottom: 8px; }
+    .savedlist { display: flex; flex-direction: column; gap: 2px; }
+    .savedrow { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+    .lnkbtn { border: none; background: none; text-align: left; cursor: pointer; font: inherit; color: var(--text-secondary); font-size: 12.5px; padding: 4px 0; flex: 1; display: flex; align-items: center; gap: 6px; }
+    .lnkbtn:hover { color: var(--primary); }
+    .listcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+    .bulkbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--primary-50); border-radius: var(--radius-sm); font-size: 12.5px; }
+    .btn.sm.danger { color: var(--red); border-color: var(--border-strong); } .btn.sm.danger:hover { background: var(--red-bg); }
+    .list { overflow-x: auto; padding: 0; }
+    .list table { width: 100%; border-collapse: collapse; min-width: 720px; }
     .list th, .list td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
-    .list tr { cursor: pointer; } .list tbody tr:hover { background: #f8f9fc; } .list tr.sel td { background: #f2f0ff; }
-    .st { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+    tbody tr:hover { background: var(--surface-2); } tr.sel td { background: var(--primary-50); }
+    .piid a, .plain { color: var(--primary); font-weight: 600; text-decoration: none; }
+    .piid a:hover, .plain:hover { text-decoration: underline; }
+    .proj { font-size: 11.5px; margin-top: 2px; }
+    .sortable { cursor: pointer; user-select: none; } .sortable:hover { color: var(--text); }
+    .sort-ic { font-size: 9px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .mono { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
-    .err-badge { display: inline-grid; place-items: center; min-width: 22px; height: 20px; border-radius: 5px; background: #eef0f6; color: var(--muted); font-size: 12px; }
-    .err-badge.has { background: #fdeaea; color: var(--red); font-weight: 700; }
-    .kebab { border: none; background: transparent; cursor: pointer; color: var(--muted); font-size: 16px; }
-    .pad { padding: 16px; }
-    .detail.empty { padding: 40px; text-align: center; }
-    .d-head { display: flex; align-items: center; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-    .badge { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-left: 6px; }
-    .err-box { margin: 12px 16px 0; background: #fdeaea; color: var(--red); padding: 8px 12px; border-radius: 8px; font-size: 13px; }
-    .tabs { display: flex; gap: 4px; padding: 0 16px; border-bottom: 1px solid var(--border); }
-    .tabs button { border: none; background: transparent; padding: 11px 12px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
-    .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
-    .tabbody { padding: 14px 16px; }
-    .diagram-wrap { display: grid; grid-template-columns: 170px 1fr; gap: 14px; }
-    .rel-h { font-size: 11px; font-weight: 700; color: #98a2b3; text-transform: uppercase; margin: 10px 0 6px; }
-    .chip-btn { display: block; width: 100%; text-align: left; border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; margin-bottom: 6px; }
-    .chip-btn:hover { background: #f6f7fb; }
-    .legend { font-size: 11px; color: var(--muted); margin-bottom: 8px; } .lg { width: 10px; height: 10px; border-radius: 3px; display: inline-block; vertical-align: middle; }
-    .lg.active { background: var(--primary); } .lg.visited { background: #cbd2e0; }
-    .dcanvas { min-width: 0; }
-    .dwrap { position: relative; overflow: auto; background-color: #fafbfd; background-image: radial-gradient(circle, #e5e9f2 1px, transparent 1px); background-size: 20px 20px; border: 1px solid var(--border); border-radius: 10px; }
-    .edges { position: absolute; inset: 0; pointer-events: none; } .ge { fill: none; stroke: #c2c8d4; stroke-width: 2; }
-    .gn { position: absolute; height: ${NH}px; background: #fff; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; box-shadow: var(--shadow-card); cursor: pointer; opacity: .5; }
-    .gn.visited { opacity: 1; } .gn.active { opacity: 1; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(91,61,245,.2); }
-    .gn.picked { outline: 2px dashed var(--amber); }
-    .gc { width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; color: #fff; font-size: 12px; }
-    .gnm { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .bc { position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); min-width: 18px; height: 18px; border-radius: 9px; background: #1f2430; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; padding: 0 5px; box-shadow: var(--shadow-card); }
-    .ops { margin-top: 16px; display: flex; flex-direction: column; gap: 14px; }
-    .op label { display: block; font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 6px; } .op .row { display: flex; gap: 8px; align-items: center; }
-    .op input { border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
-    .kv { width: 100%; } .kv td { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: top; } .kv .k { color: var(--muted); width: 34%; }
-    .kv .v { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
-    .logs th, .logs td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 12px; } .logs th { color: var(--muted); }
-    .sm { font-size: 11px; }
-    .btn.danger { color: var(--red); border-color: #f3b4b4; } .btn.danger:hover { background: #fdeaea; }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
+    .badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; }
+    .err-badge { display: inline-grid; place-items: center; min-width: 22px; height: 20px; border-radius: 5px; background: var(--surface-2); color: var(--muted); font-size: 12px; }
+    .err-badge.has { background: var(--red-bg); color: var(--red); font-weight: 700; }
+    .menucell { position: relative; text-align: right; }
+    .kebab { border: none; background: transparent; cursor: pointer; color: var(--muted); padding: 6px 8px; border-radius: var(--radius-xs); }
+    .kebab:hover { background: var(--surface-3); }
+    .rowmenu { position: fixed; width: 200px; z-index: 30; padding: 4px; box-shadow: var(--shadow-pop); }
+    .mrow { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: none; background: none; padding: 8px 10px; font-size: 12.5px; cursor: pointer; border-radius: var(--radius-xs); color: inherit; text-decoration: none; font: inherit; }
+    .mrow:hover { background: var(--surface-2); }
+    .mrow.danger { color: var(--red); }
+    .pager { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); font-size: var(--text-xs); }
+    .rows-sel { width: 64px; padding: 4px 6px; }
+    .empty-state .btn { margin-top: 12px; }
   `],
 })
 export class InstancesComponent {
-  private api = inject(ApiService);
-  private realtime = inject(RealtimeService);
-  private unsub?: () => void;
+  private api = inject(InstanceApiService);
+  private deploymentApi = inject(DeploymentApiService);
+  private wfApi = inject(WorkflowApiService);
+  private toast = inject(ToastService);
+  private modal = inject(ModalService);
   private route = inject(ActivatedRoute);
-  wfId = this.route.snapshot.paramMap.get('id');
+  private router = inject(Router);
+
+  workflows = signal<Workflow[]>([]);
+  projectFilter = signal<string>(this.route.snapshot.queryParamMap.get('workflowId') || '');
+  private wfNames = computed(() => new Map(this.workflows().map((w) => [w.id, w.name])));
+  projectName(id: string) { return this.wfNames().get(id) || id; }
+
   instances = signal<Instance[]>([]);
   deployments = signal<Record<string, Deployment>>({});
-  sel = signal<Instance | null>(null);
-  graph = signal<{ nodes: any[]; flows: any[]; diagram: { activeNodeIds: string[] }; counts: Record<string, number> }>({ nodes: [], flows: [], diagram: { activeNodeIds: [] }, counts: {} });
-  parent = signal<Instance | null>(null);
-  children = signal<Instance[]>([]);
-  picked = signal<string | null>(null);
-  tab = signal<Tab>('diagram');
-  stateFilter = 'active'; sigName = '';
-  states = STATES; NW = NW;
-  tabs: { key: Tab; label: string }[] = [{ key: 'details', label: 'Instance Details' }, { key: 'variables', label: 'Process Variables' }, { key: 'logs', label: 'Logs' }, { key: 'diagram', label: 'Diagram' }];
+  statuses = STATUSES;
+  stateSet = signal<Set<string>>(new Set(STATUSES));
+  q = signal(''); qBy = signal('');
+  errorsOnly = signal(false);
+  sortDesc = signal(true);
+  page = signal(1); pageSize = signal(20);
+  selectedIds = signal<Set<string>>(new Set());
+  menuFor = signal<string | null>(null);
+  menuPos = signal<{ top: number; left: number }>({ top: 0, left: 0 });
+  menuInstance = computed(() => this.instances().find((i) => i.id === this.menuFor()));
+  savedFilters = signal<SavedFilter[]>(this.loadSaved());
 
-  filtered = computed(() => { const f = STATES.find((s) => s.key === this.stateFilter)!; return this.instances().filter((i) => f.match(i.status)); });
-  laid = computed(() => this.graph().nodes.map((n: any, i: number) => ({ ...n, x: n.x ?? (30 + (i % 5) * 175), y: n.y ?? (30 + Math.floor(i / 5) * 96) })));
-  dw = computed(() => Math.max(560, ...this.laid().map((n: any) => n.x + NW + 40)));
-  dh = computed(() => Math.max(220, ...this.laid().map((n: any) => n.y + NH + 40)));
+  // Clicks inside the menu/kebab stop propagation (see the template), so this only ever sees clicks
+  // genuinely outside the menu — safe to unconditionally close on every document click.
+  @HostListener('document:click') closeMenu() { this.menuFor.set(null); }
+  openMenu(ev: Event, id: string) {
+    const btn = ev.currentTarget as HTMLElement;
+    const r = btn.getBoundingClientRect();
+    this.menuPos.set({ top: r.bottom + 4, left: Math.max(8, r.right - 200) });
+    this.menuFor.set(this.menuFor() === id ? null : id);
+  }
 
-  constructor() { this.reload(); }
+  filtered = computed(() => {
+    const states = this.stateSet(); const q = this.q().toLowerCase(); const by = this.qBy().toLowerCase();
+    const list = this.instances().filter((i) =>
+      states.has(i.status)
+      && (!this.errorsOnly() || i.status === 'failed' || !!i.error)
+      && (!q || i.id.toLowerCase().includes(q) || (i.correlationKey || '').toLowerCase().includes(q))
+      && (!by || (i.startedBy || '').toLowerCase().includes(by)));
+    const dir = this.sortDesc() ? -1 : 1;
+    return [...list].sort((a, b) => ((a.endedAt || a.startedAt) < (b.endedAt || b.startedAt) ? -dir : dir));
+  });
+  hasFilters = computed(() => this.stateSet().size < STATUSES.length || this.errorsOnly() || !!this.q() || !!this.qBy());
+  countByStatus = computed(() => {
+    const out: Record<string, number> = {};
+    for (const i of this.instances()) out[i.status] = (out[i.status] || 0) + 1;
+    return out;
+  });
+  pageStart = computed(() => (this.page() - 1) * this.pageSize());
+  pageEnd = computed(() => Math.min(this.pageStart() + this.pageSize(), this.filtered().length));
+  paged = computed(() => this.filtered().slice(this.pageStart(), this.pageEnd()));
+
+  constructor() {
+    this.wfApi.listWorkflows().subscribe((ws) => this.workflows.set(ws));
+    this.reload();
+    const def = this.savedFilters().find((sf) => sf.isDefault);
+    if (def) this.applySaved(def);
+  }
+
   reload() {
-    if (!this.wfId) return;
-    this.api.listInstances(this.wfId).subscribe((is) => { this.instances.set(is); if (this.sel()) this.open(this.sel()!.id); });
-    this.api.listDeployments(this.wfId).subscribe((ds) => this.deployments.set(Object.fromEntries(ds.map((d) => [d.id, d]))));
+    const workflowId = this.projectFilter() || undefined;
+    this.api.listInstances({ workflowId }).subscribe((is) => this.instances.set(is));
+    this.deploymentApi.listDeploymentsGlobal({ workflowId }).subscribe((ds) => this.deployments.set(Object.fromEntries(ds.map((d) => [d.id, d]))));
   }
-  setFilter(k: string) { this.stateFilter = k; }
-  countFor(st: { match: (s: string) => boolean }) { return this.instances().filter((i) => st.match(i.status)).length; }
-  open(id: string) {
-    this.picked.set(null);
-    this.refresh(id);
-    // Live redraw: refresh the open diagram as tokens move (node enter/exit, instance updates).
-    this.unsub?.();
-    this.unsub = this.realtime.subscribe(`instance:${id}`, () => { this.refresh(id); this.reload(); });
+  setProjectFilter(id: string) { this.projectFilter.set(id); this.reload(); }
+  toggleState(st: string) {
+    const next = new Set(this.stateSet());
+    next.has(st) ? next.delete(st) : next.add(st);
+    this.stateSet.set(next); this.page.set(1);
   }
-  private refresh(id: string) {
-    this.api.getInstance(id).subscribe((i) => this.sel.set(i));
-    this.api.instanceGraph(id).subscribe((g) => this.graph.set(g as any));
-    this.api.relatedInstances(id).subscribe((r) => { this.parent.set(r.parent); this.children.set(r.children); });
+  resetFilters() {
+    this.stateSet.set(new Set(STATUSES));
+    this.q.set(''); this.qBy.set(''); this.errorsOnly.set(false); this.page.set(1);
   }
-  ngOnDestroy() { this.unsub?.(); }
 
-  visual(t: string) { return VISUAL[t] || { icon: '●', color: '#64748b' }; }
+  toggleSelect(id: string) {
+    const s = new Set(this.selectedIds());
+    if (s.has(id)) s.delete(id); else s.add(id);
+    this.selectedIds.set(s);
+  }
+  private selectedInstances(): Instance[] { const ids = this.selectedIds(); return this.instances().filter((i) => ids.has(i.id)); }
+
+  private onActionError(e: any) { this.toast.error(e?.error?.error?.message || 'That action could not be completed'); }
+
+  suspendResume(i: Instance) {
+    const resuming = i.status === 'suspended';
+    (resuming ? this.api.resumeInstance(i.id) : this.api.suspendInstance(i.id)).subscribe({
+      next: () => { this.toast.success(resuming ? 'Instance resumed' : 'Instance suspended'); this.reload(); },
+      error: (e) => this.onActionError(e),
+    });
+  }
+  async abort(i: Instance) {
+    const ok = await this.modal.confirm({ title: 'Abort instance', message: `Abort instance #${this.shortId(i.id)}? This also aborts any active sub-process instances.`, confirmLabel: 'Abort', danger: true });
+    if (!ok) return;
+    this.api.abort(i.id).subscribe({ next: () => this.reload(), error: (e) => this.onActionError(e) });
+  }
+
+  private bulkResult(label: string, results: { ok: boolean }[]) {
+    const ok = results.filter((r) => r.ok).length;
+    this.toast[ok === results.length ? 'success' : 'error'](`${label}: ${ok} of ${results.length} succeeded`);
+    this.selectedIds.set(new Set());
+    this.reload();
+  }
+  bulkSuspend() {
+    const items = this.selectedInstances().filter((i) => i.status === 'running' || i.status === 'waiting');
+    Promise.all(items.map((i) => new Promise<{ ok: boolean }>((res) => this.api.suspendInstance(i.id).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
+      .then((r) => this.bulkResult('Suspend', r));
+  }
+  bulkResume() {
+    const items = this.selectedInstances().filter((i) => i.status === 'suspended');
+    Promise.all(items.map((i) => new Promise<{ ok: boolean }>((res) => this.api.resumeInstance(i.id).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
+      .then((r) => this.bulkResult('Resume', r));
+  }
+  async bulkAbort() {
+    // Terminal instances (completed/aborted) have nothing to abort — filter them out up front instead
+    // of relying on the backend's silent no-op, so the confirm count and bulkResult tally both reflect
+    // what actually happens (matches bulkSuspend/bulkResume's own pre-filtering below).
+    const items = this.selectedInstances().filter((i) => i.status !== 'completed' && i.status !== 'aborted');
+    if (!items.length) { this.toast.error('None of the selected instances can be aborted (already completed/aborted).'); return; }
+    const ok = await this.modal.confirm({ title: 'Abort instances', message: `Abort ${items.length} selected instance(s)? This cannot be undone.`, confirmLabel: 'Abort all', danger: true });
+    if (!ok) return;
+    Promise.all(items.map((i) => new Promise<{ ok: boolean }>((res) => this.api.abort(i.id).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
+      .then((r) => this.bulkResult('Abort', r));
+  }
+
+  private loadSaved(): SavedFilter[] {
+    try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch { return []; }
+  }
+  private persistSaved() { localStorage.setItem(SAVED_KEY, JSON.stringify(this.savedFilters())); }
+  async saveCurrentFilter() {
+    const name = await this.modal.prompt({ title: 'Save filter', message: 'Name this filter set:', placeholder: 'e.g. My team, failed' });
+    if (!name) return;
+    const sf: SavedFilter = { name, stateSet: [...this.stateSet()], errorsOnly: this.errorsOnly(), q: this.q(), qBy: this.qBy(), projectFilter: this.projectFilter() };
+    this.savedFilters.update((list) => [...list.filter((x) => x.name !== name), sf]);
+    this.persistSaved();
+  }
+  applySaved(sf: SavedFilter) {
+    this.stateSet.set(new Set(sf.stateSet)); this.errorsOnly.set(sf.errorsOnly);
+    this.q.set(sf.q); this.qBy.set(sf.qBy); this.projectFilter.set(sf.projectFilter);
+    this.page.set(1); this.reload();
+  }
+  deleteSaved(name: string) {
+    this.savedFilters.update((list) => list.filter((x) => x.name !== name));
+    this.persistSaved();
+  }
+
   statusColor(s: string) { return ({ running: '#2563eb', waiting: '#f59e0b', completed: '#16a34a', failed: '#dc2626', aborted: '#6b7280', suspended: '#7c3aed' } as any)[s] || '#6b7280'; }
   procName(i: Instance) { return (i.processId || i.workflowId || '').split('.').pop() || i.workflowId; }
-  version(i: Instance) { const d = this.deployments()[i.deploymentId]; return d ? (d.versionLabel || ('v' + (d.versionNumber ?? '?'))) + ' · ' + d.environment : '—'; }
-  count(id: string) { return this.graph().counts?.[id] || 0; }
-  isActive(id: string) { return (this.graph().diagram?.activeNodeIds || []).includes(id); }
-  nodeName(id: string) { return this.graph().nodes.find((n: any) => n.id === id)?.name || id; }
-  varRows(s: Instance) { return Object.entries(s.variables || {}).filter(([, v]) => v !== undefined).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)] as [string, string]); }
-  private byId(id: string) { return this.laid().find((n: any) => n.id === id); }
-  edge(e: any) { const a = this.byId(e.from), b = this.byId(e.to); if (!a || !b) return ''; const x1 = a.x + NW, y1 = a.y + NH / 2, x2 = b.x, y2 = b.y + NH / 2, dx = Math.max(30, Math.abs(x2 - x1) / 2); return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`; }
-
-  sendSignal(s: Instance) { let p: any = this.sigName; try { p = JSON.parse(this.sigName); } catch {} this.api.signalInstance(s.id, this.sigName, undefined).subscribe(() => { this.sigName = ''; this.open(s.id); this.reload(); }); }
-  retry(s: Instance) { const n = this.picked(); if (n) this.api.retryNode(s.id, n).subscribe(() => { this.open(s.id); this.reload(); }); }
-  suspendResume(s: Instance) { (s.status === 'suspended' ? this.api.resumeInstance(s.id) : this.api.suspendInstance(s.id)).subscribe(() => { this.open(s.id); this.reload(); }); }
-  abort(s: Instance) { this.api.abort(s.id).subscribe(() => { this.open(s.id); this.reload(); }); }
+  /** Tail of a ULID: the first 8 chars are the ms timestamp, so same-batch ids front-slice
+   *  identically (three rows all reading "01KZBZ4N" on the live list). The random part is the END. */
+  shortId(id: string) { return id.length > 10 ? '…' + id.slice(-7) : id; }
+  ago(iso: string): string {
+    const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+    if (s < 86_400) return `${Math.floor(s / 3600)}h ago`;
+    return `${Math.floor(s / 86_400)}d ago`;
+  }
+  duration(i: Instance): string {
+    const end = i.endedAt ? Date.parse(i.endedAt) : Date.now();
+    const ms = Math.max(0, end - Date.parse(i.startedAt));
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ${m % 60}m`;
+    const d = Math.floor(h / 24);
+    return `${d}d ${h % 24}h`;
+  }
 }

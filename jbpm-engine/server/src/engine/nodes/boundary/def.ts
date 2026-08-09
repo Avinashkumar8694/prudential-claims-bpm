@@ -12,4 +12,6 @@ export const def: NodeDef = {
     { key: 'event', label: 'Trigger', widget: 'event', options: ['error', 'timer', 'message', 'signal', 'escalation', 'condition'] },
     { key: 'interrupting', label: 'Interrupting (cancel the caught activity)', widget: 'bool' },
   ] }],
+  diagram: { icon: 'warning', color: '#7c3aed', shape: 'circle' },
+  typeLabel: 'Boundary event',
 };

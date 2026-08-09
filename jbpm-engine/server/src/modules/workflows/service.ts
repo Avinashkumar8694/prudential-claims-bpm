@@ -1,6 +1,6 @@
 // Workflow lifecycle: create (with a main branch + initial draft v1), read/update, permissions, vars.
 import type { AppContext } from '../../context.ts';
-import { Collections, type Branch, type Version, type Workflow, type WorkflowPermission } from '../../domain.ts';
+import { Collections, type Branch, type Folder, type Version, type Workflow, type WorkflowPermission } from '../../domain.ts';
 import type { EngineProject, EngineVar } from '../../sdk/index.ts';
 import { notFound, validation } from '../../infra/errors.ts';
 
@@ -21,6 +21,13 @@ export class WorkflowService {
   private wf() { return this.ctx.store.repo<Workflow>(Collections.workflows); }
   private br() { return this.ctx.store.repo<Branch>(Collections.branches); }
   private ve() { return this.ctx.store.repo<Version>(Collections.versions); }
+  private fo() { return this.ctx.store.repo<Folder>(Collections.folders); }
+
+  private async assertFolderValid(folderId: string | null | undefined): Promise<void> {
+    if (!folderId) return;
+    const f = await this.fo().get(folderId);
+    if (!f || f.tenantId !== this.ctx.tenantId) throw notFound('Folder');
+  }
 
   async list(): Promise<Workflow[]> {
     return (await this.wf().query((w) => w.tenantId === this.ctx.tenantId && !w.archived))
@@ -33,12 +40,15 @@ export class WorkflowService {
     return w;
   }
 
-  async create(input: { name: string; key?: string; description?: string }, actor: string): Promise<Workflow> {
+  async create(input: { name: string; key?: string; description?: string; folderId?: string | null }, actor: string): Promise<Workflow> {
     const name = (input.name || '').trim();
     if (!name) throw validation('name is required');
     const key = slug(input.key || name);
-    const dupe = await this.wf().query((w) => w.tenantId === this.ctx.tenantId && w.key === key);
+    // Archived workflows don't count as a collision — list() already hides them, so a name should be
+    // freely reusable once its previous holder is archived, not permanently reserved by a hidden record.
+    const dupe = await this.wf().query((w) => w.tenantId === this.ctx.tenantId && w.key === key && !w.archived);
     if (dupe.length) throw validation(`key "${key}" already exists`);
+    await this.assertFolderValid(input.folderId);
 
     const now = this.ctx.clock();
     const wfId = this.ctx.newId();
@@ -47,7 +57,7 @@ export class WorkflowService {
 
     const workflow: Workflow = {
       id: wfId, tenantId: this.ctx.tenantId, name, key, description: input.description,
-      defaultBranchId: branchId, permissions: [], variables: [],
+      defaultBranchId: branchId, permissions: [], variables: [], folderId: input.folderId || null,
       createdAt: now, createdBy: actor, updatedAt: now, updatedBy: actor,
     };
     const branch: Branch = {
@@ -67,12 +77,13 @@ export class WorkflowService {
     return workflow;
   }
 
-  async update(id: string, patch: Partial<Pick<Workflow, 'name' | 'description' | 'permissions' | 'variables'>>, actor: string): Promise<Workflow> {
+  async update(id: string, patch: Partial<Pick<Workflow, 'name' | 'description' | 'permissions' | 'variables' | 'folderId'>>, actor: string): Promise<Workflow> {
     const w = await this.get(id);
     if (patch.name !== undefined) w.name = patch.name.trim() || w.name;
     if (patch.description !== undefined) w.description = patch.description;
     if (patch.permissions !== undefined) w.permissions = patch.permissions;
     if (patch.variables !== undefined) w.variables = patch.variables;
+    if (patch.folderId !== undefined) { await this.assertFolderValid(patch.folderId); w.folderId = patch.folderId; }
     w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
     await this.wf().put(w);
     await this.ctx.audit({ actor, kind: 'workflow.updated', workflowId: id });

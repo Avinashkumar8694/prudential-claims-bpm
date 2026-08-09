@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Project Overview — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — Project Overview (landing after opening a project)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem active" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <a class="btn ghost sm" href="projects-list.html">← Projects</a>
+      <div class="crumbs"><b>Claims Onboarding</b> <span class="badge">CLM-104</span></div>
+      <div class="spacer"></div>
+      <a class="btn sm" href="deployments.html">Deployments</a>
+      <a class="btn sm" href="instances-list.html">Instances</a>
+      <a class="btn sm" href="dialogs.html">Export jBPM ⬇</a>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content">
+      <div class="tabs">
+        <a class="tab active" href="project-overview.html">Overview</a>
+        <a class="tab" href="project-workspace.html">Processes</a>
+        <a class="tab" href="assets-overview.html">Assets</a>
+        <a class="tab" href="access-tab.html">Access</a>
+        <a class="tab" href="project-settings.html">Settings</a>
+      </div>
+
+      <div class="row" style="margin-bottom:6px;">
+        <h1>Claims Onboarding</h1>
+        <span class="badge active">production</span>
+      </div>
+      <p class="muted" style="margin-bottom:20px; max-width:640px;">End-to-end claim intake, review, and payout process for the retail claims desk. Owned by the Claims Platform team.</p>
+
+      <div class="kpi-row">
+        <a class="card kpi" href="project-workspace.html" style="text-decoration:none;">
+          <div class="n">4</div>
+          <div class="l">Processes</div>
+        </a>
+        <a class="card kpi" href="instances-list.html" style="text-decoration:none;">
+          <div class="n" style="color:var(--blue);">12</div>
+          <div class="l">Active instances</div>
+        </a>
+        <a class="card kpi" href="deployments.html" style="text-decoration:none;">
+          <div class="n">v12</div>
+          <div class="l">Deployed to prod</div>
+        </a>
+        <a class="card kpi" href="execution-errors.html" style="text-decoration:none;">
+          <div class="n" style="color:var(--red);">1</div>
+          <div class="l">Open errors</div>
+        </a>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1.3fr 1fr; gap:16px;">
+        <div class="card" style="padding:18px;">
+          <div class="row" style="margin-bottom:12px;">
+            <h3>Processes</h3>
+            <div class="spacer"></div>
+            <a class="muted" style="font-size:12.5px;" href="project-workspace.html">Open workspace →</a>
+          </div>
+          <div class="panel-list">
+            <a class="prow" style="justify-content:space-between; text-decoration:none; color:inherit;" href="project-workspace.html">
+              <span>📄 Claim Intake</span><span class="badge active">9 nodes · deployed</span>
+            </a>
+            <a class="prow" style="justify-content:space-between; text-decoration:none; color:inherit;" href="project-workspace.html">
+              <span>📄 Document Review</span><span class="badge active">6 nodes · deployed</span>
+            </a>
+            <a class="prow" style="justify-content:space-between; text-decoration:none; color:inherit;" href="project-workspace.html">
+              <span>📄 Payout Approval</span><span class="badge inactive">5 nodes · draft</span>
+            </a>
+            <a class="prow" style="justify-content:space-between; text-decoration:none; color:inherit;" href="project-workspace.html">
+              <span>📄 Rejection Handling</span><span class="badge active">3 nodes · deployed</span>
+            </a>
+          </div>
+
+          <div class="section-title">Assets</div>
+          <div class="row" style="flex-wrap:wrap; gap:8px;">
+            <a class="badge" href="assets-form-builder.html" style="text-decoration:none;">📝 3 Forms</a>
+            <a class="badge" href="data-object-editor.html" style="text-decoration:none;">▤ 4 Data Objects</a>
+            <a class="badge" href="decision-table-editor.html" style="text-decoration:none;">🔀 2 Decision Tables</a>
+            <a class="badge" href="assets-overview.html" style="text-decoration:none;">+ 6 more kinds →</a>
+          </div>
+        </div>
+
+        <div class="card" style="padding:18px;">
+          <h3 style="margin-bottom:12px;">Recent activity</h3>
+          <div class="panel-list">
+            <div class="prow" style="align-items:flex-start;">
+              <span>✅</span>
+              <div><div>Deployed <b>v12</b> to production</div><div class="muted" style="font-size:11px;">5 minutes ago · avinash</div></div>
+            </div>
+            <div class="prow" style="align-items:flex-start;">
+              <span>❌</span>
+              <div><div>Instance #1092 failed at "Send Email"</div><div class="muted" style="font-size:11px;">12 minutes ago</div></div>
+            </div>
+            <div class="prow" style="align-items:flex-start;">
+              <span>✎</span>
+              <div><div>Edited "Payout Approval" process</div><div class="muted" style="font-size:11px;">1 hour ago · avinash</div></div>
+            </div>
+            <div class="prow" style="align-items:flex-start;">
+              <span>👤</span>
+              <div><div>Access granted to role "reviewer"</div><div class="muted" style="font-size:11px;">1 day ago</div></div>
+            </div>
+          </div>
+
+          <div class="section-title">Contributors</div>
+          <div class="row">
+            <div class="avatar">AG</div>
+            <div class="avatar" style="background:var(--blue-bg); color:var(--blue);">M</div>
+            <div class="avatar" style="background:var(--amber-bg); color:var(--amber);">J</div>
+            <a class="btn ghost sm" href="access-tab.html">Manage access →</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

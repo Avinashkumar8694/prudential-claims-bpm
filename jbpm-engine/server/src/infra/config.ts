@@ -23,6 +23,10 @@ export interface Config {
   javaSidecarStartupTimeoutMs: number;
   /** per-request timeout for a /execute call (first call per script includes a real javac compile) */
   javaSidecarTimeoutMs: number;
+  /** hostnames (or ".suffix" domains) an HTTP service task's ABSOLUTE `url` is allowed to reach even
+   *  if it resolves to a private/link-local/loopback range — see infra/outbound-guard.ts. A RELATIVE
+   *  `url` (appended to integrationBaseUrl) is never gated; only an author-supplied absolute URL is. */
+  outboundAllowlist: string[];
 }
 
 const env = process.env;
@@ -42,4 +46,5 @@ export const config: Config = {
   javaSidecarClasspath: env.JAVA_SIDECAR_CLASSPATH || defaultJavaSidecarClasspath,
   javaSidecarStartupTimeoutMs: Number(env.JAVA_SIDECAR_STARTUP_TIMEOUT_MS || 10000),
   javaSidecarTimeoutMs: Number(env.JAVA_SIDECAR_TIMEOUT_MS || 10000),
+  outboundAllowlist: (env.OUTBOUND_ALLOWLIST || '').split(',').map((h) => h.trim()).filter(Boolean),
 };

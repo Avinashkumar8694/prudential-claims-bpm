@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Task Inbox — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">ENRICH — Task Inbox: list only, opens a dedicated task page (ux_design/06)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem active" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs"><b>Tasks</b> <span>›</span> My Tasks</div>
+      <div class="spacer"></div>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content">
+      <h1>Tasks</h1>
+      <p class="muted" style="margin:4px 0 16px;">Work assigned to you, work you can claim, and — for administrators — everything in flight.</p>
+      <div class="tabs">
+        <a class="tab active" href="task-inbox.html">My Tasks (4)</a>
+        <a class="tab" href="task-inbox-available.html">Available (11)</a>
+        <a class="tab" href="task-inbox-all.html">All (admin)</a>
+      </div>
+
+      <div class="filterbar">
+        <span class="chip on">Status ▾</span>
+        <span class="chip">Assignee ▾</span>
+        <span class="chip">Created ▾</span>
+        <span class="chip">+ Advanced</span>
+        <div class="spacer"></div>
+        <span class="chip">★ Saved ▾</span>
+        <span class="chip">⚏ Columns</span>
+      </div>
+      <div class="bulkbar">
+        <span>✓ 2 selected</span>
+        <button class="btn sm">Claim</button>
+        <button class="btn sm">Release</button>
+        <button class="btn sm">Reassign ▾</button>
+        <div class="spacer"></div>
+        <a class="muted" style="font-size:12.5px; cursor:pointer;">Clear</a>
+      </div>
+
+      <div class="card" style="overflow:auto;">
+        <table>
+          <thead><tr><th></th><th>Task</th><th>Process</th><th>PIID</th><th>Priority</th><th>SLA</th><th></th></tr></thead>
+          <tbody>
+            <tr class="selected">
+              <td><input type="checkbox" checked></td>
+              <td><a href="task-detail.html" style="color:var(--primary); font-weight:600;">Review claim #4021</a></td>
+              <td>Claim Intake</td>
+              <td>#1091</td>
+              <td><span class="badge">High</span></td>
+              <td><span class="sla risk">🟠 15m</span></td>
+              <td><a class="btn sm" href="task-detail.html">Open →</a></td>
+            </tr>
+            <tr class="selected">
+              <td><input type="checkbox" checked></td>
+              <td><a href="task-detail.html" style="color:var(--primary); font-weight:600;">Approve refund #398</a></td>
+              <td>Payout Approval</td>
+              <td>#1077</td>
+              <td><span class="badge">Normal</span></td>
+              <td><span class="sla breach">🔴 40m over</span></td>
+              <td><a class="btn sm" href="task-detail.html">Open →</a></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td><a href="task-detail.html" style="color:var(--primary); font-weight:600;">Verify documents #4022</a></td>
+              <td>Document Review</td>
+              <td>#1090</td>
+              <td><span class="badge">Normal</span></td>
+              <td><span class="sla ok">🟢 2h</span></td>
+              <td><a class="btn sm" href="task-detail.html">Open →</a></td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td><a href="task-detail.html" style="color:var(--primary); font-weight:600;">Assign reviewer #4019</a></td>
+              <td>Claim Intake</td>
+              <td>#1085</td>
+              <td><span class="badge">Low</span></td>
+              <td><span class="badge">—</span></td>
+              <td><a class="btn sm" href="task-detail.html">Open →</a></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+          <div class="row" style="margin-top:12px; font-size:12.5px;">
+            <span class="muted">Showing 1–4 of 4</span>
+            <div class="spacer"></div>
+            <span class="muted">Rows</span>
+            <select style="width:70px;" aria-label="Rows per page"><option>10</option><option selected>20</option><option>50</option><option>100</option></select>
+            <button class="btn sm" disabled>‹ Prev</button>
+            <button class="btn sm">Next ›</button>
+          </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

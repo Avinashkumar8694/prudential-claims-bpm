@@ -8,12 +8,16 @@ import { logger } from './infra/logger.ts';
 import { makeContext } from './context.ts';
 import { TimerService } from './modules/timers/service.ts';
 import { IamService } from './modules/iam/service.ts';
+import { authenticateWsUpgrade } from './infra/ws-auth.ts';
 
 const { app, store } = createApp();
 const server = http.createServer(app);
 
 const wss = new WebSocketServer({ server, path: config.wsPath });
-wss.on('connection', (ws) => hub.add(ws));
+wss.on('connection', (ws, req) => {
+  if (!authenticateWsUpgrade(req)) { ws.close(4001, 'unauthorized'); return; }
+  hub.add(ws);
+});
 
 // durable timer scheduler — fires due catch/boundary timers (default tenant)
 const timerCtx = makeContext({ store, tenantId: config.defaultTenant });

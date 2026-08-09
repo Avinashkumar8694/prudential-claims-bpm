@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Event Property Window — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — event property window (polymorphic widget) (ux_design/04)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem active" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <a class="btn ghost sm" href="projects-list.html">← Projects</a>
+      <div class="crumbs"><b>Claims Onboarding</b> <span class="badge">CLM-104</span></div>
+      <div class="spacer"></div>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content" style="height:calc(100vh - var(--header-h)); padding-bottom:12px; position:relative;">
+            <div class="tabs">
+        <a class="tab" href="project-overview.html">Overview</a>
+        <a class="tab active" href="project-workspace.html">Processes</a>
+        <a class="tab" href="assets-overview.html">Assets</a>
+        <a class="tab" href="access-tab.html">Access</a>
+        <a class="tab" href="project-settings.html">Settings</a>
+      </div>
+
+      <div class="canvas-area" style="height:calc(100% - 44px); filter:saturate(.7) brightness(.97);">
+        <div class="node" style="top:118px; left:360px; width:150px;"><span class="node-ic task">👤</span> Review Docs</div>
+        <div class="node active" style="top:150px; left:478px; width:24px; height:24px; border-radius:50%; padding:0; justify-content:center; background:var(--amber-bg); border-color:var(--primary);">⏱</div>
+      </div>
+
+      <div class="modal-bg" style="position:absolute; inset:0; align-items:flex-start; padding-top:120px;">
+        <div class="modal" style="width:560px;">
+          <div class="modal-head">
+            <span class="node-ic ev" style="width:30px;height:30px;font-size:15px; background:var(--amber-bg);">⏱</span>
+            <div>
+              <h3 style="margin-bottom:1px;">Boundary Timer</h3>
+              <p class="muted" style="font-size:11.5px;">Attached to "Review Docs" · non-interrupting</p>
+            </div>
+            <div class="spacer"></div>
+            <button class="btn ghost sm">✕</button>
+          </div>
+
+          <div class="modal-body" style="grid-template-columns:1fr;">
+            <div class="field">
+              <label>Timer type</label>
+              <div class="row" style="gap:6px;">
+                <span class="chip on">Duration</span>
+                <span class="chip">Cycle</span>
+                <span class="chip">Date</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>Duration expression</label>
+              <input value="PT4H" />
+              <span class="hint">ISO-8601 duration — fires 4 hours after the task is created.</span>
+            </div>
+            <div class="field row" style="gap:18px;">
+              <label class="row" style="gap:6px; font-weight:500;"><input type="checkbox" /> Interrupting</label>
+              <label class="row" style="gap:6px; font-weight:500;"><input type="checkbox" checked /> Non-interrupting</label>
+            </div>
+            <div class="field">
+              <label>On fire → signal</label>
+              <input value="escalate-to-manager" />
+            </div>
+          </div>
+
+          <div class="modal-foot">
+            <button class="btn sm">Cancel</button>
+            <button class="btn primary sm">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

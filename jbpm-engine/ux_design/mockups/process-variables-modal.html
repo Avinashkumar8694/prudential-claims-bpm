@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Process &amp; Global Variables — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — Process/Global Variables modal (ux_design/04)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem active" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <a class="btn ghost sm" href="projects-list.html">← Projects</a>
+      <div class="crumbs"><b>Claims Onboarding</b> <span class="badge">CLM-104</span></div>
+      <div class="spacer"></div>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content" style="height:calc(100vh - var(--header-h)); padding-bottom:12px; position:relative;">
+      <div class="tabs">
+        <a class="tab" href="project-overview.html">Overview</a>
+        <a class="tab active" href="project-workspace.html">Processes</a>
+        <a class="tab" href="assets-overview.html">Assets</a>
+        <a class="tab" href="access-tab.html">Access</a>
+        <a class="tab" href="project-settings.html">Settings</a>
+      </div>
+
+      <div class="canvas-area" style="height:calc(100% - 44px); filter:saturate(.7) brightness(.97);">
+        <div class="node visited" style="top:118px; left:90px; width:140px;"><span class="node-ic ev">📝</span> Intake Form</div>
+        <div class="node" style="top:118px; left:360px; width:150px;"><span class="node-ic task">👤</span> Review Docs</div>
+      </div>
+
+      <div class="modal-bg" style="position:absolute; inset:0; align-items:flex-start; padding-top:100px;">
+        <div class="modal" style="width:600px;">
+          <div class="modal-head">
+            <h3 style="margin-bottom:1px;">Process &amp; Global Variables</h3>
+            <div class="spacer"></div>
+            <button class="btn ghost sm">✕</button>
+          </div>
+          <div class="modal-body" style="grid-template-columns:1fr;">
+            <div class="field full">
+              <div class="row" style="margin-bottom:8px;">
+                <label style="font-size:13px;">Process variables <span class="muted" style="font-weight:400;">— scoped to one instance</span></label>
+                <div class="spacer"></div>
+                <button class="btn sm">+ Add</button>
+              </div>
+              <table>
+                <thead><tr><th>Name</th><th>Type</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>claim</td><td><span class="badge">ref: Claim</span></td><td><button class="btn sm danger">✕</button></td></tr>
+                  <tr><td>reviewNotes</td><td><span class="badge">string</span></td><td><button class="btn sm danger">✕</button></td></tr>
+                  <tr><td>slaDueAt</td><td><span class="badge">date</span></td><td><button class="btn sm danger">✕</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="field full">
+              <div class="row" style="margin-bottom:8px;">
+                <label style="font-size:13px;">Global variables <span class="muted" style="font-weight:400;">— shared across all processes in this project</span></label>
+                <div class="spacer"></div>
+                <button class="btn sm">+ Add</button>
+              </div>
+              <table>
+                <thead><tr><th>Name</th><th>Type</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>maxClaimAmount</td><td><span class="badge">number</span></td><td><button class="btn sm danger">✕</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="field">
+              <label>Process SLA due date</label>
+              <input value="3d" />
+              <span class="hint">Rolls up to the instance-level SLA badge across the app.</span>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn sm">Cancel</button>
+            <button class="btn primary sm">Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -6,7 +6,7 @@ import { execSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { feelTest, feelResult, decisionToDmn, buildAsset, parseAsset, fromEngineProject } from '../dist/index.mjs';
+import { feelTest, feelResult, decisionToDmn, dmnToDecisionModel, parseFeelTest, parseFeelResult, buildAsset, parseAsset, fromEngineProject } from '../dist/index.mjs';
 
 // ---- FEEL input-cell mapping (every InputTest form) ----
 test('feelTest — every input cell form -> FEEL', () => {
@@ -74,6 +74,54 @@ test('decisionToDmn — round-trip stable + well-formed (xmllint)', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'dmn-')); const dp = path.join(tmp, 'e.dmn'); fs.writeFileSync(dp, dmn);
   execSync(`xmllint --noout "${dp}"`, { stdio: 'pipe' });
   fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+// ---- inverse direction: real DMN XML -> engine decision model (best-effort, decisionTable only) ----
+test('parseFeelTest / parseFeelResult — inverse of feelTest/feelResult for every cell form', () => {
+  assert.deepStrictEqual(parseFeelTest('"US"'), 'US');
+  assert.deepStrictEqual(parseFeelTest('5'), 5);
+  assert.deepStrictEqual(parseFeelTest('true'), true);
+  assert.deepStrictEqual(parseFeelTest('-'), { any: true });
+  assert.deepStrictEqual(parseFeelTest('"A", "B"'), ['A', 'B']);
+  assert.deepStrictEqual(parseFeelTest('> 100000'), { gt: 100000 });
+  assert.deepStrictEqual(parseFeelTest('>= 1'), { gte: 1 });
+  assert.deepStrictEqual(parseFeelTest('< 50'), { lt: 50 });
+  assert.deepStrictEqual(parseFeelTest('<= 50'), { lte: 50 });
+  assert.deepStrictEqual(parseFeelTest('[1..10]'), { between: [1, 10] });
+  assert.deepStrictEqual(parseFeelTest('not("US")'), { not: 'US' });
+  assert.deepStrictEqual(parseFeelTest('some_function(x)'), { feel: 'some_function(x)' }, 'real FEEL falls back to the escape hatch, not a crash');
+  assert.deepStrictEqual(parseFeelResult('"HIGH"'), 'HIGH');
+  assert.deepStrictEqual(parseFeelResult('42'), 42);
+  assert.deepStrictEqual(parseFeelResult('amount * 0.1'), { feel: 'amount * 0.1' });
+});
+
+test('dmnToDecisionModel — recovers a decisionTable-driven model from real DMN XML (round-trip with decisionToDmn)', () => {
+  const dmn = buildAsset({ kind: 'dmn', model: decisionToDmn(MODEL) });
+  const recovered = dmnToDecisionModel(parseAsset('e.dmn', dmn).model.xml);
+  assert.ok(recovered, 'a decisionTable-based DMN file recovers a model');
+  assert.strictEqual(recovered.decisions[0].name, 'Eligibility');
+  assert.strictEqual(recovered.decisions[0].hitPolicy, 'UNIQUE');
+  assert.deepStrictEqual(recovered.decisions[0].inputs.map((i) => i.name), ['amount', 'region']);
+  assert.deepStrictEqual(recovered.decisions[0].outputs.map((o) => o.name), ['approved', 'tier']);
+  // decisionToDmn fills in an explicit "-" (any) for every input a rule doesn't mention (see its own
+  // `inp.name in r.when ? ... : '-'`), so a sparse `when` on the way in comes back fully populated —
+  // check the two rules' actual cell values instead of a raw deepStrictEqual against the sparse MODEL.
+  assert.deepStrictEqual(recovered.decisions[0].rules[0].when, { amount: { gt: 100000 }, region: 'US' });
+  assert.deepStrictEqual(recovered.decisions[0].rules[1].when, { amount: { between: [1, 100000] }, region: { any: true } });
+  assert.deepStrictEqual(recovered.decisions[0].rules.map((r) => r.then), MODEL.decisions[0].rules.map((r) => r.then));
+  // re-serializing the recovered model produces byte-identical DMN — a genuine full round trip,
+  // not just "didn't crash": model -> XML -> model' -> XML' with XML === XML'.
+  const dmn2 = buildAsset({ kind: 'dmn', model: decisionToDmn(recovered) });
+  assert.strictEqual(dmn2, dmn, 'recovered model re-serializes to identical DMN XML');
+});
+
+test('dmnToDecisionModel — a literalExpression-only DMN (no decisionTable) recovers nothing, not a wrong guess', () => {
+  const dmn = `<?xml version="1.0"?><definitions xmlns="http://www.omg.org/spec/DMN/20180521/MODEL/" id="_d" name="LitOnly" namespace="ns">
+    <decision id="_dec1" name="isAdult"><variable name="isAdult"/>
+      <literalExpression><text>if age &gt;= 18 then "YES" else "NO"</text></literalExpression>
+    </decision></definitions>`;
+  const recovered = dmnToDecisionModel(parseAsset('e.dmn', dmn).model.xml);
+  assert.strictEqual(recovered, undefined, 'no decisionTable anywhere -> nothing recoverable, not a guess');
 });
 
 test('fromEngineProject — engine decisions -> generated .dmn with default namespace + path', () => {

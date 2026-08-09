@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Decision Table Editor — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — Decision Table grid editor (ux_design/04)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem active" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <a class="btn ghost sm" href="assets-overview.html">← Assets</a>
+      <div class="crumbs"><b>Claims Onboarding</b> <span>›</span> Assets <span>›</span> Eligibility Rules</div>
+      <div class="spacer"></div>
+      <button class="btn sm">Validate</button>
+      <button class="btn primary sm">Save</button>
+    </div>
+
+    <div class="content">
+      <h1>Decision Tables</h1>
+      <p class="muted" style="margin:4px 0 14px;">Condition and action columns; each row is one rule.</p>
+            <div class="tabs">
+        <a class="tab" href="project-overview.html">Overview</a>
+        <a class="tab" href="project-workspace.html">Processes</a>
+        <a class="tab active" href="assets-overview.html">Assets</a>
+        <a class="tab" href="access-tab.html">Access</a>
+        <a class="tab" href="project-settings.html">Settings</a>
+      </div>
+
+      <div class="row" style="margin-bottom:12px;">
+        <h2>Eligibility Rules</h2>
+        <span class="badge">guided decision table</span>
+        <div class="spacer"></div>
+        <button class="btn sm">+ Condition column</button>
+        <button class="btn sm">+ Action column</button>
+        <button class="btn sm">+ Row</button>
+      </div>
+
+      <div class="card" style="overflow:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>claim.amount</th>
+              <th>claimant.priorClaims</th>
+              <th>claim.region</th>
+              <th style="border-left:2px solid var(--border-strong);">eligible</th>
+              <th>approvalTier</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>&lt; 1000</td>
+              <td>== 0</td>
+              <td>*</td>
+              <td style="border-left:2px solid var(--border-strong);"><span class="badge active">true</span></td>
+              <td>"auto"</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>1000 – 5000</td>
+              <td>&lt;= 2</td>
+              <td>*</td>
+              <td style="border-left:2px solid var(--border-strong);"><span class="badge active">true</span></td>
+              <td>"standard"</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>&gt; 5000</td>
+              <td>*</td>
+              <td>*</td>
+              <td style="border-left:2px solid var(--border-strong);"><span class="badge failed">false</span></td>
+              <td>"manual-review"</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>*</td>
+              <td>&gt; 3</td>
+              <td>*</td>
+              <td style="border-left:2px solid var(--border-strong);"><span class="badge failed">false</span></td>
+              <td>"manual-review"</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="muted" style="font-size:12px; margin-top:10px;">Bound to Data Object <b>Claim</b> and <b>Claimant</b> · used by Business Rule Task "Check Eligibility" in Claim Intake.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

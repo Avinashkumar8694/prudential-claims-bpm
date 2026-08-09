@@ -34,6 +34,18 @@ export function createApp(store?: Store) {
     next();
   });
 
+  // minimal security headers (docs/07-security.md §8) — this API returns JSON only, never HTML
+  // (aside from /api/docs' own Swagger UI page, which needs its CDN scripts/styles left alone), so
+  // there's no templating/XSS surface a real CSP is protecting beyond stopping a browser from ever
+  // being tricked into rendering a JSON response as something else.
+  app.use((req, res, next) => {
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('X-Frame-Options', 'DENY');
+    res.header('Referrer-Policy', 'no-referrer');
+    if (req.path !== '/api/docs') res.header('Content-Security-Policy', "default-src 'none'");
+    next();
+  });
+
   // per-request AppContext (single default tenant — see the "skip multi-tenancy" note in
   // docs/07-security.md). The actor identity itself now comes from a verified JWT (requireAuth,
   // mounted below), not a trust-any X-User header.

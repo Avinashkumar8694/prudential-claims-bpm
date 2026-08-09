@@ -15,7 +15,8 @@ const schemas = {
   Error: { type: 'object', properties: { error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' }, details: {} } } } },
   Problem: { type: 'object', properties: { rule: { type: 'string' }, severity: { type: 'string', enum: ['error', 'warning'] }, message: { type: 'string' }, nodeId: { type: 'string' } } },
   ValidationResult: { type: 'object', properties: { ok: { type: 'boolean' }, errors: { type: 'array', items: ref('Problem') }, warnings: { type: 'array', items: ref('Problem') } } },
-  Workflow: { type: 'object', properties: { id: { type: 'string' }, key: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, defaultBranchId: { type: 'string' }, variables: { type: 'array', items: {} }, createdAt: { type: 'string', format: 'date-time' } } },
+  Workflow: { type: 'object', properties: { id: { type: 'string' }, key: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, defaultBranchId: { type: 'string' }, folderId: { type: 'string', nullable: true }, variables: { type: 'array', items: {} }, createdAt: { type: 'string', format: 'date-time' } } },
+  Folder: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, parentId: { type: 'string', nullable: true }, createdAt: { type: 'string', format: 'date-time' } } },
   Branch: { type: 'object', properties: { id: { type: 'string' }, workflowId: { type: 'string' }, name: { type: 'string' }, headVersionId: { type: 'string' } } },
   Version: { type: 'object', properties: { id: { type: 'string' }, branchId: { type: 'string' }, workflowId: { type: 'string' }, number: { type: 'integer' }, label: { type: 'string' }, state: { type: 'string', enum: ['draft', 'published'] }, engine: { type: 'object' } } },
   Deployment: { type: 'object', properties: { id: { type: 'string' }, workflowId: { type: 'string' }, versionId: { type: 'string' }, environment: { type: 'string' }, status: { type: 'string', enum: ['active', 'inactive', 'archived'] }, tags: { type: 'array', items: { type: 'string' } }, versionNumber: { type: 'integer' }, versionLabel: { type: 'string' }, env: { type: 'object', additionalProperties: { type: 'string' } }, deployedAt: { type: 'string', format: 'date-time' } } },
@@ -30,6 +31,12 @@ const schemas = {
   DurStats: { type: 'object', properties: { count: { type: 'integer' }, avgMs: { type: 'integer' }, minMs: { type: 'integer' }, maxMs: { type: 'integer' } } },
   Summary: { type: 'object', properties: { instances: { type: 'object' }, tasks: { type: 'object' }, deployments: { type: 'object' }, jobs: { type: 'object' } } },
   User: { type: 'object', properties: { id: { type: 'string' }, username: { type: 'string' }, roles: { type: 'array', items: { type: 'string' } }, groups: { type: 'array', items: { type: 'string' } }, active: { type: 'boolean' }, createdAt: { type: 'string' } } },
+  ExecutionError: { type: 'object', properties: { id: { type: 'string' }, type: { type: 'string', enum: ['process', 'task', 'job', 'integration'] }, instanceId: { type: 'string' }, taskId: { type: 'string' }, jobId: { type: 'string' }, workflowId: { type: 'string' }, deploymentId: { type: 'string' }, processId: { type: 'string' }, nodeId: { type: 'string' }, nodeName: { type: 'string' }, nodeType: { type: 'string' }, message: { type: 'string' }, stack: { type: 'string' }, at: { type: 'string' }, occurrences: { type: 'integer' }, acknowledged: { type: 'boolean' }, acknowledgedBy: { type: 'string' }, acknowledgedAt: { type: 'string' } } },
+  AuditEvent: { type: 'object', properties: { id: { type: 'string' }, at: { type: 'string' }, actor: { type: 'string' }, kind: { type: 'string' }, workflowId: { type: 'string' }, deploymentId: { type: 'string' }, instanceId: { type: 'string' }, taskId: { type: 'string' }, nodeId: { type: 'string' }, data: { type: 'object' } } },
+  Notification: { type: 'object', properties: { id: { type: 'string' }, userId: { type: 'string' }, kind: { type: 'string' }, title: { type: 'string' }, body: { type: 'string' }, link: { type: 'string' }, instanceId: { type: 'string' }, taskId: { type: 'string' }, deploymentId: { type: 'string' }, read: { type: 'boolean' }, at: { type: 'string' } } },
+  TaskComment: { type: 'object', properties: { id: { type: 'string' }, taskId: { type: 'string' }, author: { type: 'string' }, body: { type: 'string' }, at: { type: 'string' } } },
+  SystemSettings: { type: 'object', properties: { defaultPageSize: { type: 'integer', enum: [10, 20, 50, 100] }, instanceRetentionDays: { type: 'integer' }, auditRetentionDays: { type: 'integer' }, allowRunningVariableEdits: { type: 'boolean' }, executorIntervalSeconds: { type: 'integer' }, defaultJobRetries: { type: 'integer' }, slaWarnThresholdPct: { type: 'integer' }, sessionTimeoutHours: { type: 'integer' }, emailEnabled: { type: 'boolean' }, emailFrom: { type: 'string' }, smtpHost: { type: 'string' }, smtpPort: { type: 'integer' }, updatedAt: { type: 'string' }, updatedBy: { type: 'string' } } },
+  VariableChange: { type: 'object', properties: { name: { type: 'string' }, from: {}, to: {}, at: { type: 'string' }, actor: { type: 'string' } } },
   Group: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' } } },
   Role: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, permissions: { type: 'array', items: { type: 'string' } } } },
 };
@@ -38,9 +45,20 @@ const schemas = {
 const paths: Record<string, any> = {
   '/catalog/nodes': { get: { tags: ['Catalog'], summary: 'Node palette, property schemas and connection ports', responses: ok({ type: 'object' }) } },
   '/catalog/nodes/{engineType}': { get: { tags: ['Catalog'], summary: 'One node type definition', parameters: [idParam('engineType', 'Engine node type')], responses: { ...ok({ type: 'object' }), '404': { description: 'Not found', content: { 'application/json': { schema: ref('Error') } } } } } },
+  '/catalog/processes': { get: { tags: ['Catalog'], summary: 'Every process behind a currently-active deployment, tenant-wide — what a call activity / multi-instance node can resolve', responses: ok({ type: 'object' }) } },
   '/validate': { post: { tags: ['Authoring'], summary: 'Validate an in-progress process (no save)', requestBody: jsonBody({ type: 'object' }), responses: ok(ref('ValidationResult')) } },
   '/import/jbpm': { post: { tags: ['Import/Export'], summary: 'Import a jBPM kjar (file map) as a new project', requestBody: jsonBody({ type: 'object', properties: { files: { type: 'object', additionalProperties: { type: 'string' } }, name: { type: 'string' } } }), responses: created({ type: 'object', properties: { workflowId: { type: 'string' }, processes: { type: 'integer' } } }) } },
+  '/import/jbpm/deploy': { post: { tags: ['Import/Export'], summary: 'Import a jBPM kjar and deploy it immediately, in one step', requestBody: jsonBody({ type: 'object', properties: { files: { type: 'object', additionalProperties: { type: 'string' } }, name: { type: 'string' }, environment: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, env: { type: 'object', additionalProperties: { type: 'string' } } } }), responses: created({ type: 'object', properties: { workflowId: { type: 'string' }, processes: { type: 'integer' }, deploymentId: { type: 'string' } } }) } },
 
+  '/folders': {
+    get: { tags: ['Projects'], summary: 'List folders (Projects-page tree)', responses: ok(listOf('Folder')) },
+    post: { tags: ['Projects'], summary: 'Create a folder', requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, parentId: { type: 'string', nullable: true } } }), responses: created(ref('Folder')) },
+  },
+  '/folders/{id}': {
+    get: { tags: ['Projects'], summary: 'Get a folder', parameters: [idParam()], responses: ok(ref('Folder')) },
+    patch: { tags: ['Projects'], summary: 'Rename or move a folder', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, parentId: { type: 'string', nullable: true } } }), responses: ok(ref('Folder')) },
+    delete: { tags: ['Projects'], summary: 'Delete an empty folder', parameters: [idParam()], responses: { '204': { description: 'Deleted' }, '409': { description: 'Folder is not empty', content: { 'application/json': { schema: ref('Error') } } } } },
+  },
   '/workflows': {
     get: { tags: ['Projects'], summary: 'List projects', responses: ok(listOf('Workflow')) },
     post: { tags: ['Projects'], summary: 'Create a project', requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' } } }), responses: created(ref('Workflow')) },
@@ -65,7 +83,12 @@ const paths: Record<string, any> = {
   '/workflows/{id}/engine': { get: { tags: ['Projects'], summary: 'Assembled engine model (all processes + assets) for a project', parameters: [idParam()], responses: ok({ type: 'object' }) } },
   '/workflows/{id}/assets': {
     get: { tags: ['Assets'], summary: 'List project assets by kind', parameters: [idParam()], responses: ok({ type: 'object' }) },
-    post: { tags: ['Assets'], summary: 'Add an asset', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { kind: { type: 'string' }, name: { type: 'string' } } }), responses: created({ type: 'object' }) },
+    post: { tags: ['Assets'], summary: 'Add an asset', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { kind: { type: 'string' }, name: { type: 'string' }, fields: { type: 'object', description: 'Kind-specific fields beyond the name, e.g. { fact, baseline, target } for a scorecard — see GET /workflows/{id}/assets for each kind\'s nameField.' } } }), responses: created({ type: 'object' }) },
+  },
+  '/workflows/{id}/assets/{kind}/{name}': {
+    get: { tags: ['Assets'], summary: 'Get one asset, with the process nodes that reference it', parameters: [idParam(), idParam('kind', 'Asset kind key, e.g. forms/rulesets/decisions'), idParam('name', "The asset's name (or nameField value, e.g. a ruleset's group)")], responses: ok({ type: 'object', properties: { kind: { type: 'string' }, asset: { type: 'object' }, usedBy: { type: 'array', items: { type: 'object' } } } }) },
+    patch: { tags: ['Assets'], summary: 'Update an asset (rename and/or edit its fields); renaming re-points every process reference', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Current asset name')], requestBody: jsonBody({ type: 'object' }), responses: ok({ type: 'object', properties: { kind: { type: 'string' }, name: { type: 'string' } } }) },
+    delete: { tags: ['Assets'], summary: 'Delete an asset — blocked (409) while any process node still references it', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Asset name')], responses: { '204': { description: 'Deleted' }, '409': { description: 'Still referenced', content: { 'application/json': { schema: ref('Error') } } } } },
   },
   '/workflows/{id}/branches': {
     get: { tags: ['Versioning'], summary: 'List branches', parameters: [idParam()], responses: ok(listOf('Branch')) },
@@ -83,6 +106,7 @@ const paths: Record<string, any> = {
   '/versions/{id}/deploy': { post: { tags: ['Deployments'], summary: 'Deploy a published version', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { environment: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, env: { type: 'object' }, activate: { type: 'boolean' } } }), responses: created(ref('Deployment')) } },
   '/versions/{id}/export': { get: { tags: ['Import/Export'], summary: 'Export a version as a jBPM kjar (file map)', parameters: [idParam()], responses: ok({ type: 'object', properties: { files: { type: 'object', additionalProperties: { type: 'string' } } } }) } },
 
+  '/deployments': { get: { tags: ['Deployments'], summary: 'List deployments across all projects', parameters: [q('workflowId', 'Filter by project'), q('environment', 'Filter by environment'), q('status', 'Filter by status')], responses: ok(listOf('Deployment')) } },
   '/workflows/{id}/deployments': { get: { tags: ['Deployments'], summary: 'List deployments for a project', parameters: [idParam()], responses: ok(listOf('Deployment')) } },
   '/deployments/{id}': { get: { tags: ['Deployments'], summary: 'Get a deployment', parameters: [idParam()], responses: ok(ref('Deployment')) } },
   '/deployments/{id}/tags': { post: { tags: ['Deployments'], summary: 'Add/remove deployment tags', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { add: { type: 'array', items: { type: 'string' } }, remove: { type: 'array', items: { type: 'string' } } } }), responses: ok(ref('Deployment')) } },
@@ -109,11 +133,52 @@ const paths: Record<string, any> = {
   '/instances/{id}/abort': { post: { tags: ['Instances'], summary: 'Abort (cascades to active children)', parameters: [idParam()], responses: ok(ref('Instance')) } },
 
   '/tasks': { get: { tags: ['Human Tasks'], summary: 'List tasks', parameters: [q('assignee', 'Owned by user'), q('group', 'Group queue'), q('status', 'Task status'), q('overdue', 'true = only tasks past their dueAt and not yet completed/skipped')], responses: ok(listOf('Task')) } },
-  '/tasks/{id}': { get: { tags: ['Human Tasks'], summary: 'Get a task', parameters: [idParam()], responses: ok(ref('Task')) } },
+  '/tasks/{id}': {
+    get: { tags: ['Human Tasks'], summary: 'Get a task', parameters: [idParam()], responses: ok(ref('Task')) },
+    patch: { tags: ['Human Tasks'], summary: 'Admin edits: priority / due date (null dueAt clears it)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { priority: { type: 'integer' }, dueAt: { type: 'string', format: 'date-time', nullable: true } } }), responses: ok(ref('Task')) },
+  },
   '/tasks/{id}/claim': { post: { tags: ['Human Tasks'], summary: 'Claim a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/release': { post: { tags: ['Human Tasks'], summary: 'Release a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/complete': { post: { tags: ['Human Tasks'], summary: 'Complete a task (resumes the instance)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object' } } }), responses: ok(ref('Task')) } },
   '/tasks/{id}/skip': { post: { tags: ['Human Tasks'], summary: 'Skip a task without completing it (only if the node is declared skippable)', parameters: [idParam()], responses: ok(ref('Task')) } },
+  '/tasks/{id}/start': { post: { tags: ['Human Tasks'], summary: 'Start working (reserved → inprogress; starting from Ready implicitly claims)', parameters: [idParam()], responses: ok(ref('Task')) } },
+  '/tasks/{id}/stop': { post: { tags: ['Human Tasks'], summary: 'Stop working (inprogress → reserved, ownership kept)', parameters: [idParam()], responses: ok(ref('Task')) } },
+  '/tasks/{id}/save': { post: { tags: ['Human Tasks'], summary: 'Save partial outputs without completing', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object' } } }), responses: ok(ref('Task')) } },
+  '/tasks/{id}/delegate': { post: { tags: ['Human Tasks'], summary: 'Delegate to a user (lands reserved in their inbox)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { to: { type: 'string' } } }), responses: ok(ref('Task')) } },
+  '/tasks/{id}/forward': { post: { tags: ['Human Tasks'], summary: 'Forward to a user or group queue (back to Ready; target must claim)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { user: { type: 'string' }, group: { type: 'string' } } }), responses: ok(ref('Task')) } },
+  '/tasks/{id}/remind': { post: { tags: ['Human Tasks'], summary: 'Send the current owner a reminder notification', parameters: [idParam()], responses: ok({ type: 'object', properties: { notified: { type: 'string' } } }) } },
+  '/tasks/{id}/comments': {
+    get: { tags: ['Human Tasks'], summary: 'List comments', parameters: [idParam()], responses: ok(listOf('TaskComment')) },
+    post: { tags: ['Human Tasks'], summary: 'Add a comment', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { body: { type: 'string' } } }), responses: created(ref('TaskComment')) },
+  },
+  '/tasks/{id}/comments/{cid}': { delete: { tags: ['Human Tasks'], summary: 'Delete a comment (author or business admin)', parameters: [idParam(), idParam('cid', 'Comment id')], responses: { '204': { description: 'Deleted' } } } },
+  '/tasks/{id}/events': { get: { tags: ['Human Tasks'], summary: 'Task audit trail (the Logs tab)', parameters: [idParam()], responses: ok(listOf('AuditEvent')) } },
+  '/instances/{id}/variables': { put: { tags: ['Instances'], summary: 'Edit instance variables inline (audited; refused once the instance has ended)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', additionalProperties: {} }), responses: ok(ref('Instance')) } },
+  '/instances/{id}/variable-history': { get: { tags: ['Instances'], summary: 'Per-variable change history (from the audit trail)', parameters: [idParam(), q('name', 'Only this variable')], responses: ok(listOf('VariableChange')) } },
+
+  '/errors': { get: { tags: ['Execution Errors'], summary: 'List execution errors (the operational failure queue)', parameters: [q('type', 'Comma-separated: process,task,job,integration'), q('instanceId', 'Filter by instance'), q('taskId', 'Filter by task'), q('jobId', 'Filter by job'), q('workflowId', 'Filter by project'), q('processId', 'Filter by process'), q('acknowledged', 'true / false'), q('from', 'ISO lower bound'), q('to', 'ISO upper bound'), q('limit', 'Page size'), q('offset', 'Page offset')], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('ExecutionError') }, total: { type: 'integer' } } }) } },
+  '/errors/summary': { get: { tags: ['Execution Errors'], summary: 'Counts for the nav badge / Home KPI', responses: ok({ type: 'object', properties: { total: { type: 'integer' }, unacknowledged: { type: 'integer' }, last24h: { type: 'integer' } } }) } },
+  '/errors/{id}': { get: { tags: ['Execution Errors'], summary: 'Get one error', parameters: [idParam()], responses: ok(ref('ExecutionError')) } },
+  '/errors/{id}/ack': { post: { tags: ['Execution Errors'], summary: 'Acknowledge (take ownership; idempotent)', parameters: [idParam()], responses: ok(ref('ExecutionError')) } },
+  '/errors/ack': { post: { tags: ['Execution Errors'], summary: 'Bulk acknowledge', requestBody: jsonBody({ type: 'object', properties: { ids: { type: 'array', items: { type: 'string' } } } }), responses: ok({ type: 'object', properties: { results: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' }, ok: { type: 'boolean' }, reason: { type: 'string' } } } } } }) } },
+
+  '/jobs': { get: { tags: ['Jobs & Timers'], summary: 'List timer jobs', parameters: [q('status', 'scheduled|fired|cancelled'), q('instanceId', 'Filter by instance'), q('kind', 'duration|cycle|date|start')], responses: ok(listOf('TimerJob')) } },
+  '/jobs/{id}': { get: { tags: ['Jobs & Timers'], summary: 'Get a job', parameters: [idParam()], responses: ok(ref('TimerJob')) } },
+  '/jobs/{id}/cancel': { post: { tags: ['Jobs & Timers'], summary: 'Cancel a scheduled job', parameters: [idParam()], responses: ok(ref('TimerJob')) } },
+  '/jobs/{id}/trigger': { post: { tags: ['Jobs & Timers'], summary: 'Fire a scheduled job now', parameters: [idParam()], responses: ok(ref('TimerJob')) } },
+  '/jobs/{id}/reschedule': { post: { tags: ['Jobs & Timers'], summary: 'Move the fire time (also revives a cancelled job)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { dueAt: { type: 'string', format: 'date-time' } } }), responses: ok(ref('TimerJob')) } },
+
+  '/audit': { get: { tags: ['Governance'], summary: 'Audit log (admin)', parameters: [q('actor', 'Filter by actor'), q('kind', "Exact kind or prefix ending in '.' (e.g. 'task.')"), q('workflowId', 'Filter by project'), q('deploymentId', 'Filter by deployment'), q('instanceId', 'Filter by instance'), q('taskId', 'Filter by task'), q('from', 'ISO lower bound'), q('to', 'ISO upper bound'), q('limit', 'Page size'), q('offset', 'Page offset')], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('AuditEvent') }, total: { type: 'integer' } } }) } },
+  '/audit/facets': { get: { tags: ['Governance'], summary: 'Distinct kinds + actors for the filter dropdowns (admin)', responses: ok({ type: 'object', properties: { kinds: { type: 'array', items: { type: 'string' } }, actors: { type: 'array', items: { type: 'string' } } } }) } },
+
+  '/notifications': { get: { tags: ['Notifications'], summary: "The caller's notifications (bell panel)", parameters: [q('unread', 'true = unread only'), q('limit', 'Max rows (default 50)')], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('Notification') }, unread: { type: 'integer' } } }) } },
+  '/notifications/read-all': { post: { tags: ['Notifications'], summary: 'Mark all read', responses: ok({ type: 'object', properties: { marked: { type: 'integer' } } }) } },
+  '/notifications/{id}/read': { post: { tags: ['Notifications'], summary: 'Mark one read', parameters: [idParam()], responses: ok(ref('Notification')) } },
+
+  '/settings/system': {
+    get: { tags: ['Governance'], summary: 'Global system settings (singleton; defaults if never saved)', responses: ok(ref('SystemSettings')) },
+    put: { tags: ['Governance'], summary: 'Update system settings (admin)', requestBody: jsonBody(ref('SystemSettings')), responses: ok(ref('SystemSettings')) },
+  },
 
   '/query/process-definitions': { get: { tags: ['Query & Analytics'], summary: 'All active process definitions with live stats', responses: ok(listOf('ProcessDef')) } },
   '/query/process-definitions/{processId}/instances': { get: { tags: ['Query & Analytics'], summary: 'Instances of a process definition', parameters: [idParam('processId', 'Process id'), q('status', 'Filter by status')], responses: ok(listOf('Instance')) } },
@@ -129,6 +194,8 @@ const paths: Record<string, any> = {
   '/query/jobs': { get: { tags: ['Query & Analytics'], summary: 'Timer jobs', parameters: [q('status', 'scheduled|fired|cancelled')], responses: ok(listOf('TimerJob')) } },
 
   '/auth/login': { post: { tags: ['IAM'], security: [], summary: 'Log in — issues a JWT (Bearer token) for every other endpoint', requestBody: jsonBody({ type: 'object', properties: { username: { type: 'string' }, password: { type: 'string' } } }), responses: { ...ok({ type: 'object', properties: { token: { type: 'string' }, user: ref('User') } }), '401': { description: 'Invalid credentials', content: { 'application/json': { schema: ref('Error') } } } } } },
+  '/auth/me': { get: { tags: ['IAM'], summary: 'The caller’s own identity + resolved permissions (from their current roles)', responses: ok({ type: 'object', properties: { user: { type: 'object', properties: { id: { type: 'string' }, username: { type: 'string' }, roles: { type: 'array', items: { type: 'string' } }, groups: { type: 'array', items: { type: 'string' } } } }, permissions: { type: 'array', items: { type: 'string' } } } }) } },
+  '/auth/me/password': { post: { tags: ['IAM'], summary: 'Change your own password (requires the current one)', requestBody: jsonBody({ type: 'object', properties: { currentPassword: { type: 'string' }, newPassword: { type: 'string' } } }), responses: { '204': { description: 'Changed' }, '403': { description: 'Current password incorrect', content: { 'application/json': { schema: ref('Error') } } } } } },
   '/users': {
     get: { tags: ['IAM'], summary: 'List users (admin)', responses: ok(listOf('User')) },
     post: { tags: ['IAM'], summary: 'Create a user (admin)', requestBody: jsonBody({ type: 'object', properties: { username: { type: 'string' }, password: { type: 'string' }, roles: { type: 'array', items: { type: 'string' } }, groups: { type: 'array', items: { type: 'string' } } } }), responses: created(ref('User')) },
@@ -164,6 +231,7 @@ export const openapiSpec = {
   tags: [
     { name: 'Catalog' }, { name: 'Authoring' }, { name: 'Projects' }, { name: 'Processes' }, { name: 'Assets' },
     { name: 'Versioning' }, { name: 'Deployments' }, { name: 'Instances' }, { name: 'Human Tasks' },
+    { name: 'Execution Errors' }, { name: 'Jobs & Timers' }, { name: 'Notifications' }, { name: 'Governance' },
     { name: 'Query & Analytics' }, { name: 'Import/Export' }, { name: 'IAM' },
   ],
   components: {

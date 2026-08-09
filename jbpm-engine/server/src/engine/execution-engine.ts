@@ -1,15 +1,17 @@
 // Token-based interpreter over the SDK engine JSON. See docs/08-execution-engine.md.
 // Deterministic core (clock/newId injected). Persists the instance after runToQuiescence.
 import type { AppContext } from '../context.ts';
-import { Collections, type Deployment, type Instance, type NodeVisit, type TimerJob } from '../domain.ts';
+import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.ts';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
-import { NODE_HANDLERS, CHILD_OUTPUT_MAPPERS, type HandlerCtx, type HandlerResult } from './nodes/index.ts';
+import { NODE_HANDLERS, CHILD_OUTPUT_MAPPERS, buildMultiInstanceResult, type HandlerCtx, type HandlerResult } from './nodes/index.ts';
 import { varTypesOf, kcontextInfoOf, onActionOf } from './nodes/kcontext-info.ts';
 // Aliased (not `boundary`) since fireBoundary()'s own parameter below is already named `boundary`.
 import * as boundaryHandler from './nodes/boundary/handler.ts';
 import { computeDue } from './duration.ts';
 import { runScript } from './sandbox.ts';
 import { config } from '../infra/config.ts';
+import { conflict, quotaExceeded } from '../infra/errors.ts';
+import { SettingsService } from '../modules/settings/service.ts';
 
 // Error codes the Node runtime raises (documented in docs/14-error-handling.md); user codes also
 // allowed. Re-exported from nodes/boundary/handler.ts, which owns error-catch matching logic now.
@@ -68,6 +70,11 @@ export class ExecutionEngine {
       history: [], startedAt: now, startedBy: actor,
     };
     this.emit({ kind: 'instance.started', instanceId: inst.id });
+    // Every instance is created here — a direct start, a scheduled/cron start, a call-activity or
+    // multi-instance child, or a signal/message start-event peer instance (see startChild()/
+    // broadcast() below, both of which route through this same method) — so this is the one place
+    // that needs to log it for the Audit Log's PIID column to ever show a "started" row at all.
+    await this.ctx.audit({ actor, kind: 'instance.started', workflowId: dep.workflowId, deploymentId: dep.id, instanceId: inst.id, data: { processId: inst.processId } });
     await this.runToQuiescence(inst, dep);
     return inst;
   }
@@ -101,14 +108,32 @@ export class ExecutionEngine {
 
         if (result.wait) {
           token.state = 'waiting'; token.waitFor = result.wait;
-          if (result.wait.kind === 'timer' && result.wait.dueAt) await this.scheduleTimer(inst, token.id, node.id!, result.wait.dueAt);
-          // schedule any timer boundary events attached to this (now waiting) host node — WHICH
-          // boundaries match is boundary/handler.ts's own decision; scheduling the actual TimerJob
-          // still needs this.ctx.newId()/clock() and the timer repo, so that part stays here.
-          for (const b of boundaryHandler.boundaryTimerHosts(p.nodes, node.id!)) {
-            const spec = (b as any).event.timer;
-            const cycle = typeof spec === 'object' ? spec.cycle : undefined;
-            await this.scheduleTimer(inst, token.id, b.id!, computeDue(spec, this.ctx.clock()), cycle);
+          try {
+            if (result.wait.kind === 'timer' && result.wait.dueAt) await this.scheduleTimer(inst, token.id, node.id!, result.wait.dueAt);
+            // schedule any timer boundary events attached to this (now waiting) host node — WHICH
+            // boundaries match is boundary/handler.ts's own decision; scheduling the actual TimerJob
+            // still needs this.ctx.newId()/clock() and the timer repo, so that part stays here.
+            for (const b of boundaryHandler.boundaryTimerHosts(p.nodes, node.id!)) {
+              const spec = (b as any).event.timer;
+              const cycle = typeof spec === 'object' ? spec.cycle : undefined;
+              await this.scheduleTimer(inst, token.id, b.id!, computeDue(spec, this.ctx.clock()), cycle);
+            }
+          } catch (e) {
+            // couldn't durably schedule the timer (e.g. maxActiveTimers quota) — fail this node the
+            // same way a handler error does, rather than leave the token parked on a wait nothing
+            // will ever resolve (default maxActiveTimers is 0/unlimited, so this never fires unless
+            // an admin opted in — no behavior change for any existing deployment).
+            this.removeToken(inst, token.id);
+            const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'RUNTIME_ERROR';
+            if (this.raiseError(inst, p, node.id!, code, (e as Error).message)) continue;
+            inst.status = 'failed'; inst.error = { nodeId: node.id!, message: (e as Error).message, at: this.ctx.clock() }; break;
+          }
+          // Message/signal/escalation boundaries get a WAITING token of their own, same idea as the
+          // timer boundaries just above but via a token broadcast()/signalInstance() can resume,
+          // instead of a TimerJob — see resumeToken()'s own boundary branch for what happens when one
+          // of these actually resolves.
+          for (const b of boundaryHandler.messageBoundaryHosts(p.nodes, node.id!)) {
+            inst.tokens.push({ id: this.ctx.newId(), nodeId: b.node.id!, state: 'waiting', waitFor: { kind: b.kind, ref: b.name }, enteredAt: this.ctx.clock() });
           }
           continue;
         }
@@ -137,7 +162,7 @@ export class ExecutionEngine {
         // triggered mid-handler (inst.status no longer 'running'): an aborted instance must not
         // keep accumulating new tokens just because the node it aborted from "completed normally"
         // from the handler's own point of view.
-        this.removeToken(inst, token.id);
+        this.removeHostToken(inst, p, token.id, node.id!);
         if (result.end === 'complete' || result.consume || inst.status !== 'running') { /* no successors */ }
         else {
           const targets = result.next ?? this.defaultTargets(p, node, inst);
@@ -157,9 +182,14 @@ export class ExecutionEngine {
     await this.inst().put(inst);
     this.emit({ kind: inst.status === 'failed' ? 'instance.failed' : inst.status === 'completed' ? 'instance.completed' : 'instance.updated', instanceId: inst.id });
     // Reached a terminal state → no orphans: abort any still-active child instances (e.g. a terminate
-    // end / failure left parallel call-activities or sub-processes running).
+    // end / failure left parallel call-activities or sub-processes running), AND no dangling tasks —
+    // an interrupting boundary timer/error cancels its host token here (see fireBoundary/raiseError)
+    // but never touched the separate Task record for that host, and a terminate end or unhandled
+    // failure can just as easily leave an OTHER parallel branch's task open. Any instance that just
+    // became completed/aborted/failed must leave zero actionable tasks behind.
     if (inst.status === 'completed' || inst.status === 'aborted' || inst.status === 'failed') {
       await this.cancelTimersForInstance(inst.id);
+      await this.exitOpenTasks(inst.id);
       await this.abortDescendants(inst.id);
     }
     // Notify the parent's waiting call/sub-process token: completed → resume; aborted/failed → propagate.
@@ -181,10 +211,33 @@ export class ExecutionEngine {
       if (child.independent) continue;
       child.status = 'aborted'; child.tokens = []; child.endedAt = this.ctx.clock();
       await this.cancelTimersForInstance(child.id);
+      await this.exitOpenTasks(child.id);
       await this.inst().put(child);
       this.emit({ kind: 'instance.updated', instanceId: child.id });
       await this.abortDescendants(child.id);
     }
+  }
+
+  /** No instance in a terminal state should leave an actionable task behind — see the callers'
+   *  comments for the specific ways a task's host activity can otherwise be cancelled without the
+   *  separate Task record ever finding out. 'exited' (jBPM's own term) covers every such case; a
+   *  task already completed/skipped/errored (its OWN terminal states) is untouched. */
+  private async exitOpenTasks(instanceId: string): Promise<void> {
+    const open = await this.ctx.store.repo<Task>(Collections.tasks).query((t) =>
+      t.tenantId === this.ctx.tenantId && t.instanceId === instanceId &&
+      (t.status === 'created' || t.status === 'reserved' || t.status === 'inprogress'));
+    for (const t of open) { t.status = 'exited'; await this.ctx.store.repo<Task>(Collections.tasks).put(t); }
+  }
+
+  /** Same, scoped to one token — an interrupting boundary cancels only ITS host token, which may be
+   *  one of several still-active branches on a parallel gateway; the instance itself stays running,
+   *  so exitOpenTasks(instanceId) above (only called once the whole instance settles) would never
+   *  reach this task otherwise. */
+  private async exitOpenTaskForToken(tokenId: string): Promise<void> {
+    const open = await this.ctx.store.repo<Task>(Collections.tasks).query((t) =>
+      t.tenantId === this.ctx.tenantId && t.tokenId === tokenId &&
+      (t.status === 'created' || t.status === 'reserved' || t.status === 'inprogress'));
+    for (const t of open) { t.status = 'exited'; await this.ctx.store.repo<Task>(Collections.tasks).put(t); }
   }
 
   /** Public entry: abort an instance and its whole subtree; also unblock a waiting parent. */
@@ -192,6 +245,7 @@ export class ExecutionEngine {
     if (inst.status === 'completed' || inst.status === 'aborted') return inst;
     inst.status = 'aborted'; inst.tokens = []; inst.endedAt = this.ctx.clock();
     await this.cancelTimersForInstance(inst.id);
+    await this.exitOpenTasks(inst.id);
     await this.inst().put(inst);
     this.emit({ kind: 'instance.updated', instanceId: inst.id });
     await this.abortDescendants(inst.id);
@@ -204,11 +258,13 @@ export class ExecutionEngine {
   private async tryFailParent(child: Instance): Promise<void> {
     const parent = await this.inst().get(child.parentInstanceId!);
     if (!parent || parent.status === 'completed' || parent.status === 'aborted' || parent.status === 'failed') return;
-    const token = parent.tokens.find((t) => t.state === 'waiting' && t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id);
+    const token = parent.tokens.find((t) => t.state === 'waiting' &&
+      ((t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id) || (t.waitFor?.kind === 'multiInstance' && t.id === child.parentTokenId)));
     if (!token) return;
     const pdep = await this.deps().get(parent.deploymentId);
     if (!pdep) return;
     const p = this.pick(pdep, parent.processId);
+    if (token.waitFor?.kind === 'multiInstance') { await this.settleMultiInstance(parent, pdep, p, token); return; }
     this.removeToken(parent, token.id);
     // Same code family the sync completion path in call/handler.ts and subprocess/handler.ts raises
     // for the identical failure, just detected later (the child instead parked in a wait) — kept in
@@ -216,13 +272,40 @@ export class ExecutionEngine {
     const callNode = p.nodes.find((n) => n.id === token.nodeId) as any;
     const prefix = callNode?.type === 'call' ? 'CALL' : 'SUBPROCESS';
     const code = `${prefix}_${child.status === 'aborted' ? 'ABORTED' : 'ERROR'}`;
-    if (this.raiseError(parent, p, token.nodeId, code, `child instance ${child.status}: ${child.id}`)) {
+    await this.failParentWith(parent, p, pdep, token.nodeId, code, `child instance ${child.status}: ${child.id}`);
+  }
+
+  /** A child instance completed → map its outputs into the parent and continue the parent flow. */
+  private async tryResumeParent(child: Instance): Promise<void> {
+    const parent = await this.inst().get(child.parentInstanceId!);
+    if (!parent) return;
+    const token = parent.tokens.find((t) => t.state === 'waiting' &&
+      ((t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id) || (t.waitFor?.kind === 'multiInstance' && t.id === child.parentTokenId)));
+    if (!token) return;
+    const pdep = await this.deps().get(parent.deploymentId);
+    if (!pdep) return;
+    const p = this.pick(pdep, parent.processId);
+    if (token.waitFor?.kind === 'multiInstance') { await this.settleMultiInstance(parent, pdep, p, token); return; }
+    const callNode = p.nodes.find((n) => n.id === token.nodeId) as any;
+    // Mapping is node-type-specific (subprocess shares scope, call is isolated) — see each type's own
+    // mapChildOutputs in nodes/index.ts's CHILD_OUTPUT_MAPPERS (same logic the sync-completion path uses).
+    const mapper = callNode ? CHILD_OUTPUT_MAPPERS[callNode.type as string] : undefined;
+    const vars = mapper ? mapper(callNode, child) : {};
+    await this.resumeToken(parent, pdep, token.id, vars);
+  }
+
+  /** Shared terminal-outcome logic for a child settling into a parent's waiting call/subprocess/
+   *  multi-instance token: route to an error boundary if one is attached, otherwise fail the parent
+   *  and cascade upward — the same either way regardless of which node type raised it. */
+  private async failParentWith(parent: Instance, p: EngineProcess, pdep: Deployment, nodeId: string, code: string, message: string): Promise<void> {
+    if (this.raiseError(parent, p, nodeId, code, message)) {
       parent.status = 'running';
       await this.runToQuiescence(parent, pdep);   // handler token → runs recovery, then settles (may cascade)
     } else {
       parent.status = 'failed';
-      parent.error = { nodeId: token.nodeId, message: `child instance ${child.status}`, at: this.ctx.clock() };
+      parent.error = { nodeId, message, at: this.ctx.clock() };
       parent.endedAt = this.ctx.clock();
+      await this.exitOpenTasks(parent.id);
       await this.inst().put(parent);
       this.emit({ kind: 'instance.failed', instanceId: parent.id });
       await this.abortDescendants(parent.id);
@@ -230,20 +313,42 @@ export class ExecutionEngine {
     }
   }
 
-  /** A child instance completed → map its outputs into the parent and continue the parent flow. */
-  private async tryResumeParent(child: Instance): Promise<void> {
-    const parent = await this.inst().get(child.parentInstanceId!);
-    if (!parent) return;
-    const token = parent.tokens.find((t) => t.state === 'waiting' && t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id);
-    if (!token) return;
-    const pdep = await this.deps().get(parent.deploymentId);
-    if (!pdep) return;
-    const callNode = this.pick(pdep, parent.processId).nodes.find((n) => n.id === token.nodeId) as any;
-    // Mapping is node-type-specific (subprocess shares scope, call is isolated) — see each type's own
-    // mapChildOutputs in nodes/index.ts's CHILD_OUTPUT_MAPPERS (same logic the sync-completion path uses).
-    const mapper = callNode ? CHILD_OUTPUT_MAPPERS[callNode.type as string] : undefined;
-    const vars = mapper ? mapper(callNode, child) : {};
-    await this.resumeToken(parent, pdep, token.id, vars);
+  /** One of a multi-instance (forEach) node's children just settled (completed/failed/aborted) —
+   *  re-derive the node's full state from ALL its children (found by parentTokenId, not stored on the
+   *  token itself — see WaitSpec's 'multiInstance' doc comment) and either: start the next item
+   *  (sequential, more items left, nothing failed yet), stay parked (parallel, some still running),
+   *  fail the node (any child aborted/failed — real MI default semantics), or resume with the
+   *  collected itemResult array (every child completed). */
+  private async settleMultiInstance(parent: Instance, pdep: Deployment, p: EngineProcess, token: Token): Promise<void> {
+    const n = p.nodes.find((node) => node.id === token.nodeId) as any;
+    if (!n) { this.removeToken(parent, token.id); return; }
+    const items = Array.isArray(parent.variables[n.over]) ? (parent.variables[n.over] as unknown[]) : [];
+    let siblings = (await this.inst().query((i) => i.tenantId === this.ctx.tenantId && i.parentInstanceId === parent.id && i.parentTokenId === token.id))
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    const alreadyFailed = siblings.some((s) => s.status === 'failed' || s.status === 'aborted');
+    if (!n.parallel && !alreadyFailed && siblings.length < items.length && siblings.every((s) => s.status === 'completed')) {
+      const item = items[siblings.length];
+      const childVars: Record<string, unknown> = {};
+      for (const v of (n.pass || [])) childVars[v] = parent.variables[v];
+      if (n.as) childVars[n.as] = item;
+      const resolved = this.resolveCalled ? await this.resolveCalled(n.process) : undefined;
+      if (resolved) {
+        await this.startChild(resolved.dep, resolved.processId, childVars, parent.startedBy, parent.id, token.id);
+        siblings = (await this.inst().query((i) => i.tenantId === this.ctx.tenantId && i.parentInstanceId === parent.id && i.parentTokenId === token.id))
+          .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+      }
+    }
+    const result = buildMultiInstanceResult(siblings, items.length, n);
+    if (result.wait) return;   // still outstanding children — stay parked, nothing to do yet
+    if (result.error) {
+      this.removeToken(parent, token.id);
+      await this.failParentWith(parent, p, pdep, token.nodeId!, result.errorCode || 'MULTIINSTANCE_ERROR', result.error);
+      return;
+    }
+    // Same "exit the wait node, spawn successors, resume the loop" path every other wait-node type
+    // resumes through — gets onExit/cancelEventGatewaySiblings/defaultTargets for free instead of
+    // duplicating them here.
+    await this.resumeToken(parent, pdep, token.id, result.vars);
   }
 
   /** Start a child process instance linked to a parent token (call activity). `independent` decouples
@@ -380,11 +485,30 @@ export class ExecutionEngine {
 
   private removeToken(inst: Instance, tokenId: string) { inst.tokens = inst.tokens.filter((t) => t.id !== tokenId); }
 
+  /** Remove a host token AND any sibling message/signal/escalation boundary tokens still waiting on
+   *  it (see messageBoundaryHosts) — those are real entries in inst.tokens (unlike a timer boundary's
+   *  wait, which lives in a separate TimerJob record already cleaned up via cancelTimersForToken), so
+   *  leaving one behind after its host is gone for ANY reason — normal completion, a DIFFERENT
+   *  boundary interrupting it, direct resumption — would permanently block the instance from ever
+   *  settling out of 'waiting' (see runToQuiescence's settle check). */
+  private removeHostToken(inst: Instance, p: EngineProcess, hostTokenId: string, hostNodeId: string): void {
+    this.removeToken(inst, hostTokenId);
+    const boundaryIds = new Set(boundaryHandler.messageBoundaryHosts(p.nodes, hostNodeId).map((b) => b.node.id!));
+    if (boundaryIds.size) inst.tokens = inst.tokens.filter((t) => !(t.state === 'waiting' && boundaryIds.has(t.nodeId)));
+  }
+
   // ---- timers ----
   private timerRepo() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
   /** `cycle` (boundary timers only — see call site) lets TimerService reschedule this job for its next
    *  occurrence after firing, instead of the one-shot behavior every other timer kind wants. */
   private async scheduleTimer(inst: Instance, tokenId: string, nodeId: string, dueAt: string, cycle?: string) {
+    const { maxActiveTimers } = await new SettingsService(this.ctx).get();
+    if (maxActiveTimers) {
+      const active = await this.timerRepo().query((t) => t.tenantId === this.ctx.tenantId && t.status === 'scheduled');
+      if (active.length >= maxActiveTimers) {
+        throw quotaExceeded(`per-tenant active-timer quota exceeded (max ${maxActiveTimers})`, { quota: 'maxActiveTimers', max: maxActiveTimers, current: active.length });
+      }
+    }
     await this.timerRepo().put({ id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: inst.id, tokenId, nodeId, kind: 'duration', dueAt, cycle, fired: 0, status: 'scheduled' });
   }
   /** Cancel a token's pending timers (host completed/resumed → its boundary/catch timers no longer apply). */
@@ -427,10 +551,31 @@ export class ExecutionEngine {
   private async fireBoundary(inst: Instance, dep: Deployment, boundary: EngineNode, hostTokenId: string): Promise<Instance> {
     const host = inst.tokens.find((t) => t.id === hostTokenId);
     if (!host) return inst;   // host already finished → stale timer
-    if ((boundary as any).interrupting !== false) { this.removeToken(inst, hostTokenId); await this.cancelTimersForToken(inst, hostTokenId); }
+    if ((boundary as any).interrupting !== false) {
+      this.removeHostToken(inst, this.proc(inst, dep), hostTokenId, host.nodeId); await this.cancelTimersForToken(inst, hostTokenId);
+      await this.exitOpenTaskForToken(hostTokenId);   // e.g. a user task cancelled out from under its assignee
+    }
     inst.tokens.push({ id: this.ctx.newId(), nodeId: boundary.id!, state: 'active', enteredAt: this.ctx.clock() });
     inst.status = 'running';
     this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: boundary.id!, tokenId: inst.tokens.at(-1)!.id });
+    return this.runToQuiescence(inst, dep);
+  }
+  /** A message/signal/escalation boundary's own waiting token resolved (see messageBoundaryHosts) —
+   *  same "interrupting cancels the host, then run the recovery flow" as fireBoundary, just resolved
+   *  via broadcast()/resumeToken() instead of a fired TimerJob, so the host has to be found by its
+   *  current waiting token rather than passed in directly (that's still the SAME host token id
+   *  fireBoundary takes; this just discovers it a different way). */
+  private async fireMessageBoundary(inst: Instance, dep: Deployment, boundary: EngineNode, boundaryTokenId: string): Promise<Instance> {
+    this.removeToken(inst, boundaryTokenId);
+    const p = this.proc(inst, dep);
+    const hostIds = boundaryHandler.onList(boundary);
+    const host = inst.tokens.find((t) => t.state === 'waiting' && hostIds.includes(t.nodeId));
+    if (host && (boundary as any).interrupting !== false) {
+      this.removeHostToken(inst, p, host.id, host.nodeId); await this.cancelTimersForToken(inst, host.id);
+      await this.exitOpenTaskForToken(host.id);
+    }
+    for (const t of this.defaultTargets(p, boundary, inst)) inst.tokens.push({ id: this.ctx.newId(), nodeId: t, state: 'active', enteredAt: this.ctx.clock() });
+    inst.status = 'running';
     return this.runToQuiescence(inst, dep);
   }
 
@@ -517,15 +662,25 @@ export class ExecutionEngine {
   // ---- resume (wait states) ----
   /** Complete a wait node (task/timer/message/signal) and continue the instance. */
   async resumeToken(inst: Instance, dep: Deployment, tokenId: string, vars?: Record<string, unknown>): Promise<Instance> {
-    if (inst.status === 'suspended') throw new Error('instance is suspended');   // nothing advances a paused tree
+    // Proper ApiErrors (not bare Error) so every caller — direct service guards already reject most of
+    // these earlier, but this is the last line of defense for anything that reaches resumeToken without
+    // one (e.g. a manually-triggered timer job on a suspended instance) — gets a clean 409 instead of
+    // falling through to errorMiddleware's generic "Internal server error" 500.
+    if (inst.status === 'suspended') throw conflict('instance is suspended');   // nothing advances a paused tree
     const token = inst.tokens.find((t) => t.id === tokenId);
-    if (!token || token.state !== 'waiting') throw new Error('token is not waiting');
+    if (!token || token.state !== 'waiting') throw conflict('token is not waiting');
     if (vars) Object.assign(inst.variables, vars);
     await this.cancelTimersForToken(inst, tokenId);   // host resumed → drop its pending boundary/catch timers
     const p = this.proc(inst, dep);
     const node = this.nodeMap(p).get(token.nodeId);
+    // A message/signal/escalation boundary's own waiting token (see messageBoundaryHosts) resolving —
+    // route through the same "cancel the host, then run the recovery flow" logic fireBoundary uses for
+    // a timer boundary, rather than the generic wait-node completion logic below (which assumes the
+    // RESUMED node itself is what was being waited on, true for a userTask/catch but not for a
+    // boundary, whose real host is a DIFFERENT, still-separately-tracked token).
+    if (node?.type === 'boundary') return this.fireMessageBoundary(inst, dep, node, tokenId);
     // exit the wait node, spawn successors, resume the loop
-    this.removeToken(inst, tokenId);
+    if (node) this.removeHostToken(inst, p, tokenId, node.id!); else this.removeToken(inst, tokenId);
     if (node) await this.cancelEventGatewaySiblings(inst, p, node.id!);
     // A waiting node (userTask/receive/etc.) NOW actually completes — this is where its onExit fires
     // (handle() already ran onExit for anything that finished immediately; a waiting node never got

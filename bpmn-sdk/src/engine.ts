@@ -8,6 +8,7 @@ import { autowire } from './wire.js';
 import { buildAsset, parseAsset, assetKind } from './assets.js';
 import type { DrlModel, DrlRule, RuleConstraint, RulePattern, LhsElement, RuleAction, RuleAttributes, ConstraintOp, DslEntry } from './assets.js';
 import type { ElementNode } from './xml.js';
+import { kid, kids, cdataText } from './xml.js';
 
 export type Lang = 'js' | 'java' | 'mvel';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS';
@@ -737,6 +738,80 @@ export function decisionToDmn(model: EngineDecisionModel, namespace?: string): {
   return { xml: el('definitions', { xmlns: 'http://www.omg.org/spec/DMN/20180521/MODEL/', id: `_defs_${clean(model.name)}`, name: model.name, namespace: ns }, children) };
 }
 
+// ---- DMN XML -> engine decision model (inverse of decisionToDmn, best-effort) ----
+// Only decisionTable-based decisions are recoverable this way — evaluateDmn (the runtime evaluator,
+// in the server's decisioning.ts) only ever understood literal/comparison decision tables to begin
+// with, never full FEEL. A <decision> driven by a <literalExpression> (an "if X then Y else Z" FEEL
+// conditional) or a <businessKnowledgeModel> (a Java-backed function call) — both common in real DMN
+// files — has no equivalent here and is skipped rather than guessed at.
+const FEEL_LIT = (s: string): string | number | boolean => {
+  const t = s.trim();
+  if (/^".*"$/.test(t)) return t.slice(1, -1);
+  if (/^-?\d+(\.\d+)?$/.test(t)) return Number(t);
+  if (t === 'true' || t === 'false') return t === 'true';
+  return t;
+};
+/** Inverse of feelTest: a decision table input-entry's raw FEEL text -> engine InputTest. Anything
+ *  outside this small grammar (a real FEEL expression, function call, etc.) becomes `{feel: text}` —
+ *  testMatch() (decisioning.ts) already treats that as an unconditional match, same fallback feelTest
+ *  itself uses on the way out, so round-tripping an unrecognized cell doesn't silently misfire. */
+export function parseFeelTest(text: string): InputTest {
+  const t = text.trim();
+  if (t === '' || t === '-') return { any: true };
+  let m = /^>=\s*(.+)$/.exec(t); if (m) return { gte: FEEL_LIT(m[1]) as number | string };
+  m = /^<=\s*(.+)$/.exec(t); if (m) return { lte: FEEL_LIT(m[1]) as number | string };
+  m = /^>\s*(.+)$/.exec(t); if (m) return { gt: FEEL_LIT(m[1]) as number | string };
+  m = /^<\s*(.+)$/.exec(t); if (m) return { lt: FEEL_LIT(m[1]) as number | string };
+  m = /^\[(.+)\.\.(.+)\]$/.exec(t); if (m) return { between: [FEEL_LIT(m[1]) as number, FEEL_LIT(m[2]) as number] };
+  m = /^not\((.+)\)$/.exec(t); if (m) { const inner = m[1].split(',').map((s) => FEEL_LIT(s)); return { not: inner.length > 1 ? inner : inner[0] }; }
+  if (t.includes(',')) return t.split(',').map((s) => FEEL_LIT(s));
+  if (/^"[^"]*"$/.test(t) || /^-?\d+(\.\d+)?$/.test(t) || t === 'true' || t === 'false') return FEEL_LIT(t);
+  return { feel: t };   // real FEEL expression, function call, etc. — not evaluated, always matches
+}
+/** Inverse of feelResult: an output-entry's raw FEEL text -> engine OutputResult. */
+export function parseFeelResult(text: string): OutputResult {
+  const t = text.trim();
+  if (t === '') return '';
+  if (/^"[^"]*"$/.test(t) || /^-?\d+(\.\d+)?$/.test(t) || t === 'true' || t === 'false') return FEEL_LIT(t);
+  return { feel: t };
+}
+/** One <decision><decisionTable> -> an EngineDecision, or undefined if this decision isn't
+ *  table-driven (literalExpression/businessKnowledgeModel — see the module comment above). */
+function dmnDecisionFromXml(decEl: ElementNode): EngineDecision | undefined {
+  const dt = kid(decEl, 'decisionTable');
+  if (!dt) return undefined;
+  // typeRef round-trips as-is (not translated back through a "real" engine type name): feelType()
+  // degrades to the identity function for anything it doesn't recognize, and every value it DOES
+  // produce (number/string/boolean/date/...) is also one of its own valid input keys — so feeding a
+  // typeRef straight back into `type` always regenerates the identical typeRef on the way out again.
+  const inputs: DecisionField[] = kids(dt, 'input').map((inp) => {
+    const expr = kid(inp, 'inputExpression');
+    const name = (expr && cdataText(kid(expr, 'text')) || inp.attrs.label || inp.attrs.id || '').trim();
+    return { name, ...(expr?.attrs.typeRef ? { type: expr.attrs.typeRef as FeelType } : {}) };
+  });
+  const outputs: DecisionField[] = kids(dt, 'output').map((o) => ({
+    name: o.attrs.name || o.attrs.label || o.attrs.id || '', ...(o.attrs.typeRef ? { type: o.attrs.typeRef as FeelType } : {}),
+  }));
+  const rules: DecisionRule[] = kids(dt, 'rule').map((r) => {
+    const ins = kids(r, 'inputEntry'); const outs = kids(r, 'outputEntry');
+    const when: Record<string, InputTest> = {}; const then: Record<string, OutputResult> = {};
+    inputs.forEach((inp, i) => { if (ins[i]) when[inp.name] = parseFeelTest(cdataText(kid(ins[i], 'text'))); });
+    outputs.forEach((o, i) => { if (outs[i]) then[o.name] = parseFeelResult(cdataText(kid(outs[i], 'text'))); });
+    return { when, then };
+  });
+  const hitPolicy = (dt.attrs.hitPolicy as HitPolicy) || 'UNIQUE';
+  return { name: decEl.attrs.name || decEl.attrs.id || '', hitPolicy, inputs, outputs, rules,
+    ...(dt.attrs.aggregation ? { aggregation: dt.attrs.aggregation as Aggregation } : {}) };
+}
+/** A parsed DMN <definitions> XML tree -> an EngineDecisionModel, keeping only decisionTable-driven
+ *  decisions (see dmnDecisionFromXml). Returns undefined if the file declares no such decision at
+ *  all (e.g. every decision uses a literalExpression) — nothing usable to wire up. */
+export function dmnToDecisionModel(defsXml: ElementNode): EngineDecisionModel | undefined {
+  const decisions = kids(defsXml, 'decision').map(dmnDecisionFromXml).filter((d): d is EngineDecision => !!d);
+  if (!decisions.length) return undefined;
+  return { name: defsXml.attrs.name || defsXml.attrs.id || 'model', namespace: defsXml.attrs.namespace, decisions };
+}
+
 // engine type -> Java field type / GDST dataType / operator symbol
 const GDST_OP: Record<GdstOp, string> = { eq: '==', ne: '!=', gt: '>', gte: '>=', lt: '<', lte: '<=' };
 const GDST_JAVA: Record<string, string> = { string: 'String', number: 'Double', double: 'Double', float: 'Double', int: 'Integer', integer: 'Integer', long: 'Long', bool: 'Boolean', boolean: 'Boolean', date: 'java.util.Date' };
@@ -1168,7 +1243,11 @@ export function toEngine(m: ProcessModel): EngineProcess {
       case 'endEvent': return n.eventType === 'terminate' || n.subtype === 'terminate' ? { ...b, type: 'end', result: 'terminate' } : { ...b, type: 'end', ...(ev(n) ? { throw: ev(n) } : {}) };
       case 'scriptTask': return { ...b, type: 'script', lang: dialectToLang(n.scriptFormat), code: n.script };
       case 'userTask': return { ...b, type: 'userTask', name: n.name, group: n.group, form: n.taskName, ...revLifecycle(n) };
-      case 'businessRuleTask': return { ...b, type: 'rule', ruleflowGroup: n.ruleFlowGroup, ...revLifecycle(n) };
+      // dmnModel present (implementation="...drools/dmn") -> real DMN wiring; decision name is left
+      // unset (real jBPM's own dataInputAssociation convention never names one explicitly either — see
+      // parse.ts) and defaults to the model's first decision at evaluation time (decisioning.ts).
+      case 'businessRuleTask': return { ...b, type: 'rule', ruleflowGroup: n.ruleFlowGroup,
+        ...(n.dmnModel ? { dmn: { namespace: n.dmnNamespace || '', model: n.dmnModel, decision: '' } } : {}), ...revLifecycle(n) };
       case 'sendTask': return { ...b, type: 'send', message: n.messageRef, ...revLifecycle(n) };
       case 'receiveTask': return { ...b, type: 'receive', message: n.messageRef, ...revLifecycle(n) };
       case 'manualTask': return { ...b, type: 'manual', name: n.name, ...revLifecycle(n) };
