@@ -1,0 +1,66 @@
+<div class="stage" (mousedown)="startPan($event)" (mousemove)="onMouseMove($event)" (mouseup)="onMouseUp()">
+  <div class="canvasfield" [style.transform]="'scale(' + zoom() + ')'">
+    <div class="content" [style.transform]="'translate(' + pan().x + 'px,' + pan().y + 'px)'">
+      @if (process(); as p) {
+        <svg class="flows">
+          @for (f of p.flows; track f.from + f.to) {
+            @if (nodeAt(f.from); as a) {
+              @if (nodeAt(f.to); as b) {
+                <path [class.taken]="flowTaken(f)" [attr.d]="pathBetween(a, b)" />
+              }
+            }
+          }
+        </svg>
+        @for (n of p.nodes; track n.id) {
+          <div class="node" [class]="shapeOf(n).shape + ' ' + nodeState(n.id)" [class.selected]="selectedId() === n.id"
+               [style.left.px]="n.x ?? 0" [style.top.px]="n.y ?? 0"
+               (mousedown)="$event.stopPropagation()" (click)="select(n.id, $event)">
+            <span class="dotstate"></span>
+            <span class="ic" [style.color]="shapeOf(n).color">{{ shapeOf(n).icon }}</span>
+            <span class="lbl">{{ label(n) }}</span>
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  @if (instance(); as inst) {
+    <div class="chrome topbar glass" (mousedown)="$event.stopPropagation()">
+      <a class="crumb" [routerLink]="['/instances', inst.id]">← Back</a>
+      <span class="pname">Instance #{{ inst.id.slice(-8) }}</span>
+      <span class="pill" [style.color]="'var(--status-' + inst.status + ')'" [style.background]="'var(--status-' + inst.status + '-bg)'">{{ inst.status }}</span>
+      <span class="meta">Started by {{ inst.startedBy }}</span>
+      <span class="spacer"></span>
+      @if (inst.status === 'failed' && inst.error) { <button class="btn" (click)="retry(inst.error.nodeId)">Retry</button> }
+      @if (inst.status === 'running' || inst.status === 'waiting') { <button class="btn danger" (click)="abort()">Abort</button> }
+    </div>
+  }
+
+  @if (selectedId(); as sid) {
+    @if (nodeAt(sid); as n) {
+      <div class="chrome props glass" (mousedown)="$event.stopPropagation()">
+        <div class="propshead"><h3>{{ label(n) }}</h3><button class="close" (click)="deselect()">×</button></div>
+        <div class="row"><span>Type</span><span>{{ n['type'] }}</span></div>
+        <div class="row"><span>State</span><span class="cap">{{ nodeState(n.id) }}</span></div>
+      </div>
+    }
+  }
+
+  @if (legendOpen()) {
+    <div class="chrome legend glass" (mousedown)="$event.stopPropagation()">
+      <span class="lg"><span class="d active"></span>active</span>
+      <span class="lg"><span class="d visited"></span>visited</span>
+      <span class="lg"><span class="d ghost"></span>not reached</span>
+      <button class="lgclose" (click)="legendOpen.set(false)">×</button>
+    </div>
+  } @else {
+    <button class="chrome legendtoggle glass" (mousedown)="$event.stopPropagation()" (click)="legendOpen.set(true)">Legend</button>
+  }
+
+  <div class="chrome zoom glass" (mousedown)="$event.stopPropagation()">
+    <button (click)="zoomBy(-0.1)">−</button>
+    <span class="pct">{{ (zoom() * 100) | number:'1.0-0' }}%</span>
+    <button (click)="zoomBy(0.1)">+</button>
+    <button (click)="zoomReset()" title="Reset view">⤢</button>
+  </div>
+</div>

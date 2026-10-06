@@ -1,0 +1,93 @@
+<div class="stage" (mousedown)="startPan($event)">
+  <div class="canvasfield" #canvasField [style.transform]="'scale(' + zoom() + ')'">
+    <div class="content" [style.transform]="'translate(' + pan().x + 'px,' + pan().y + 'px)'">
+      @if (process(); as p) {
+        <svg class="flows">
+          @for (f of p.flows; track f.from + f.to) {
+            @if (nodeAt(f.from); as a) {
+              @if (nodeAt(f.to); as b) {
+                <path [attr.d]="pathBetween(a, b)" (click)="deleteFlow(f, $event)" />
+              }
+            }
+          }
+          @if (connectingFrom() && nodeAt(connectingFrom()!); as a) {
+            @if (ghostPoint(); as g) {
+              <path class="ghost" [attr.d]="'M ' + anchorRight(a).x + ' ' + anchorRight(a).y + ' L ' + g.x + ' ' + g.y" />
+            }
+          }
+        </svg>
+
+        @for (n of p.nodes; track n.id) {
+          <div class="node" [class]="shapeOf(n).shape"
+               [class.selected]="selectedNodeId() === n.id"
+               [style.left.px]="n.x ?? 0" [style.top.px]="n.y ?? 0"
+               [style.borderColor]="selectedNodeId() === n.id ? 'var(--violet)' : shapeOf(n).color"
+               (mousedown)="startDrag(n, $event)" (click)="selectNode(n, $event)">
+            <span class="ic" [style.color]="shapeOf(n).color">{{ shapeOf(n).icon }}</span>
+            <span class="lbl">{{ label(n) }}</span>
+            <span class="handle" (mousedown)="startConnect(n, $event)" title="Drag to connect"></span>
+          </div>
+        }
+      }
+    </div>
+  </div>
+
+  <div class="chrome topbar glass" (mousedown)="$event.stopPropagation()">
+    <a class="crumb" [routerLink]="['/projects', workflowId]">← Back</a>
+    <span class="pname">{{ process()?.name || process()?.id }}</span>
+    <span class="pill" [class.saving]="saveState() === 'saving'" [class.dirty]="saveState() === 'dirty'">
+      {{ saveState() === 'saved' ? 'Saved' : saveState() === 'saving' ? 'Saving…' : 'Unsaved' }}
+    </span>
+    <span class="statuspill" [class.haserrors]="errorCount() > 0">
+      @if (issues().length === 0) {
+        <span class="ok">●</span> No problems
+      } @else {
+        @if (errorCount() > 0) { <span class="err">{{ errorCount() }} error{{ errorCount() > 1 ? 's' : '' }}</span> }
+        @if (warningCount() > 0) { <span class="warn">{{ warningCount() }} warning{{ warningCount() > 1 ? 's' : '' }}</span> }
+      }
+    </span>
+    <span class="spacer"></span>
+    <button class="btn" (click)="validate()" [disabled]="validating()">{{ validating() ? 'Validating…' : 'Validate' }}</button>
+    <button class="btn" (click)="publish()" [disabled]="publishing()">{{ publishing() ? 'Publishing…' : 'Publish' }}</button>
+    <button class="btn primary" (click)="deploy()">Deploy</button>
+  </div>
+
+  <div class="chrome rail glass" [class.open]="paletteOpen()" (mousedown)="$event.stopPropagation()">
+    @if (!paletteOpen()) {
+      <button class="railtoggle" (click)="paletteOpen.set(true)" title="Open palette">⌕</button>
+    } @else {
+      <div class="railhead">
+        <input placeholder="Search nodes…" [ngModel]="paletteQuery()" (ngModelChange)="paletteQuery.set($event)" />
+        <button class="railclose" (click)="paletteOpen.set(false)">×</button>
+      </div>
+      <div class="railbody">
+        @for (group of paletteByCategory(); track group.category) {
+          <div class="cat">{{ group.category }}</div>
+          @for (entry of group.entries; track entry.key) {
+            <button class="entry" (click)="addFromPalette(entry)">
+              <span class="dot" [style.background]="entry.color"></span>{{ entry.label }}
+            </button>
+          }
+        }
+      </div>
+    }
+  </div>
+
+  @if (selectedNode(); as node) {
+    <div class="chrome props glass" (mousedown)="$event.stopPropagation()">
+      <div class="propshead">
+        <h3>{{ label(node) }} · {{ selectedNodeDef()?.typeLabel }}</h3>
+        <button class="close" (click)="deselect()">×</button>
+      </div>
+      <app-node-properties [node]="node" [def]="selectedNodeDef()" [process]="process()!" (changed)="onFieldChange()" />
+      <button class="btn danger" style="width:100%;justify-content:center;margin-top:10px" (click)="deleteSelected()">Delete node</button>
+    </div>
+  }
+
+  <div class="chrome zoom glass" (mousedown)="$event.stopPropagation()">
+    <button (click)="zoomBy(-0.1)">−</button>
+    <span class="pct">{{ (zoom() * 100) | number:'1.0-0' }}%</span>
+    <button (click)="zoomBy(0.1)">+</button>
+    <button (click)="zoomReset()" title="Reset view">⤢</button>
+  </div>
+</div>

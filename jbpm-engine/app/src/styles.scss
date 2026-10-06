@@ -1,0 +1,161 @@
+:root {
+  --bg-void: #fbfaff;
+  --bg-page: #f7f6fb;
+  --bg-surface: #ffffff;
+  --bg-surface-2: #fbfaff;
+  --bg-chip: #f5f3fb;
+  --border-soft: #eeecf5;
+  --border-strong: #ddd9ea;
+  --text-hi: #1a1730;
+  --text-lo: #4a4763;
+  --text-faint: #8b88a3;
+  --violet: #7c3aed;
+  --violet-600: #6d28d9;
+  --pink: #d946ef;
+  --grad-brand: linear-gradient(135deg, #8b5cf6 0%, #d946ef 100%);
+  --grad-page:
+    radial-gradient(1200px 600px at 8% -5%, #e9dcff 0%, transparent 55%),
+    radial-gradient(1000px 520px at 98% 4%, #ffe0f2 0%, transparent 52%),
+    radial-gradient(900px 500px at 88% 96%, #ddfbef 0%, transparent 50%),
+    radial-gradient(800px 460px at 4% 92%, #e6f0ff 0%, transparent 50%);
+  --dot-grid: #e4e0f0;
+
+  --shadow-color: 76, 58, 122;
+  --shadow-card: 0 1px 2px rgba(var(--shadow-color), .04), 0 4px 16px -6px rgba(var(--shadow-color), .1);
+  --shadow-pop: 0 8px 24px -8px rgba(var(--shadow-color), .18), 0 24px 48px -16px rgba(var(--shadow-color), .2);
+  --shadow-shell: 0 24px 70px -24px rgba(var(--shadow-color), .28);
+  --shadow-focus: 0 0 0 3px rgba(124, 58, 237, .18);
+
+  --good: #059669;
+  --good-bg: #e7f9f1;
+  --warn: #d97706;
+  --warn-bg: #fff5e5;
+  --bad: #e11d48;
+  --bad-bg: #ffe9ee;
+  --info: #2563eb;
+  --info-bg: #e8f0ff;
+  --muted-status: #8b88a3;
+  --muted-status-bg: #f5f3fb;
+
+  --status-running: var(--info);
+  --status-running-bg: var(--info-bg);
+  --status-waiting: var(--warn);
+  --status-waiting-bg: var(--warn-bg);
+  --status-completed: var(--good);
+  --status-completed-bg: var(--good-bg);
+  --status-failed: var(--bad);
+  --status-failed-bg: var(--bad-bg);
+  --status-aborted: var(--muted-status);
+  --status-aborted-bg: var(--muted-status-bg);
+  --status-suspended: var(--violet);
+  --status-suspended-bg: #f2ecff;
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-lg: 26px;
+  --header-h: 56px;
+  --sidenav-w: 232px;
+  --sidenav-w-collapsed: 64px;
+
+  --font-ui: "Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--grad-page), var(--bg-page);
+  background-attachment: fixed;
+  color: var(--text-hi);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { margin: 0; font-weight: 700; text-wrap: balance; }
+p { margin: 0; }
+
+a { color: inherit; text-decoration: none; }
+
+button, input, select, textarea { font-family: inherit; color: inherit; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-surface);
+  color: var(--text-hi);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: border-color .12s, background .12s, transform .08s;
+  box-shadow: var(--shadow-card);
+}
+.btn:hover { border-color: var(--border-strong); }
+.btn:active { transform: scale(.98); }
+.btn.primary {
+  background: var(--grad-brand);
+  border: none;
+  color: #fff;
+  box-shadow: 0 8px 20px -8px rgba(217, 70, 239, .5);
+}
+.btn.danger { border-color: rgba(225, 29, 72, .3); color: var(--bad); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.field label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin-bottom: 5px;
+}
+.field input, .field select, .field textarea {
+  width: 100%;
+  font-size: 13px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text-hi);
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline: none;
+  border-color: var(--violet);
+  box-shadow: var(--shadow-focus);
+}
+
+.pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
