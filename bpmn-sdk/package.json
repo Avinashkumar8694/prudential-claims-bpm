@@ -1,0 +1,21 @@
+{
+  "name": "@fabrixly/bpmn-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Parse/serialize real jBPM BPMN2 XML projects; convert to/from this workspace's own simplified engine model.",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "bpmn-sdk": "./dist/cli.js"
+  },
+  "files": ["dist"]
+}
