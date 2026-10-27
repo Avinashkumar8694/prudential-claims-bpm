@@ -111,7 +111,7 @@ export const RULES: Rule[] = [
       const { maxIn, maxOut } = def.ports;
       if (maxOut != null && dout > maxOut) out.push(P('connection-cardinality', 'error', `"${label(n)}" (${n.type}) allows at most ${maxOut} outgoing connection${maxOut === 1 ? '' : 's'} (has ${dout})`, { nodeId: n.id }));
       if (maxIn != null && din > maxIn) out.push(P('connection-cardinality', 'error', `"${label(n)}" (${n.type}) allows at most ${maxIn} incoming connection${maxIn === 1 ? '' : 's'} (has ${din})`, { nodeId: n.id }));
-      if (n.type === 'gateway' && din > 1 && dout > 1) out.push(P('connection-cardinality', 'error', `Gateway "${label(n)}" must be diverging (1→many) or converging (many→1), not both`, { nodeId: n.id }));
+      if (n.type === 'gateway' && (n as any).mode !== 'exclusive' && din > 1 && dout > 1) out.push(P('connection-cardinality', 'error', `Gateway "${label(n)}" must be diverging (1→many) or converging (many→1), not both`, { nodeId: n.id }));
     }
     return out;
   } },

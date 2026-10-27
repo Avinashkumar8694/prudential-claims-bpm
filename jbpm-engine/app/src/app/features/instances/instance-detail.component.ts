@@ -486,20 +486,56 @@ export class InstanceDetailComponent implements OnDestroy {
   nodeName(id: string) { return this.graph().nodes.find((n: any) => n.id === id)?.name || id; }
   private byId(id: string) { return this.laid().find((n: any) => n.id === id); }
 
-  // Same "longest-path column, barycenter row" layered layout as process-canvas.component's
-  // applyAutoLayout — a node without an incoming flow edge (a start node, or a boundary-attached
-  // node whose only link is `on:`, never a `flows` entry) is a root/column 0, and every other node's
-  // column is one past its furthest predecessor's, so parallel branches land side by side by row
-  // instead of interleaved by array index.
+  nodeDims(type: string): { w: number; h: number } {
+    if (type === 'start' || type === 'end' || type === 'catch' || type === 'throw' || type === 'boundary') {
+      return { w: 44, h: 44 };
+    }
+    if (type === 'gateway') {
+      return { w: 52, h: 52 };
+    }
+    return { w: 180, h: 56 };
+  }
+  nodeAnchorOut(n: any): { x: number; y: number } {
+    const d = this.nodeDims(n.type);
+    return { x: n.x + d.w, y: n.y + d.h / 2 };
+  }
+  nodeAnchorIn(n: any): { x: number; y: number } {
+    const d = this.nodeDims(n.type);
+    return { x: n.x, y: n.y + d.h / 2 };
+  }
+
+  // Cycle-safe layered auto-layout
   private computeLayeredPositions(nodes: any[], flows: any[]): Map<string, { x: number; y: number }> {
-    const ids = nodes.map((n) => n.id);
-    const col = new Map<string, number>();
+    if (!nodes.length) return new Map();
     const roots = nodes.filter((n) => n.type === 'start' || !flows.some((f) => f.to === n.id));
     const rootIds = (roots.length ? roots : nodes.slice(0, 1)).map((n) => n.id);
+
+    const visited = new Set<string>();
+    const inStack = new Set<string>();
+    const forwardFlows: any[] = [];
+
+    const dfs = (curr: string) => {
+      visited.add(curr);
+      inStack.add(curr);
+      for (const f of flows) {
+        if (f.from !== curr) continue;
+        if (!inStack.has(f.to)) {
+          forwardFlows.push(f);
+          if (!visited.has(f.to)) dfs(f.to);
+        }
+      }
+      inStack.delete(curr);
+    };
+
+    for (const r of rootIds) if (!visited.has(r)) dfs(r);
+    for (const n of nodes) if (!visited.has(n.id)) dfs(n.id);
+
+    const col = new Map<string, number>();
     for (const id of rootIds) col.set(id, 0);
+
     for (let pass = 0; pass < nodes.length + 1; pass++) {
       let changed = false;
-      for (const f of flows) {
+      for (const f of forwardFlows) {
         if (!col.has(f.from)) continue;
         const c = col.get(f.from)! + 1;
         if (!col.has(f.to) || col.get(f.to)! < c) { col.set(f.to, c); changed = true; }
@@ -507,7 +543,7 @@ export class InstanceDetailComponent implements OnDestroy {
       if (!changed) break;
     }
     let maxCol = Math.max(0, ...[...col.values()]);
-    for (const id of ids) if (!col.has(id)) { maxCol += 1; col.set(id, maxCol); }
+    for (const n of nodes) if (!col.has(n.id)) { maxCol += 1; col.set(n.id, maxCol); }
 
     const byCol = new Map<number, string[]>();
     for (const n of nodes) { const c = col.get(n.id)!; (byCol.get(c) || byCol.set(c, []).get(c)!).push(n.id); }
@@ -531,26 +567,52 @@ export class InstanceDetailComponent implements OnDestroy {
     return out;
   }
 
-  // Orthogonal (Manhattan) routing, same as process-canvas.component's orthPath — bounded by the two
-  // endpoint coordinates themselves, so it can never overshoot the canvas the way the old raw cubic
-  // bezier's `dx = |x2-x1|/2` control points did for two nodes far apart horizontally.
-  private orthPath(x1: number, y1: number, x2: number, y2: number): string {
+  // Orthogonal (Manhattan) sequence-flow routing with loop bypass
+  private orthPath(x1: number, y1: number, x2: number, y2: number, fromNode?: any, toNode?: any): string {
     const R = 8;
-    if (Math.abs(y2 - y1) < 2) return `M ${x1} ${y1} L ${x2} ${y2}`;
-    const midX = x1 + Math.max(24, (x2 - x1) / 2);
-    const down = y2 > y1;
-    const r = Math.min(R, Math.abs(y2 - y1) / 2, Math.abs(midX - x1), Math.abs(x2 - midX));
-    const vSign = down ? 1 : -1;
+    if (Math.abs(y2 - y1) < 4 && x2 >= x1) return `M ${x1} ${y1} L ${x2} ${y2}`;
+
+    if (x2 >= x1 + 24) {
+      const midX = Math.round(x1 + (x2 - x1) / 2);
+      const down = y2 > y1;
+      const r = Math.min(R, Math.abs(y2 - y1) / 2, Math.abs(midX - x1), Math.abs(x2 - midX));
+      const vSign = down ? 1 : -1;
+      return [
+        `M ${x1} ${y1}`,
+        `L ${midX - r} ${y1}`,
+        `Q ${midX} ${y1} ${midX} ${y1 + r * vSign}`,
+        `L ${midX} ${y2 - r * vSign}`,
+        `Q ${midX} ${y2} ${midX + r} ${y2}`,
+        `L ${x2} ${y2}`,
+      ].join(' ');
+    }
+
+    // Backward loop-back bypass
+    const dFrom = fromNode ? this.nodeDims(fromNode.type) : { w: 180, h: 56 };
+    const dTo = toNode ? this.nodeDims(toNode.type) : { w: 180, h: 56 };
+    const bypassY = Math.max((fromNode?.y ?? y1) + dFrom.h, (toNode?.y ?? y2) + dTo.h) + 38;
+    const outX = x1 + 20, inX = x2 - 20;
+    const r = Math.min(R, Math.abs(bypassY - y1) / 2, Math.abs(bypassY - y2) / 2, 16);
+
     return [
       `M ${x1} ${y1}`,
-      `L ${midX - r} ${y1}`,
-      `Q ${midX} ${y1} ${midX} ${y1 + r * vSign}`,
-      `L ${midX} ${y2 - r * vSign}`,
-      `Q ${midX} ${y2} ${midX + r} ${y2}`,
+      `L ${outX - r} ${y1}`,
+      `Q ${outX} ${y1} ${outX} ${y1 + r}`,
+      `L ${outX} ${bypassY - r}`,
+      `Q ${outX} ${bypassY} ${outX - r} ${bypassY}`,
+      `L ${inX + r} ${bypassY}`,
+      `Q ${inX} ${bypassY} ${inX} ${bypassY - r}`,
+      `L ${inX} ${y2 + r}`,
+      `Q ${inX} ${y2} ${inX + r} ${y2}`,
       `L ${x2} ${y2}`,
     ].join(' ');
   }
-  edge(e: any) { const a = this.byId(e.from), b = this.byId(e.to); if (!a || !b) return ''; return this.orthPath(a.x + NW, a.y + NH / 2, b.x, b.y + NH / 2); }
+  edge(e: any) {
+    const a = this.byId(e.from), b = this.byId(e.to);
+    if (!a || !b) return '';
+    const p1 = this.nodeAnchorOut(a), p2 = this.nodeAnchorIn(b);
+    return this.orthPath(p1.x, p1.y, p2.x, p2.y, a, b);
+  }
 
   ago(iso: string): string {
     const s = Math.max(0, (Date.now() - Date.parse(iso)) / 1000);

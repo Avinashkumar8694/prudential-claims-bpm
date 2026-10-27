@@ -1237,7 +1237,12 @@ export function toEngine(m: ProcessModel): EngineProcess {
   // toEngine is a best-effort reverse: jBPM fields may be undefined and don't always satisfy the
   // strict EngineNode union (e.g. an http node with no reversible url), so the builder returns `any`.
   const conv = (n: Node): any => {
-    const b: EngineNode = { id: n.id, type: 'raw', name: n.name };
+    const b: EngineNode = {
+      id: n.id,
+      type: 'raw',
+      name: n.name,
+      ...(n.position ? { x: Math.round(n.position.x), y: Math.round(n.position.y) } : {}),
+    };
     switch (n.type) {
       case 'startEvent': return { ...b, type: 'start', ...(ev(n) ? { on: ev(n) } : {}) };
       case 'endEvent': return n.eventType === 'terminate' || n.subtype === 'terminate' ? { ...b, type: 'end', result: 'terminate' } : { ...b, type: 'end', ...(ev(n) ? { throw: ev(n) } : {}) };

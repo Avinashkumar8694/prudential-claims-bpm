@@ -510,12 +510,16 @@
         {
           "id": "_START_NODE",
           "type": "start",
-          "name": "Start Error Handler"
+          "name": "Start Error Handler",
+          "x": 128,
+          "y": 240
         },
         {
           "id": "_TIMER_MERGE",
           "type": "gateway",
           "name": "Timer Merge",
+          "x": 397,
+          "y": 240,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -523,6 +527,8 @@
           "id": "_INCREMENT_RETRY",
           "type": "script",
           "name": "Increment retryCount",
+          "x": 884,
+          "y": 414,
           "lang": "js",
           "code": "let count = kcontext.getVariable(\"retryCount\");\nkcontext.setVariable(\"retryCount\", count + 1);\n\nconsole.log(\"[BPM][RETRY] process=pru-api-error-handler | piid=\" + kcontext.getProcessInstance().getId() + \" | node=IncrementRetry | caseId=\" + kcontext.getVariable(\"caseId\") + \" | attempt=\" + (count + 1) + \" | maxRetries=\" + kcontext.getVariable(\"maxRetryCount\") + \" | failedEndpoint=\" + kcontext.getVariable(\"failedEndpoint\"));\n"
         },
@@ -530,6 +536,8 @@
           "id": "_CHECK_LIMIT",
           "type": "gateway",
           "name": "retryCount < maxRetryCount?",
+          "x": 1036,
+          "y": 426,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -537,6 +545,8 @@
           "id": "_PARSE_SCRIPT",
           "type": "script",
           "name": "Script_ParseContext",
+          "x": 224,
+          "y": 222,
           "lang": "js",
           "code": "// 1. Initialize Base URL\nlet url = ((env && env[\"INTEGRATION_LAYER_URL\"]) || \"\");\nif (url == null || url.isEmpty()) { url = ((env && env[\"INTEGRATION_LAYER_URL\"]) || \"\"); }\nif (url == null || url.isEmpty()) {\n    try {\n        url = kcontext.getKieRuntime().getEnvironment().get(\"INTEGRATION_LAYER_URL\");\n    } catch (e) {\n        console.log(\"[BPM][EXIT][ERROR] process=pru-api-error-handler | piid=\" + kcontext.getProcessInstance().getId() + \" | node=ParseContext | caseId=\" + kcontext.getVariable(\"caseId\") + \" | error=\" + e.getMessage());\n    }\n}\nif (url == null || url.isEmpty()) { url = \"http://localhost:3000\"; }\nkcontext.setVariable(\"baseUrl\", url);\n\nconsole.log(\"[BPM][BOOTSTRAP] process=pru-api-error-handler | piid=\" + kcontext.getProcessInstance().getId() + \" | caseId=\" + kcontext.getVariable(\"caseId\") + \" | baseUrl=\" + url);\n\n// 2. Initialize default retry states if empty\nif (kcontext.getVariable(\"retryCount\") == null) { kcontext.setVariable(\"retryCount\", 0); }\nif (kcontext.getVariable(\"maxRetryCount\") == null) { kcontext.setVariable(\"maxRetryCount\", 3); }\n\n// 3. Unpack the JSON context sent from the main process\nlet ctx = kcontext.getVariable(\"failedContext\");\n\nconsole.log(\"[BPM][ENTRY] process=pru-api-error-handler | piid=\" + kcontext.getProcessInstance().getId() + \" | node=ParseContext | caseId=\" + kcontext.getVariable(\"caseId\") + \" | failedContext=\" + (ctx != null ? ctx.substring(0, Math.min(ctx.length, 200)) : \"null\"));\nif (ctx != null && !ctx.isEmpty()) {\n    try {\n        let node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(ctx);\n        let endpoint = node.get(\"url\").asText();\n        if (!endpoint.startsWith(\"http\")) {\n            endpoint = url + endpoint;\n        }\n        kcontext.setVariable(\"failedEndpoint\", endpoint);\n        kcontext.setVariable(\"failedPayload\", node.get(\"payload\").toString());\n        \n        let method = \"POST\";\n        if (node.has(\"method\")) {\n            method = node.get(\"method\").asText();\n        }\n        kcontext.setVariable(\"failedMethod\", method);\n\n        let headers = \"\";\n        if (node.has(\"headers\")) {\n            headers = node.get(\"headers\").asText();\n        }\n        kcontext.setVariable(\"failedHeaders\", headers);\n\n        console.log(\"[BPM][EXIT][OK] process=pru-api-error-handler | piid=\" + kcontext.getProcessInstance().getId() + \" | node=ParseContext | caseId=\" + kcontext.getVariable(\"caseId\") + \" | failedEndpoint=\" + endpoint + \" | failedMethod=\" + method + \" | failedHeaders=\" + headers);\n    } catch (e) {\n        console.log(\"[BPM][EXIT][ERROR] process=pru-api-error-handler | piid=\" + kcontext.getProcessInstance().getId() + \" | node=ParseContext | caseId=\" + kcontext.getVariable(\"caseId\") + \" | error=\" + e.getMessage());\n    }\n}\n// Default method if not unpacked\nif (kcontext.getVariable(\"failedMethod\") == null) { kcontext.setVariable(\"failedMethod\", \"POST\"); }\nif (kcontext.getVariable(\"failedHeaders\") == null) { kcontext.setVariable(\"failedHeaders\", \"\"); }"
         },
@@ -544,6 +554,8 @@
           "id": "_RETRY_REST",
           "type": "workItem",
           "name": "Rest_RetryAPI",
+          "x": 621,
+          "y": 231,
           "handler": "Rest",
           "params": {
             "ContentData": "$failedPayload",
@@ -562,6 +574,8 @@
           "id": "_ADMIN_DECISION_GATE",
           "type": "gateway",
           "name": "Admin Action?",
+          "x": 1389,
+          "y": 426,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -569,6 +583,8 @@
           "id": "_RETRY_MERGE",
           "type": "gateway",
           "name": "Retry Merge",
+          "x": 506,
+          "y": 110,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -576,18 +592,24 @@
           "id": "_INCREMENT_MERGE",
           "type": "gateway",
           "name": "Increment Merge",
+          "x": 781,
+          "y": 426,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_END_TERMINATE",
           "type": "end",
-          "name": "End (Terminate)"
+          "name": "End (Terminate)",
+          "x": 1552,
+          "y": 426
         },
         {
           "id": "_TIMER_NODE",
           "type": "catch",
           "name": "Timer_1mWait",
+          "x": 506,
+          "y": 240,
           "event": {
             "timer": {
               "duration": "PT1M"
@@ -598,6 +620,8 @@
           "id": "_CHECK_SUCCESS",
           "type": "gateway",
           "name": "Success?",
+          "x": 786,
+          "y": 246,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -605,6 +629,8 @@
           "id": "_ADMIN_REVIEW",
           "type": "userTask",
           "name": "IT Admin Exception Review",
+          "x": 1230,
+          "y": 414,
           "group": "ProcessReviewer",
           "form": "ITAdminExceptionReview"
         },
@@ -612,18 +638,24 @@
           "id": "_END_MERGE",
           "type": "gateway",
           "name": "End Merge",
+          "x": 1144,
+          "y": 246,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_END_NODE",
           "type": "end",
-          "name": "End (Resume)"
+          "name": "End (Resume)",
+          "x": 1305,
+          "y": 246
         },
         {
           "id": "_RETRY_REST_ERROR",
           "type": "boundary",
           "name": "Catch Retry Failure",
+          "x": 703,
+          "y": 283,
           "on": "_RETRY_REST",
           "event": {
             "error": "org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"
@@ -852,12 +884,16 @@
         {
           "id": "_END_FAILED",
           "type": "end",
-          "name": "Generation Failed"
+          "name": "Generation Failed",
+          "x": 1747,
+          "y": 308
         },
         {
           "id": "_GATE_CREATE_OK",
           "type": "gateway",
           "name": "Create Call Accepted?",
+          "x": 909,
+          "y": 204,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -865,6 +901,8 @@
           "id": "_WAIT_SIGNAL",
           "type": "catch",
           "name": "Wait Certificate Generation Signal",
+          "x": 1127,
+          "y": 204,
           "event": {
             "signal": "CERTIFICATE_DOCUMENT_GENERATION_SIGNAL"
           }
@@ -872,17 +910,23 @@
         {
           "id": "_84AE37A3-4346-4F27-9A43-A88AB71DD668",
           "type": "end",
-          "name": "Generation Failed"
+          "name": "Generation Failed",
+          "x": 909,
+          "y": 464
         },
         {
           "id": "_START_GEN",
           "type": "start",
-          "name": "Start Certificate Document Generation"
+          "name": "Start Certificate Document Generation",
+          "x": 91,
+          "y": 200
         },
         {
           "id": "_CALL_DOC_CREATE",
           "type": "call",
           "name": "Request Certificate Document",
+          "x": 451,
+          "y": 191,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -905,6 +949,8 @@
           "id": "_GATE_STATUS",
           "type": "gateway",
           "name": "Generation Complete?",
+          "x": 1573,
+          "y": 202,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -912,6 +958,8 @@
           "id": "_PARSE_SIGNAL_RESULT",
           "type": "script",
           "name": "Parse Signal Result",
+          "x": 1344,
+          "y": 192,
           "lang": "js",
           "code": "let signalData = kcontext.getVariable(\"certGenSignalResponse\");\nconsole.log(\"[BPM][EXIT] process=certificate_document_generation | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Wait-Certificate-Generation-Signal | caseId=\" + kcontext.getVariable(\"caseId\") + \" | signalData=\" + signalData);\n// Poller-driven signal (apl-policy-ms CertificateGeneration's runBatchSweep) replaces the old\n// timer-poll loop entirely - it raises CERTIFICATE_DOCUMENT_GENERATION_SIGNAL exactly once,\n// carrying {success, lineageId}, once every certificate sharing a lineage_id has resolved (or one\n// of them timed out). There's no more in-flight \"Pending\" state to loop on here - the signal only\n// ever fires Completed or Failed, never partway through.\nlet success = false;\nif (signalData != null) {\n    let successVal = signalData.get(\"success\");\n    success = Boolean.TRUE.equals(successVal) || \"true\".equals(String(successVal));\n}\nkcontext.setVariable(\"generationStatus\", success ? \"Completed\" : \"Failed\");\nkcontext.setVariable(\"certificateResults\", signalData != null ? signalData.toString() : null);"
         },
@@ -919,6 +967,8 @@
           "id": "_BUILD_CREATE_PAYLOAD",
           "type": "script",
           "name": "Build Certificate Create Payload",
+          "x": 233,
+          "y": 189,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=certificate_document_generation | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Build-Certificate-Create-Payload | caseId=\" + kcontext.getVariable(\"caseId\") + \" | journeyType=\" + kcontext.getVariable(\"journeyType\"));\n// CertificateGeneration/apis.ts checkRequestBody requires party_id + type; party_agreement_ids\n// (plural, array) is genuinely looped per-agreement by createCertificatesLoop, not just accepted\n// for shape compatibility - this subprocess's own party_agreement_ids carries the real scope\n// straight through, so a resend/regenerate call covering several agreements generates all of\n// them in one call, the same as the real endpoint supports.\n// change_reason is optional (createCertificatesLoop's own logic decides INITIAL_ISSUE/REPRINT/\n// default_change_reason when omitted) - only required at all for journeys whose policy_document_type\n// rows are marked change_reason_required (currently just CORRECTION), and even then only on a reissue.\nlet json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\njson.putPOJO(\"party_id\", kcontext.getVariable(\"party_id\"));\nlet createPartyAgreementIdsNode ;\ntry {\n    createPartyAgreementIdsNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(kcontext.getVariable(\"party_agreement_ids\"));\n} catch (e) {\n    createPartyAgreementIdsNode = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();\n}\njson.set(\"party_agreement_ids\", createPartyAgreementIdsNode);\njson.putPOJO(\"type\", kcontext.getVariable(\"journeyType\"));\nlet changeReasonVal = kcontext.getVariable(\"changeReason\");\nif (changeReasonVal != null && !String(changeReasonVal).isEmpty()) {\n    json.putPOJO(\"change_reason\", changeReasonVal);\n}\n// This subprocess now waits on CERTIFICATE_DOCUMENT_GENERATION_SIGNAL instead of polling (see\n// Wait-Certificate-Generation-Signal) - cid/piid/signal_name are required on every call so\n// apl-policy-ms's CertificateGeneration/flows.ts poller can raise that signal back once every\n// certificate under this request's lineage_id resolves. signal_name must be this exact literal;\n// it's the one name this subprocess's own catch event is wired to (jBPM signal names are resolved\n// statically at design time - a caller-supplied name can't change what this catch event listens for).\n// piid must be THIS subprocess instance's own id, not a caller-supplied value - a callActivity's\n// parent can't know its child's instance id before the child actually starts, so no caller could\n// ever have populated this correctly. cid falls back to caseId when the caller has no distinct\n// case-level id of its own (e.g. certificate-resend.bpmn only ever supplies caseId, never cid) -\n// matching error-retry/register's identical cid-is-soft/piid-is-authoritative contract in apl-policy-ms.\nlet cidVal = kcontext.getVariable(\"cid\");\njson.putPOJO(\"cid\", cidVal != null ? cidVal : kcontext.getVariable(\"caseId\"));\njson.putPOJO(\"piid\", kcontext.getProcessInstance().getId());\njson.put(\"signal_name\", \"CERTIFICATE_DOCUMENT_GENERATION_SIGNAL\");\nkcontext.setVariable(\"Method\", \"POST\");\nkcontext.setVariable(\"Url\", kcontext.getVariable(\"certificateCreateUrl\"));\nkcontext.setVariable(\"ContentData\", json.toString());\nkcontext.setVariable(\"ContentType\", \"application/json\");\nkcontext.setVariable(\"ResultClass\", \"\");\nkcontext.setVariable(\"ConnectTimeout\", \"180000\");\nkcontext.setVariable(\"ReadTimeout\", \"180000\");\nkcontext.setVariable(\"HandleResponseErrors\", \"true\");\nkcontext.setVariable(\"Headers\", \"{\\\"Content-Type\\\":\\\"application/json\\\"}\");"
         },
@@ -926,13 +976,17 @@
           "id": "_CHECK_CREATE_RESULT",
           "type": "script",
           "name": "Check Create Result",
+          "x": 685,
+          "y": 191,
           "lang": "js",
           "code": "let resp = kcontext.getVariable(\"Result\");\nconsole.log(\"[BPM][EXIT] process=certificate_document_generation | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Request-Certificate-Document | caseId=\" + kcontext.getVariable(\"caseId\") + \" | responseLen=\" + (resp != null ? String(resp.length) : \"null\"));\n// /policy/certificate/create returns a JSON ARRAY (one entry per document type) on success, or a\n// plain {\"error\": \"...\"} object on a request-level failure (missing fields, agreement not found) -\n// see CertificateGeneration/apis.ts checkRequestBody / resolveAgreementForCreate. An object-level\n// error means there's nothing to poll for - fail fast instead of waiting a full minute to find out.\nlet createFailed = false;\nif (resp == null || resp.isEmpty()) {\n    createFailed = true;\n} else {\n    try {\n        let root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp);\n        if (!root.isArray() && root.has(\"error\")) {\n            createFailed = true;\n            console.log(\"[BPM][WARN] certificate create request-level error: \" + root.get(\"error\").asText());\n        }\n    } catch (e) {\n        createFailed = true;\n        console.log(\"[BPM][WARN] Could not parse certificate create response: \" + e.getMessage());\n    }\n}\nkcontext.setVariable(\"createFailed\", createFailed);"
         },
         {
           "id": "_END_COMPLETED",
           "type": "end",
-          "name": "Generation Completed"
+          "name": "Generation Completed",
+          "x": 1747,
+          "y": 114
         }
       ],
       "flows": [
@@ -1129,6 +1183,8 @@
           "id": "_BUILD_COMM_CONTEXT",
           "type": "script",
           "name": "Build Communication Context",
+          "x": 2187,
+          "y": 259,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=certificate_resend | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Build-Communication-Context | caseId=\" + kcontext.getVariable(\"caseId\"));\n// commPurposeId is a declared process property, so a caller creating this case/process\n// instance can supply its own value; MANUAL_RESEND below is only the fallback when none is\n// given. MANUAL_RESEND is already seeded in communication_event_config (Category B,\n// communication_event_config_seed_data.md) and flagged there as having \"no sendCommunication\n// call site designed yet\" - this process is that call site. It covers both paths this process\n// has (NO_CHANGE and a completed regeneration): \"resolved dynamically, not a fixed role set\" -\n// primary recipient is whichever party (insured/group/broker) actually requested the resend,\n// not a hardcoded role. partyAgreementIds/changeReason/generationRequired ride inside\n// commEntityContext (not separate subprocess properties) so send_communication_with_retry.bpmn's\n// own ioSpecification never needed touching - it already passes this whole object through.\n// party_agreement_ids is a JSON-array-as-string process variable (same convention as\n// policy_management_process.bpmn's own party_agreement_ids) - parsed here into a real array so\n// CertificateSendEmail/apis.ts (which genuinely loops every id given, not just the first) gets\n// the whole scope in one send-communication call, matching what /policy/certificate/create and\n// /policy/certificates/status already do for the same field.\nlet entityContext = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\nentityContext.putPOJO(\"partyId\", kcontext.getVariable(\"party_id\"));\nentityContext.putPOJO(\"groupId\", kcontext.getVariable(\"group_id\"));\nentityContext.putPOJO(\"brokerId\", kcontext.getVariable(\"broker_id\"));\nlet partyAgreementIdsNode ;\ntry {\n    partyAgreementIdsNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(kcontext.getVariable(\"party_agreement_ids\"));\n} catch (e) {\n    partyAgreementIdsNode = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();\n}\nentityContext.set(\"partyAgreementIds\", partyAgreementIdsNode);\nentityContext.putPOJO(\"changeReason\", kcontext.getVariable(\"changeReason\"));\nentityContext.putPOJO(\"generationRequired\", !\"NO_CHANGE\".equals(kcontext.getVariable(\"reasonMode\")));\nlet certificateIdsNode ;\ntry {\n    certificateIdsNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(kcontext.getVariable(\"certificateIds\"));\n} catch (e) {\n    certificateIdsNode = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();\n}\nentityContext.set(\"certificateIds\", certificateIdsNode);\nkcontext.setVariable(\"commEntityContext\", entityContext);\nif (kcontext.getVariable(\"commPurposeId\") == null || String(kcontext.getVariable(\"commPurposeId\")).isEmpty()) {\n    kcontext.setVariable(\"commPurposeId\", \"MANUAL_RESEND\");\n}"
         },
@@ -1136,6 +1192,8 @@
           "id": "_OPEN_TIMELINE",
           "type": "call",
           "name": "Open Timeline",
+          "x": 813,
+          "y": 182,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -1161,12 +1219,16 @@
         {
           "id": "_END_GEN_FAILED",
           "type": "end",
-          "name": "Regeneration Failed - Not Sent"
+          "name": "Regeneration Failed - Not Sent",
+          "x": 1776,
+          "y": 793
         },
         {
           "id": "_CALL_CERT_GEN",
           "type": "call",
           "name": "Regenerate Certificate Document",
+          "x": 1140,
+          "y": 390,
           "process": "policy_system.certificate_document_generation",
           "inputs": {
             "party_id": "$party_id",
@@ -1187,6 +1249,8 @@
           "id": "_GATE_REASON",
           "type": "gateway",
           "name": "No Change or Regenerate?",
+          "x": 1196,
+          "y": 183,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -1194,6 +1258,8 @@
           "id": "_CLOSE_TL_DONE",
           "type": "call",
           "name": "Close Timeline (COMPLETED)",
+          "x": 3285,
+          "y": 265,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -1220,18 +1286,24 @@
           "id": "_BOOTSTRAP_URLS",
           "type": "script",
           "name": "Resolve Base URLs",
+          "x": 496,
+          "y": 182,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=certificate_resend | piid=\" + kcontext.getProcessInstance().getId() + \" | caseId=\" + kcontext.getVariable(\"caseId\") + \" | reasonMode=\" + kcontext.getVariable(\"reasonMode\") + \" | journeyType=\" + kcontext.getVariable(\"journeyType\"));\n// Same base-URL resolution pattern as policy_agreement_issuance.bpmn's own bootstrap script\n// (System property -> env var -> KIE runtime environment -> hardcoded fallback).\nlet aplPolicyMsUrl = ((env && env[\"APL_POLICY_MS_URL\"]) || \"\");\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) { aplPolicyMsUrl = ((env && env[\"APL_POLICY_MS_URL\"]) || \"\"); }\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) {\n    try { aplPolicyMsUrl = kcontext.getKieRuntime().getEnvironment().get(\"APL_POLICY_MS_URL\"); } catch (e) {}\n}\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) { aplPolicyMsUrl = \"http://localhost:8200/policy-api\"; }\nkcontext.setVariable(\"aplPolicyMsBaseUrl\", aplPolicyMsUrl);\nkcontext.setVariable(\"certificateCreateUrl\", aplPolicyMsUrl + \"/policy/certificate/create\");\nkcontext.setVariable(\"documentStatusUrl\", aplPolicyMsUrl + \"/policy/certificates/status\");\n// /policy/certificate/send-communication is the real, confirmed wrapper used by\n// policy_agreement_issuance.bpmn's own _CALL_SEND_COMM path today - reused as-is here.\nkcontext.setVariable(\"communicationSendUrl\", aplPolicyMsUrl + \"/policy/certificate/send-communication\");\nkcontext.setVariable(\"communicationRetryUrl\", aplPolicyMsUrl + \"/communications/retry\");\nif (kcontext.getVariable(\"maxRetryCount\") == null) { kcontext.setVariable(\"maxRetryCount\", 3); }\nkcontext.setVariable(\"Headers\", \"{\\\"Content-Type\\\":\\\"application/json\\\"}\");\nkcontext.setVariable(\"ContentType\", \"application/json\");\nkcontext.setVariable(\"ResultClass\", \"\");\nkcontext.setVariable(\"ConnectTimeout\", \"180000\");\nkcontext.setVariable(\"ReadTimeout\", \"180000\");\nkcontext.setVariable(\"HandleResponseErrors\", \"true\");"
         },
         {
           "id": "_START_RESEND",
           "type": "start",
-          "name": "Start Certificate Resend"
+          "name": "Start Certificate Resend",
+          "x": 250,
+          "y": 192
         },
         {
           "id": "_MERGE_COMM_CONTEXT",
           "type": "gateway",
           "name": "Comm Context Merge",
+          "x": 1964,
+          "y": 275,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -1239,6 +1311,8 @@
           "id": "_RECORD_REGEN_STEP",
           "type": "call",
           "name": "Record Regeneration Step",
+          "x": 1471,
+          "y": 387,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -1265,6 +1339,8 @@
           "id": "_CALL_SEND_COMM",
           "type": "call",
           "name": "Send Certificate Communication",
+          "x": 2556,
+          "y": 259,
           "process": "policy_system.send_communication_with_retry",
           "inputs": {
             "commPurposeId": "$commPurposeId",
@@ -1287,12 +1363,16 @@
         {
           "id": "_END_RESEND_DONE",
           "type": "end",
-          "name": "Certificate Resend Complete"
+          "name": "Certificate Resend Complete",
+          "x": 3342,
+          "y": 555
         },
         {
           "id": "_GATE_GEN_RESULT",
           "type": "gateway",
           "name": "Generation Completed?",
+          "x": 1776,
+          "y": 387,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -1300,6 +1380,8 @@
           "id": "_RECORD_COMM_STEP",
           "type": "call",
           "name": "Record Communication Step",
+          "x": 2894,
+          "y": 259,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -1326,6 +1408,8 @@
           "id": "_CLOSE_TL_FAILED",
           "type": "call",
           "name": "Close Timeline (FAILED)",
+          "x": 1719,
+          "y": 583,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -1451,22 +1535,30 @@
           "id": "_A742C21E-359A-48A9-84E1-B3BA5876F5AD",
           "type": "userTask",
           "name": "Task",
+          "x": 615,
+          "y": 324,
           "form": "Task"
         },
         {
           "id": "_248B836C-7542-4447-8B68-726ADB528EDE",
           "type": "script",
           "name": "Task",
+          "x": 381,
+          "y": 324,
           "lang": "js",
           "code": "// no-op"
         },
         {
           "id": "_7F062302-9F93-4C3A-903B-8B623C8FE740",
-          "type": "end"
+          "type": "end",
+          "x": 858,
+          "y": 347
         },
         {
           "id": "_F2BF3DB0-923B-45B1-B955-2AA1265E01BD",
-          "type": "start"
+          "type": "start",
+          "x": 245,
+          "y": 347
         }
       ],
       "flows": [
@@ -1503,6 +1595,8 @@
           "id": "_06841B47-64B3-498D-B4B7-BC46FEBE7F54",
           "type": "script",
           "name": "Task",
+          "x": 314,
+          "y": 402,
           "lang": "js",
           "code": "// no-op"
         },
@@ -1510,15 +1604,21 @@
           "id": "_CBEB9C61-AD21-4E5A-B4BF-9C05F61A651B",
           "type": "userTask",
           "name": "Coverage_Lapse",
+          "x": 548,
+          "y": 402,
           "form": "Task"
         },
         {
           "id": "_CE9CB7F5-52D6-4F64-B346-C283C980C3F6",
-          "type": "start"
+          "type": "start",
+          "x": 178,
+          "y": 425
         },
         {
           "id": "_1B35A7D6-AB16-4A52-89EA-ADAB20F3A71C",
-          "type": "end"
+          "type": "end",
+          "x": 782,
+          "y": 425
         }
       ],
       "flows": [
@@ -1553,24 +1653,32 @@
       "nodes": [
         {
           "id": "_3DD23B12-44EB-486E-99A3-F11C2D017923",
-          "type": "start"
+          "type": "start",
+          "x": 251,
+          "y": 239
         },
         {
           "id": "_613DE4E4-BB12-4178-BD5B-4AC07118E50E",
           "type": "userTask",
           "name": "Enrollment",
+          "x": 621,
+          "y": 216,
           "form": "Task"
         },
         {
           "id": "_12210FB9-9131-4C80-A3B9-E03103E92441",
           "type": "script",
           "name": "Task",
+          "x": 387,
+          "y": 216,
           "lang": "js",
           "code": "// no-op"
         },
         {
           "id": "_469503C6-0C58-4639-8014-4726DD553A5C",
-          "type": "end"
+          "type": "end",
+          "x": 855,
+          "y": 239
         }
       ],
       "flows": [
@@ -1676,17 +1784,23 @@
           "id": "_1E2CD46E-8129-4315-9434-CC5DB9F44F86",
           "type": "script",
           "name": "Init",
+          "x": 157,
+          "y": 139,
           "lang": "js",
           "code": "let baseUrl = System.getenv(\"\");\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://apl-policy-ms-service.policy-management.svc.cluster.local:80/policy-api\";\nkcontext.setVariable(\"content_type\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\n\nlet update_case_str = baseUrl + \"/case/instance/update-status\";\nkcontext.setVariable(\"update_case_url\", update_case_str);\n\nlet update_cid_pid = baseUrl + \"/update/cid-pid\";\nkcontext.setVariable(\"update_pid_url\", update_cid_pid);"
         },
         {
           "id": "_FC276B9D-3FB0-4F03-9217-5D7E831A33B0",
-          "type": "end"
+          "type": "end",
+          "x": 1229,
+          "y": 157
         },
         {
           "id": "_1454E8D5-7218-4223-8BDC-37A5A94DBC56",
           "type": "workItem",
           "name": "Update Pid Cid",
+          "x": 336,
+          "y": 140,
           "handler": "Rest",
           "params": {
             "ContentType": "$content_type",
@@ -1704,12 +1818,16 @@
         },
         {
           "id": "_AB8873A7-6D21-4BC0-B238-C33D808CAABD",
-          "type": "end"
+          "type": "end",
+          "x": 1088,
+          "y": 296
         },
         {
           "id": "_92818481-2A7C-4B89-8FBA-F2ADDAF5A855",
           "type": "workItem",
           "name": "Update Case Status",
+          "x": 514,
+          "y": 139,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -1727,12 +1845,16 @@
         },
         {
           "id": "_FF237063-787A-4B9E-A339-25F33B06D8BC",
-          "type": "end"
+          "type": "end",
+          "x": 1047,
+          "y": 29
         },
         {
           "id": "_0C7D846A-9148-4C00-BA96-19CD25A4FCDE",
           "type": "workItem",
           "name": "Approved",
+          "x": 854,
+          "y": 273,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -1750,12 +1872,16 @@
         },
         {
           "id": "_982C5F4B-6A75-4CCE-ABF6-BC4C073B3778",
-          "type": "start"
+          "type": "start",
+          "x": 69,
+          "y": 162
         },
         {
           "id": "_39BDD764-C4B7-44F4-91CE-1977244E2C75",
           "type": "workItem",
           "name": "Override",
+          "x": 833,
+          "y": 17,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -1775,6 +1901,8 @@
           "id": "_2535D44F-DBB7-4E21-A1C3-4DD86167171E",
           "type": "workItem",
           "name": "Declined",
+          "x": 1013,
+          "y": 128,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -1794,12 +1922,16 @@
           "id": "_1AA4E98B-D1ED-426A-9F96-E5F5CE73DC1A",
           "type": "userTask",
           "name": "Enrollment Error Rate Review",
+          "x": 701,
+          "y": 134,
           "group": "#{enrollment_review_group}",
           "form": "Task"
         },
         {
           "id": "_B927E770-2779-491A-BD1F-0F934A247B40",
           "type": "gateway",
+          "x": 882,
+          "y": 157,
           "mode": "exclusive",
           "direction": "Diverging"
         }
@@ -1953,6 +2085,8 @@
           "id": "_94DFDC37-A556-4B61-BBEB-68106E40979C",
           "type": "workItem",
           "name": "Update Case Status",
+          "x": 1233,
+          "y": 69,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -1972,6 +2106,8 @@
           "id": "_FB866736-D17E-4639-BDA5-D45F5E8E2DF5",
           "type": "workItem",
           "name": "Update Case Status",
+          "x": 621,
+          "y": 69,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -1991,6 +2127,8 @@
           "id": "_434E11E2-7151-485A-A788-498BF219C95A",
           "type": "workItem",
           "name": "Update Pid Cid",
+          "x": 413,
+          "y": 64,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_pid_payload",
@@ -2010,6 +2148,8 @@
           "id": "_4D4288D7-3B43-4AB4-9FF2-DB31A9580590",
           "type": "workItem",
           "name": "Update Case Status",
+          "x": 987,
+          "y": 225,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -2029,31 +2169,43 @@
           "id": "_0A844EA7-DA55-40CE-9AE5-4C18F2639886",
           "type": "userTask",
           "name": "Enrollment Exception Review",
+          "x": 809,
+          "y": 69,
           "group": "#{enrollment_review_group}",
           "form": "Task"
         },
         {
           "id": "_CEE46425-D1C3-46AC-A258-67499E3F1CE4",
           "type": "gateway",
+          "x": 1036,
+          "y": 92,
           "mode": "exclusive",
           "direction": "Diverging"
         },
         {
           "id": "_E71908FC-7516-46A6-B4DE-74B1546A5650",
-          "type": "end"
+          "type": "end",
+          "x": 1282,
+          "y": 248
         },
         {
           "id": "_E19A3609-9EB9-47B0-814A-532E54BE36EE",
-          "type": "start"
+          "type": "start",
+          "x": 76,
+          "y": 92
         },
         {
           "id": "_E1FAD7C2-3302-41EC-86B7-E799CDD64CE2",
-          "type": "end"
+          "type": "end",
+          "x": 1486,
+          "y": 87
         },
         {
           "id": "_F57A022E-D538-459B-AB74-3863D5065AF4",
           "type": "script",
           "name": "Init",
+          "x": 205,
+          "y": 69,
           "lang": "js",
           "code": "let baseUrl = System.getenv(\"\");\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://apl-policy-ms-service.policy-management.svc.cluster.local:80/policy-api\";\nkcontext.setVariable(\"content_type\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\n\nlet update_case_str = baseUrl + \"/case/instance/update-status\";\nkcontext.setVariable(\"update_case_url\", update_case_str);\n\nlet update_cid_pid = baseUrl + \"/update/cid-pid\";\nkcontext.setVariable(\"update_pid_url\", update_cid_pid);"
         }
@@ -2193,11 +2345,15 @@
       "nodes": [
         {
           "id": "_8A13A401-BDB9-48FB-A95D-EE6B5491B95F",
-          "type": "end"
+          "type": "end",
+          "x": 1322,
+          "y": 33
         },
         {
           "id": "_C70C827A-A156-4A5B-8057-639CA2B83F30",
           "type": "gateway",
+          "x": 1137,
+          "y": 137,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -2205,6 +2361,8 @@
           "id": "_9EF7A9DC-3DDC-4128-8BB3-E81A4FB277C1",
           "type": "workItem",
           "name": "Approved",
+          "x": 1070,
+          "y": 236,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -2224,6 +2382,8 @@
           "id": "_7CE3BCAA-77BA-479D-BECE-524F44F58CA0",
           "type": "workItem",
           "name": "Declined",
+          "x": 1331,
+          "y": 114,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -2243,6 +2403,8 @@
           "id": "_B2ED4372-D925-4D76-82EB-C102C07B2B6D",
           "type": "script",
           "name": "Init",
+          "x": 250,
+          "y": 75,
           "lang": "js",
           "code": "let baseUrl = System.getenv(\"\");\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://apl-policy-ms-service.policy-management.svc.cluster.local:80/policy-api\";\nkcontext.setVariable(\"content_type\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\n\nlet update_case_str = baseUrl + \"/case/instance/update-status\";\nkcontext.setVariable(\"update_case_url\", update_case_str);\n\nlet update_cid_pid = baseUrl + \"/update/cid-pid\";\nkcontext.setVariable(\"update_pid_url\", update_cid_pid);"
         },
@@ -2250,6 +2412,8 @@
           "id": "_3D435E2F-C4A8-470C-8703-AAA6FBA40B48",
           "type": "workItem",
           "name": "Update Case Status",
+          "x": 642,
+          "y": 75,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -2269,6 +2433,8 @@
           "id": "_BEB18AAB-0527-498E-BB03-6221320DF507",
           "type": "workItem",
           "name": "Update Pid Cid",
+          "x": 446,
+          "y": 75,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_pid_payload",
@@ -2286,16 +2452,22 @@
         },
         {
           "id": "_D642BE50-D608-4DBD-BB5A-C6825A086871",
-          "type": "start"
+          "type": "start",
+          "x": 124,
+          "y": 98
         },
         {
           "id": "_EBE6FDB1-2924-4E0C-81CC-8CD0E535604B",
-          "type": "end"
+          "type": "end",
+          "x": 1304,
+          "y": 259
         },
         {
           "id": "_3E19A053-F6EE-41E4-B7A4-0047F8D7D4E1",
           "type": "workItem",
           "name": "Override",
+          "x": 1088,
+          "y": 10,
           "handler": "Rest",
           "params": {
             "ContentData": "$update_case_payload",
@@ -2315,12 +2487,16 @@
           "id": "_A581D841-23CB-4A13-BBE1-A4722B3EC8F1",
           "type": "userTask",
           "name": "PARTICIPATION RATE REVIEW",
+          "x": 833,
+          "y": 75,
           "group": "#{enrollment_review_group}",
           "form": "Task"
         },
         {
           "id": "_6FFE29A5-FF6E-4F0D-B1F3-9C4AF303355E",
-          "type": "end"
+          "type": "end",
+          "x": 1604,
+          "y": 137
         }
       ],
       "flows": [
@@ -2464,12 +2640,16 @@
       "nodes": [
         {
           "id": "_EDE03B60-3DA9-400A-AE15-85950ABEAD44",
-          "type": "end"
+          "type": "end",
+          "x": 1806,
+          "y": 286
         },
         {
           "id": "_WAIT_FOR_SIGNAL",
           "type": "catch",
           "name": "Wait For Signal",
+          "x": 1124,
+          "y": 286,
           "event": {
             "signal": "ErrorRetrySignal"
           }
@@ -2478,6 +2658,8 @@
           "id": "_REGISTER_MERGE",
           "type": "gateway",
           "name": "Register Merge",
+          "x": 490,
+          "y": 286,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -2485,6 +2667,8 @@
           "id": "_PROCESS_REVIEWER",
           "type": "userTask",
           "name": "Process Reviewer",
+          "x": 1514,
+          "y": 550,
           "group": "ProcessReviewer",
           "form": "ProcessReview"
         },
@@ -2492,17 +2676,23 @@
           "id": "_4702C206-9622-4815-8F03-4850063F9B30",
           "type": "script",
           "name": "Init",
+          "x": 251,
+          "y": 263,
           "lang": "js",
           "code": "\nlet urlVal = kcontext.getVariable(\"Url\");\nlet methodVal = kcontext.getVariable(\"Method\");\nlet errorMsg = kcontext.getVariable(\"ErrorMessage\");\n\nif (kcontext.getVariable(\"caseId\") == null) { kcontext.setVariable(\"caseId\", \"\"); }\nif (kcontext.getVariable(\"maxRetryCount\") == null) { kcontext.setVariable(\"maxRetryCount\", 3); }\nif (kcontext.getVariable(\"count\") == null) { kcontext.setVariable(\"count\", 1); }\nif (kcontext.getVariable(\"Method\") == null) { kcontext.setVariable(\"Method\", \"POST\"); }\n\nconsole.log(\"[BPM][ENTRY] process=policy_system.error_flow | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Init | caseId=\" + kcontext.getVariable(\"caseId\") + \" | url=\" + urlVal + \" | method=\" + methodVal + \" | maxRetryCount=\" + kcontext.getVariable(\"maxRetryCount\") + \" | count=\" + kcontext.getVariable(\"count\") + \" | errorMessage=\" + errorMsg);\n      "
         },
         {
           "id": "_84937C91-B10A-4DE3-AE6E-74292D7C17F1",
-          "type": "start"
+          "type": "start",
+          "x": 95,
+          "y": 286
         },
         {
           "id": "_CHECK_SUCCESS",
           "type": "gateway",
           "name": "Success?",
+          "x": 1514,
+          "y": 286,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -2510,6 +2700,8 @@
           "id": "_END_MERGE",
           "type": "gateway",
           "name": "End Merge",
+          "x": 1660,
+          "y": 286,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -2517,6 +2709,8 @@
           "id": "_REGISTER_RETRY",
           "type": "workItem",
           "name": "Register Retry",
+          "x": 880,
+          "y": 263,
           "handler": "Rest",
           "params": {
             "ContentData": "$RegisterContentData",
@@ -2534,6 +2728,8 @@
           "id": "_BUILD_REGISTER_REQUEST",
           "type": "script",
           "name": "Build Register Request",
+          "x": 636,
+          "y": 263,
           "lang": "js",
           "code": "// Builds the request for /error-retry/register - this hands the actual wait\n// off to an external tracker (error_retry_tracker) + poller instead of a\n// BPMN timerEventDefinition, because this KIE Server build's EJB Timer\n// Service crashes the marshaller on every commit that\n// resumes an active gateway from a background thread. The poller instead\n// nudges this instance forward with a plain signal, delivered via an\n// ordinary synchronous REST call - the same code path that has run every\n// gateway evaluation cleanly all along.\nlet aplPolicyMsUrl = ((env && env[\"APL_POLICY_MS_URL\"]) || \"\");\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) { aplPolicyMsUrl = ((env && env[\"APL_POLICY_MS_URL\"]) || \"\"); }\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) {\n    try { aplPolicyMsUrl = kcontext.getKieRuntime().getEnvironment().get(\"APL_POLICY_MS_URL\"); } catch (e) {}\n}\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) { aplPolicyMsUrl = \"http://localhost:3002\"; }\n\n// signal_name here is stored for the case-service's own cid/piid-scoped\n// correlation (sendCaseSignal), not for jBPM's own catch event - jBPM's\n// signalRef is a fixed literal (\"ErrorRetrySignal\") for every instance, and\n// per-instance targeting instead comes from the poller always delivering it\n// through the instance-scoped REST endpoint (.../instances/{piid}/signal/...),\n// confirmed live: a signal fired through that endpoint only ever resumes the\n// one matching instance, never a different one also waiting on the same name.\nlet piid = kcontext.getProcessInstance().getId();\nlet sigName = \"ErrorRetry_\" + piid;\nkcontext.setVariable(\"signalName\", sigName);\nkcontext.setVariable(\"RegisterUrl\", aplPolicyMsUrl + \"/error-retry/register\");\n\n// RegisterContentData is an Object variable (not String) so RESTWorkItemHandler's own\n// transformRequest(content, \"application/json\") - already the fixed ContentType on\n// Register Retry - does the one real Jackson serialization itself. Building this as a\n// pre-stringified String and letting DataFabric's context column be a bare varchar(255)\n// is what originally caused every non-trivial retry context (anything beyond a tiny\n// payload like {case_id, case_status}) to be silently rejected by Postgres\n// (\"value too long for type character varying(255)\") - confirmed live. context.context\n// is now itself a real nested Map rather than a second layer of stringified JSON, matching\n// error_retry_tracker.context's own type now being json/jsonb, not varchar.\nlet rawContentData = kcontext.getVariable(\"ContentData\");\nlet parsedContentData = rawContentData;\ntry {\n    parsedContentData = new com.fasterxml.jackson.databind.ObjectMapper().readValue(rawContentData, java.util.Map);\n} catch (e) {\n    console.log(\"[BPM][WARN] process=policy_system.error_flow | piid=\" + piid + \" | node=Build-Register-Request | ContentData was not valid JSON, storing as a raw string - \" + e.getMessage());\n}\n\nlet retryContext = new java.util.LinkedHashMap();\nretryContext.put(\"url\", kcontext.getVariable(\"Url\"));\nretryContext.put(\"method\", kcontext.getVariable(\"Method\"));\nretryContext.put(\"contentData\", parsedContentData);\n\nlet body = new java.util.LinkedHashMap();\nbody.put(\"type\", \"API_RETRY\");\nbody.put(\"cid\", kcontext.getVariable(\"caseId\"));\nbody.put(\"piid\", String(piid));\nbody.put(\"signal_name\", sigName);\nbody.put(\"context\", retryContext);\n\nkcontext.setVariable(\"RegisterContentData\", body);\n\nconsole.log(\"[BPM][ENTRY] process=policy_system.error_flow | piid=\" + piid + \" | node=Build-Register-Request | caseId=\" + kcontext.getVariable(\"caseId\") + \" | signalName=\" + sigName);"
         },
@@ -2541,6 +2737,8 @@
           "id": "_CHECK_ADMIN_DECISION",
           "type": "gateway",
           "name": "Admin Decision?",
+          "x": 1806,
+          "y": 573,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -2548,6 +2746,8 @@
           "id": "_PARSE_SIGNAL_RESULT",
           "type": "script",
           "name": "Parse Signal Result",
+          "x": 1270,
+          "y": 263,
           "lang": "js",
           "code": "let raw = kcontext.getVariable(\"signalData\");\nlet success = false;\nlet exceeded = false;\nlet responsePayload = null;\ntry {\n  let rawMap = null;\n  if (raw instanceof java.util.Map) {\n    rawMap = raw;\n  } else if (raw instanceof com.fasterxml.jackson.databind.JsonNode) {\n    rawMap = new com.fasterxml.jackson.databind.ObjectMapper().convertValue(raw, java.util.Map);\n  } else if (raw != null) {\n    rawMap = new com.fasterxml.jackson.databind.ObjectMapper().readValue(String(raw), java.util.Map);\n  }\n  if (rawMap != null) {\n    let s = rawMap.get(\"success\");\n    success = Boolean.TRUE.equals(s) || \"true\".equals(String(s));\n    let ex = rawMap.get(\"exceeded\");\n    exceeded = Boolean.TRUE.equals(ex) || \"true\".equals(String(ex));\n    responsePayload = rawMap.get(\"response\");\n  }\n} catch (e) {\n  console.log(\"[BPM][WARN] Could not parse signalData: \" + e.getMessage());\n}\nkcontext.setVariable(\"Status\", success ? \"200\" : \"FAILED\");\n\n// [FIX] This process's own \"Result\" is what the global RESTWorkItemHandler-decorator mapping\n// copies onto the ORIGINAL failing process's own \"Result\" variable once this error_flow\n// instance completes (confirmed live: left unset, the original process's Result ended up\n// holding THIS process's earlier Register-Retry call's own response instead of the real\n// retried business response - that leftover value has no \"error\" key, so the original\n// process's own Result-parsing logic silently misread it as success and hung forever at its\n// next wait state). Writing the real retried response (or a proper error-shaped object on\n// failure/exceeded) here means the original process gets back exactly what a direct\n// successful/failed REST call would have produced.\nlet resultMapper = new com.fasterxml.jackson.databind.ObjectMapper();\nif (success) {\n    kcontext.setVariable(\"Result\", responsePayload != null ? resultMapper.writeValueAsString(responsePayload) : \"{}\");\n} else {\n    let errNode = resultMapper.createObjectNode();\n    errNode.put(\"error\", exceeded ? \"Retry exceeded maximum wait time\" : \"Retry failed\");\n    kcontext.setVariable(\"Result\", errNode.toString());\n}\n\nconsole.log(\"[BPM][EXIT] process=policy_system.error_flow | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Parse-Signal-Result | success=\" + success + \" | exceeded=\" + exceeded);"
         }
@@ -2642,23 +2842,31 @@
       "nodes": [
         {
           "id": "_CE0C5696-FD2B-47FE-AFC8-1CD3719B7708",
-          "type": "end"
+          "type": "end",
+          "x": 867,
+          "y": 285
         },
         {
           "id": "_F6348810-2532-4641-A11F-F8776831F44D",
           "type": "script",
           "name": "Task",
+          "x": 399,
+          "y": 262,
           "lang": "js",
           "code": "// no-op"
         },
         {
           "id": "_B60B7467-1A91-4B8E-8B6D-5F0F7FC2AAF6",
-          "type": "start"
+          "type": "start",
+          "x": 263,
+          "y": 285
         },
         {
           "id": "_FC35E5DC-171D-4ADD-A5CE-1640668F5214",
           "type": "userTask",
           "name": "Escalation",
+          "x": 633,
+          "y": 262,
           "form": "Task"
         }
       ],
@@ -2696,20 +2904,28 @@
           "id": "_9B7A7C7C-2EAD-4675-A272-EEA3F1A87082",
           "type": "userTask",
           "name": "File feed",
+          "x": 592,
+          "y": 265,
           "form": "Task"
         },
         {
           "id": "_1057A6B5-7793-44D3-B5BC-F0273631DFE6",
-          "type": "start"
+          "type": "start",
+          "x": 222,
+          "y": 288
         },
         {
           "id": "_8891718F-C195-4C48-A313-7714F20EF8FA",
-          "type": "end"
+          "type": "end",
+          "x": 826,
+          "y": 288
         },
         {
           "id": "_4D01090C-8D88-44B1-9F53-18A8EE37AC70",
           "type": "script",
           "name": "Task",
+          "x": 358,
+          "y": 265,
           "lang": "js",
           "code": "// no-op"
         }
@@ -2886,12 +3102,16 @@
         {
           "id": "_70158B84-5A58-4328-A936-17EC9174EC9B",
           "type": "gateway",
+          "x": 615,
+          "y": 206,
           "mode": "parallel",
           "direction": "Diverging"
         },
         {
           "id": "_570AC615-68E3-46F6-A4BD-8462D37E8B98",
           "type": "gateway",
+          "x": 1257,
+          "y": 206,
           "mode": "exclusive",
           "default": "_249C04DA-0A4B-4148-AF16-96F207FBCD5D",
           "direction": "Diverging"
@@ -2900,29 +3120,39 @@
           "id": "_EF37FCC4-A7A1-429C-ADBE-AE9A3E4D0635",
           "type": "script",
           "name": "Task",
+          "x": 245,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\" enter cid:\"+kcontext.getVariable(\"cid\")+\",node:\"+kcontext.getNodeInstance().getNodeName()+\",process:\"+kcontext.getProcessInstance().getProcessName());\n// Header\nlet baseUrl = System.getenv(\"\");\n\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://apl-quotation-ms-service.apl-quotation-ms.svc.cluster.local:80/quote-api\";\n//Set content type, Method  and other variables\nkcontext.setVariable(\"contentType\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\nkcontext.setVariable(\"isHandleResponseErrors\",\"true\");\nkcontext.setVariable(\"email_type\",\"SEND_EMAIL_WITH_POLICY_CERTIFICATE_SIGNAL\");\n\n// Save Signal Info\nlet saveSignalPath = baseUrl + \"/case-service/case/instance/signal/save\";\nkcontext.setVariable(\"saveUrl\", saveSignalPath);\n//create policy document\nlet certificateCreatePath = baseUrl + \"/policy/certificate/create\";\nkcontext.setVariable(\"certificateCreateUrl\", certificateCreatePath);\n\n//physical delivery Eligibility\nlet physicalMailEligibilityPath = baseUrl + \"/policy/physical-mail/eligibility\";\nkcontext.setVariable(\"physicalMailEligibilityUrl\", physicalMailEligibilityPath);\n\n//physical delivery Notification\nlet policyCertSendMailPath = baseUrl + \"/policy/certificate/send-email\";\nkcontext.setVariable(\"policyCertSendMailUrl\", policyCertSendMailPath);\n\n//physical delivery Eligibility\nlet physicalDeliveryPath = baseUrl + \"/policy/certificate/physical/delivery\";\nkcontext.setVariable(\"physicalDeliveryUrl\", physicalDeliveryPath);\n"
         },
         {
           "id": "_9F80D5A9-6535-4717-9130-29412751C8B2",
-          "type": "end"
+          "type": "end",
+          "x": 2292,
+          "y": 207
         },
         {
           "id": "_F45E59C8-3A08-44EF-AE67-A2C92098B10A",
           "type": "userTask",
           "name": "Certificate Creation Exception",
+          "x": 1208,
+          "y": 440,
           "form": "Task"
         },
         {
           "id": "_76878D2E-559A-49C9-BE03-F139A492B628",
           "type": "userTask",
           "name": "Physical Delivery Exception",
+          "x": 2092,
+          "y": 32,
           "form": "Task"
         },
         {
           "id": "_BF268371-E79E-48EE-9FD0-A78331044C1F",
           "type": "workItem",
           "name": "sending physical delivery",
+          "x": 1899,
+          "y": 184,
           "handler": "Rest",
           "params": {
             "ContentData": "$physicalDeliveryPayload",
@@ -2943,6 +3173,8 @@
           "id": "_DDF8D640-7DA7-459B-A11B-A9E6344EC56A",
           "type": "workItem",
           "name": "Save Signal",
+          "x": 702,
+          "y": 334,
           "handler": "Rest",
           "params": {
             "ContentData": "$savePayload",
@@ -2958,6 +3190,8 @@
         {
           "id": "_3D1F66D1-79B1-46D8-B6B6-24A524C04D3D",
           "type": "gateway",
+          "x": 2141,
+          "y": 207,
           "mode": "exclusive",
           "default": "_793EE355-8589-47E7-9545-7A8728A37AF8",
           "direction": "Diverging"
@@ -2966,6 +3200,8 @@
           "id": "_F51B9DE6-274B-4DA7-A25C-E7573F57202F",
           "type": "call",
           "name": "Policy Send Email",
+          "x": 1571,
+          "y": 375,
           "process": "policy_management.send_email",
           "inputs": {
             "email_type": "$email_type",
@@ -2979,12 +3215,16 @@
         },
         {
           "id": "_AFEE03A0-F16F-4862-98CF-200A0446E725",
-          "type": "start"
+          "type": "start",
+          "x": 144,
+          "y": 206
         },
         {
           "id": "_1A751EAF-3C2C-49D4-A842-F1B4D319BCCF",
           "type": "workItem",
           "name": "Check Physical Delivery",
+          "x": 1385,
+          "y": 183,
           "handler": "Rest",
           "params": {
             "ContentData": "$savePayload",
@@ -3003,6 +3243,8 @@
           "id": "_CCB24647-5271-42DC-966F-D46D7AE1478B",
           "type": "workItem",
           "name": "Certificate Creation",
+          "x": 697,
+          "y": 51,
           "handler": "Rest",
           "params": {
             "ContentData": "$certificateCreatePayload",
@@ -3017,41 +3259,55 @@
         },
         {
           "id": "_1368FBD7-4053-460D-97E6-7EAC63F793F9",
-          "type": "end"
+          "type": "end",
+          "x": 961,
+          "y": 588
         },
         {
           "id": "_EF5C1E64-F360-4E22-BBF7-F849E6C318A1",
           "type": "script",
           "name": "Certificate Creation Error Check",
+          "x": 1023,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\"Signal value \"+generate_document_signal_response);\nlet data = kcontext.getVariable(\"generate_document_signal_response\");\nkcontext.setVariable(\"isError\",false);\n\n\nif (data != null && !data.isEmpty()) {\n    if (data.containsKey(\"Error\")) {\n    kcontext.setVariable(\"Error\",data.get(\"Error\"));\n    }\n\tif (data.containsKey(\"ErrorMessage\")) {\n    kcontext.setVariable(\"ErrorMessage\",data.get(\"ErrorMessage\"));\n    }\n\tif (data.containsKey(\"isError\")) {\n\tlet errorVal = data.get(\"isError\");\n\tif(errorVal){\n\t\t\tkcontext.setVariable(\"serviceType\",\"PCD\");\n\t\t}\n    kcontext.setVariable(\"isError\",errorVal);\n    }\n    \n}"
         },
         {
           "id": "_576DDD2D-E930-4817-B1C4-F7485F676A93",
           "type": "gateway",
+          "x": 961,
+          "y": 463,
           "mode": "exclusive",
           "default": "_D2463773-0874-41ED-8BF0-8455DC05B869",
           "direction": "Diverging"
         },
         {
           "id": "_5E718E8A-310C-41B2-B99A-5936858C90F2",
-          "type": "end"
+          "type": "end",
+          "x": 1804,
+          "y": 397
         },
         {
           "id": "_85B23AA8-F6AF-4072-B25B-15D9713B95D5",
           "type": "gateway",
+          "x": 479,
+          "y": 206,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_0EDE9F8D-E1C7-4965-8079-318F4803F1E5",
           "type": "gateway",
+          "x": 1778,
+          "y": 207,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_A90F9BC4-A0CB-4406-BADB-E1DA68876EDD",
           "type": "gateway",
+          "x": 1619,
+          "y": 206,
           "mode": "exclusive",
           "default": "_1A0B023B-FD68-4FF3-8F21-28272D5005DB",
           "direction": "Diverging"
@@ -3059,12 +3315,16 @@
         {
           "id": "_1006958E-5708-464B-8911-35157F2228B8",
           "type": "gateway",
+          "x": 887,
+          "y": 206,
           "mode": "parallel",
           "direction": "Converging"
         },
         {
           "id": "_2AE50831-6067-46FF-8672-302D4B2670E6",
           "type": "catch",
+          "x": 751,
+          "y": 206,
           "event": {
             "signal": "GENERATE_POLICY_DOCUMENT_SIGNAL"
           }
@@ -3368,12 +3628,16 @@
         {
           "id": "_70158B84-5A58-4328-A936-17EC9174EC9B",
           "type": "gateway",
+          "x": 615,
+          "y": 206,
           "mode": "parallel",
           "direction": "Diverging"
         },
         {
           "id": "_570AC615-68E3-46F6-A4BD-8462D37E8B98",
           "type": "gateway",
+          "x": 1257,
+          "y": 206,
           "mode": "exclusive",
           "default": "_249C04DA-0A4B-4148-AF16-96F207FBCD5D",
           "direction": "Diverging"
@@ -3382,29 +3646,39 @@
           "id": "_EF37FCC4-A7A1-429C-ADBE-AE9A3E4D0635",
           "type": "script",
           "name": "Task",
+          "x": 245,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\" enter cid:\"+kcontext.getVariable(\"cid\")+\",node:\"+kcontext.getNodeInstance().getNodeName()+\",process:\"+kcontext.getProcessInstance().getProcessName());\n// Header\nlet baseUrl = System.getenv(\"\");\n\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://apl-quotation-ms-service.apl-quotation-ms.svc.cluster.local:80/quote-api\";\n//Set content type, Method  and other variables\nkcontext.setVariable(\"contentType\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\nkcontext.setVariable(\"isHandleResponseErrors\",\"true\");\nkcontext.setVariable(\"email_type\",\"SEND_EMAIL_WITH_POLICY_ID_CARD_SIGNAL\");\n\n// Save Signal Info\nlet saveSignalPath = baseUrl + \"/case-service/case/instance/signal/save\";\nkcontext.setVariable(\"saveUrl\", saveSignalPath);\n//create policy document\nlet idCardCreatePath = baseUrl + \"/policy/id-card/create\";\nkcontext.setVariable(\"idCardCreateUrl\", idCardCreatePath);\n\n//physical delivery Eligibility\nlet physicalMailEligibilityPath = baseUrl + \"/policy/physical-mail/eligibility\";\nkcontext.setVariable(\"physicalMailEligibilityUrl\", physicalMailEligibilityPath);\n\n//physical delivery Notification\nlet policyCertSendMailPath = baseUrl + \"/policy/id-card/send-email\";\nkcontext.setVariable(\"policyCertSendMailUrl\", policyCertSendMailPath);\n\n//physical delivery Eligibility\nlet physicalDeliveryPath = baseUrl + \"/policy/id-card/physical/delivery\";\nkcontext.setVariable(\"physicalDeliveryUrl\", physicalDeliveryPath);\n"
         },
         {
           "id": "_9F80D5A9-6535-4717-9130-29412751C8B2",
-          "type": "end"
+          "type": "end",
+          "x": 2292,
+          "y": 207
         },
         {
           "id": "_F45E59C8-3A08-44EF-AE67-A2C92098B10A",
           "type": "userTask",
           "name": "ID Card Creation Exception",
+          "x": 1208,
+          "y": 440,
           "form": "Task"
         },
         {
           "id": "_76878D2E-559A-49C9-BE03-F139A492B628",
           "type": "userTask",
           "name": "Physical Delivery Exception",
+          "x": 2092,
+          "y": 32,
           "form": "Task"
         },
         {
           "id": "_BF268371-E79E-48EE-9FD0-A78331044C1F",
           "type": "workItem",
           "name": "sending physical delivery",
+          "x": 1899,
+          "y": 184,
           "handler": "Rest",
           "params": {
             "ContentData": "$physicalDeliveryPayload",
@@ -3425,6 +3699,8 @@
           "id": "_DDF8D640-7DA7-459B-A11B-A9E6344EC56A",
           "type": "workItem",
           "name": "Save Signal",
+          "x": 702,
+          "y": 334,
           "handler": "Rest",
           "params": {
             "ContentData": "$savePayload",
@@ -3440,6 +3716,8 @@
         {
           "id": "_3D1F66D1-79B1-46D8-B6B6-24A524C04D3D",
           "type": "gateway",
+          "x": 2141,
+          "y": 207,
           "mode": "exclusive",
           "default": "_793EE355-8589-47E7-9545-7A8728A37AF8",
           "direction": "Diverging"
@@ -3448,6 +3726,8 @@
           "id": "_F51B9DE6-274B-4DA7-A25C-E7573F57202F",
           "type": "call",
           "name": "ID Card Send Email",
+          "x": 1571,
+          "y": 375,
           "process": "policy_management.send_email",
           "inputs": {
             "email_type": "$email_type",
@@ -3461,12 +3741,16 @@
         },
         {
           "id": "_AFEE03A0-F16F-4862-98CF-200A0446E725",
-          "type": "start"
+          "type": "start",
+          "x": 144,
+          "y": 206
         },
         {
           "id": "_1A751EAF-3C2C-49D4-A842-F1B4D319BCCF",
           "type": "workItem",
           "name": "Check Physical Delivery",
+          "x": 1385,
+          "y": 183,
           "handler": "Rest",
           "params": {
             "ContentData": "$savePayload",
@@ -3485,6 +3769,8 @@
           "id": "_CCB24647-5271-42DC-966F-D46D7AE1478B",
           "type": "workItem",
           "name": "Id Card Creation",
+          "x": 697,
+          "y": 51,
           "handler": "Rest",
           "params": {
             "ContentData": "$certificateCreatePayload",
@@ -3499,41 +3785,55 @@
         },
         {
           "id": "_1368FBD7-4053-460D-97E6-7EAC63F793F9",
-          "type": "end"
+          "type": "end",
+          "x": 961,
+          "y": 588
         },
         {
           "id": "_EF5C1E64-F360-4E22-BBF7-F849E6C318A1",
           "type": "script",
           "name": "Certificate Creation Error Check",
+          "x": 1023,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\"Signal value \"+generate_document_signal_response);\nlet data = kcontext.getVariable(\"generate_document_signal_response\");\nkcontext.setVariable(\"isError\",false);\n\n\nif (data != null && !data.isEmpty()) {\n    if (data.containsKey(\"Error\")) {\n    kcontext.setVariable(\"Error\",data.get(\"Error\"));\n    }\n\tif (data.containsKey(\"ErrorMessage\")) {\n    kcontext.setVariable(\"ErrorMessage\",data.get(\"ErrorMessage\"));\n    }\n\tif (data.containsKey(\"isError\")) {\n\tlet errorVal = data.get(\"isError\");\n\tif(errorVal){\n\t\t\tkcontext.setVariable(\"serviceType\",\"PCD\");\n\t\t}\n    kcontext.setVariable(\"isError\",errorVal);\n    }\n    \n}"
         },
         {
           "id": "_576DDD2D-E930-4817-B1C4-F7485F676A93",
           "type": "gateway",
+          "x": 961,
+          "y": 463,
           "mode": "exclusive",
           "default": "_D2463773-0874-41ED-8BF0-8455DC05B869",
           "direction": "Diverging"
         },
         {
           "id": "_5E718E8A-310C-41B2-B99A-5936858C90F2",
-          "type": "end"
+          "type": "end",
+          "x": 1804,
+          "y": 397
         },
         {
           "id": "_85B23AA8-F6AF-4072-B25B-15D9713B95D5",
           "type": "gateway",
+          "x": 479,
+          "y": 206,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_0EDE9F8D-E1C7-4965-8079-318F4803F1E5",
           "type": "gateway",
+          "x": 1778,
+          "y": 207,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_A90F9BC4-A0CB-4406-BADB-E1DA68876EDD",
           "type": "gateway",
+          "x": 1619,
+          "y": 206,
           "mode": "exclusive",
           "default": "_1A0B023B-FD68-4FF3-8F21-28272D5005DB",
           "direction": "Diverging"
@@ -3541,12 +3841,16 @@
         {
           "id": "_1006958E-5708-464B-8911-35157F2228B8",
           "type": "gateway",
+          "x": 887,
+          "y": 206,
           "mode": "parallel",
           "direction": "Converging"
         },
         {
           "id": "_2AE50831-6067-46FF-8672-302D4B2670E6",
           "type": "catch",
+          "x": 751,
+          "y": 206,
           "event": {
             "signal": "GENERATE_POLICY_DOCUMENT_SIGNAL"
           }
@@ -3830,12 +4134,16 @@
         {
           "id": "_70158B84-5A58-4328-A936-17EC9174EC9B",
           "type": "gateway",
+          "x": 615,
+          "y": 206,
           "mode": "parallel",
           "direction": "Diverging"
         },
         {
           "id": "_570AC615-68E3-46F6-A4BD-8462D37E8B98",
           "type": "gateway",
+          "x": 1257,
+          "y": 206,
           "mode": "exclusive",
           "default": "_249C04DA-0A4B-4148-AF16-96F207FBCD5D",
           "direction": "Diverging"
@@ -3844,29 +4152,39 @@
           "id": "_EF37FCC4-A7A1-429C-ADBE-AE9A3E4D0635",
           "type": "script",
           "name": "Task",
+          "x": 245,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\" enter cid:\"+kcontext.getVariable(\"cid\")+\",node:\"+kcontext.getNodeInstance().getNodeName()+\",process:\"+kcontext.getProcessInstance().getProcessName());\n// Header\nlet baseUrl = System.getenv(\"\");\n\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://apl-quotation-ms-service.apl-quotation-ms.svc.cluster.local:80/quote-api\";\n//Set content type, Method  and other variables\nkcontext.setVariable(\"contentType\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\nkcontext.setVariable(\"isHandleResponseErrors\",\"true\");\nkcontext.setVariable(\"email_type\",\"POLICYDOCUMENT\");\n\n// Save Signal Info\nlet saveSignalPath = baseUrl + \"/case-service/case/instance/signal/save\";\nkcontext.setVariable(\"saveUrl\", saveSignalPath);\n//create policy document\nlet documentCreatePath = baseUrl + \"/policy/document/create\";\nkcontext.setVariable(\"documentCreateUrl\", documentCreatePath);\n\n//physical delivery Eligibility\nlet physicalMailEligibilityPath = baseUrl + \"/policy/physical-mail/eligibility\";\nkcontext.setVariable(\"physicalMailEligibilityUrl\", physicalMailEligibilityPath);\n\n//physical delivery Notification\nlet policyCertSendMailPath = baseUrl + \"/policy/certificate/send-email'\";\nkcontext.setVariable(\"policyCertSendMailUrl\", policyCertSendMailPath);\n\n//physical delivery Eligibility\nlet physicalDeliveryPath = baseUrl + \"/policy/physical/delivery\";\nkcontext.setVariable(\"physicalDeliveryUrl\", physicalDeliveryPath);\n"
         },
         {
           "id": "_9F80D5A9-6535-4717-9130-29412751C8B2",
-          "type": "end"
+          "type": "end",
+          "x": 2292,
+          "y": 207
         },
         {
           "id": "_F45E59C8-3A08-44EF-AE67-A2C92098B10A",
           "type": "userTask",
           "name": "Generate Document Exception",
+          "x": 1208,
+          "y": 440,
           "form": "Task"
         },
         {
           "id": "_76878D2E-559A-49C9-BE03-F139A492B628",
           "type": "userTask",
           "name": "Physical Delivery Exception",
+          "x": 2092,
+          "y": 32,
           "form": "Task"
         },
         {
           "id": "_BF268371-E79E-48EE-9FD0-A78331044C1F",
           "type": "workItem",
           "name": "sending physical delivery",
+          "x": 1899,
+          "y": 184,
           "handler": "Rest",
           "params": {
             "ContentData": "$physicalDeliveryPayload",
@@ -3887,6 +4205,8 @@
           "id": "_DDF8D640-7DA7-459B-A11B-A9E6344EC56A",
           "type": "workItem",
           "name": "Save Signal",
+          "x": 702,
+          "y": 334,
           "handler": "Rest",
           "params": {
             "ContentData": "$savePayload",
@@ -3902,6 +4222,8 @@
         {
           "id": "_3D1F66D1-79B1-46D8-B6B6-24A524C04D3D",
           "type": "gateway",
+          "x": 2141,
+          "y": 207,
           "mode": "exclusive",
           "default": "_793EE355-8589-47E7-9545-7A8728A37AF8",
           "direction": "Diverging"
@@ -3910,6 +4232,8 @@
           "id": "_F51B9DE6-274B-4DA7-A25C-E7573F57202F",
           "type": "call",
           "name": "Policy Send Email",
+          "x": 1571,
+          "y": 375,
           "process": "policy_management.send_email",
           "inputs": {
             "email_type": "$email_type",
@@ -3923,12 +4247,16 @@
         },
         {
           "id": "_AFEE03A0-F16F-4862-98CF-200A0446E725",
-          "type": "start"
+          "type": "start",
+          "x": 144,
+          "y": 206
         },
         {
           "id": "_1A751EAF-3C2C-49D4-A842-F1B4D319BCCF",
           "type": "workItem",
           "name": "Check Physical Delivery",
+          "x": 1385,
+          "y": 183,
           "handler": "Rest",
           "params": {
             "ContentData": "$savePayload",
@@ -3947,6 +4275,8 @@
           "id": "_CCB24647-5271-42DC-966F-D46D7AE1478B",
           "type": "workItem",
           "name": "Generate Document",
+          "x": 697,
+          "y": 51,
           "handler": "Rest",
           "params": {
             "ContentData": "$documentCreatepayload",
@@ -3961,41 +4291,55 @@
         },
         {
           "id": "_1368FBD7-4053-460D-97E6-7EAC63F793F9",
-          "type": "end"
+          "type": "end",
+          "x": 961,
+          "y": 588
         },
         {
           "id": "_EF5C1E64-F360-4E22-BBF7-F849E6C318A1",
           "type": "script",
           "name": "Generate Document Error Check",
+          "x": 1023,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\"Signal value \"+generate_document_signal_response);\nlet data = kcontext.getVariable(\"generate_document_signal_response\");\nkcontext.setVariable(\"isError\",false);\n\n\nif (data != null && !data.isEmpty()) {\n    if (data.containsKey(\"Error\")) {\n    kcontext.setVariable(\"Error\",data.get(\"Error\"));\n    }\n\tif (data.containsKey(\"ErrorMessage\")) {\n    kcontext.setVariable(\"ErrorMessage\",data.get(\"ErrorMessage\"));\n    }\n\tif (data.containsKey(\"isError\")) {\n\tlet errorVal = data.get(\"isError\");\n\tif(errorVal){\n\t\t\tkcontext.setVariable(\"serviceType\",\"PCD\");\n\t\t}\n    kcontext.setVariable(\"isError\",errorVal);\n    }\n    \n}"
         },
         {
           "id": "_576DDD2D-E930-4817-B1C4-F7485F676A93",
           "type": "gateway",
+          "x": 961,
+          "y": 463,
           "mode": "exclusive",
           "default": "_D2463773-0874-41ED-8BF0-8455DC05B869",
           "direction": "Diverging"
         },
         {
           "id": "_5E718E8A-310C-41B2-B99A-5936858C90F2",
-          "type": "end"
+          "type": "end",
+          "x": 1804,
+          "y": 397
         },
         {
           "id": "_85B23AA8-F6AF-4072-B25B-15D9713B95D5",
           "type": "gateway",
+          "x": 479,
+          "y": 206,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_0EDE9F8D-E1C7-4965-8079-318F4803F1E5",
           "type": "gateway",
+          "x": 1778,
+          "y": 207,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_A90F9BC4-A0CB-4406-BADB-E1DA68876EDD",
           "type": "gateway",
+          "x": 1619,
+          "y": 206,
           "mode": "exclusive",
           "default": "_1A0B023B-FD68-4FF3-8F21-28272D5005DB",
           "direction": "Diverging"
@@ -4003,12 +4347,16 @@
         {
           "id": "_1006958E-5708-464B-8911-35157F2228B8",
           "type": "gateway",
+          "x": 887,
+          "y": 206,
           "mode": "parallel",
           "direction": "Converging"
         },
         {
           "id": "_2AE50831-6067-46FF-8672-302D4B2670E6",
           "type": "catch",
+          "x": 751,
+          "y": 206,
           "event": {
             "signal": "GENERATE_POLICY_DOCUMENT_SIGNAL"
           }
@@ -4234,6 +4582,8 @@
         {
           "id": "_DA0E3E83-F543-43CB-860D-3562B42E006F",
           "type": "gateway",
+          "x": 994,
+          "y": 286,
           "mode": "exclusive",
           "default": "_7BC3BF93-27DB-4F8C-BAEF-E944D5202B76",
           "direction": "Diverging"
@@ -4242,6 +4592,8 @@
           "id": "_8ABD9757-8515-499A-9237-D38E840C55D8",
           "type": "call",
           "name": "Notification",
+          "x": 1130,
+          "y": 264,
           "process": "policy_management.send_email",
           "inputs": {
             "cid": "$cid",
@@ -4256,6 +4608,8 @@
         {
           "id": "_E66C8234-0573-4F7F-84AA-F5139F209DB1",
           "type": "gateway",
+          "x": 557,
+          "y": 286,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -4263,6 +4617,8 @@
           "id": "_26170ECB-E17A-47E5-B146-D145A8B3B90B",
           "type": "workItem",
           "name": "Group Takeover Update",
+          "x": 760,
+          "y": 263,
           "handler": "Rest",
           "params": {
             "ContentData": "$takoverUpdateRequest",
@@ -4279,12 +4635,16 @@
         },
         {
           "id": "_137DBCB7-4BD6-401F-B8EB-16CAE5AD18EA",
-          "type": "end"
+          "type": "end",
+          "x": 1363,
+          "y": 286
         },
         {
           "id": "_6B47909F-58E3-4443-A29E-DFF3323B57B2",
           "type": "script",
           "name": "Init",
+          "x": 323,
+          "y": 263,
           "lang": "js",
           "code": "console.log(\" enter cid:\"+kcontext.getVariable(\"cid\")+\",node:\"+kcontext.getNodeInstance().getNodeName()+\",process:\"+kcontext.getProcessInstance().getProcessName());\nlet pId = kcontext.getProcessInstance().getId();\nlet takoverUpdateRequestStr = new org.json.JSONObject();\ntakoverUpdateRequestStr.put(\"broker_id\", kcontext.getVariable(\"broker_id\"));\ntakoverUpdateRequestStr.put(\"policy_number\", kcontext.getVariable(\"policy_number\"));\ntakoverUpdateRequestStr.put(\"prior_carrier_name\", kcontext.getVariable(\"prior_carrier_name\"));\ntakoverUpdateRequestStr.put(\"prior_carrier_policy_number\", kcontext.getVariable(\"prior_carrier_policy_number\"));\ntakoverUpdateRequestStr.put(\"effective_date_with_prior_carrier\", kcontext.getVariable(\"effective_date_with_prior_carrier\"));\ntakoverUpdateRequestStr.put(\"group_id\", kcontext.getVariable(\"group_id\"));\nkcontext.setVariable(\"takoverUpdateRequest\", takoverUpdateRequestStr.toString());\n\nkcontext.setVariable(\"email_type\", \"TAKEOVER_UPDATE_NOTIFICATION\");\nlet baseUrl = System.getenv(\"\");\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://apl-quotation-ms-service.apl-quotation-ms.svc.cluster.local:80/quote-api\";\n//Set content type, Method  and other variables\nkcontext.setVariable(\"contentType\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\nkcontext.setVariable(\"isHandleResponseErrors\",\"true\");\n\n// Takeover Update URL\nlet takeOverUpdateURLStr = baseUrl + \"/quote-api/group/takeover/update\";\nkcontext.setVariable(\"takoverUpdateUrl\", takeOverUpdateURLStr);"
         },
@@ -4292,11 +4652,15 @@
           "id": "_A30CA0EC-51AD-4E57-B583-829F59857A8A",
           "type": "userTask",
           "name": "Task",
+          "x": 945,
+          "y": 436,
           "form": "Task"
         },
         {
           "id": "_EAD77077-A75B-43BF-A37C-5E90567264C4",
-          "type": "start"
+          "type": "start",
+          "x": 145,
+          "y": 286
         }
       ],
       "flows": [
@@ -4502,12 +4866,16 @@
         {
           "id": "_70158B84-5A58-4328-A936-17EC9174EC9B",
           "type": "gateway",
+          "x": 615,
+          "y": 206,
           "mode": "parallel",
           "direction": "Diverging"
         },
         {
           "id": "_570AC615-68E3-46F6-A4BD-8462D37E8B98",
           "type": "gateway",
+          "x": 1257,
+          "y": 206,
           "mode": "exclusive",
           "default": "_2030B299-EEB7-40F2-9710-FCB94D892825",
           "direction": "Diverging"
@@ -4516,6 +4884,8 @@
           "id": "_EF37FCC4-A7A1-429C-ADBE-AE9A3E4D0635",
           "type": "script",
           "name": "Task",
+          "x": 245,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\" enter cid:\"+kcontext.getVariable(\"cid\")+\",node:\"+kcontext.getNodeInstance().getNodeName()+\",process:\"+kcontext.getProcessInstance().getProcessName());\n// Header\nlet baseUrl = System.getenv(\"\");\n\nbaseUrl = (baseUrl != null) ? baseUrl : \"\";\n//Set content type, Method  and other variables\nkcontext.setVariable(\"contentType\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\nkcontext.setVariable(\"isHandleResponseErrors\",\"true\");\nkcontext.setVariable(\"email_type\",\"POLICY_TERMINATION_DATE_REACHED\");\n\n// Save Signal Info\nlet saveSignalPath = baseUrl + \"/case-service/case/instance/signal/save\";\nkcontext.setVariable(\"saveUrl\", saveSignalPath);\n\nlet updateTerminationPath = baseUrl + \"/policy/termination\";\nkcontext.setVariable(\"updateTerminationUrl\", updateTerminationPath);"
         },
@@ -4523,12 +4893,16 @@
           "id": "_F45E59C8-3A08-44EF-AE67-A2C92098B10A",
           "type": "userTask",
           "name": "Termination Exception Review",
+          "x": 1208,
+          "y": 440,
           "form": "Task"
         },
         {
           "id": "_DDF8D640-7DA7-459B-A11B-A9E6344EC56A",
           "type": "workItem",
           "name": "Save Signal",
+          "x": 702,
+          "y": 334,
           "handler": "Rest",
           "params": {
             "ContentData": "$savePayload",
@@ -4545,6 +4919,8 @@
           "id": "_F51B9DE6-274B-4DA7-A25C-E7573F57202F",
           "type": "call",
           "name": "Termination Send Email",
+          "x": 1443,
+          "y": 184,
           "process": "policy_management.send_email",
           "inputs": {
             "email_type": "$email_type",
@@ -4558,12 +4934,16 @@
         },
         {
           "id": "_AFEE03A0-F16F-4862-98CF-200A0446E725",
-          "type": "start"
+          "type": "start",
+          "x": 144,
+          "y": 206
         },
         {
           "id": "_CCB24647-5271-42DC-966F-D46D7AE1478B",
           "type": "workItem",
           "name": "Update Policy Termination",
+          "x": 697,
+          "y": 51,
           "handler": "Rest",
           "params": {
             "ContentData": "$updateTerminationPayload",
@@ -4578,41 +4958,55 @@
         },
         {
           "id": "_1368FBD7-4053-460D-97E6-7EAC63F793F9",
-          "type": "end"
+          "type": "end",
+          "x": 961,
+          "y": 588
         },
         {
           "id": "_EF5C1E64-F360-4E22-BBF7-F849E6C318A1",
           "type": "script",
           "name": "Update Policy Termination Error Check",
+          "x": 1023,
+          "y": 183,
           "lang": "js",
           "code": "console.log(\"Signal value \"+generate_document_signal_response);\nlet data = kcontext.getVariable(\"generate_document_signal_response\");\nkcontext.setVariable(\"isError\",false);\n\n\nif (data != null && !data.isEmpty()) {\n    if (data.containsKey(\"Error\")) {\n    kcontext.setVariable(\"Error\",data.get(\"Error\"));\n    }\n\tif (data.containsKey(\"ErrorMessage\")) {\n    kcontext.setVariable(\"ErrorMessage\",data.get(\"ErrorMessage\"));\n    }\n\tif (data.containsKey(\"isError\")) {\n\tlet errorVal = data.get(\"isError\");\n\tif(errorVal){\n\t\t\tkcontext.setVariable(\"serviceType\",\"PCD\");\n\t\t}\n    kcontext.setVariable(\"isError\",errorVal);\n    }\n    \n}"
         },
         {
           "id": "_576DDD2D-E930-4817-B1C4-F7485F676A93",
           "type": "gateway",
+          "x": 961,
+          "y": 463,
           "mode": "exclusive",
           "default": "_D2463773-0874-41ED-8BF0-8455DC05B869",
           "direction": "Diverging"
         },
         {
           "id": "_5E718E8A-310C-41B2-B99A-5936858C90F2",
-          "type": "end"
+          "type": "end",
+          "x": 1726,
+          "y": 206
         },
         {
           "id": "_85B23AA8-F6AF-4072-B25B-15D9713B95D5",
           "type": "gateway",
+          "x": 479,
+          "y": 206,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_1006958E-5708-464B-8911-35157F2228B8",
           "type": "gateway",
+          "x": 887,
+          "y": 206,
           "mode": "parallel",
           "direction": "Converging"
         },
         {
           "id": "_2AE50831-6067-46FF-8672-302D4B2670E6",
           "type": "catch",
+          "x": 751,
+          "y": 206,
           "event": {
             "signal": "POLICY_TERMINATION_DATE_REACHED"
           }
@@ -4849,6 +5243,8 @@
           "id": "_RECORD_CREATE_POLICY_STEP",
           "type": "call",
           "name": "Record Create Policy Step",
+          "x": 2562,
+          "y": 671,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -4875,6 +5271,8 @@
           "id": "_CALL_PREM",
           "type": "call",
           "name": "Premium Check",
+          "x": 828,
+          "y": 678,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -4901,6 +5299,8 @@
           "id": "_CALL_REC",
           "type": "script",
           "name": "Policy Record Creation",
+          "x": 1575,
+          "y": 678,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Policy-Record-Creation | caseId=\" + kcontext.getVariable(\"caseId\"));\n// party_agreement_id (and every other agreement detail this process needs) is already known\n// by the time this node runs - fanned out from the parent's own party_agreement_ids (see\n// _CALL_ISSUE_CHILD's multiInstanceLoopCharacteristics in policy_issue.bpmn) - so no lookup\n// call is needed here.\n// certificate_id flows through exactly as supplied - used downstream as-is when a real value\n// is already set, left null otherwise (see docs/queries.md - no real source confirmed yet).\n// Never fabricated here, since a made-up id would be indistinguishable from a real one to\n// every downstream consumer (Certificate Create, Document Status poll, Communication)."
         },
@@ -4908,6 +5308,8 @@
           "id": "_CALL_CREATE_POLICY",
           "type": "call",
           "name": "Create Policy - Issue Agreement",
+          "x": 2234,
+          "y": 671,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -4933,17 +5335,23 @@
         {
           "id": "_START",
           "type": "start",
-          "name": "Issue Policy Per Agreement - Start"
+          "name": "Issue Policy Per Agreement - Start",
+          "x": 525,
+          "y": 688
         },
         {
           "id": "_END_ISSUED",
           "type": "end",
-          "name": "Case Completed - Policy Issued"
+          "name": "Case Completed - Policy Issued",
+          "x": 2858,
+          "y": 678
         },
         {
           "id": "_RECORD_PREM_STEP",
           "type": "call",
           "name": "Record Premium Check Step",
+          "x": 1210,
+          "y": 678,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -4970,6 +5378,8 @@
           "id": "_RECORD_REC_STEP",
           "type": "call",
           "name": "Record Policy Record Step",
+          "x": 1889,
+          "y": 678,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -4996,6 +5406,8 @@
           "id": "_TERM_HANDLER",
           "type": "subprocess",
           "name": "Handle Unrecoverable API Failure (any stage)",
+          "x": 298,
+          "y": 1266,
           "on": {
             "error": "TERMINATE_CASE"
           },
@@ -5004,6 +5416,8 @@
               "id": "_TERM_LOG",
               "type": "script",
               "name": "Log Unrecoverable Failure",
+              "x": 563,
+              "y": 1346,
               "lang": "js",
               "code": "// One handler for every rest-executor Call Activity in this process, whichever stage was in flight -\n// caseId/Url are the same shared process variables every stage sets before its own call, so whatever\n// they hold right now identifies the failing call, without this handler needing to know which of the\n// 10 stages actually threw the error.\nconsole.log(\"[BPM][TERMINATE_CASE] Case \" + caseId + \" terminated - unrecoverable API failure. Last attempted call: \" + Url);"
             },
@@ -5011,12 +5425,16 @@
               "id": "_4A4760C8-66DA-4CA7-82EA-621DAB8DB5CE",
               "type": "end",
               "name": "Case Aborted - Technical Failure",
+              "x": 924,
+              "y": 1354,
               "result": "terminate"
             },
             {
               "id": "_TERM_START",
               "type": "start",
               "name": "Catch Terminate",
+              "x": 350,
+              "y": 1358,
               "on": {
                 "error": "TERMINATE_CASE"
               }
@@ -5311,6 +5729,8 @@
           "id": "_CLOSE_TL_5",
           "type": "call",
           "name": "Close Timeline (DECLINED)",
+          "x": 1936,
+          "y": 1118,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5337,6 +5757,8 @@
           "id": "_CLOSE_TL_7",
           "type": "call",
           "name": "Close Timeline (COMPLETED)",
+          "x": 8400,
+          "y": 2032,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5363,6 +5785,8 @@
           "id": "_CLOSE_TL_2",
           "type": "call",
           "name": "Close Timeline (FAILED)",
+          "x": 7861,
+          "y": 2615,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5389,6 +5813,8 @@
           "id": "_CALL_ISSUE_CHILD",
           "type": "forEach",
           "name": "Issue Policy Per Agreement",
+          "x": 5811,
+          "y": 1858,
           "process": "policy_system.policy_agreement_issuance",
           "over": "party_id",
           "as": "party_agreement_id",
@@ -5400,6 +5826,8 @@
           "id": "_CLOSE_TL_4",
           "type": "call",
           "name": "Close Timeline (DECLINED)",
+          "x": 5171,
+          "y": 2120,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5426,6 +5854,8 @@
           "id": "_CALL_OFAC_DECISION",
           "type": "call",
           "name": "Record OFAC Decision",
+          "x": 3858,
+          "y": 2292,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5448,6 +5878,8 @@
           "id": "_CLOSE_TL_3",
           "type": "call",
           "name": "Close Timeline (DECLINED)",
+          "x": 6939,
+          "y": 964,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5474,6 +5906,8 @@
           "id": "_CALL_ESCALATE_OFAC_72H",
           "type": "call",
           "name": "Escalate-OFAC-72h",
+          "x": 3858,
+          "y": 2905,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5500,6 +5934,8 @@
           "id": "_RECORD_COMM_STEP_PI",
           "type": "call",
           "name": "Record Communication Step PI",
+          "x": 7755,
+          "y": 2032,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5526,6 +5962,8 @@
           "id": "_CALL_PATCH_WORKITEM_OFAC_SET",
           "type": "call",
           "name": "Set Work Item (OFAC Compliance Review)",
+          "x": 3425,
+          "y": 2363,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5552,6 +5990,8 @@
           "id": "_CALL_ESCALATE_OFAC_48H",
           "type": "call",
           "name": "Escalate-OFAC-48h",
+          "x": 3858,
+          "y": 3105,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5578,6 +6018,8 @@
           "id": "_CALL_ESCALATE_OFAC_24H",
           "type": "call",
           "name": "Escalate-OFAC-24h",
+          "x": 3858,
+          "y": 3288,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5603,17 +6045,23 @@
         {
           "id": "_END_OFAC_ESCALATION",
           "type": "end",
-          "name": "OFAC Escalation Logged"
+          "name": "OFAC Escalation Logged",
+          "x": 4585,
+          "y": 3288
         },
         {
           "id": "_END_CERT_GEN_FAILED",
           "type": "end",
-          "name": "Case Aborted - Certificate Generation Failed"
+          "name": "Case Aborted - Certificate Generation Failed",
+          "x": 8219,
+          "y": 2625
         },
         {
           "id": "_CALL_SET_STATUS_OFAC_HOLD",
           "type": "call",
           "name": "Set Case Status Issuance Hold (OFAC)",
+          "x": 3428,
+          "y": 2229,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5640,6 +6088,8 @@
           "id": "_CALL_SIU",
           "type": "call",
           "name": "SIU Hold Check",
+          "x": 1320,
+          "y": 630,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5666,6 +6116,8 @@
           "id": "_LOG_OFAC_PHONE_ESCALATION",
           "type": "script",
           "name": "Log OFAC Phone Escalation",
+          "x": 4756,
+          "y": 2905,
           "lang": "js",
           "code": "console.log(\"[BPM][ESCALATION] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Log-OFAC-Phone-Escalation | caseId=\" + kcontext.getVariable(\"caseId\") + \" | cid=\" + kcontext.getVariable(\"cid\") + \" | message=OFAC case unresolved 72h - final escalation to Legal, phone outreach required (docs/apis/ofac_apis.md S1.8). No email template applies at this tier - APL Docs/email_templates/ofac_escalation_reminder.md marks the 72h step out of band (phone, not email); this log line is the only auditable record BPM itself produces for that step, per rule 33's \\\"all escalation steps must be logged and auditable\\\".\");"
         },
@@ -5673,6 +6125,8 @@
           "id": "_539B6401-0027-46E6-A987-294C12B8C2A0",
           "type": "call",
           "name": "Policy Started - timeline",
+          "x": 675,
+          "y": 626,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5699,6 +6153,8 @@
           "id": "_RECORD_CC_STEP",
           "type": "call",
           "name": "Record CC Check Step",
+          "x": 3420,
+          "y": 626,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5725,12 +6181,16 @@
           "id": "_END_CC_DECLINED",
           "type": "end",
           "name": "Case Aborted - Not Issued (Complex Coverage)",
+          "x": 7353,
+          "y": 971,
           "result": "terminate"
         },
         {
           "id": "_GATE_OFAC_DECISION",
           "type": "gateway",
           "name": "Reviewer Decision",
+          "x": 4320,
+          "y": 2121,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -5738,6 +6198,8 @@
           "id": "_CALL_SET_STATUS_CC_HOLD",
           "type": "call",
           "name": "Set Case Status Issuance Hold (Complex Coverage)",
+          "x": 4593,
+          "y": 717,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5764,6 +6226,8 @@
           "id": "_8ADE0FB7-FAAF-4893-B4E3-C8316F052EA3",
           "type": "call",
           "name": "Update Case Status Abort",
+          "x": 1939,
+          "y": 899,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5790,6 +6254,8 @@
           "id": "_69E3A873-B74D-43B3-A8DC-9DEF7E9C5DF6",
           "type": "call",
           "name": "Send-OFAC-Case-HIT-Reminder-5",
+          "x": 3425,
+          "y": 1730,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5816,6 +6282,8 @@
           "id": "_CALL_OFAC_NOTIFY_24H",
           "type": "call",
           "name": "Send-OFAC-Reminder-1",
+          "x": 4212,
+          "y": 3288,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5842,6 +6310,8 @@
           "id": "_RECORD_OFAC_DECISION_STEP",
           "type": "call",
           "name": "Record OFAC Decision Step",
+          "x": 3856,
+          "y": 2728,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5868,6 +6338,8 @@
           "id": "_CALL_OFAC_NOTIFY_48H",
           "type": "call",
           "name": "Send-OFAC-Reminder-2",
+          "x": 4200,
+          "y": 3105,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5894,12 +6366,16 @@
           "id": "_END_OFAC_DECLINED",
           "type": "end",
           "name": "Case Aborted - Not Issued (OFAC)",
+          "x": 5511,
+          "y": 2127,
           "result": "terminate"
         },
         {
           "id": "_RECORD_CERTGEN_STEP",
           "type": "call",
           "name": "Record CertGen Step",
+          "x": 6099,
+          "y": 2264,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5926,6 +6402,8 @@
           "id": "_D6FAB60F-EA9F-499E-AFE7-3D1B22AD13E1",
           "type": "userTask",
           "name": "Certificate Generation Failed Review",
+          "x": 7406,
+          "y": 2612,
           "group": "ProcessReviewer",
           "form": "Task"
         },
@@ -5933,6 +6411,8 @@
           "id": "_GATE_CC_FIRST_TIME",
           "type": "gateway",
           "name": "First Time Issuance?",
+          "x": 3767,
+          "y": 972,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -5940,6 +6420,8 @@
           "id": "_CALL_UPDATE_CASE_PENDING",
           "type": "call",
           "name": "Update Case Status Pending",
+          "x": 998,
+          "y": 626,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5966,6 +6448,8 @@
           "id": "_PARSE_OFAC_DECISION_RESULT",
           "type": "script",
           "name": "Parse OFAC Decision Result",
+          "x": 4262,
+          "y": 2292,
           "lang": "js",
           "code": "let resp = kcontext.getVariable(\"Result\");\nconsole.log(\"[BPM][EXIT] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Parse-OFAC-Decision-Result | caseId=\" + kcontext.getVariable(\"caseId\") + \" | responseLen=\" + (resp != null ? String(resp.length) : \"null\"));\n// Response is {cid, party_id, decision, agreements_updated, case_status} -\n// informational/audit trail here (OFAC_check/flows.ts finalResult). The\n// branch was already decided by the reviewer (reviewer_decision +\n// ofac_approval_document_id, read by _GATE_OFAC_DECISION next) - this call's\n// only job is to persist that decision against the real compliance case."
         },
@@ -5973,6 +6457,8 @@
           "id": "_CALL_SET_STATUS_OFAC_DECLINED",
           "type": "call",
           "name": "Set Case Status Declined (OFAC)",
+          "x": 4542,
+          "y": 2117,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -5999,6 +6485,8 @@
           "id": "_643AF630-47B4-49A9-8049-DEDEE81403C0",
           "type": "call",
           "name": "Send-OFAC-Escalation-mail-3",
+          "x": 4453,
+          "y": 2905,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6025,6 +6513,8 @@
           "id": "_48E16D27-8128-4D23-B3A2-C1E5E05D2538",
           "type": "call",
           "name": "Record SIU- timeline",
+          "x": 1638,
+          "y": 630,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6051,6 +6541,8 @@
           "id": "_PARSE_CERT_BATCH_SIGNAL",
           "type": "script",
           "name": "Parse Certificate Batch Signal",
+          "x": 6708,
+          "y": 2264,
           "lang": "js",
           "code": "let signalData = kcontext.getVariable(\"certBatchSignalResponse\");\nconsole.log(\"[BPM][EXIT] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Wait-Certificate-Batch-Generation-Signal | caseId=\" + kcontext.getVariable(\"caseId\") + \" | signalData=\" + signalData);\n// Poller-driven signal (apl-policy-ms CertificateGeneration's runBatchSweep) - fires exactly\n// once, carrying {success, lineageId}, once every certificate sharing this batch's lineage_id\n// has resolved (or one of them timed out). Same mechanism certificate-document-generation.bpmn's\n// own _PARSE_SIGNAL_RESULT already relies on.\nlet success = false;\nif (signalData != null) {\n    let successVal = signalData.get(\"success\");\n    success = Boolean.TRUE.equals(successVal) || \"true\".equals(String(successVal));\n}\nkcontext.setVariable(\"cert_batch_status\", success ? \"Completed\" : \"Failed\");"
         },
@@ -6058,6 +6550,8 @@
           "id": "_HOLD_CC",
           "type": "userTask",
           "name": "Jet Issue Complex Coverage Review",
+          "x": 5251,
+          "y": 709,
           "group": "ComplexCoverageReviewer",
           "form": "Task"
         },
@@ -6065,6 +6559,8 @@
           "id": "_BUILD_OFAC_DECISION_PAYLOAD",
           "type": "script",
           "name": "Build OFAC Decision Payload",
+          "x": 3857,
+          "y": 2422,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Build-OFAC-Decision-Payload | caseId=\" + kcontext.getVariable(\"caseId\"));\n// Persists the reviewer's OFAC decision back to apl-policy-ms\n// (POST /ofac/case/decision) once _HOLD_OFAC completes, before\n// _GATE_OFAC_DECISION branches. Maps this process's 3-way reviewer_decision\n// (plus the \"no approval document\" override _GATE_OFAC_DECISION's own\n// _F_GATE_OFAC_DECISION_ESCALATE condition already enforces) onto the API's\n// own decision enum (APPROVE/DECLINE/ESCALATE_LEGAL -\n// OFAC_check/flows.ts sd_L34UTvXMwXFvhBpA) - mirrors that same condition\n// exactly, so the persisted decision always matches the branch actually taken.\nlet rd = kcontext.getVariable(\"reviewer_decision\");\nlet docId = kcontext.getVariable(\"ofac_approval_document_id\");\nlet apiDecision ;\nif (\"DECLINE\".equals(rd)) {\n    apiDecision = \"DECLINE\";\n} else if (\"ESCALATE\".equals(rd)) {\n    apiDecision = \"ESCALATE_LEGAL\";\n} else {\n    apiDecision = \"APPROVE\";\n}\n// [KNOWN GAP] escalation_subject is required by the API for ESCALATE_LEGAL but\n// no real Case Manager screen field for it is confirmed yet (docs/design.md\n// section 8) - _HOLD_OFAC can supply one if/when that field exists; until\n// then this synthesizes a safe non-empty default so the call never 400s.\nlet escSubject = kcontext.getVariable(\"escalation_subject\");\nif (escSubject == null || escSubject.trim().isEmpty()) {\n    escSubject = \"OFAC Compliance Review - Legal Escalation - Case \" + kcontext.getVariable(\"cid\");\n}\nlet json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\njson.putPOJO(\"cid\", kcontext.getVariable(\"cid\"));\njson.putPOJO(\"piid\", kcontext.getProcessInstance().getId());\njson.putPOJO(\"party_id\", kcontext.getVariable(\"party_id\"));\njson.put(\"decision\", apiDecision);\njson.putPOJO(\"document_id\", docId);\n// [KNOWN GAP] No real per-user identity is captured by this human task today\n// (only the ProcessReviewer role) - reviewer is the role name as a placeholder\n// until a real ActorId/ownership capture is wired into _HOLD_OFAC.\njson.put(\"reviewer\", \"ProcessReviewer\");\nif (\"ESCALATE_LEGAL\".equals(apiDecision)) {\n    json.put(\"escalation_subject\", escSubject);\n}\nkcontext.setVariable(\"Method\", \"POST\");\nkcontext.setVariable(\"Url\", kcontext.getVariable(\"ofacCaseDecisionUrl\"));\nkcontext.setVariable(\"ContentData\", json.toString());"
         },
@@ -6072,6 +6568,8 @@
           "id": "_CALL_SET_STATUS_CERT_GEN_FAILED",
           "type": "call",
           "name": "Set-Case-Status-Failed-Certificate-Generation",
+          "x": 7115,
+          "y": 2615,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6098,6 +6596,8 @@
           "id": "_CALL_SET_STATUS_ISSUED",
           "type": "call",
           "name": "Set Case Status Issued",
+          "x": 8090,
+          "y": 2033,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6124,6 +6624,8 @@
           "id": "_RECORD_OFAC_SCREEN_STEP",
           "type": "call",
           "name": "Record OFAC Screening Step",
+          "x": 3425,
+          "y": 1547,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6150,6 +6652,8 @@
           "id": "_BB8003EF-9DD8-4137-BBA7-2802A53B1A5D",
           "type": "call",
           "name": "Send-OFAC-Case-Decline-Reminder-6",
+          "x": 4858,
+          "y": 2117,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6176,6 +6680,8 @@
           "id": "_BEF771DD-85B5-4C45-A5B7-3AD6F4A3CF64",
           "type": "call",
           "name": "Send Certificate Issued Communication",
+          "x": 6360,
+          "y": 2262,
           "process": "policy_system.send_communication_with_retry",
           "inputs": {
             "commPurposeId": "$commPurposeId",
@@ -6201,6 +6707,8 @@
           "id": "_GATE_CC_DECISION",
           "type": "gateway",
           "name": "Reviewer Decision",
+          "x": 6388,
+          "y": 979,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -6208,6 +6716,8 @@
           "id": "_CALL_PATCH_WORKITEM_CC_SET",
           "type": "call",
           "name": "Set Work Item (Complex Coverage Review)",
+          "x": 4945,
+          "y": 712,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6234,12 +6744,16 @@
           "id": "_END_SIU_DECLINED",
           "type": "end",
           "name": "Case Aborted - Not Issued (SIU)",
+          "x": 1999,
+          "y": 1358,
           "result": "terminate"
         },
         {
           "id": "_GATE_CERT_BATCH",
           "type": "gateway",
           "name": "Certificate Batch Status?",
+          "x": 6947,
+          "y": 2275,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -6247,6 +6761,8 @@
           "id": "_CALL_OFAC_ASSIGN_LEGAL",
           "type": "call",
           "name": "Assign-OFAC-Task-to-Legal",
+          "x": 4167,
+          "y": 2911,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6272,17 +6788,23 @@
         {
           "id": "_C1ABF8B1-D0E5-4380-A146-932679A08375",
           "type": "end",
-          "name": "OFAC Escalation Logged"
+          "name": "OFAC Escalation Logged",
+          "x": 5101,
+          "y": 2914
         },
         {
           "id": "_END_ISSUED",
           "type": "end",
-          "name": "Case Completed - Policy Issued"
+          "name": "Case Completed - Policy Issued",
+          "x": 8735,
+          "y": 2042
         },
         {
           "id": "_GATE_OFAC",
           "type": "gateway",
           "name": "Screening Status?",
+          "x": 3476,
+          "y": 1869,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -6290,6 +6812,8 @@
           "id": "_WAIT_CERT_BATCH_SIGNAL",
           "type": "catch",
           "name": "Wait Certificate Batch Generation Signal",
+          "x": 6298,
+          "y": 2467,
           "event": {
             "signal": "CERTIFICATE_BATCH_GENERATION_SIGNAL"
           }
@@ -6298,6 +6822,8 @@
           "id": "_PARSE_CC_DECISION_RESULT",
           "type": "script",
           "name": "Parse Complex Coverage Decision Result",
+          "x": 6326,
+          "y": 710,
           "lang": "js",
           "code": "let resp = kcontext.getVariable(\"Result\");\nconsole.log(\"[BPM][EXIT] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Parse-CC-Decision-Result | caseId=\" + kcontext.getVariable(\"caseId\") + \" | responseLen=\" + (resp != null ? String(resp.length) : \"null\"));\n// Ack-only (recordTransaction result) - informational/audit trail, doesn't\n// gate anything here. The branch was already decided by the reviewer\n// (reviewer_decision, read by _GATE_CC_DECISION next) - this call's only\n// job is to persist that decision against the real case record."
         },
@@ -6305,6 +6831,8 @@
           "id": "_CALL_OFAC",
           "type": "call",
           "name": "OFAC Screening",
+          "x": 3422,
+          "y": 1369,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6331,6 +6859,8 @@
           "id": "_A7D6FB36-C768-4134-B4CC-09B789CA847D",
           "type": "call",
           "name": "Send-JetIssue-Open-Reminder-1",
+          "x": 4039,
+          "y": 965,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6357,6 +6887,8 @@
           "id": "_GATE_SIU",
           "type": "gateway",
           "name": "SIU Flagged?",
+          "x": 1996,
+          "y": 640,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -6364,6 +6896,8 @@
           "id": "_RECORD_CC_DECISION_STEP",
           "type": "call",
           "name": "Record CC Decision Step",
+          "x": 5351,
+          "y": 859,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6390,6 +6924,8 @@
           "id": "_CALL_CC_DECISION",
           "type": "call",
           "name": "Record Complex Coverage Decision",
+          "x": 6108,
+          "y": 710,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6412,6 +6948,8 @@
           "id": "_CALL_PATCH_WORKITEM_OFAC_CLEAR",
           "type": "call",
           "name": "Clear Work Item (OFAC Compliance Review)",
+          "x": 3856,
+          "y": 2556,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6438,6 +6976,8 @@
           "id": "_INIT",
           "type": "script",
           "name": "Init Defaults",
+          "x": 431,
+          "y": 626,
           "lang": "js",
           "code": "// [FIX] Bare assignment (caseId = ...) does not reliably persist a process variable write\n// in this KIE deployment's Java-dialect scriptTask compiler, confirmed live: every bare-assigned\n// variable below showed empty in a running instance's Process Variables view, while every\n// kcontext.setVariable(...) call in this same script (the URL resolution further down) came\n// through correctly. Every assignment in this script now uses the proven-working explicit form.\n kcontext.setVariable(\"piid\", String(kcontext.getProcessInstance().getId()));\nkcontext.setVariable(\"caseId\", String(cid));\nkcontext.setVariable(\"maxRetryCount\", 3);\nkcontext.setVariable(\"Method\", \"POST\");\nkcontext.setVariable(\"ContentType\", \"application/json\");\n// ResultClass intentionally empty - RESTWorkItemHandler only attempts JSON->Object transformation\n// when ResultClass is set, and every downstream _PARSE_* script casts Result directly to String,\n// expecting raw response text. Setting a class here (even \"java.lang.String\") makes Jackson try to\n// deserialize the JSON body into that type, which fails for any object-shaped response body.\nkcontext.setVariable(\"ResultClass\", \"\");\nkcontext.setVariable(\"ConnectTimeout\", \"180000\");\nkcontext.setVariable(\"ReadTimeout\", \"180000\");\nkcontext.setVariable(\"HandleResponseErrors\", \"true\");\nkcontext.setVariable(\"Headers\", \"{\\\"Content-Type\\\":\\\"application/json\\\"}\");\n// [FIX] Base URL resolution - matching the reference pru-nigo-followup.bpmn's real Script_Bootstrap pattern\n// (System property -> env var -> KIE runtime environment -> hardcoded fallback). Every onEntry-script in\n// this process previously built its Url from inert \"${VAR}\" placeholder text with NO real resolution\n// mechanism anywhere in this kjar - confirmed by reading kie-deployment-descriptor.xml's own Rest work item\n// handler (org.jbpm.process.workitem.rest.RESTWorkItemHandler, the real standard jBPM REST client, which\n// performs no placeholder substitution of its own) and finding no custom WorkItemHandler or \"${VAR}\"\n// substitution logic anywhere else in this kjar. Every onEntry-script now reads these resolved process\n// variables via kcontext.getVariable(...) instead.\nlet aplQuotationMsUrl = ((env && env[\"APL_QUOTATION_MS_URL\"]) || \"\");\nif (aplQuotationMsUrl == null || aplQuotationMsUrl.isEmpty()) { aplQuotationMsUrl = ((env && env[\"APL_QUOTATION_MS_URL\"]) || \"\"); } ;\nif (aplQuotationMsUrl == null || aplQuotationMsUrl.isEmpty()) {\n    try { aplQuotationMsUrl = kcontext.getKieRuntime().getEnvironment().get(\"APL_QUOTATION_MS_URL\"); } catch (e) {}\n};\nif (aplQuotationMsUrl == null || aplQuotationMsUrl.isEmpty()) { aplQuotationMsUrl = \"http://localhost:3001\"; };\nkcontext.setVariable(\"aplQuotationMsBaseUrl\", aplQuotationMsUrl);\n\nlet aplPolicyMsUrl = ((env && env[\"APL_POLICY_MS_URL\"]) || \"\");\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) { aplPolicyMsUrl = ((env && env[\"APL_POLICY_MS_URL\"]) || \"\"); };\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) {\n    try { aplPolicyMsUrl = kcontext.getKieRuntime().getEnvironment().get(\"APL_POLICY_MS_URL\"); } catch (e) {}\n};\nif (aplPolicyMsUrl == null || aplPolicyMsUrl.isEmpty()) { aplPolicyMsUrl = \"http://localhost:3002\"; };\nkcontext.setVariable(\"aplPolicyMsBaseUrl\", aplPolicyMsUrl);\n\n// [FIX] Every endpoint URL this process ever calls is assembled here, once, at process start - not\n// piecemeal inside each stage's own onEntry-script. Every dynamic piece any of these URLs needs\n// (party_id/group_id/policy_id/party_agreement_ids) is already available as a process-level property\n// from the moment this process starts, so there is no stage for which the URL genuinely can't be known\n// this early - only each stage's own JSON request body (which needs values resolved mid-flow, like\n// certificate_id) still gets built inside that stage's own onEntry-script.\nkcontext.setVariable(\"siuCheckUrl\", aplPolicyMsUrl + \"/policy/issuance/siu-check\");\nkcontext.setVariable(\"complexCoverageCheckUrl\", aplPolicyMsUrl + \"/policy/issuance/complex-coverage-check\");\n// [FIX] apl-quotation-ms's /v1/compliance/ofac/screen was an explicit [MOCK] placeholder pending real\n// LexisNexis integration. apl-policy-ms now has a real, fully-built OFAC service (OFAC_check/apis.json)\n// wired to LexisNexis and its own ofac_screening Data Fabric table - routed there instead, matching this\n// process's own convention that every real call goes through apl-policy-ms.\nkcontext.setVariable(\"ofacScreenUrl\", aplPolicyMsUrl + \"/ofac/screening/run\");\n// [NEW] Persist the reviewer's decision back to apl-policy-ms once _HOLD_CC/_HOLD_OFAC\n// complete, so it's recorded against the real case/compliance record - not just used to\n// branch this process locally. See _BUILD_CC_DECISION_PAYLOAD / _BUILD_OFAC_DECISION_PAYLOAD.\nkcontext.setVariable(\"jetIssueDecisionUrl\", aplPolicyMsUrl + \"/jet-issue/decision\");\nkcontext.setVariable(\"ofacCaseDecisionUrl\", aplPolicyMsUrl + \"/ofac/case/decision\");\nkcontext.setVariable(\"premiumCheckUrl\", aplPolicyMsUrl + \"/policy/issuance/premium-check\");\n// Policy Record Creation (_CALL_REC in policy_agreement_issuance.bpmn) needs no URL here -\n// party_agreement_id and every other agreement detail it needs is already known by the time\n// that node runs, fanned out from party_agreement_ids below - it's a plain script, not a\n// REST call.\n// certificateCreateUrl/documentStatusUrl are both real apl-policy-ms endpoints (CertificateCreate/\n// CertificateStatus sd-services), per \"all policy-related APIs come from policy-ms only\" - hardcoded stubs today\n// pending the real implementation being built separately, but matching the exact request/response shape this\n// process already sends/expects. documentStatusUrl carries no query string - Poll Document Status (in\n// policy_agreement_issuance.bpmn) POSTs party_agreement_id/party_id/type in the request body instead, since\n// the real endpoint is POST /policy/certificates/status, not a GET.\nkcontext.setVariable(\"certificateCreateUrl\", aplPolicyMsUrl + \"/policy/certificate/create\");\nkcontext.setVariable(\"documentStatusUrl\", aplPolicyMsUrl + \"/policy/certificates/status\");\n// [CHANGED] certificateSendEmailUrl (apl-quotation-ms /policy/certificate/send-communication)\n// replaced - communication now goes through the real apl-policy-ms Communication\n// service, once for the whole process after every agreement is done, not per\n// agreement (see _BUILD_COMM_PAYLOAD, between _CALL_ISSUE_CHILD and _END_ISSUED).\nkcontext.setVariable(\"communicationSendUrl\", aplPolicyMsUrl + \"/policy/certificate/send-communication\");\nkcontext.setVariable(\"communicationRetryUrl\", aplPolicyMsUrl + \"/communications/retry\");\nkcontext.setVariable(\"shipmentsUrl\", aplPolicyMsUrl + \"/policy/shipments\");\nkcontext.setVariable(\"createPolicyUrl\", aplPolicyMsUrl + \"/policy/create-policy\");\n\nkcontext.setVariable(\"timelineOpenUrl\", aplPolicyMsUrl + \"/policy/timeline/open\");\nkcontext.setVariable(\"timelineStepUrl\", aplPolicyMsUrl + \"/policy/timeline/workflow-step\");\nkcontext.setVariable(\"timelineCloseUrl\", aplPolicyMsUrl + \"/policy/timeline/close\");"
         },
@@ -6445,6 +6985,8 @@
           "id": "_CALL_CC",
           "type": "call",
           "name": "Trigger Complex Coverage Check",
+          "x": 2659,
+          "y": 626,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6471,6 +7013,8 @@
           "id": "_656320F9-9364-43F8-A552-40F42C50375A",
           "type": "call",
           "name": "Send-OFAC-Case-Open-Reminder-4",
+          "x": 3422,
+          "y": 2511,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6497,6 +7041,8 @@
           "id": "_CALL_PATCH_WORKITEM_CC_CLEAR",
           "type": "call",
           "name": "Clear Work Item (Complex Coverage Review)",
+          "x": 5536,
+          "y": 710,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6522,30 +7068,40 @@
         {
           "id": "_MERGE_HOLD_CC",
           "type": "gateway",
+          "x": 4376,
+          "y": 974,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_MERGE_OFAC",
           "type": "gateway",
+          "x": 3477,
+          "y": 1212,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_MERGE_HOLD_OFAC",
           "type": "gateway",
+          "x": 3485,
+          "y": 2121,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_START",
           "type": "start",
-          "name": "Case Started"
+          "name": "Case Started",
+          "x": 256,
+          "y": 635
         },
         {
           "id": "_CALL_GENERATE_CERTIFICATES",
           "type": "call",
           "name": "Generate-Certificates-Batch",
+          "x": 5811,
+          "y": 2262,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6572,6 +7128,8 @@
           "id": "_CALL_SET_STATUS_CC_DECLINED",
           "type": "call",
           "name": "Set Case Status Declined (Complex Coverage)",
+          "x": 6580,
+          "y": 965,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6598,12 +7156,16 @@
           "id": "_BUILD_CC_DECISION_PAYLOAD",
           "type": "script",
           "name": "Build Complex Coverage Decision Payload",
+          "x": 5829,
+          "y": 710,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Build-CC-Decision-Payload | caseId=\" + kcontext.getVariable(\"caseId\"));\n// Persists the reviewer's Complex Coverage decision back to apl-policy-ms\n// (POST /jet-issue/decision) once _HOLD_CC completes, before _GATE_CC_DECISION\n// branches - covers all three outcomes (Decline/Approve/Request More Info)\n// uniformly, in one place, instead of duplicating the call on every branch.\n// step_name is hardcoded server-side to COMPLEX_COVERAGE_CHECK regardless of\n// what's sent (JetIssueDecision/flows.ts sd_2xVI4EjrCFMh784B), so only cid\n// and the decision itself need to go in the request body.\nlet json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\njson.putPOJO(\"cid\", kcontext.getVariable(\"cid\"));\njson.putPOJO(\"piid\", kcontext.getProcessInstance().getId());\njson.putPOJO(\"group_id\", kcontext.getVariable(\"group_id\"));\njson.putPOJO(\"party_id\", kcontext.getVariable(\"party_id\"));\njson.putPOJO(\"broker_id\", kcontext.getVariable(\"broker_id\"));\njson.put(\"decision\", kcontext.getVariable(\"reviewer_decision\"));\njson.put(\"reason\", kcontext.getVariable(\"reason\"));\njson.put(\"description\", kcontext.getVariable(\"description\"));\nkcontext.setVariable(\"Method\", \"POST\");\nkcontext.setVariable(\"Url\", kcontext.getVariable(\"jetIssueDecisionUrl\"));\nkcontext.setVariable(\"ContentData\", json.toString());"
         },
         {
           "id": "_MERGE_PREM",
           "type": "gateway",
+          "x": 4320,
+          "y": 1862,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -6611,6 +7173,8 @@
           "id": "_CALL_CERT_AVAILABLE_EMAIL",
           "type": "call",
           "name": "Send-Certificate-Available-Email",
+          "x": 7433,
+          "y": 2033,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -6637,6 +7201,8 @@
           "id": "_BUILD_COMM_ENTITY_CONTEXT",
           "type": "script",
           "name": "Build Communication Entity Context",
+          "x": 7123,
+          "y": 2033,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=policy_issue | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Build-Comm-Entity-Context | caseId=\" + kcontext.getVariable(\"caseId\"));\n// Fires once for the whole policy_issue process, after every agreement in\n// party_agreement_ids has finished (issued or held) - not once per\n// agreement. commPurposeId CERTIFICATE_ISSUED is the real, seeded config\n// (communication_event_config_seed_data.md row 7): primary INSURED,\n// CC BROKER+GROUP_ADMIN. certificateId is intentionally omitted - this one\n// notification can cover more than one certificate issued in this run. The\n// actual send/retry/escalation logic lives in the reusable\n// send_communication_with_retry subprocess (see _CALL_SEND_COMM below) -\n// this node's only job is assembling the inputs that call needs.\nlet entityContext = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\nentityContext.putPOJO(\"partyId\", kcontext.getVariable(\"party_id\"));\nentityContext.putPOJO(\"groupId\", kcontext.getVariable(\"group_id\"));\nentityContext.putPOJO(\"brokerId\", kcontext.getVariable(\"broker_id\"));\nkcontext.setVariable(\"commEntityContext\", entityContext);\nkcontext.setVariable(\"commPurposeId\", \"CERTIFICATE_ISSUED\");"
         },
@@ -6644,18 +7210,24 @@
           "id": "_HOLD_OFAC",
           "type": "userTask",
           "name": "OFAC Compliance Review",
+          "x": 3309,
+          "y": 2728,
           "group": "OFACComplianceReviewer",
           "form": "Task"
         },
         {
           "id": "_614C0E86-4B3B-46BF-B69C-F311B36CEF65",
           "type": "end",
-          "name": "OFAC Escalation Logged"
+          "name": "OFAC Escalation Logged",
+          "x": 4599,
+          "y": 3113
         },
         {
           "id": "_GATE_CC",
           "type": "gateway",
           "name": "Audit Bypass?",
+          "x": 3477,
+          "y": 967,
           "mode": "exclusive",
           "direction": "Diverging"
         },
@@ -6663,6 +7235,8 @@
           "id": "_TERM_HANDLER",
           "type": "subprocess",
           "name": "Handle Unrecoverable API Failure (any stage)",
+          "x": 298,
+          "y": 1266,
           "on": {
             "error": "TERMINATE_CASE"
           },
@@ -6671,6 +7245,8 @@
               "id": "_TERM_LOG",
               "type": "script",
               "name": "Log Unrecoverable Failure",
+              "x": 563,
+              "y": 1346,
               "lang": "js",
               "code": "// One handler for every rest-executor Call Activity in this process, whichever stage was in flight -\n// caseId/Url are the same shared process variables every stage sets before its own call, so whatever\n// they hold right now identifies the failing call, without this handler needing to know which of the\n// 10 stages actually threw the error.\nconsole.log(\"[BPM][TERMINATE_CASE] Case \" + caseId + \" terminated - unrecoverable API failure. Last attempted call: \" + Url);"
             },
@@ -6678,6 +7254,8 @@
               "id": "_CALL_ABORT_CASE_TERM",
               "type": "call",
               "name": "Abort Case (Technical Failure)",
+              "x": 893,
+              "y": 1346,
               "process": "policy_system.rest-executor",
               "inputs": {
                 "Url": "$Url",
@@ -6704,6 +7282,8 @@
               "id": "_CLOSE_TL_9",
               "type": "call",
               "name": "Close Timeline (FAILED)",
+              "x": 1248,
+              "y": 1352,
               "process": "policy_system.rest-executor",
               "inputs": {
                 "Url": "$Url",
@@ -6730,12 +7310,16 @@
               "id": "_4A4760C8-66DA-4CA7-82EA-621DAB8DB5CE",
               "type": "end",
               "name": "Case Aborted - Technical Failure",
+              "x": 1536,
+              "y": 1365,
               "result": "terminate"
             },
             {
               "id": "_TERM_START",
               "type": "start",
               "name": "Catch Terminate",
+              "x": 350,
+              "y": 1358,
               "on": {
                 "error": "TERMINATE_CASE"
               }
@@ -6768,6 +7352,8 @@
           "id": "_HOLD_OFAC_TIMER_72H",
           "type": "boundary",
           "name": "72h Escalation Timer",
+          "x": 3668,
+          "y": 2787,
           "on": "_HOLD_OFAC",
           "event": {
             "timer": {
@@ -6780,6 +7366,8 @@
           "id": "_HOLD_OFAC_TIMER_24H",
           "type": "boundary",
           "name": "24h Escalation Timer",
+          "x": 3313,
+          "y": 2787,
           "on": "_HOLD_OFAC",
           "event": {
             "timer": {
@@ -6792,6 +7380,8 @@
           "id": "_HOLD_OFAC_TIMER_48H",
           "type": "boundary",
           "name": "48h Escalation Timer",
+          "x": 3488,
+          "y": 2787,
           "on": "_HOLD_OFAC",
           "event": {
             "timer": {
@@ -7488,26 +8078,36 @@
       "nodes": [
         {
           "id": "_9A6BD535-7B4F-4D93-8B6C-854876397C5A",
-          "type": "end"
+          "type": "end",
+          "x": 1101,
+          "y": 2305
         },
         {
           "id": "_59AEF49E-5A12-4421-9888-E1744BA8EDE3",
           "type": "gateway",
+          "x": 632,
+          "y": 724,
           "mode": "exclusive",
           "direction": "Diverging"
         },
         {
           "id": "_F73DC463-786D-4EF8-9B73-A2C753BDC3BC",
-          "type": "end"
+          "type": "end",
+          "x": 1031,
+          "y": 501
         },
         {
           "id": "_586AB476-EECC-46ED-AB63-1855852808B8",
-          "type": "end"
+          "type": "end",
+          "x": 1031,
+          "y": 271
         },
         {
           "id": "_338E93EA-9963-43D5-B886-0BE8C0B8918B",
           "type": "call",
           "name": "Generate  and Send Certificate Doc",
+          "x": 804,
+          "y": 1966,
           "process": "policy_system.certificate_resend",
           "inputs": {
             "cid": "$cid",
@@ -7530,6 +8130,8 @@
           "id": "_AE16BA1A-72B4-4B73-A984-D74E249B2633",
           "type": "call",
           "name": "File feed",
+          "x": 804,
+          "y": 2422,
           "process": "policy_system.file_feed",
           "inputs": {
             "process_value_type": "$process_value_type",
@@ -7541,12 +8143,16 @@
         },
         {
           "id": "_5E5119DD-92EF-41F0-AA5E-BFFDE7C42526",
-          "type": "start"
+          "type": "start",
+          "x": 233,
+          "y": 719
         },
         {
           "id": "_A198F26E-CEBA-4D1A-B45C-91A1D46C46BA",
           "type": "call",
           "name": "POLICY JET ISSUE",
+          "x": 804,
+          "y": 1794,
           "process": "policy_system.policy_issue",
           "inputs": {
             "cid": "$cid",
@@ -7572,6 +8178,8 @@
           "id": "_58646C15-CE4D-489C-8D09-18042687DAA7",
           "type": "call",
           "name": "Takeover Process",
+          "x": 796,
+          "y": 248,
           "process": "group-takeover-process",
           "inputs": {
             "broker_id": "$broker_id",
@@ -7590,6 +8198,8 @@
           "id": "_0B7C3167-BDDF-42AF-85B8-144DDE9A244F",
           "type": "call",
           "name": "Claims",
+          "x": 804,
+          "y": 2584,
           "process": "policy_system.claims",
           "inputs": {
             "process_value_type": "$process_value_type",
@@ -7603,6 +8213,8 @@
           "id": "_A81DC8D8-0F94-488D-8FCD-1559352E5C0E",
           "type": "call",
           "name": "Generate IDand  Send",
+          "x": 796,
+          "y": 924,
           "process": "generate-id-card-send-email",
           "inputs": {
             "cid": "$cid",
@@ -7617,16 +8229,22 @@
         },
         {
           "id": "_B61CF73D-4696-409F-A39E-DF421465A399",
-          "type": "end"
+          "type": "end",
+          "x": 1110,
+          "y": 1986
         },
         {
           "id": "_97ECB41C-8E0C-485B-9CDA-EA3C88A9E296",
-          "type": "end"
+          "type": "end",
+          "x": 1101,
+          "y": 2776
         },
         {
           "id": "_572A02D4-8462-41EA-9683-E7DACBB339D3",
           "type": "call",
           "name": "PARTICIPATION_RATE_REVIEW",
+          "x": 797,
+          "y": 1636,
           "process": "policy_system.enrollment_participation_rate_review",
           "inputs": {
             "cid": "$cid",
@@ -7646,6 +8264,8 @@
           "id": "_6B8DAD01-7819-49E3-AD22-586A7478329A",
           "type": "script",
           "name": "Init",
+          "x": 397,
+          "y": 701,
           "lang": "js",
           "code": "let pId = kcontext.getProcessInstance().getId();\nkcontext.setVariable(\"pid\",pId);\nconsole.log(\"Enter node:\"+kcontext.getNodeInstance().getNodeName()+\" process instance id:\"+pId);\n// Header\nlet baseUrl = ((env && env[\"APL_BROKER_MS_BASE_URL\"]) || \"\");\nlet datafabricBaseUrl = ((env && env[\"APL_BROKER_DATA_FABRIC_BASE_URL\"]) || \"\");\n// Default values if environment variables are not present\nbaseUrl = (baseUrl != null) ? baseUrl : \"http://art-gi-int-api-service.general-insurance.svc.cluster.local:80\";\ndatafabricBaseUrl = (datafabricBaseUrl != null) ? datafabricBaseUrl : \"http://art-gi-int-api-service.general-insurance.svc.cluster.local:80\";\n//Set content type, Method  and other variables\nkcontext.setVariable(\"contentType\",\"application/json\");\nkcontext.setVariable(\"method\",\"POST\");\nkcontext.setVariable(\"isHandleResponseErrors\",\"true\");\n\nkcontext.setVariable(\"count\", 0);\nkcontext.setVariable(\"input\", \"\"); // TODO"
         },
@@ -7653,6 +8273,8 @@
           "id": "_78BF7EDC-64FD-435A-BD7A-F402A43930FF",
           "type": "call",
           "name": "Escalation",
+          "x": 804,
+          "y": 2753,
           "process": "policy_system.Escalation",
           "inputs": {
             "process_value_type": "$process_value_type",
@@ -7664,12 +8286,16 @@
         },
         {
           "id": "_5D15261F-8A07-4ABA-A0B5-F2387A659CF5",
-          "type": "end"
+          "type": "end",
+          "x": 1101,
+          "y": 2445
         },
         {
           "id": "_F9A14701-060C-427E-B574-9C5A2862BA5A",
           "type": "call",
           "name": "Policy Termination",
+          "x": 797,
+          "y": 1106,
           "process": "policy-termination",
           "inputs": {
             "group_id": "$group_id",
@@ -7684,12 +8310,16 @@
         },
         {
           "id": "_CFAED5EB-35E3-439D-9972-643CB27A2366",
-          "type": "end"
+          "type": "end",
+          "x": 1120,
+          "y": 1493
         },
         {
           "id": "_16906A72-99DA-423C-82F9-813A5D610CF7",
           "type": "call",
           "name": "Coverage/lapse",
+          "x": 804,
+          "y": 2282,
           "process": "policy_system.coverage_lapse",
           "inputs": {
             "process_value_type": "$process_value_type",
@@ -7701,24 +8331,34 @@
         },
         {
           "id": "_9C6BA547-2D08-4970-8E21-8984898D09EC",
-          "type": "end"
+          "type": "end",
+          "x": 1115,
+          "y": 1810
         },
         {
           "id": "_63F85205-1D8D-45E7-AE80-57352F8F49DF",
-          "type": "end"
+          "type": "end",
+          "x": 1110,
+          "y": 1129
         },
         {
           "id": "_F9CB7BA0-EA24-49EF-8C0F-AFA0BD408F82",
-          "type": "end"
+          "type": "end",
+          "x": 1110,
+          "y": 1658
         },
         {
           "id": "_2F96682A-829E-4E26-AACB-443CB2DC9CD1",
-          "type": "end"
+          "type": "end",
+          "x": 1087,
+          "y": 946
         },
         {
           "id": "_FC1B7F49-E679-4384-BF07-D8B32F514334",
           "type": "call",
           "name": "Generate Policy Doc and Send",
+          "x": 796,
+          "y": 478,
           "process": "generate-send-policy-document",
           "inputs": {
             "cid": "$cid",
@@ -7733,16 +8373,22 @@
         },
         {
           "id": "_916B897F-F2C3-4AE1-9659-D501EFA61A4D",
-          "type": "end"
+          "type": "end",
+          "x": 1110,
+          "y": 1328
         },
         {
           "id": "_8433E2F1-5EAB-4DB7-9C71-71928745899F",
-          "type": "end"
+          "type": "end",
+          "x": 1101,
+          "y": 2607
         },
         {
           "id": "_AF7A3FEB-B10D-49A6-A1DA-81ABB22C7AC7",
           "type": "call",
           "name": "Error Rate Review",
+          "x": 796,
+          "y": 1471,
           "process": "policy_system.enrollment_error_rate_review",
           "inputs": {
             "cid": "$cid",
@@ -7762,6 +8408,8 @@
           "id": "_1C9A5A30-EAE5-441D-B3E5-C7809F1419C0",
           "type": "call",
           "name": "Enrollment Exception",
+          "x": 797,
+          "y": 1306,
           "process": "policy_system.enrollment_exception",
           "inputs": {
             "cid": "$cid",
@@ -7781,16 +8429,22 @@
         },
         {
           "id": "_3A2DE43F-B782-404B-B6F6-68106F5ABAB3",
-          "type": "end"
+          "type": "end",
+          "x": 1031,
+          "y": 724
         },
         {
           "id": "_EAD3B1D8-E581-4336-AD28-0495AD468A34",
-          "type": "end"
+          "type": "end",
+          "x": 1101,
+          "y": 2155
         },
         {
           "id": "_478B2091-29B4-4607-BAA6-FECD0D30EB12",
           "type": "call",
           "name": "Generate Certificate Doc and Send",
+          "x": 795,
+          "y": 701,
           "process": "generate-certificate-send-email",
           "inputs": {
             "cid": "$cid",
@@ -7807,6 +8461,8 @@
           "id": "_A384E0FE-1073-4C5C-AA88-7A3D6CE041CA",
           "type": "call",
           "name": "Enrollment",
+          "x": 804,
+          "y": 2133,
           "process": "policy_system.enrollment",
           "inputs": {
             "process_value_type": "$process_value_type",
@@ -8121,12 +8777,16 @@
         {
           "id": "_END_SUCCESS",
           "type": "end",
-          "name": "End Success"
+          "name": "End Success",
+          "x": 696,
+          "y": 100
         },
         {
           "id": "_BUILD_CTX",
           "type": "script",
           "name": "Build Context",
+          "x": 458,
+          "y": 240,
           "lang": "js",
           "code": "\nlet urlVal = kcontext.getVariable(\"Url\");\nlet payloadVal = kcontext.getVariable(\"ContentData\");\nlet methodVal = kcontext.getVariable(\"Method\");\nlet headersVal = kcontext.getVariable(\"Headers\");\n\nif (urlVal == null) urlVal = \"\";\nif (payloadVal == null || payloadVal.isEmpty()) payloadVal = \"{}\";\nif (methodVal == null) methodVal = \"POST\";\nlet escapedHeaders = headersVal != null ? headersVal.replace(\"\\\"\", \"\\\\\\\"\") : \"\";\n\nlet ctx = \"{\\\"url\\\":\\\"\" + urlVal + \"\\\", \\\"payload\\\":\" + payloadVal + \", \\\"method\\\":\\\"\" + methodVal + \"\\\", \\\"headers\\\":\\\"\" + escapedHeaders + \"\\\"}\";\nkcontext.setVariable(\"failedContext\", ctx);\n      "
         },
@@ -8134,6 +8794,8 @@
           "id": "_END_ERROR_TERMINATE",
           "type": "end",
           "name": "Throw Terminate Error",
+          "x": 949,
+          "y": 300,
           "throw": {
             "error": "TERMINATE_CASE"
           }
@@ -8142,6 +8804,8 @@
           "id": "_PRE_EXECUTE",
           "type": "script",
           "name": "Pre-Execute Params Sanity",
+          "x": 220,
+          "y": 88,
           "lang": "js",
           "code": "\nlet handleErr = kcontext.getVariable(\"HandleResponseErrors\");\nif (handleErr instanceof Boolean) {\n    kcontext.setVariable(\"HandleResponseErrors\", String(handleErr));\n} else if (handleErr != null) {\n    kcontext.setVariable(\"HandleResponseErrors\", handleErr.toString());\n} else {\n    kcontext.setVariable(\"HandleResponseErrors\", \"false\");\n}\n\nlet connTimeout = kcontext.getVariable(\"ConnectTimeout\");\nif (connTimeout != null) {\n    kcontext.setVariable(\"ConnectTimeout\", connTimeout.toString());\n} else {\n    kcontext.setVariable(\"ConnectTimeout\", \"180000\");\n}\nlet readTimeout = kcontext.getVariable(\"ReadTimeout\");\nif (readTimeout != null) {\n    kcontext.setVariable(\"ReadTimeout\", readTimeout.toString());\n} else {\n    kcontext.setVariable(\"ReadTimeout\", \"180000\");\n}\n      "
         },
@@ -8149,6 +8813,8 @@
           "id": "_REST_TASK",
           "type": "workItem",
           "name": "REST Execution",
+          "x": 440,
+          "y": 88,
           "handler": "Rest",
           "params": {
             "Url": "$Url",
@@ -8171,6 +8837,8 @@
           "id": "_CALL_ERR",
           "type": "call",
           "name": "Call API Error Handler",
+          "x": 620,
+          "y": 240,
           "process": "policy_system.api-error-handler",
           "inputs": {
             "failedContext": "$failedContext",
@@ -8186,24 +8854,32 @@
         {
           "id": "_START",
           "type": "start",
-          "name": "Start"
+          "name": "Start",
+          "x": 100,
+          "y": 100
         },
         {
           "id": "_GATE_CHECK_DECISION",
           "type": "gateway",
           "name": "Is Terminate?",
+          "x": 780,
+          "y": 252,
           "mode": "exclusive",
           "direction": "Diverging"
         },
         {
           "id": "_END_ERROR",
           "type": "end",
-          "name": "End Handled"
+          "name": "End Handled",
+          "x": 949,
+          "y": 200
         },
         {
           "id": "_B_ERROR",
           "type": "boundary",
           "name": "Catch REST Failure",
+          "x": 500,
+          "y": 140,
           "on": "_REST_TASK",
           "event": {
             "error": "org.jbpm.bpmn2.handler.WorkItemHandlerRuntimeException"
@@ -8355,18 +9031,24 @@
           "id": "_GATE_SENT",
           "type": "gateway",
           "name": "Communication Sent?",
+          "x": 890,
+          "y": 115,
           "mode": "exclusive",
           "direction": "Diverging"
         },
         {
           "id": "_START",
           "type": "start",
-          "name": "Start"
+          "name": "Start",
+          "x": 75,
+          "y": 115
         },
         {
           "id": "_PARSE_SEND_RESULT",
           "type": "script",
           "name": "Parse Send Result",
+          "x": 660,
+          "y": 108,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=send_communication_with_retry | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Parse-Send-Result | caseId=\" + kcontext.getVariable(\"caseId\"));\n// POST /communications/send response: {results:[{partyId,role,channel,isCc,\n// status,shipmentId}], sent}. The primary (non-CC) recipient gets one\n// results[] entry per configured channel (EMAIL, PHYSICAL, or both), each\n// with its own shipmentId. sent here means every one of the primary's\n// channels came back SENT - failedChannels collects however many didn't\n// (zero, one, or both), so the same retry path below handles any\n// combination uniformly, no separate single/multiple-channel branching.\nlet sent = false;\nlet failedChannelsJson = \"[]\";\nlet resp = kcontext.getVariable(\"Result\");\ntry {\n  let root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp);\n  let failed = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();\n  let primaryCount = 0;\n  for (let r of root.path(\"results\")) {\n    if (r.path(\"isCc\").asBoolean(false)) {\n      continue;\n    }\n    primaryCount++;\n    if (!\"SENT\".equals(r.path(\"status\").asText(\"\"))) {\n      let f = failed.addObject();\n      f.put(\"shipmentId\", r.hasNonNull(\"shipmentId\") ? r.path(\"shipmentId\").asText() : null);\n      f.put(\"channel\", r.hasNonNull(\"channel\") ? r.path(\"channel\").asText() : null);\n    }\n  }\n  sent = primaryCount > 0 && failed.size() == 0;\n  failedChannelsJson = failed.toString();\n} catch (e) {\n  console.log(\"[BPM][WARN] Could not parse communication response: \" + e.getMessage());\n}\nkcontext.setVariable(\"commSent\", sent);\nkcontext.setVariable(\"failedChannels\", failedChannelsJson);"
         },
@@ -8374,24 +9056,32 @@
           "id": "_GATE_HOLD_DECISION",
           "type": "gateway",
           "name": "Reviewer Decision",
+          "x": 1710,
+          "y": 615,
           "mode": "exclusive",
           "direction": "Diverging"
         },
         {
           "id": "_MERGE_END",
           "type": "gateway",
+          "x": 1130,
+          "y": 115,
           "mode": "exclusive",
           "direction": "Converging"
         },
         {
           "id": "_END",
           "type": "end",
-          "name": "Done"
+          "name": "Done",
+          "x": 1500,
+          "y": 115
         },
         {
           "id": "_CALL_RETRY",
           "type": "call",
           "name": "Retry Communication",
+          "x": 1020,
+          "y": 453,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -8418,6 +9108,8 @@
           "id": "_CALL_SEND",
           "type": "call",
           "name": "Send Communication",
+          "x": 430,
+          "y": 108,
           "process": "policy_system.rest-executor",
           "inputs": {
             "Url": "$Url",
@@ -8444,12 +9136,16 @@
           "id": "_BUILD_RETRY_PAYLOAD",
           "type": "script",
           "name": "Build Retry Payload",
+          "x": 790,
+          "y": 453,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=send_communication_with_retry | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Build-Retry-Payload | caseId=\" + kcontext.getVariable(\"caseId\"));\n// failedChannels always reflects the current outstanding failures (set by\n// Parse-Send-Result the first time through, then re-set by Parse-Retry-Result\n// on every loop back) - POST /communications/retry takes the whole list in\n// one call and retries exactly those channels, whether that's one or both.\nlet json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\ntry {\n  let failures = new com.fasterxml.jackson.databind.ObjectMapper().readTree(kcontext.getVariable(\"failedChannels\"));\n  json.putPOJO(\"failures\", failures);\n} catch (e) {\n  json.putArray(\"failures\");\n}\njson.put(\"commPurposeId\", kcontext.getVariable(\"commPurposeId\"));\njson.putPOJO(\"entityContext\", kcontext.getVariable(\"commEntityContext\"));\nkcontext.setVariable(\"Method\", \"POST\");\nkcontext.setVariable(\"Url\", kcontext.getVariable(\"communicationRetryUrl\"));\nkcontext.setVariable(\"ContentData\", json.toString());"
         },
         {
           "id": "_MERGE_RETRY_PAYLOAD",
           "type": "gateway",
+          "x": 670,
+          "y": 460,
           "mode": "exclusive",
           "direction": "Converging"
         },
@@ -8457,6 +9153,8 @@
           "id": "_SET_RESPONSE",
           "type": "script",
           "name": "Set Response",
+          "x": 1250,
+          "y": 108,
           "lang": "js",
           "code": "console.log(\"[BPM][EXIT] process=send_communication_with_retry | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Set-Response | caseId=\" + kcontext.getVariable(\"caseId\") + \" | commSent=\" + kcontext.getVariable(\"commSent\"));\n// response is this reusable subprocess's own declared output (see the\n// callActivity that invokes this process) - matches the same {response ->\n// sub_process_status} convention already used for every other reusable\n// subprocess call in this project (policy_management_process.bpmn).\nlet json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\njson.put(\"sent\", Boolean.TRUE.equals(kcontext.getVariable(\"commSent\")));\nkcontext.setVariable(\"response\", json.toString());"
         },
@@ -8464,6 +9162,8 @@
           "id": "_WAIT_RETRY",
           "type": "catch",
           "name": "Wait 1 Minute (Before Retry)",
+          "x": 890,
+          "y": 275,
           "event": {
             "timer": {
               "duration": "PT1M"
@@ -8474,6 +9174,8 @@
           "id": "_BUILD_PAYLOAD",
           "type": "script",
           "name": "Build Communication Payload",
+          "x": 200,
+          "y": 108,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=send_communication_with_retry | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Build-Payload | caseId=\" + kcontext.getVariable(\"caseId\"));\n// Reusable subprocess - commEntityContext/communicationSendUrl/communicationRetryUrl\n// and the standard rest-executor plumbing (Headers, maxRetryCount, etc.) all arrive\n// as inputs, already resolved once by whichever caller started this instance.\n// [FIX] communicationSendUrl points at apl-policy-ms's own /policy/certificate/send-communication\n// wrapper - that wrapper used to hardcode commPurposeId=CERTIFICATE_ISSUED and resolve its own\n// mergeData/entityContext purely from party_id/group_id/broker_id, so forwarding only those three\n// was consistent with what it could ever use. It's since been fixed to accept comm_purpose_id,\n// party_agreement_ids, change_reason, generation_required, certificate_id - resolving real\n// per-agreement certificate data and using the real purpose instead of a hardcoded one - so this\n// node now forwards them too. commPurposeId is a separate top-level input this subprocess already\n// receives (was never read here); the rest ride inside commEntityContext, forwarded when present\n// via optional chaining that resolves to null (harmless) rather than throwing when a caller (e.g.\n// policy_issue.bpmn's own _CALL_SEND_COMM) doesn't set them - existing callers see no behavior\n// change. _BUILD_RETRY_PAYLOAD below is unchanged - retry still calls /communications/retry\n// directly with the original nested {commPurposeId, entityContext} shape.\nlet entityContext = kcontext.getVariable(\"commEntityContext\");\nlet json = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();\njson.set(\"party_id\", entityContext.path(\"partyId\"));\njson.set(\"group_id\", entityContext.path(\"groupId\"));\njson.set(\"broker_id\", entityContext.path(\"brokerId\"));\nlet commPurposeIdVal = kcontext.getVariable(\"commPurposeId\");\nif (commPurposeIdVal != null) { json.put(\"comm_purpose_id\", commPurposeIdVal.toString()); }\nif (entityContext.has(\"certificateIds\") && !entityContext.path(\"certificateIds\").isNull()) {\n    json.set(\"certificate_ids\", entityContext.path(\"certificateIds\"));\n}\n// CertificateSendEmail/apis.ts genuinely loops every id in party_agreement_ids, not just the\n// first - commEntityContext carries the real array under partyAgreementIds (plural), forwarded\n// as-is so a multi-agreement resend/regenerate sends one communication covering every agreement.\nif (entityContext.has(\"partyAgreementIds\") && !entityContext.path(\"partyAgreementIds\").isNull()) {\n    json.set(\"party_agreement_ids\", entityContext.path(\"partyAgreementIds\"));\n}\nif (entityContext.has(\"changeReason\") && !entityContext.path(\"changeReason\").isNull()) {\n    json.set(\"change_reason\", entityContext.path(\"changeReason\"));\n}\nif (entityContext.has(\"generationRequired\") && !entityContext.path(\"generationRequired\").isNull()) {\n    json.set(\"generation_required\", entityContext.path(\"generationRequired\"));\n}\nkcontext.setVariable(\"Method\", \"POST\");\nkcontext.setVariable(\"Url\", kcontext.getVariable(\"communicationSendUrl\"));\nkcontext.setVariable(\"ContentData\", json.toString());"
         },
@@ -8481,12 +9183,16 @@
           "id": "_HOLD",
           "type": "userTask",
           "name": "Manual Case - Communication Delivery Failure",
+          "x": 1480,
+          "y": 600,
           "form": "Task"
         },
         {
           "id": "_PARSE_RETRY_RESULT",
           "type": "script",
           "name": "Parse Retry Result",
+          "x": 1250,
+          "y": 453,
           "lang": "js",
           "code": "console.log(\"[BPM][ENTRY] process=send_communication_with_retry | piid=\" + kcontext.getProcessInstance().getId() + \" | node=Parse-Retry-Result | caseId=\" + kcontext.getVariable(\"caseId\"));\n// Same parsing as Parse-Send-Result, re-applied to the retry response -\n// failedChannels is overwritten with whatever is still outstanding, so a\n// human-approved second retry (see Hold below) targets only what's actually\n// still failing, not the original full list.\nlet sent = false;\nlet failedChannelsJson = \"[]\";\nlet resp = kcontext.getVariable(\"Result\");\ntry {\n  let root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp);\n  let failed = new com.fasterxml.jackson.databind.ObjectMapper().createArrayNode();\n  let primaryCount = 0;\n  for (let r of root.path(\"results\")) {\n    if (r.path(\"isCc\").asBoolean(false)) {\n      continue;\n    }\n    primaryCount++;\n    if (!\"SENT\".equals(r.path(\"status\").asText(\"\"))) {\n      let f = failed.addObject();\n      f.put(\"shipmentId\", r.hasNonNull(\"shipmentId\") ? r.path(\"shipmentId\").asText() : null);\n      f.put(\"channel\", r.hasNonNull(\"channel\") ? r.path(\"channel\").asText() : null);\n    }\n  }\n  sent = primaryCount > 0 && failed.size() == 0;\n  failedChannelsJson = failed.toString();\n} catch (e) {\n  console.log(\"[BPM][WARN] Could not parse communication retry response: \" + e.getMessage());\n}\nkcontext.setVariable(\"commSent\", sent);\nkcontext.setVariable(\"failedChannels\", failedChannelsJson);"
         },
@@ -8494,6 +9200,8 @@
           "id": "_GATE_RETRY_SENT",
           "type": "gateway",
           "name": "Retry Sent?",
+          "x": 1480,
+          "y": 460,
           "mode": "exclusive",
           "direction": "Diverging"
         }
@@ -8702,6 +9410,8 @@
           "id": "_8B32E36A-AD7D-4742-95E8-BAC3116F55CB",
           "type": "workItem",
           "name": "Send Email",
+          "x": 685,
+          "y": 123,
           "handler": "Rest",
           "params": {
             "Url": "$emailUrl",
@@ -8719,6 +9429,8 @@
           "id": "_CD240147-1714-41AE-A3EF-EC5956CB7D1B",
           "type": "catch",
           "name": "Send Email Response signal",
+          "x": 734,
+          "y": 302,
           "event": {
             "signal": "SEND_EMAIL_RESPONSE"
           }
@@ -8727,6 +9439,8 @@
           "id": "_08E9B9ED-35FA-41AD-BAFF-B19929E85FEA",
           "type": "workItem",
           "name": "Save Signal Send Email",
+          "x": 685,
+          "y": 458,
           "handler": "Rest",
           "params": {
             "ContentData": "$sendSignalPayload",
@@ -8741,38 +9455,52 @@
         },
         {
           "id": "_D037EBAA-947A-4F7D-86B1-5226627552D8",
-          "type": "end"
+          "type": "end",
+          "x": 1599,
+          "y": 146
         },
         {
           "id": "_B550C6D8-D06B-409F-8EBE-EF00B8874D02",
           "type": "script",
           "name": "Init",
+          "x": 279,
+          "y": 279,
           "lang": "js",
           "code": "let baseUrl = ((env && env[\"APL_BROKER_MS_BASE_URL\"]) || \"\");\nbaseUrl = (baseUrl != null) ? baseUrl : \"https://apl-neutrinos-app-feat.apl-cloud.com/broker-ms-api\";\n\nlet quotationBaseURL = ((env && env[\"QUOTATION_BASE_URL\"]) || \"\");\nquotationBaseURL = (quotationBaseURL != null) ? quotationBaseURL : \"http://apl-quotation-ms-service.apl-quotation-ms.svc.cluster.local:80/quote-api\";\n\nkcontext.setVariable(\"contentType\", \"application/json\");\nkcontext.setVariable(\"method\", \"POST\");\nkcontext.setVariable(\"isHandleResponseErrors\", \"true\");\nkcontext.setVariable(\"count\", 0);\n\nlet email_type_value = kcontext.getVariable(\"email_type\");\n\n// Default URL\nlet sendEmailUrl = baseUrl + \"/policy-issue/email/send\";\n\n// Update URL only if needed (example logic: same URL for all now)\nif (\"NOTIFICATION\".equals(email_type_value)) {\n    sendEmailUrl = baseUrl + \"/policy-issue/email/send\";\n} else if (\"TERMINATION\".equals(email_type_value)) {\n    sendEmailUrl = baseUrl + \"/termination/email\";\n} else if (\"REINSTATEMENT\".equals(email_type_value)) {\n    sendEmailUrl = baseUrl + \"/reinstatement/email/send\";\n} else if (\"BROKERRECORDCHANGE\".equals(email_type_value)) {\n    sendEmailUrl = baseUrl + \"/broker/record/change/email/send\";\n}\n\nelse if (\"CONTENT_ISSUE\".equals(email_type_value)) {\n    sendEmailUrl = quotationBaseURL + \"/enrollment/file/content/notification\";\n}else if (\"FILE_FORMAT_ISSUE\".equals(email_type_value)) {\n    sendEmailUrl = quotationBaseURL + \"/enrollment/file/format/notification\";\n}else if (\"VALIDATION_SUCCESS\".equals(email_type_value)) {\n    sendEmailUrl = quotationBaseURL + \"/enrollment/file/validation/notification\";\n}else if (\"TAKEOVER_UPDATE_NOTIFICATION\".equals(email_type_value)) {\n    sendEmailUrl = quotationBaseURL + \"/takeover/file/notification\";\n}else if (\"SEND_EMAIL_WITH_POLICY_CERTIFICATE_SIGNAL\".equals(email_type_value)) {\n    sendEmailUrl = quotationBaseURL + \"/policy/certificate/send-email\";\n}else if (\"SEND_EMAIL_WITH_POLICY_ID_CARD_SIGNAL\".equals(email_type_value)) {\n    sendEmailUrl = quotationBaseURL + \"/policy/id-card/send-email'\";\n}\n\n// Set in context\nkcontext.setVariable(\"emailUrl\", sendEmailUrl);\n\n// Signal URL\nlet signalUrl = baseUrl + \"/case-service/case/instance/signal/save\";\nkcontext.setVariable(\"sendSignalUrl\", signalUrl);\n"
         },
         {
           "id": "_E27F6CFB-39AA-47A4-97F1-E4082763483D",
-          "type": "start"
+          "type": "start",
+          "x": 154,
+          "y": 302
         },
         {
           "id": "_E99B3332-FFAC-48E8-AF43-AF5CEBFE27D4",
-          "type": "end"
+          "type": "end",
+          "x": 1635,
+          "y": 302
         },
         {
           "id": "_0E14099A-F517-4FBA-9B53-B80C43F0D3AE",
           "type": "gateway",
+          "x": 1455,
+          "y": 302,
           "mode": "exclusive",
           "direction": "Diverging"
         },
         {
           "id": "_2F12B796-0951-41A3-88BE-1B4A7C4ADFC9",
           "type": "gateway",
+          "x": 988,
+          "y": 302,
           "mode": "parallel",
           "direction": "Converging"
         },
         {
           "id": "_404D7360-075A-4928-8B0A-9412191C67C8",
           "type": "gateway",
+          "x": 501,
+          "y": 302,
           "mode": "parallel",
           "direction": "Diverging"
         },
@@ -8780,6 +9508,8 @@
           "id": "_F023F62D-976B-4A45-BEB0-FE79381E9803",
           "type": "script",
           "name": "Validate Response",
+          "x": 1170,
+          "y": 279,
           "lang": "js",
           "code": "console.log(\"Signal value \"+send_email_signal_resp_obj);\nlet data = kcontext.getVariable(\"send_email_signal_resp_obj\");\nkcontext.setVariable(\"isError\",false);\nif (data != null && !data.isEmpty()) {\n    if (data.containsKey(\"Error\")) {\n    kcontext.setVariable(\"Error\",data.get(\"Error\"));\n    }\n\tif (data.containsKey(\"ErrorMessage\")) {\n    kcontext.setVariable(\"ErrorMessage\",data.get(\"ErrorMessage\"));\n    }\n\tif (data.containsKey(\"isError\")) {\n\tlet errorVal = data.get(\"isError\");\n\tif(errorVal){\n\t\t\tkcontext.setVariable(\"serviceType\",\"CP\");\n\t\t}\n    kcontext.setVariable(\"isError\",errorVal);\n    }\n}"
         }

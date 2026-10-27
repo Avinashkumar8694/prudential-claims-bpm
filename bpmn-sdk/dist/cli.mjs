@@ -399,6 +399,22 @@ function parseBpmnAll(xml) {
           } else {
             nd.subtype = "reusable";
           }
+          const portName = (ref, suffix) => ref.startsWith(`${el.attrs.id}_`) && ref.endsWith(suffix) ? ref.slice(el.attrs.id.length + 1, -suffix.length) : ref;
+          const inputs = {};
+          for (const a of kids(el, "dataInputAssociation")) {
+            const port = portName(targetText(a), "InputX");
+            const asg = kid(a, "assignment");
+            const value = asg ? cdataText(kid(asg, "from")) : sourceText(a);
+            if (port && value !== void 0) inputs[port] = asg ? value || "" : `$${value}`;
+          }
+          const outputs = {};
+          for (const a of kids(el, "dataOutputAssociation")) {
+            const port = portName(sourceText(a), "OutputX");
+            const target = targetText(a);
+            if (port && target) outputs[target] = port;
+          }
+          if (Object.keys(inputs).length) nd.inputs = inputs;
+          if (Object.keys(outputs).length) nd.outputs = outputs;
           applyOnEntryExit(el, nd);
           nodes.push(nd);
           break;

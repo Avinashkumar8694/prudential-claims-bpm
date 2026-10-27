@@ -4,7 +4,7 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// bpmn-sdk/src/xml.ts
+// src/xml.ts
 function decodeEntities(s) {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 }
@@ -118,7 +118,7 @@ function stringifyNode(el2) {
   return inner ? `<${el2.name}${a}>${inner}</${el2.name}>` : `<${el2.name}${a}/>`;
 }
 
-// bpmn-sdk/src/parse.ts
+// src/parse.ts
 var RAW_SKIP = /* @__PURE__ */ new Set([
   "property",
   "sequenceFlow",
@@ -495,7 +495,7 @@ function parseBpmn(xml) {
   return all[0];
 }
 
-// bpmn-sdk/src/constants.ts
+// src/constants.ts
 var constants_exports = {};
 __export(constants_exports, {
   BUILTIN_ERRORS: () => BUILTIN_ERRORS,
@@ -569,7 +569,7 @@ var BUILTIN_ERRORS = {
   TERMINATE: "TERMINATE_CASE"
 };
 
-// bpmn-sdk/src/serialize.ts
+// src/serialize.ts
 function serializeProcess(proc) {
   let idc = 0;
   const uid = (p = "_id") => `${p}${++idc}`;
@@ -863,11 +863,11 @@ ${edges.join("\n")}
 `;
 }
 
-// bpmn-sdk/src/project.ts
+// src/project.ts
 import fs2 from "fs";
 import path2 from "path";
 
-// bpmn-sdk/src/scaffold.ts
+// src/scaffold.ts
 import fs from "fs";
 import path from "path";
 var SCAFFOLD_FILES = [
@@ -1136,7 +1136,7 @@ function writeDescriptor(descriptor, projectDir) {
   return written;
 }
 
-// bpmn-sdk/src/project.ts
+// src/project.ts
 function walk(dir, ext, out = []) {
   for (const e of fs2.readdirSync(dir, { withFileTypes: true })) {
     const p = path2.join(dir, e.name);
@@ -1171,7 +1171,7 @@ function writeProject(project, projectDir, opts = {}) {
   return written;
 }
 
-// bpmn-sdk/src/validate.ts
+// src/validate.ts
 function validateModel(proc) {
   const errors = [];
   const warnings = [];
@@ -1206,7 +1206,7 @@ function validateModel(proc) {
   return { ok: errors.length === 0, errors, warnings };
 }
 
-// bpmn-sdk/src/wire.ts
+// src/wire.ts
 function wireContainer(nodes, flows) {
   for (const n of nodes) {
     if (n.type !== "boundaryEvent") n.incoming = flows.filter((f) => f.targetRef === n.id).map((f) => f.id);
@@ -1219,7 +1219,7 @@ function autowire(p) {
   return p;
 }
 
-// bpmn-sdk/src/assets.ts
+// src/assets.ts
 var EXT_KIND = {
   ".drl": "drl",
   ".dmn": "dmn",
@@ -1569,7 +1569,7 @@ function buildAsset(asset) {
   }
 }
 
-// bpmn-sdk/src/engine.ts
+// src/engine.ts
 var PRIM = {
   string: "String",
   int: "Integer",
@@ -2579,7 +2579,12 @@ function toEngine(m) {
     ...n.onExit ? { onExit: n.onExit, onExitLang: dialectToLang(n.onExitFormat) } : {}
   });
   const conv = (n) => {
-    const b = { id: n.id, type: "raw", name: n.name };
+    const b = {
+      id: n.id,
+      type: "raw",
+      name: n.name,
+      ...n.position ? { x: Math.round(n.position.x), y: Math.round(n.position.y) } : {}
+    };
     switch (n.type) {
       case "startEvent":
         return { ...b, type: "start", ...ev(n) ? { on: ev(n) } : {} };
@@ -2715,3 +2720,4 @@ export {
   writeProject,
   writeProperties
 };
+//# sourceMappingURL=index.mjs.map
