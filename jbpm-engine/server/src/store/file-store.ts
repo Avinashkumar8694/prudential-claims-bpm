@@ -4,6 +4,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Entity, Repository, Store } from './repository.ts';
 
+function cloneSafe<T>(val: T): T {
+  try {
+    return structuredClone(val);
+  } catch {
+    return JSON.parse(JSON.stringify(val));
+  }
+}
+
 class FileRepo<T extends Entity> implements Repository<T> {
   private cache = new Map<string, T>();
   private loaded = false;
@@ -26,7 +34,7 @@ class FileRepo<T extends Entity> implements Repository<T> {
   async query(pred: (t: T) => boolean) { this.ensureLoaded(); return [...this.cache.values()].filter(pred); }
   async put(entity: T) {
     this.ensureLoaded();
-    this.cache.set(entity.id, structuredClone(entity));
+    this.cache.set(entity.id, cloneSafe(entity));
     const tmp = this.file(entity.id) + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(entity, null, 2));
     fs.renameSync(tmp, this.file(entity.id));   // atomic-ish write

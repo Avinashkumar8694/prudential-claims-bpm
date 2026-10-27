@@ -220,8 +220,14 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
   // bare-name binding first (spread), THEN the fixed globals — so kcontext/vars/instance/node/env/
   // console always win over a same-named process variable, matching real jBPM's own bare-name
   // convention while keeping this engine's reserved globals safe from being shadowed.
+  const safeVars: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    if (!RESERVED_SANDBOX_KEYS.has(k)) {
+      safeVars[k] = v;
+    }
+  }
   const sandbox: Record<string, unknown> = {
-    ...vars,
+    ...safeVars,
     kcontext, vars,
     instance: buildInstanceGlobal(vars, opts, actions),
     node: buildNodeGlobal(opts),
@@ -262,8 +268,11 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
 
 const RESERVED_SANDBOX_KEYS = new Set([
   'kcontext', 'vars', 'instance', 'node', 'env', 'console',
-  'Java', 'java', 'System', 'KieFunctions', 'org', 'com', 'Boolean',
-  'String', 'Number', 'Object', 'Array', 'Integer', 'Long', 'Double', 'Float',
+  'Java', 'java', 'System', 'KieFunctions', 'org', 'com', 'makeJacksonNode',
+  'Boolean', 'String', 'Number', 'Object', 'Array', 'Integer', 'Long', 'Double', 'Float',
+  'Error', 'Date', 'Math', 'JSON', 'RegExp', 'Map', 'Set', 'Promise', 'Function',
+  'Symbol', 'Reflect', 'Proxy', 'isNaN', 'isFinite', 'parseInt', 'parseFloat',
+  'encodeURI', 'encodeURIComponent', 'decodeURI', 'decodeURIComponent', 'eval',
 ]);
 
 /** deployment/instance context for a condition — same shape ScriptOpts carries for scripts, kept
@@ -301,8 +310,14 @@ export async function evalCondition(expr: string | undefined, lang: string | und
   // ProcessContext is available in every script/condition, not just scripts.
   const actions: PendingAction[] = [];
   const kcontext = buildKcontext(vars, ctx, actions);
+  const safeVars: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    if (!RESERVED_SANDBOX_KEYS.has(k)) {
+      safeVars[k] = v;
+    }
+  }
   const sandbox: Record<string, unknown> = {
-    ...vars, kcontext, vars,
+    ...safeVars, kcontext, vars,
     instance: buildInstanceGlobal(vars, ctx, actions),
     node: buildNodeGlobal(ctx),
     env: { ...(ctx.env || {}) },

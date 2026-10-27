@@ -37,8 +37,10 @@ export const WORKITEM_HANDLERS: Record<string, WorkItemHandler> = {
     let url = rawUrl.replace(/\$\{([^}]+)\}/g, (_, key) => String(env[key] ?? p[key] ?? ''));
 
     // If relative path, resolve against BASE_URL configured in deployment/project environment
-    if (url.startsWith('/') && env['BASE_URL']) {
-      url = env['BASE_URL'].replace(/\/+$/, '') + url;
+    const baseUrl = env['BASE_URL'] || '';
+    if (!/^https?:\/\//i.test(url) && baseUrl) {
+      const base = baseUrl.replace(/\/+$/, '');
+      url = url.startsWith('/') ? `${base}${url}` : `${base}/${url}`;
     }
 
     const method = String(p['Method'] || p['method'] || 'POST').toUpperCase();
