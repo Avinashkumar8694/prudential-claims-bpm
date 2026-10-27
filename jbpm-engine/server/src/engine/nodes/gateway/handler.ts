@@ -1,13 +1,10 @@
 // Gateway — exclusive/parallel/inclusive/event/complex branching + join.
-// KNOWN LIMITATION: a converging parallel/inclusive join counts arrivals via inst.history (how many
-// tokens have EVER reached this node id), which is correct for a join visited once per instance but is
-// NOT loop-safe — a parallel fork/join sitting inside a cycle would under-count on the 2nd+ iteration
-// (history from the 1st round never resets). The `joins` map threaded through HandlerCtx exists for a
-// future per-round tracking fix; it isn't load-bearing yet. Fine for the common (non-looped) case.
 import type { NodeHandler, HandlerResult } from '../types.ts';
 import { evalCondition } from '../../sandbox.ts';
 import { varTypesOf, kcontextInfoOf, onActionOf } from '../kcontext-info.ts';
 
+/** sequential (not Promise.all) so a 'java' condition's sidecar round trip for flow N doesn't race
+ *  the one for flow N+1 — gateway fan-out is small and not a hot path, so this costs nothing real. */
 async function filterAsync<T>(items: T[], pred: (item: T) => Promise<boolean>): Promise<T[]> {
   const out: T[] = [];
   for (const item of items) if (await pred(item)) out.push(item);
@@ -19,14 +16,19 @@ async function findAsync<T>(items: T[], pred: (item: T) => Promise<boolean>): Pr
 }
 
 export const handler: NodeHandler = async (c): Promise<HandlerResult> => {
-  const node = c.node as any;
+  const node = c.node;
   const outs = c.outgoing(node.id);
   const ins = c.incoming(node.id);
   const converging = ins.length > 1 && outs.length <= 1;
+  // real jBPM's Java condition dialect binds every DECLARED process variable as a bare, typed local
+  // identifier (e.g. `return retryCount < maxRetryCount;`), not just via kcontext.getVariable — see
+  // sandbox.ts evalCondition / java-sidecar.ts executeJavaCondition. Unused by `js` conditions (bare
+  // names there aren't statically typed), but harmless to pass either way.
   const varTypes = varTypesOf(c);
   const condCtx = { ...kcontextInfoOf(c), onAction: onActionOf(c) };
 
   if (converging && (node.mode === 'parallel' || node.mode === 'inclusive')) {
+    // join: wait until a token has arrived via each incoming flow
     const arrived = c.inst.history.filter((h) => h.nodeId === node.id).length;
     if (arrived < ins.length) return { consume: true, outcome: `join ${arrived}/${ins.length}` };
     c.joins[node.id] = new Set();
@@ -36,10 +38,19 @@ export const handler: NodeHandler = async (c): Promise<HandlerResult> => {
   switch (node.mode) {
     case 'parallel': return { next: outs.map((f) => f.to), outcome: 'fork' };
     case 'inclusive': {
+      // The default flow is a FALLBACK — taken only if nothing else matched — same as exclusive
+      // below, not an always-taken flow alongside whatever else matches. (A previous version of this
+      // included it in `matched` unconditionally, a real bug: the default fired on every execution
+      // regardless of any other flow's condition, confirmed via a real reproduction.) Only flows that
+      // actually carry a `when` are eligible for the primary match; a flow with no condition that
+      // isn't the explicit default is fallback-only, matching exclusive's convention below.
       const matched = await filterAsync(outs, async (f) => !!f.when && evalCondition(f.when, f.lang, c.inst.variables, undefined, varTypes, condCtx));
       const chosen = matched.length ? matched : outs.filter((f) => f.id === node.default || !f.when);
       return { next: chosen.map((f) => f.to), outcome: matched.length ? 'inclusive' : 'default' };
     }
+    // Event-based gateway: fork a token onto EVERY downstream catch (message/signal/timer/condition) —
+    // real BPMN semantics is a race, not a fan-out: whichever catch fires first wins, and
+    // execution-engine.ts's resumeToken (via cancelEventGatewaySiblings) cancels the rest at that point.
     case 'event': return { next: outs.map((f) => f.to), outcome: 'event-gateway-fork' };
     case 'complex':
     case 'exclusive':

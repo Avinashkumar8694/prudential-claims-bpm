@@ -3,11 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "ng serve",
-    "start": "ng serve",
+    "dev": "ng serve --port 4200",
+    "start": "ng serve --port 4200",
     "build": "ng build",
-    "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "test": "ng test"
+    "watch": "ng build --watch --configuration development"
   },
   "dependencies": {
     "@angular/animations": "^18.2.0",
@@ -18,9 +17,9 @@
     "@angular/platform-browser": "^18.2.0",
     "@angular/platform-browser-dynamic": "^18.2.0",
     "@angular/router": "^18.2.0",
-    "rxjs": "^7.8.0",
-    "tslib": "^2.6.0",
-    "zone.js": "^0.14.0"
+    "rxjs": "^7.8.1",
+    "tslib": "^2.6.3",
+    "zone.js": "~0.14.10"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^18.2.0",

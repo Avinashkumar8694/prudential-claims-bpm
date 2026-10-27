@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Jobs & Timers — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — Jobs & Timers (ux_design/05)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem active" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs"><b>Jobs &amp; Timers</b></div>
+      <div class="spacer"></div>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content">
+      <h1>Jobs &amp; Timers</h1>
+      <p class="muted" style="margin:4px 0 14px;">Every scheduled timer and job the engine is holding, with a live countdown to next fire.</p>
+      <div class="filterbar">
+        <span class="chip on">Kind: all ▾</span>
+        <span class="chip">Status: scheduled ▾</span>
+        <span class="chip">+ Advanced</span>
+        <div class="spacer"></div>
+        <span class="chip">⚏ Columns</span>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Job ID</th><th>PIID</th><th>Process</th><th>Kind</th><th style="cursor:pointer;">Next fire <span class="muted">▲</span></th><th>Retries</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            <tr>
+              <td style="font-family:var(--font-mono);">JOB-8801</td><td><a href="process-instance-detail.html" style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">PI-1091</a></td><td>Claim Intake</td>
+              <td><span class="badge">Timer (cycle)</span></td>
+              <td><b style="color:var(--primary);">in 3h 12m</b></td>
+              <td class="muted">0</td><td><span class="badge running">scheduled</span></td>
+              <td><button class="btn sm">Trigger now</button> <button class="btn sm">Cancel</button></td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);">JOB-8802</td><td class="muted">—</td><td>Onboarding <span class="muted" style="font-size:11px;">(starts a new instance)</span></td>
+              <td><span class="badge">start-timer</span></td>
+              <td><b style="color:var(--primary);">daily @ 02:00</b></td>
+              <td class="muted">0</td><td><span class="badge running">scheduled</span></td>
+              <td><button class="btn sm">Trigger now</button> <button class="btn sm">Cancel</button></td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);">JOB-8803</td><td><a href="process-instance-detail.html" style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">PI-1089</a></td><td>Payout Approval</td>
+              <td><span class="badge">Boundary timer</span></td>
+              <td><b style="color:var(--red);">2m ago</b></td>
+              <td class="muted">1</td><td><span class="badge active">fired</span></td>
+              <td><span class="muted">—</span></td>
+            </tr>
+            <tr>
+              <td style="font-family:var(--font-mono);">JOB-8804</td><td><a href="process-instance-detail.html" style="font-family:var(--font-mono); font-weight:600; color:var(--primary);">PI-1090</a></td><td>Document Review</td>
+              <td><span class="badge">Timer (duration)</span></td>
+              <td><b style="color:var(--primary);">in 58s</b></td>
+              <td class="muted">0</td><td><span class="badge waiting">scheduled</span></td>
+              <td><button class="btn sm">Trigger now</button> <button class="btn sm">Cancel</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:12px; font-size:12.5px;">
+        <span class="muted">Showing 1–4 of 17</span>
+        <div class="spacer"></div>
+        <span class="muted">Rows</span>
+        <select style="width:70px;" aria-label="Rows per page"><option>10</option><option selected>20</option><option>50</option><option>100</option></select>
+        <button class="btn sm" disabled>‹ Prev</button>
+        <button class="btn sm">Next ›</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,211 +1,279 @@
-import { Router, type Request, type Response, type NextFunction } from 'express';
+// All REST routes (see docs/05-api-spec.md). One assembled router to keep the wiring in one place.
+// A per-request AppContext + actor are attached by contextMiddleware (see app.ts); requireAuth (also
+// app.ts) verifies the caller's JWT before anything here runs. Each route additionally declares the
+// permission it needs via requirePermission(action) — see http/auth-middleware.ts and
+// modules/iam/service.ts's DEFAULT_ROLES for what grants what.
+import { Router } from 'express';
+import type { Request } from 'express';
+import { asyncHandler } from '../infra/errors.ts';
 import type { AppContext } from '../context.ts';
-import { requireAuth, requirePermission } from './auth-middleware.ts';
+import { WorkflowService } from '../modules/workflows/service.ts';
+import { FolderService } from '../modules/folders/service.ts';
+import { BranchService } from '../modules/branches/service.ts';
+import { VersionService } from '../modules/versions/service.ts';
+import { DeploymentService } from '../modules/deployments/service.ts';
+import { InstanceService } from '../modules/instances/service.ts';
+import { TaskService } from '../modules/tasks/service.ts';
+import { ProcessService } from '../modules/processes/service.ts';
+import { QueryService } from '../modules/queries/service.ts';
+import { AssetsService } from '../modules/assets/service.ts';
 import { IamService } from '../modules/iam/service.ts';
-import { FoldersService } from '../modules/folders/service.ts';
-import { WorkflowsService } from '../modules/workflows/service.ts';
-import { BranchesService } from '../modules/branches/service.ts';
-import { VersionsService } from '../modules/versions/service.ts';
-import { DeploymentsService } from '../modules/deployments/service.ts';
-import { InstancesService } from '../modules/instances/service.ts';
-import { TasksService } from '../modules/tasks/service.ts';
+import { ErrorService } from '../modules/errors/service.ts';
+import { AuditService } from '../modules/audit/service.ts';
+import { NotificationService } from '../modules/notifications/service.ts';
 import { SettingsService } from '../modules/settings/service.ts';
-import { NODE_DEFS, CATEGORIES } from '../engine/nodes/index.ts';
+import { TimerService } from '../modules/timers/service.ts';
+import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
+import { exportKjar } from '../modules/export/service.ts';
+import { ImportService } from '../modules/import/service.ts';
+import { ValidationService } from '../modules/validation/service.ts';
+import { openapiSpec, swaggerHtml } from './openapi.ts';
+import { hub } from '../infra/ws-hub.ts';
+import { requirePermission } from './auth-middleware.ts';
+import { rateLimit } from './rate-limit.ts';
 
-type Handler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
-const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res, next).catch(next); };
-const ctxOf = (req: Request): AppContext => req.ctx!;
-const actorOf = (req: Request): string => req.user!.username;
+const ctxOf = (req: Request): AppContext => (req as any).ctx;
+const actorOf = (req: Request): string => (req as any).actor;
+const emit = hub.engineEmit;
+const perm = requirePermission;
+// per-user (post-auth) limits on the routes most likely to be hammered by a runaway script or abused
+// for DoS — starting instances (cheapest to spam, so the tightest per-second ceiling), and the
+// heavier deploy/import operations (already permission-gated, but still worth bounding).
+const startLimiter = rateLimit({ windowMs: 60_000, max: 120 });
+const deployLimiter = rateLimit({ windowMs: 60_000, max: 20 });
+const importLimiter = rateLimit({ windowMs: 60_000, max: 20 });
 
-export function createRouter(makeCtx: (tenantId: string) => AppContext): Router {
-  const router = Router();
+export function buildRoutes(): Router {
+  const r = Router();
 
-  // ---- auth (no auth required to log in) ----
-  router.post('/auth/login', h(async (req, res) => {
-    const { username, password, tenantId } = req.body || {};
-    if (!username || !password) { res.status(400).json({ error: 'username and password are required' }); return; }
-    const iam = new IamService(makeCtx(tenantId || 'default'));
-    res.json(await iam.login(username, password));
+  // --- API docs: OpenAPI spec + Swagger UI (jBPM-style) — any authenticated caller ---
+  r.get('/openapi.json', (_req, res) => res.json(openapiSpec));
+  r.get('/docs', (_req, res) => res.type('html').send(swaggerHtml));
+
+  // --- catalog: the UI gets the node list + per-node config (palette, ports, property schema) here ---
+  r.get('/catalog/nodes', (_req, res) => res.json({
+    categories: CATEGORIES,
+    nodes: NODE_DEFS.flatMap((d) => d.palette),                                  // palette tiles
+    schemas: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.schema])), // engineType → property form
+    ports: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.ports])),    // engineType → { in, out }
+    diagram: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.diagram])),       // engineType → { icon, color, shape } for diagram rendering
+    typeLabels: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.typeLabel])),   // engineType → neutral display name
+  }));
+  r.get('/catalog/nodes/:engineType', (req, res) => {
+    const def = NODE_DEF_BY_TYPE[req.params.engineType];
+    if (!def) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'node type not found' } });
+    res.json(def);
+  });
+  // Every process a 'call'/'forEach' node can actually resolve at runtime: any process on any
+  // currently-active deployment, tenant-wide (same project or a different one) — exactly matching
+  // instances/service.ts's own resolveCalled, so nothing shows up here that would fail at run time.
+  // Backs the 'processRef' widget's picker and the 'called' variable-mapping source.
+  r.get('/catalog/processes', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const deployments = await new DeploymentService(ctx).list({ status: 'active' });
+    const wfNames = new Map<string, string>();
+    const wfSvc = new WorkflowService(ctx);
+    const items: { id: string; name: string; workflowId: string; workflowName: string; environment: string; vars: { name: string; type?: string }[] }[] = [];
+    for (const dep of deployments) {
+      if (!wfNames.has(dep.workflowId)) {
+        const wf = await wfSvc.get(dep.workflowId).catch(() => null);
+        wfNames.set(dep.workflowId, wf?.name || dep.workflowId);
+      }
+      for (const p of dep.engine?.processes || []) {
+        items.push({ id: p.id!, name: p.name || p.id!, workflowId: dep.workflowId, workflowName: wfNames.get(dep.workflowId)!, environment: dep.environment, vars: (p as any).vars || [] });
+      }
+    }
+    res.json({ items });
   }));
 
-  router.use(requireAuth(makeCtx));
+  // --- validation (validate an in-progress engine process, no save) — any authenticated caller ---
+  r.post('/validate', asyncHandler(async (req, res) => res.json(await new ValidationService().validate((req.body?.engine?.processes?.[0]) || req.body?.process || req.body))));
 
-  router.get('/auth/me', h(async (req, res) => { res.json(req.user); }));
-  router.get('/auth/permissions', h(async (req, res) => {
-    const granted = await new IamService(ctxOf(req)).resolvePermissions(req.user!);
-    res.json({ permissions: [...granted] });
+  // --- import a jBPM kjar (file map) as a new project ---
+  r.post('/import/jbpm', perm('workflow:edit'), importLimiter, asyncHandler(async (req, res) => res.status(201).json(await new ImportService(ctxOf(req)).importKjar(req.body?.files, req.body?.name, actorOf(req)))));
+  // Import straight to a running deployment, no manual Publish/Deploy detour — jBPM's own
+  // "deploy this artifact" ops flow. Requires deploy permission (a superset of the plain import above).
+  r.post('/import/jbpm/deploy', perm('workflow:deploy'), importLimiter, asyncHandler(async (req, res) => res.status(201).json(await new ImportService(ctxOf(req)).importAndDeploy(
+    req.body?.files, req.body?.name, actorOf(req),
+    { environment: req.body?.environment || 'prod', tags: req.body?.tags, env: req.body?.env },
+  ))));
+
+  // --- folders (organize the Projects page into a tree; purely presentational) ---
+  r.get('/folders', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new FolderService(ctxOf(req)).list() })));
+  r.post('/folders', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new FolderService(ctxOf(req)).create(req.body, actorOf(req)))));
+  r.get('/folders/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new FolderService(ctxOf(req)).get(req.params.id))));
+  r.patch('/folders/:id', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new FolderService(ctxOf(req)).update(req.params.id, req.body, actorOf(req)))));
+  r.delete('/folders/:id', perm('workflow:edit'), asyncHandler(async (req, res) => { await new FolderService(ctxOf(req)).delete(req.params.id); res.status(204).end(); }));
+
+  // --- workflows ---
+  r.get('/workflows', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new WorkflowService(ctxOf(req)).list() })));
+  r.post('/workflows', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new WorkflowService(ctxOf(req)).create(req.body, actorOf(req)))));
+  r.get('/workflows/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).get(req.params.id))));
+  r.patch('/workflows/:id', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).update(req.params.id, req.body, actorOf(req)))));
+  r.delete('/workflows/:id', perm('workflow:edit'), asyncHandler(async (req, res) => { await new WorkflowService(ctxOf(req)).archive(req.params.id, actorOf(req)); res.status(204).end(); }));
+  r.put('/workflows/:id/permissions', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).setPermissions(req.params.id, req.body, actorOf(req)))));
+  r.put('/workflows/:id/variables', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).setVariables(req.params.id, req.body, actorOf(req)))));
+
+  // --- processes within a project ---
+  r.get('/workflows/:id/processes', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new ProcessService(ctxOf(req)).list(req.params.id) })));
+  r.post('/workflows/:id/processes', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new ProcessService(ctxOf(req)).add(req.params.id, req.body?.name, actorOf(req)))));
+  r.get('/workflows/:id/processes/:pid', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new ProcessService(ctxOf(req)).getProcess(req.params.id, req.params.pid))));
+  r.put('/workflows/:id/processes/:pid', perm('workflow:edit'), asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).saveProcess(req.params.id, req.params.pid, req.body?.process || req.body, actorOf(req)); res.json({ ok: true }); }));
+  r.patch('/workflows/:id/processes/:pid', perm('workflow:edit'), asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).rename(req.params.id, req.params.pid, req.body?.name, actorOf(req)); res.json({ ok: true }); }));
+  r.delete('/workflows/:id/processes/:pid', perm('workflow:edit'), asyncHandler(async (req, res) => { await new ProcessService(ctxOf(req)).remove(req.params.id, req.params.pid, actorOf(req)); res.status(204).end(); }));
+
+  // --- project engine + assets ---
+  r.get('/workflows/:id/engine', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new ProcessService(ctxOf(req)).getEngine(req.params.id))));
+  r.get('/workflows/:id/assets', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).list(req.params.id))));
+  r.post('/workflows/:id/assets', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new AssetsService(ctxOf(req)).add(req.params.id, req.body?.kind, req.body?.name, actorOf(req), req.body?.fields))));
+  r.get('/workflows/:id/assets/:kind/:name', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).get(req.params.id, req.params.kind, req.params.name))));
+  r.patch('/workflows/:id/assets/:kind/:name', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).update(req.params.id, req.params.kind, req.params.name, req.body || {}, actorOf(req)))));
+  r.delete('/workflows/:id/assets/:kind/:name', perm('workflow:edit'), asyncHandler(async (req, res) => { await new AssetsService(ctxOf(req)).remove(req.params.id, req.params.kind, req.params.name, actorOf(req)); res.status(204).end(); }));
+
+  // --- branches ---
+  r.get('/workflows/:id/branches', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new BranchService(ctxOf(req)).listByWorkflow(req.params.id) })));
+  r.post('/workflows/:id/branches', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new BranchService(ctxOf(req)).create(req.params.id, req.body, actorOf(req)))));
+  r.get('/branches/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new BranchService(ctxOf(req)).get(req.params.id))));
+  r.get('/branches/:id/versions', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new VersionService(ctxOf(req)).listByBranch(req.params.id) })));
+  r.post('/branches/:id/versions', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new VersionService(ctxOf(req)).saveDraft(req.params.id, req.body.engine, actorOf(req), req.body.message))));
+
+  // --- versions ---
+  r.get('/versions/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new VersionService(ctxOf(req)).get(req.params.id))));
+  r.post('/versions/:id/publish', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new VersionService(ctxOf(req)).publish(req.params.id, actorOf(req), req.body?.label))));
+  r.post('/versions/:id/validate', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new VersionService(ctxOf(req)).validate(req.params.id))));
+  r.get('/versions/:a/diff/:b', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new VersionService(ctxOf(req)).diff(req.params.a, req.params.b))));
+  r.post('/versions/:id/deploy', perm('workflow:deploy'), deployLimiter, asyncHandler(async (req, res) => res.status(201).json(await new DeploymentService(ctxOf(req)).deploy(req.params.id, req.body, actorOf(req)))));
+  r.get('/versions/:id/export', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const v = await new VersionService(ctxOf(req)).get(req.params.id);
+    res.json(exportKjar(v.engine));
   }));
 
-  // ---- node catalog (drives the builder palette + properties panel; same defs the engine's own
-  // factory registry validated at boot, never a hand-duplicated frontend copy) ----
-  router.get('/node-defs', h(async (_req, res) => { res.json({ categories: CATEGORIES, defs: NODE_DEFS }); }));
+  // --- deployments ---
+  // cross-project listing (Deployments is a top-level page, same shape as GET /instances) —
+  // workflows/:id/deployments below stays as the per-project convenience alias.
+  r.get('/deployments', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new DeploymentService(ctxOf(req)).list(req.query as any) })));
+  r.get('/workflows/:id/deployments', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new DeploymentService(ctxOf(req)).listByWorkflow(req.params.id) })));
+  r.get('/deployments/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).get(req.params.id))));
+  r.post('/deployments/:id/tags', perm('workflow:deploy'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).setTags(req.params.id, req.body, actorOf(req)))));
+  r.post('/deployments/:id/activate', perm('workflow:deploy'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).activate(req.params.id, actorOf(req)))));
+  r.post('/deployments/:id/rollback', perm('workflow:deploy'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).rollback(req.body.environment, req.body.toDeploymentId, actorOf(req)))));
+  r.post('/deployments/:id/undeploy', perm('workflow:deploy'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).undeploy(req.params.id, actorOf(req)))));
+  r.post('/deployments/:id/archive', perm('workflow:deploy'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).archive(req.params.id, actorOf(req)))));
+  r.get('/deployments/:id/export', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
+    res.json(exportKjar(d.engine));
+  }));
+  r.get('/deployments/:id/definitions', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
+    res.json({ items: (d.engine.processes || []).map((p) => ({ id: p.id, name: p.name || p.id, nodes: (p.nodes || []).length, startable: (p.nodes || []).some((n) => n.type === 'start') })) });
+  }));
 
-  // ---- folders ----
-  router.get('/folders', h(async (req, res) => { res.json(await new FoldersService(ctxOf(req)).list()); }));
-  router.get('/folders/:id', h(async (req, res) => { res.json(await new FoldersService(ctxOf(req)).get(req.params.id)); }));
-  router.post('/folders', requirePermission('workflow:edit'), h(async (req, res) => {
-    res.status(201).json(await new FoldersService(ctxOf(req)).create(req.body?.name, req.body?.parentId ?? null, actorOf(req)));
-  }));
-  router.put('/folders/:id', requirePermission('workflow:edit'), h(async (req, res) => {
-    const svc = new FoldersService(ctxOf(req));
-    let folder = await svc.get(req.params.id);
-    if (req.body?.name !== undefined) folder = await svc.rename(req.params.id, req.body.name, actorOf(req));
-    if (req.body?.parentId !== undefined) folder = await svc.move(req.params.id, req.body.parentId, actorOf(req));
-    res.json(folder);
-  }));
-  router.delete('/folders/:id', requirePermission('workflow:edit'), h(async (req, res) => {
-    await new FoldersService(ctxOf(req)).delete(req.params.id); res.status(204).end();
-  }));
+  // --- instances (runtime) ---
+  r.post('/instances', perm('workflow:run'), startLimiter, asyncHandler(async (req, res) => res.status(201).json(await new InstanceService(ctxOf(req), emit).start(req.body, actorOf(req)))));
+  r.get('/instances', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new InstanceService(ctxOf(req)).list(req.query as any) })));
+  r.get('/instances/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).get(req.params.id))));
+  r.get('/instances/:id/history', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).history(req.params.id))));
+  r.get('/instances/:id/diagram-state', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).diagramState(req.params.id))));
+  r.get('/instances/:id/graph', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).graph(req.params.id))));
+  r.get('/instances/:id/related', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).related(req.params.id))));
+  r.post('/instances/:id/signal', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req), emit).signal(req.params.id, req.body?.name, req.body?.payload, actorOf(req)))));
+  r.post('/instances/:id/retry', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req), emit).retry(req.params.id, req.body?.nodeId, actorOf(req)))));
+  r.post('/instances/:id/suspend', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).suspend(req.params.id, actorOf(req)))));
+  r.post('/instances/:id/resume', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).resumeInstance(req.params.id, actorOf(req)))));
+  r.post('/instances/:id/abort', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).abort(req.params.id, actorOf(req)))));
+  r.put('/instances/:id/variables', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).updateVariables(req.params.id, req.body || {}, actorOf(req)))));
+  r.get('/instances/:id/variable-history', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new InstanceService(ctxOf(req)).variableHistory(req.params.id, req.query.name as string | undefined) })));
 
-  // ---- workflows ----
-  router.get('/workflows', h(async (req, res) => {
-    const { folderId, includeArchived, search } = req.query;
-    res.json(await new WorkflowsService(ctxOf(req)).list({
-      folderId: folderId === undefined ? undefined : (folderId === 'null' ? null : String(folderId)),
-      includeArchived: includeArchived === 'true', search: search ? String(search) : undefined,
+  // --- tasks (task-level group/assignee/excludedOwners/businessAdmin checks happen inside TaskService
+  // itself — see modules/tasks/service.ts — on top of the role-level task:manage gate here) ---
+  r.get('/tasks', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).list({ ...req.query as any, overdue: req.query.overdue === 'true' }) })));
+  r.get('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).get(req.params.id))));
+  r.post('/tasks/:id/claim', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).claim(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/release', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).release(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/complete', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).complete(req.params.id, req.body?.outputs || {}, actorOf(req)))));
+  r.post('/tasks/:id/skip', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).skip(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/start', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).start(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/stop', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).stop(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/save', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).saveOutputs(req.params.id, req.body?.outputs || {}, actorOf(req)))));
+  r.post('/tasks/:id/delegate', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).delegate(req.params.id, req.body?.to, actorOf(req)))));
+  r.post('/tasks/:id/forward', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).forward(req.params.id, { user: req.body?.user, group: req.body?.group }, actorOf(req)))));
+  r.post('/tasks/:id/remind', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).remind(req.params.id, actorOf(req)))));
+  r.patch('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).update(req.params.id, { priority: req.body?.priority, dueAt: req.body?.dueAt }, actorOf(req)))));
+  r.get('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).listComments(req.params.id) })));
+  r.post('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.status(201).json(await new TaskService(ctxOf(req)).addComment(req.params.id, req.body?.body, actorOf(req)))));
+  r.delete('/tasks/:id/comments/:cid', perm('task:manage'), asyncHandler(async (req, res) => { await new TaskService(ctxOf(req)).deleteComment(req.params.id, req.params.cid, actorOf(req)); res.status(204).end(); }));
+  r.get('/tasks/:id/events', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).events(req.params.id) })));
+
+  // --- execution errors (the operational failure queue — see modules/errors/service.ts) ---
+  const errs = (req: Request) => new ErrorService(ctxOf(req));
+  r.get('/errors', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const { type, acknowledged, limit, offset, ...rest } = req.query as Record<string, string>;
+    res.json(await errs(req).list({
+      ...rest,
+      type: type ? (type.split(',') as any) : undefined,
+      acknowledged: acknowledged === undefined ? undefined : acknowledged === 'true',
+      limit: limit ? Number(limit) : undefined, offset: offset ? Number(offset) : undefined,
     }));
   }));
-  router.get('/workflows/:id', h(async (req, res) => { res.json(await new WorkflowsService(ctxOf(req)).get(req.params.id)); }));
-  router.post('/workflows', requirePermission('workflow:edit'), h(async (req, res) => {
-    res.status(201).json(await new WorkflowsService(ctxOf(req)).create(req.body?.name, req.body?.folderId, actorOf(req)));
-  }));
-  router.put('/workflows/:id', requirePermission('workflow:edit'), h(async (req, res) => {
-    const svc = new WorkflowsService(ctxOf(req));
-    let wf = await svc.get(req.params.id);
-    if (req.body?.name !== undefined) wf = await svc.rename(req.params.id, req.body.name, actorOf(req));
-    if (req.body?.folderId !== undefined) wf = await svc.move(req.params.id, req.body.folderId, actorOf(req));
-    if (req.body?.archived !== undefined) wf = await svc.setArchived(req.params.id, req.body.archived, actorOf(req));
-    res.json(wf);
-  }));
-  router.delete('/workflows/:id', requirePermission('workflow:edit'), h(async (req, res) => {
-    await new WorkflowsService(ctxOf(req)).delete(req.params.id); res.status(204).end();
-  }));
+  r.get('/errors/summary', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await errs(req).summary())));
+  r.get('/errors/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await errs(req).get(req.params.id))));
+  r.post('/errors/:id/ack', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await errs(req).acknowledge(req.params.id, actorOf(req)))));
+  r.post('/errors/ack', perm('workflow:run'), asyncHandler(async (req, res) => res.json({ results: await errs(req).acknowledgeMany(req.body?.ids || [], actorOf(req)) })));
 
-  // ---- branches ----
-  router.get('/workflows/:workflowId/branches', h(async (req, res) => { res.json(await new BranchesService(ctxOf(req)).list(req.params.workflowId)); }));
-  router.get('/branches/:id', h(async (req, res) => { res.json(await new BranchesService(ctxOf(req)).get(req.params.id)); }));
-  router.post('/workflows/:workflowId/branches', requirePermission('workflow:edit'), h(async (req, res) => {
-    res.status(201).json(await new BranchesService(ctxOf(req)).create(req.params.workflowId, req.body?.name, req.body?.fromBranchId, actorOf(req)));
-  }));
-  router.put('/branches/:id', requirePermission('workflow:edit'), h(async (req, res) => {
-    const svc = new BranchesService(ctxOf(req));
-    let branch = await svc.get(req.params.id);
-    if (req.body?.name !== undefined) branch = await svc.rename(req.params.id, req.body.name, actorOf(req));
-    if (req.body?.protected !== undefined) branch = await svc.setProtected(req.params.id, req.body.protected, actorOf(req));
-    res.json(branch);
-  }));
-  router.delete('/branches/:id', requirePermission('workflow:edit'), h(async (req, res) => {
-    const svc = new BranchesService(ctxOf(req));
-    const branch = await svc.get(req.params.id);
-    const wf = await new WorkflowsService(ctxOf(req)).get(branch.workflowId);
-    await svc.delete(req.params.id, wf.defaultBranchId);
-    res.status(204).end();
-  }));
+  // --- jobs & timers (list/cancel/trigger/reschedule the durable TimerJobs) ---
+  const timers = (req: Request) => new TimerService(ctxOf(req), emit);
+  r.get('/jobs', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await timers(req).list(req.query as any) })));
+  r.get('/jobs/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await timers(req).getJob(req.params.id))));
+  r.post('/jobs/:id/cancel', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await timers(req).cancel(req.params.id, actorOf(req)))));
+  r.post('/jobs/:id/trigger', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await timers(req).trigger(req.params.id, actorOf(req)))));
+  r.post('/jobs/:id/reschedule', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await timers(req).rescheduleJob(req.params.id, req.body?.dueAt, actorOf(req)))));
 
-  // ---- versions ----
-  router.get('/branches/:branchId/versions', h(async (req, res) => { res.json(await new VersionsService(ctxOf(req)).list(req.params.branchId)); }));
-  router.get('/versions/:id', h(async (req, res) => { res.json(await new VersionsService(ctxOf(req)).get(req.params.id)); }));
-  router.put('/versions/:id', requirePermission('workflow:edit'), h(async (req, res) => {
-    res.json(await new VersionsService(ctxOf(req)).saveDraft(req.params.id, req.body?.engine, actorOf(req)));
+  // --- audit log (reads the trail every service writes via ctx.audit) ---
+  r.get('/audit', perm('admin:iam'), asyncHandler(async (req, res) => {
+    const { limit, offset, ...rest } = req.query as Record<string, string>;
+    res.json(await new AuditService(ctxOf(req)).list({ ...rest, limit: limit ? Number(limit) : undefined, offset: offset ? Number(offset) : undefined }));
   }));
-  router.post('/versions/:id/publish', requirePermission('workflow:edit'), h(async (req, res) => {
-    res.json(await new VersionsService(ctxOf(req)).publish(req.params.id, actorOf(req)));
-  }));
-  router.post('/versions/:id/validate', h(async (req, res) => {
-    res.json({ issues: await new VersionsService(ctxOf(req)).validateOnly(req.params.id) });
-  }));
+  r.get('/audit/facets', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new AuditService(ctxOf(req)).facets())));
 
-  // ---- deployments ----
-  router.get('/deployments', h(async (req, res) => {
-    const { workflowId, environment, status } = req.query;
-    res.json(await new DeploymentsService(ctxOf(req)).list({
-      workflowId: workflowId ? String(workflowId) : undefined,
-      environment: environment ? String(environment) : undefined,
-      status: status ? (String(status) as 'active' | 'inactive' | 'archived') : undefined,
-    }));
-  }));
-  router.get('/deployments/:id', h(async (req, res) => { res.json(await new DeploymentsService(ctxOf(req)).get(req.params.id)); }));
-  router.post('/deployments', requirePermission('workflow:deploy'), h(async (req, res) => {
-    res.status(201).json(await new DeploymentsService(ctxOf(req)).deploy(req.body?.versionId, req.body?.environment, actorOf(req), req.body?.env, req.body?.tags));
-  }));
-  router.post('/deployments/:id/undeploy', requirePermission('workflow:deploy'), h(async (req, res) => {
-    res.json(await new DeploymentsService(ctxOf(req)).undeploy(req.params.id, actorOf(req)));
-  }));
-  router.post('/deployments/:id/archive', requirePermission('workflow:deploy'), h(async (req, res) => {
-    res.json(await new DeploymentsService(ctxOf(req)).archive(req.params.id, actorOf(req)));
-  }));
+  // --- notifications (always scoped to the caller — no cross-user reads) ---
+  r.get('/notifications', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).listFor(actorOf(req), { unread: req.query.unread === 'true', limit: req.query.limit ? Number(req.query.limit) : undefined }))));
+  r.post('/notifications/read-all', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).markAllRead(actorOf(req)))));
+  r.post('/notifications/:id/read', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).markRead(req.params.id, actorOf(req)))));
 
-  // ---- instances ----
-  router.get('/instances', h(async (req, res) => {
-    const { workflowId, deploymentId, status, parentInstanceId } = req.query;
-    res.json(await new InstancesService(ctxOf(req)).list({
-      workflowId: workflowId ? String(workflowId) : undefined,
-      deploymentId: deploymentId ? String(deploymentId) : undefined,
-      status: status ? (String(status) as any) : undefined,
-      parentInstanceId: parentInstanceId ? String(parentInstanceId) : undefined,
-    }));
-  }));
-  router.get('/instances/:id', h(async (req, res) => { res.json(await new InstancesService(ctxOf(req)).get(req.params.id)); }));
-  router.get('/instances/:id/diagram', h(async (req, res) => { res.json(await new InstancesService(ctxOf(req)).diagram(req.params.id)); }));
-  router.post('/instances', requirePermission('workflow:run'), h(async (req, res) => {
-    res.status(201).json(await new InstancesService(ctxOf(req)).start(req.body || {}, actorOf(req)));
-  }));
-  router.post('/instances/:id/abort', requirePermission('workflow:run'), h(async (req, res) => {
-    res.json(await new InstancesService(ctxOf(req)).abort(req.params.id, actorOf(req)));
-  }));
-  router.post('/instances/:id/retry', requirePermission('workflow:run'), h(async (req, res) => {
-    res.json(await new InstancesService(ctxOf(req)).retryNode(req.params.id, req.body?.nodeId, actorOf(req)));
-  }));
-  router.put('/instances/:id/variables', requirePermission('workflow:run'), h(async (req, res) => {
-    res.json(await new InstancesService(ctxOf(req)).editVariables(req.params.id, req.body || {}, actorOf(req)));
-  }));
-  router.post('/instances/:id/signal', requirePermission('workflow:run'), h(async (req, res) => {
-    res.json(await new InstancesService(ctxOf(req)).signal(req.params.id, req.body?.name, req.body?.payload, actorOf(req)));
-  }));
+  // --- system settings (singleton; readable by anyone signed in, writable by admins) ---
+  r.get('/settings/system', asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).get())));
+  r.put('/settings/system', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).update(req.body || {}, actorOf(req)))));
 
-  // ---- tasks ----
-  router.get('/tasks', h(async (req, res) => {
-    const { instanceId, status, mine } = req.query;
-    res.json(await new TasksService(ctxOf(req)).list({
-      instanceId: instanceId ? String(instanceId) : undefined,
-      status: status ? (String(status) as any) : undefined,
-      forUser: mine === 'true' ? { username: req.user!.username, groups: req.user!.groups } : undefined,
-    }));
-  }));
-  router.get('/tasks/:id', h(async (req, res) => { res.json(await new TasksService(ctxOf(req)).get(req.params.id)); }));
-  router.post('/tasks/:id/claim', requirePermission('task:manage'), h(async (req, res) => {
-    res.json(await new TasksService(ctxOf(req)).claim(req.params.id, { username: req.user!.username, groups: req.user!.groups }));
-  }));
-  router.post('/tasks/:id/release', requirePermission('task:manage'), h(async (req, res) => {
-    res.json(await new TasksService(ctxOf(req)).release(req.params.id, actorOf(req)));
-  }));
-  router.post('/tasks/:id/start', requirePermission('task:manage'), h(async (req, res) => {
-    res.json(await new TasksService(ctxOf(req)).start(req.params.id, { username: req.user!.username, groups: req.user!.groups }));
-  }));
-  router.post('/tasks/:id/complete', requirePermission('task:manage'), h(async (req, res) => {
-    res.json(await new TasksService(ctxOf(req)).complete(req.params.id, req.body || {}, { username: req.user!.username, groups: req.user!.groups }));
-  }));
-  router.post('/tasks/:id/skip', requirePermission('task:manage'), h(async (req, res) => {
-    res.json(await new TasksService(ctxOf(req)).skip(req.params.id, actorOf(req)));
-  }));
+  // --- query / task-admin / analytics (jBPM KIE-Server-style; see docs/17) ---
+  const q = (req: Request) => new QueryService(ctxOf(req));
+  const s = (req: Request) => (req.query.status as string | undefined);
+  r.get('/query/process-definitions', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).processDefinitions() })));
+  r.get('/query/process-definitions/:processId/instances', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).processInstances(req.params.processId, s(req)) })));
+  r.get('/query/process-definitions/:processId/signals', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).processSignals(req.params.processId))));
+  r.get('/query/users', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).users() })));
+  r.get('/query/users/:user/tasks', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).tasksForUser(req.params.user, s(req)) })));
+  r.get('/query/users/:user/tasks/completed', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).tasksCompletedByUser(req.params.user) })));
+  r.get('/query/groups/:group/tasks', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).tasksForGroup(req.params.group, s(req)) })));
+  r.get('/query/instances/:id/tasks', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).instanceTasks(req.params.id) })));
+  r.get('/query/analytics/tasks', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).taskAnalytics())));
+  r.get('/query/analytics/processes', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).processAnalytics())));
+  r.get('/query/analytics/summary', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).summary())));
+  r.get('/query/jobs', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).jobs(s(req)) })));
 
-  // ---- settings ----
-  router.get('/settings', h(async (req, res) => { res.json(await new SettingsService(ctxOf(req)).get()); }));
-  router.put('/settings', requirePermission('settings:manage'), h(async (req, res) => {
-    res.json(await new SettingsService(ctxOf(req)).update(req.body || {}, actorOf(req)));
-  }));
+  // --- IAM: users, groups, roles (admin-only) ---
+  const iam = (req: Request) => new IamService(ctxOf(req));
+  r.get('/users', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listUsers() })));
+  r.post('/users', perm('admin:iam'), asyncHandler(async (req, res) => res.status(201).json(await iam(req).createUser(req.body, actorOf(req)))));
+  r.get('/users/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).getUser(req.params.id))));
+  r.patch('/users/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).updateUser(req.params.id, req.body, actorOf(req)))));
+  r.post('/users/:id/password', perm('admin:iam'), asyncHandler(async (req, res) => { await iam(req).setPassword(req.params.id, req.body?.password, actorOf(req)); res.status(204).end(); }));
+  r.get('/groups', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listGroups() })));
+  r.post('/groups', perm('admin:iam'), asyncHandler(async (req, res) => res.status(201).json(await iam(req).createGroup(req.body, actorOf(req)))));
+  r.delete('/groups/:id', perm('admin:iam'), asyncHandler(async (req, res) => { await iam(req).deleteGroup(req.params.id, actorOf(req)); res.status(204).end(); }));
+  r.get('/roles', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listRoles() })));
+  r.post('/roles', perm('admin:iam'), asyncHandler(async (req, res) => res.status(201).json(await iam(req).createRole(req.body, actorOf(req)))));
+  r.patch('/roles/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).updateRole(req.params.id, req.body?.permissions || [], actorOf(req)))));
+  r.delete('/roles/:id', perm('admin:iam'), asyncHandler(async (req, res) => { await iam(req).deleteRole(req.params.id, actorOf(req)); res.status(204).end(); }));
 
-  // ---- iam ----
-  router.get('/iam/users', requirePermission('iam:manage'), h(async (req, res) => { res.json(await new IamService(ctxOf(req)).listUsers()); }));
-  router.post('/iam/users', requirePermission('iam:manage'), h(async (req, res) => {
-    const { username, password, roles, groups } = req.body || {};
-    res.status(201).json(await new IamService(ctxOf(req)).createUser(username, password, roles || [], groups || [], actorOf(req)));
-  }));
-  router.put('/iam/users/:id/active', requirePermission('iam:manage'), h(async (req, res) => {
-    res.json(await new IamService(ctxOf(req)).setActive(req.params.id, !!req.body?.active, actorOf(req)));
-  }));
-  router.get('/iam/groups', h(async (req, res) => { res.json(await new IamService(ctxOf(req)).listGroups()); }));
-  router.get('/iam/roles', h(async (req, res) => { res.json(await new IamService(ctxOf(req)).listRoles()); }));
-
-  return router;
+  return r;
 }

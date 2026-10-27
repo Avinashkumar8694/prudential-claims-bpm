@@ -1,27 +1,25 @@
-import jwt from 'jsonwebtoken';
+// IAM: users, groups, roles/permissions, login. Single-tenant (this project intentionally doesn't do
+// JWT-bound multi-tenancy — see docs/07-security.md) but otherwise implements the RBAC model that doc
+// describes: named roles carrying permission strings, users carrying role + group names, group names
+// matching the same plain strings userTask.group/Task.group already use.
 import type { AppContext } from '../../context.ts';
-import { Collections, type User, type Group, type Role } from '../../domain.ts';
-import { unauthorized, notFound, conflict, validation } from '../../infra/errors.ts';
-import { config } from '../../infra/config.ts';
-import { hashPassword, verifyPassword } from '../../infra/passwords.ts';
+import { Collections, type Group, type Role, type User } from '../../domain.ts';
+import { hashPassword, verifyPassword, signToken, permissionGrants } from '../../infra/auth.ts';
+import { notFound, validation, conflict, forbidden, authRequired } from '../../infra/errors.ts';
 
-export interface AuthedUser { id: string; tenantId: string; username: string; groups: string[]; roles: string[]; }
-interface JwtClaims { sub: string; tenantId: string; username: string; groups: string[]; roles: string[]; }
+export type PublicUser = Omit<User, 'passwordHash'>;
+const sanitize = (u: User): PublicUser => { const { passwordHash: _drop, ...rest } = u; return rest; };
 
-/** JWT sign/verify are pure functions of `config.jwtSecret` — no store access needed, so the auth
- *  middleware can verify a token (and learn which tenant it belongs to) before it has any
- *  tenant-scoped AppContext to construct an IamService with. */
-export function signToken(claims: JwtClaims): string {
-  return jwt.sign(claims, config.jwtSecret, { expiresIn: '8h' });
-}
-export function verifyToken(token: string): AuthedUser {
-  try {
-    const claims = jwt.verify(token, config.jwtSecret) as JwtClaims;
-    return { id: claims.sub, tenantId: claims.tenantId, username: claims.username, groups: claims.groups, roles: claims.roles };
-  } catch {
-    throw unauthorized('invalid or expired token');
-  }
-}
+/** name -> default permission set, seeded once (see ensureSeeded) if the roles collection is empty.
+ *  Matches docs/07-security.md's role list exactly. */
+export const DEFAULT_ROLES: Record<string, string[]> = {
+  admin: ['*'],
+  author: ['workflow:view', 'workflow:edit'],
+  release: ['workflow:view', 'workflow:deploy'],
+  operator: ['workflow:view', 'workflow:run', 'query:read'],
+  worker: ['task:manage'],
+  viewer: ['workflow:view', 'query:read'],
+};
 
 export class IamService {
   constructor(private ctx: AppContext) {}
@@ -29,55 +27,140 @@ export class IamService {
   private groups() { return this.ctx.store.repo<Group>(Collections.groups); }
   private roles() { return this.ctx.store.repo<Role>(Collections.roles); }
 
-  async login(username: string, password: string): Promise<{ token: string; user: AuthedUser }> {
-    const rows = await this.users().query((u) => u.tenantId === this.ctx.tenantId && u.username === username);
-    const user = rows[0];
-    if (!user || !user.active || !verifyPassword(password, user.passwordHash)) throw unauthorized('invalid username or password');
-    const authed: AuthedUser = { id: user.id, tenantId: user.tenantId, username: user.username, groups: user.groups, roles: user.roles };
-    const token = signToken({ sub: authed.id, tenantId: authed.tenantId, username: authed.username, groups: authed.groups, roles: authed.roles });
-    await this.ctx.audit({ kind: 'user.login', actor: user.username });
-    return { token, user: authed };
+  /** Bootstraps a fresh deployment: default roles (if none exist) + one admin user (if no users exist
+   *  at all) so there's always a way in. Call once at server startup — safe to call repeatedly
+   *  (no-ops once seeded). */
+  async ensureSeeded(defaultAdminPassword: string): Promise<{ seededAdmin: boolean }> {
+    const existingRoles = await this.roles().query((r) => r.tenantId === this.ctx.tenantId);
+    if (existingRoles.length === 0) {
+      for (const [name, permissions] of Object.entries(DEFAULT_ROLES)) {
+        await this.roles().put({ id: this.ctx.newId(), tenantId: this.ctx.tenantId, name, permissions });
+      }
+    }
+    const existingUsers = await this.users().query((u) => u.tenantId === this.ctx.tenantId);
+    if (existingUsers.length === 0) {
+      await this.createUser({ username: 'admin', password: defaultAdminPassword, roles: ['admin'], groups: [] }, 'system');
+      return { seededAdmin: true };
+    }
+    return { seededAdmin: false };
   }
 
-  async listUsers(): Promise<User[]> { return (await this.users().query((u) => u.tenantId === this.ctx.tenantId)).sort((a, b) => a.username.localeCompare(b.username)); }
-  async listGroups(): Promise<Group[]> { return (await this.groups().query((g) => g.tenantId === this.ctx.tenantId)).sort((a, b) => a.name.localeCompare(b.name)); }
-  async listRoles(): Promise<Role[]> { return (await this.roles().query((r) => r.tenantId === this.ctx.tenantId)).sort((a, b) => a.name.localeCompare(b.name)); }
+  async login(username: string, password: string): Promise<{ token: string; user: PublicUser }> {
+    const u = (await this.users().query((x) => x.tenantId === this.ctx.tenantId && x.username === username))[0];
+    if (!u || !u.active || !(await verifyPassword(password, u.passwordHash))) throw authRequired('invalid username or password');
+    const token = signToken({ sub: u.id, username: u.username, roles: u.roles, groups: u.groups });
+    return { token, user: sanitize(u) };
+  }
 
-  async createUser(username: string, password: string, roleNames: string[], groupNames: string[], actor: string): Promise<User> {
-    if (!username.trim() || !password) throw validation('username and password are required');
-    const existing = await this.users().query((u) => u.tenantId === this.ctx.tenantId && u.username === username);
-    if (existing.length) throw conflict(`username "${username}" is already taken`);
-    const now = this.ctx.clock();
-    const user: User = {
-      id: this.ctx.newId(), tenantId: this.ctx.tenantId, username: username.trim(),
-      passwordHash: hashPassword(password), roles: roleNames, groups: groupNames, active: true, createdAt: now,
+  /** Resolves a role-name list to its union of granted permission strings (missing/unknown role names
+   *  simply contribute nothing — a deleted role silently drops from anyone still holding it). */
+  async permissionsFor(roleNames: string[]): Promise<string[]> {
+    if (!roleNames.length) return [];
+    const rows = await this.roles().query((r) => r.tenantId === this.ctx.tenantId && roleNames.includes(r.name));
+    return rows.flatMap((r) => r.permissions);
+  }
+  async authorize(roleNames: string[], action: string): Promise<boolean> {
+    return permissionGrants(await this.permissionsFor(roleNames), action);
+  }
+
+  // ---- users ----
+  async listUsers(): Promise<PublicUser[]> {
+    return (await this.users().query((u) => u.tenantId === this.ctx.tenantId)).sort((a, b) => a.username.localeCompare(b.username)).map(sanitize);
+  }
+  async getUser(id: string): Promise<PublicUser> {
+    const u = await this.users().get(id);
+    if (!u || u.tenantId !== this.ctx.tenantId) throw notFound('User');
+    return sanitize(u);
+  }
+  async createUser(input: { username: string; password: string; roles?: string[]; groups?: string[] }, actor: string): Promise<PublicUser> {
+    const username = (input.username || '').trim();
+    if (!username) throw validation('username is required');
+    if (!input.password || input.password.length < 8) throw validation('password must be at least 8 characters');
+    const dupe = await this.users().query((u) => u.tenantId === this.ctx.tenantId && u.username === username);
+    if (dupe.length) throw conflict(`username "${username}" already exists`);
+    const u: User = {
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, username,
+      passwordHash: await hashPassword(input.password),
+      roles: input.roles || [], groups: input.groups || [], active: true, createdAt: this.ctx.clock(),
     };
-    await this.users().put(user);
-    await this.ctx.audit({ kind: 'user.created', actor, data: { username: user.username } });
-    return user;
+    await this.users().put(u);
+    await this.ctx.audit({ actor, kind: 'user.created', data: { username } });
+    return sanitize(u);
+  }
+  async updateUser(id: string, patch: Partial<Pick<User, 'roles' | 'groups' | 'active'>>, actor: string): Promise<PublicUser> {
+    const u = await this.users().get(id);
+    if (!u || u.tenantId !== this.ctx.tenantId) throw notFound('User');
+    if (patch.roles !== undefined) u.roles = patch.roles;
+    if (patch.groups !== undefined) u.groups = patch.groups;
+    if (patch.active !== undefined) u.active = patch.active;
+    await this.users().put(u);
+    await this.ctx.audit({ actor, kind: 'user.updated', data: { userId: id } });
+    return sanitize(u);
+  }
+  async setPassword(id: string, newPassword: string, actor: string): Promise<void> {
+    const u = await this.users().get(id);
+    if (!u || u.tenantId !== this.ctx.tenantId) throw notFound('User');
+    if (!newPassword || newPassword.length < 8) throw validation('password must be at least 8 characters');
+    u.passwordHash = await hashPassword(newPassword);
+    await this.users().put(u);
+    await this.ctx.audit({ actor, kind: 'user.password_changed', data: { userId: id } });
   }
 
-  async setActive(id: string, active: boolean, actor: string): Promise<User> {
-    const user = await this.users().get(id);
-    if (!user || user.tenantId !== this.ctx.tenantId) throw notFound('user');
-    user.active = active;
-    await this.users().put(user);
-    await this.ctx.audit({ kind: active ? 'user.activated' : 'user.deactivated', actor, data: { username: user.username } });
-    return user;
+  /** Self-service variant of setPassword — for a user changing their OWN password (no admin:iam
+   *  needed), gated by knowing the current password rather than by permission. */
+  async changeOwnPassword(id: string, currentPassword: string, newPassword: string): Promise<void> {
+    const u = await this.users().get(id);
+    if (!u || u.tenantId !== this.ctx.tenantId) throw notFound('User');
+    if (!(await verifyPassword(currentPassword || '', u.passwordHash))) throw forbidden('current password is incorrect');
+    if (!newPassword || newPassword.length < 8) throw validation('new password must be at least 8 characters');
+    u.passwordHash = await hashPassword(newPassword);
+    await this.users().put(u);
+    await this.ctx.audit({ actor: u.username, kind: 'user.password_changed', data: { userId: id, self: true } });
   }
 
-  /** A `'*'` entry on any assigned role grants everything; otherwise an exact permission-string match
-   *  (e.g. "workflow:edit", "task:manage" — see the real role records) on any assigned role. */
-  async hasPermission(user: AuthedUser, permission: string): Promise<boolean> {
-    const granted = await this.resolvePermissions(user);
-    return granted.has('*') || granted.has(permission);
+  // ---- groups ----
+  async listGroups(): Promise<Group[]> { return (await this.groups().query((g) => g.tenantId === this.ctx.tenantId)).sort((a, b) => a.name.localeCompare(b.name)); }
+  async createGroup(input: { name: string; description?: string }, actor: string): Promise<Group> {
+    const name = (input.name || '').trim();
+    if (!name) throw validation('name is required');
+    if ((await this.groups().query((g) => g.tenantId === this.ctx.tenantId && g.name === name)).length) throw conflict(`group "${name}" already exists`);
+    const g: Group = { id: this.ctx.newId(), tenantId: this.ctx.tenantId, name, description: input.description };
+    await this.groups().put(g);
+    await this.ctx.audit({ actor, kind: 'group.created', data: { name } });
+    return g;
+  }
+  async deleteGroup(id: string, actor: string): Promise<void> {
+    const g = await this.groups().get(id);
+    if (!g || g.tenantId !== this.ctx.tenantId) throw notFound('Group');
+    await this.groups().delete(id);
+    await this.ctx.audit({ actor, kind: 'group.deleted', data: { name: g.name } });
   }
 
-  /** The current user's own full permission set — lets the UI show/hide controls without needing
-   *  `iam:manage` just to read role definitions (most roles don't have it). */
-  async resolvePermissions(user: AuthedUser): Promise<Set<string>> {
-    if (!user.roles.length) return new Set();
-    const roles = await this.listRoles();
-    return new Set(roles.filter((r) => user.roles.includes(r.name)).flatMap((r) => r.permissions));
+  // ---- roles ----
+  async listRoles(): Promise<Role[]> { return (await this.roles().query((r) => r.tenantId === this.ctx.tenantId)).sort((a, b) => a.name.localeCompare(b.name)); }
+  async createRole(input: { name: string; permissions: string[] }, actor: string): Promise<Role> {
+    const name = (input.name || '').trim();
+    if (!name) throw validation('name is required');
+    if ((await this.roles().query((r) => r.tenantId === this.ctx.tenantId && r.name === name)).length) throw conflict(`role "${name}" already exists`);
+    const r: Role = { id: this.ctx.newId(), tenantId: this.ctx.tenantId, name, permissions: input.permissions || [] };
+    await this.roles().put(r);
+    await this.ctx.audit({ actor, kind: 'role.created', data: { name } });
+    return r;
+  }
+  async updateRole(id: string, permissions: string[], actor: string): Promise<Role> {
+    const r = await this.roles().get(id);
+    if (!r || r.tenantId !== this.ctx.tenantId) throw notFound('Role');
+    if (r.name === 'admin') throw forbidden('the admin role\'s permissions cannot be changed');
+    r.permissions = permissions;
+    await this.roles().put(r);
+    await this.ctx.audit({ actor, kind: 'role.updated', data: { roleId: id } });
+    return r;
+  }
+  async deleteRole(id: string, actor: string): Promise<void> {
+    const r = await this.roles().get(id);
+    if (!r || r.tenantId !== this.ctx.tenantId) throw notFound('Role');
+    if (r.name === 'admin') throw forbidden('the admin role cannot be deleted');
+    await this.roles().delete(id);
+    await this.ctx.audit({ actor, kind: 'role.deleted', data: { name: r.name } });
   }
 }

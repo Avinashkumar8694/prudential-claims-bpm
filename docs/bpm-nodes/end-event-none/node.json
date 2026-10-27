@@ -1,0 +1,25 @@
+{
+  "id": "_END_HOLD",
+  "type": "endEvent",
+  "subtype": "none",
+  "bpmnElement": "endEvent",
+  "name": "Verification Process (Hold)",
+  "position": {
+    "x": 2240,
+    "y": 380,
+    "width": 40,
+    "height": 40
+  },
+  "incoming": [
+    "_fh3"
+  ],
+  "outgoing": [],
+  "properties": {
+    "elementname": "Verification Process (Hold)"
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "scripts": {},
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:endEvent id=\"_END_HOLD\" name=\"Verification Process (Hold)\"><bpmn2:incoming>_fh3</bpmn2:incoming></bpmn2:endEvent>"
+}

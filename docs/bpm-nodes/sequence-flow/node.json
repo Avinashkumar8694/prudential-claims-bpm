@@ -1,0 +1,28 @@
+{
+  "id": "_fdeath",
+  "type": "sequenceFlow",
+  "bpmnElement": "sequenceFlow",
+  "sourceRef": "_XG_TYPE",
+  "targetRef": "_SC_PEND",
+  "name": "Death",
+  "properties": {
+    "elementname": "Death"
+  },
+  "condition": {
+    "language": "java",
+    "expr": "return \"DEATH\".equals(claimType);"
+  },
+  "di": {
+    "waypoints": [
+      {
+        "x": 100,
+        "y": 400
+      },
+      {
+        "x": 260,
+        "y": 400
+      }
+    ]
+  },
+  "bpmn": "<bpmn2:sequenceFlow id=\"_fdeath\" name=\"Death\" sourceRef=\"_XG_TYPE\" targetRef=\"_SC_PEND\"><bpmn2:conditionExpression xsi:type=\"bpmn2:tFormalExpression\" language=\"http://www.java.com/java\"><![CDATA[return \"DEATH\".equals(claimType);]]></bpmn2:conditionExpression></bpmn2:sequenceFlow>"
+}

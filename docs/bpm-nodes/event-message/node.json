@@ -1,0 +1,12 @@
+{
+  "id": "_s",
+  "type": "startEvent",
+  "bpmnElement": "startEvent",
+  "eventType": "message",
+  "messageRef": "MSG",
+  "name": "On Message",
+  "outgoing": [
+    "_f"
+  ],
+  "bpmn": "<bpmn2:startEvent id=\"_s\" name=\"On Message\"><bpmn2:outgoing>_f</bpmn2:outgoing><bpmn2:messageEventDefinition id=\"_d\" messageRef=\"MSG\"/></bpmn2:startEvent>"
+}

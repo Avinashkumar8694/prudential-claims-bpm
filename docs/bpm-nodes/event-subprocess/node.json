@@ -1,0 +1,44 @@
+{
+  "id": "_GLOBAL_TERMINATE_SUBPROCESS",
+  "type": "subProcess",
+  "subtype": "event",
+  "bpmnElement": "subProcess",
+  "name": "Global Terminate Subprocess",
+  "triggeredByEvent": true,
+  "position": {
+    "x": 80,
+    "y": 980,
+    "width": 300,
+    "height": 120
+  },
+  "children": [
+    {
+      "id": "_START_TERMINATE_EVENT",
+      "type": "startEvent",
+      "subtype": "error",
+      "isInterrupting": true,
+      "errorRef": "TERMINATE_CASE",
+      "outgoing": [
+        "_F_TERM"
+      ]
+    },
+    {
+      "id": "_END_TERMINATE_EVENT",
+      "type": "endEvent",
+      "subtype": "terminate",
+      "incoming": [
+        "_F_TERM"
+      ]
+    },
+    {
+      "id": "_F_TERM",
+      "type": "sequenceFlow",
+      "sourceRef": "_START_TERMINATE_EVENT",
+      "targetRef": "_END_TERMINATE_EVENT"
+    }
+  ],
+  "properties": {
+    "elementname": "Global Terminate Subprocess"
+  },
+  "bpmn": "<bpmn2:subProcess id=\"_GLOBAL_TERMINATE_SUBPROCESS\" name=\"Global Terminate Subprocess\" triggeredByEvent=\"true\"> <startEvent isInterrupting=true + errorEventDefinition TERMINATE_CASE> -> <endEvent terminate> </bpmn2:subProcess>"
+}

@@ -1,69 +1,53 @@
-// Shared contract every node handler implements. Kept deliberately small: a handler is a pure-ish
-// function from (node + read-only capabilities) to a HandlerResult describing what happened — all
-// actual state mutation (tokens, timers, tasks) is applied by execution-engine.ts's own loop, never by
-// a handler directly touching `inst` beyond what HandlerCtx exposes.
-import type { EngineNode, EngineFlow, EngineProcess } from '../../sdk/index.ts';
-import type { Instance, Deployment } from '../../domain.ts';
+// Per-node handler contract. Each node type lives in its own folder (handler.ts = backend logic).
+// The ExecutionEngine builds a HandlerCtx and dispatches to the registered handler; handlers are pure
+// functions that return a HandlerResult (what the step loop should do next).
 import type { AppContext } from '../../context.ts';
-
-export interface WaitSpec { kind: 'timer' | 'task' | 'message' | 'signal' | 'condition' | 'child' | 'multiInstance'; ref?: string; dueAt?: string; }
+import type { Deployment, Instance, Token } from '../../domain.ts';
+import type { EngineFlow, EngineProcess } from '../../sdk/index.ts';
+import type { EngineEvent } from '../execution-engine.ts';
 
 export interface HandlerResult {
-  /** Merged into inst.variables after this node completes. */
   vars?: Record<string, unknown>;
-  /** Explicit successor node ids — omit to use the process's own outgoing flows (defaultTargets). */
-  next?: string[];
-  /** Park the token — the engine schedules/registers whatever the WaitSpec.kind implies. */
-  wait?: WaitSpec;
-  /** A human-readable trace string for this node visit (history/logs). */
-  outcome?: string;
-  /** This node's own token is consumed with no successors spawned at all (rare — most "done" paths
-   *  either wait or fall through to defaultTargets). */
-  consume?: boolean;
-  /** The whole (sub)process ends here — 'complete' is a normal end; 'terminate'/'error' are special. */
+  wait?: Token['waitFor'];
   end?: 'complete' | 'terminate' | 'error';
-  /** Only meaningful alongside end:'terminate' — escalate the terminate all the way to the root
-   *  instance instead of just this (sub)process (see execution-engine.ts's terminateAll handling). */
-  terminateAll?: boolean;
-  /** A recoverable failure — routed to a matching error-catch if one exists, else fails the instance. */
+  next?: string[];        // explicit target node ids (else follow outgoing flows)
+  consume?: boolean;      // remove token without spawning (e.g. join not yet satisfied)
+  outcome?: string;
   error?: string;
-  errorCode?: string;
+  errorCode?: string;     // BPMN-style error code for error-boundary routing
 }
 
+/** Everything a node handler needs — the node + instance state plus engine capabilities. */
 export interface HandlerCtx {
-  node: EngineNode;
+  node: any;
   inst: Instance;
   proc: EngineProcess;
   dep: Deployment;
   app: AppContext;
   joins: Record<string, Set<string>>;
+  /** the current active token's id — the genuine node-*instance*-level id (as opposed to `node.id`,
+   *  the node *definition* id), matching real jBPM's `NodeInstance.getId()` vs `.getNode().getId()`
+   *  distinction (see kcontext.getNodeInstance() in script/condition handlers). */
   tokenId: string;
-  outgoing: (nodeId: string) => EngineFlow[];
-  incoming: (nodeId: string) => EngineFlow[];
-  emit: (e: { kind: string; [k: string]: unknown }) => void;
-  startChild: (dep: Deployment, processId: string, vars: Record<string, unknown>, parentTokenId: string, independent?: boolean) => Promise<Instance>;
-  /** Untargeted broadcast — 'message' resolves to the single oldest waiter; 'signal' fans out to
-   *  every waiter AND every matching signal-start. `correlationKey`, when given, narrows delivery to
-   *  only the waiting instance(s) whose OWN correlationKey (set at instance-start) matches — a real,
-   *  documented part of this engine's EventDef/EngineSend contract (see sdk's own EventDef type),
-   *  not a jBPM XML attribute; omit for the default "every/oldest matching waiter" behavior. */
-  broadcast: (name: string, kind: 'signal' | 'message', correlationKey?: string) => Promise<void>;
-  /** Deliver a signal to ONE specific instance by id — matches real jBPM's targeted
-   *  KieRuntime.signalEvent(type, event, processInstanceId). */
-  signal: (targetInstanceId: string, name: string, payload?: unknown) => Promise<void>;
-  /** Abort ONE specific instance by id. */
-  abort: (targetInstanceId: string) => Promise<void>;
-  /** Run recorded compensation handlers — every completed one (ref omitted) or just one (ref = a
-   *  specific host node id), LIFO. Returns the compensation handler's own output variables. */
-  compensate: (ref?: string) => Promise<Record<string, unknown>>;
-  /** Route a thrown escalation within this SAME instance's own boundary/event-subprocess scope chain
-   *  — never a cross-instance broadcast. Returns whether anything caught it (false = uncaught, which
-   *  is NOT an error — the throwing path just continues). */
-  escalate: (code: string) => Promise<boolean>;
-  /** Resolve a called-process id to its active deployment. `workflowId`, when the author pinned one via
-   *  the processRef picker, disambiguates when more than one active deployment declares a process with
-   *  the exact same bare id (e.g. two independently-authored projects both using "reviewProcess"). */
-  resolveCalled?: (processId: string, workflowId?: string) => Promise<{ dep: Deployment; processId: string } | undefined>;
+  outgoing(nodeId: string): EngineFlow[];
+  incoming(nodeId: string): EngineFlow[];
+  emit(e: EngineEvent): void;
+  /** `independent`: decouple the child's lifecycle from the parent's — see `Instance.independent`. */
+  startChild(dep: Deployment, processId: string, vars: Record<string, unknown>, parentTokenId: string, independent?: boolean): Promise<Instance>;
+  /** `correlationValue`, when given, narrows delivery to instances whose OWN correlationKey matches
+   *  (see execution-engine.ts's broadcast() doc comment) instead of every instance waiting on `name`. */
+  broadcast(name: string, correlationValue?: string): Promise<void>;
+  /** Deliver a signal to a SPECIFIC instance by id (matches real jBPM's targeted
+   *  kcontext.getKieRuntime().signalEvent(type, event, processInstanceId), as opposed to
+   *  broadcast()'s session-wide delivery) — a no-op if the id doesn't resolve to a live instance in
+   *  this tenant. */
+  signal(targetInstanceId: string, name: string, payload?: unknown): Promise<void>;
+  /** Abort a SPECIFIC instance by id (matches real jBPM's kcontext.getKieRuntime().
+   *  abortProcessInstance(id)) — a no-op if the id doesn't resolve to a live instance in this tenant. */
+  abort(targetInstanceId: string): Promise<void>;
+  /** Run compensation handlers for completed activities in reverse order (all, or a single host). */
+  compensate(ref?: string): Promise<Record<string, unknown>>;
+  resolveCalled?: (processId: string) => Promise<{ dep: Deployment; processId: string } | undefined>;
 }
 
-export type NodeHandler = (c: HandlerCtx) => HandlerResult | Promise<HandlerResult>;
+export type NodeHandler = (c: HandlerCtx) => Promise<HandlerResult> | HandlerResult;

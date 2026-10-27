@@ -1,0 +1,7 @@
+{
+  "id": "fDeath",
+  "from": "_route",
+  "to": "_death",
+  "when": "return \"DEATH\".equals(claimType);",
+  "lang": "java"
+}

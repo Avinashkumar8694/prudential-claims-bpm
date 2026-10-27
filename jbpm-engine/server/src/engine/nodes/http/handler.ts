@@ -14,13 +14,15 @@ function jsonPath(obj: any, path: string): unknown {
 }
 
 export const handler: NodeHandler = async (c) => {
-  const n = c.node as any;
+  const n = c.node;
   const baseUrl = (c.dep.env && c.dep.env['INTEGRATION_LAYER_URL']) || config.integrationBaseUrl;
   const isAbsolute = /^https?:\/\//.test(n.url || '');
   const url = isAbsolute ? n.url : `${baseUrl}${n.url || ''}`;
   const method = String(n.method || 'POST').toUpperCase();
   const body: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(n.body || {})) body[k] = (typeof v === 'string' && v.startsWith('$')) ? c.inst.variables[v.slice(1)] : v;
+  // only an author-supplied ABSOLUTE url is SSRF-gated — see outbound-guard.ts's own doc comment for
+  // why the relative/baseUrl path (operator-configured, trusted) is deliberately left alone.
   if (isAbsolute) {
     try { await assertOutboundAllowed(url); }
     catch (e) { return { error: (e as Error).message, errorCode: 'SSRF_BLOCKED' }; }
@@ -36,11 +38,13 @@ export const handler: NodeHandler = async (c) => {
     let json: any; try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
     const vars: Record<string, unknown> = {};
     for (const [varName, path] of Object.entries(n.resultTo || {})) vars[varName] = jsonPath(json, String(path));
-    if (n.exitScript && n.lang && n.lang !== 'js' && n.lang !== 'java') {
-      return { vars, outcome: `HTTP ${res.status} (exit script skipped: unsupported dialect "${n.lang}")` };
-    }
     if (n.exitScript) {
+      // jBPM-parity exit hook: raw response available as resPayload, resultTo already applied
       const scriptVars: Record<string, unknown> = { ...c.inst.variables, ...vars, resPayload: text };
+      // bare-name binding for lang:'java' (real jBPM's own JavaActionBuilder mechanism — see
+      // script/handler.ts); resPayload is a synthesized variable (not in c.proc.vars) but real jBPM
+      // exit scripts reference it constantly (`resPayload.isEmpty()` etc.), so it's always declared
+      // as String on top of whatever's actually declared for this process.
       const varTypes: Record<string, string> = { resPayload: 'String', ...varTypesOf(c) };
       try {
         const { maxConcurrentScripts } = await new SettingsService(c.app).get();
@@ -51,9 +55,7 @@ export const handler: NodeHandler = async (c) => {
         delete scriptVars.resPayload;
         Object.assign(vars, scriptVars);
       } catch (e) {
-        const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED'
-          : (e as { code?: string }).code === 'JAVA_SIDECAR_UNAVAILABLE' ? 'JAVA_SIDECAR_UNAVAILABLE'
-          : 'SCRIPT_ERROR';
+        const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'SCRIPT_ERROR';
         return { error: `exitScript failed: ${(e as Error).message}`, errorCode: code };
       }
     }

@@ -1,49 +1,51 @@
-import { promises as fs } from 'node:fs';
+// File-backed store: <dataDir>/<collection>/<id>.json. Loads lazily into memory, writes through.
+// Zero-setup durability for dev; same Repository interface as memory/pg.
+import fs from 'node:fs';
 import path from 'node:path';
-import type { Store, Repo } from './types.ts';
+import type { Entity, Repository, Store } from './repository.ts';
 
-/** Mirrors the real on-disk layout this project's data survived the loss in: one JSON file per entity,
- *  under `<dataDir>/<collection>/<id>.json`. No in-memory cache — every call reads/writes the
- *  filesystem directly, which keeps write behavior simple and obviously correct (this is a
- *  single-process, self-hosted engine, not a distributed store) at the cost of `query()` re-reading
- *  every file in a collection each time; fine at this project's real data volumes (hundreds of files
- *  per collection, not millions). */
+class FileRepo<T extends Entity> implements Repository<T> {
+  private cache = new Map<string, T>();
+  private loaded = false;
+  constructor(private dir: string) {}
+
+  private ensureLoaded() {
+    if (this.loaded) return;
+    fs.mkdirSync(this.dir, { recursive: true });
+    for (const f of fs.readdirSync(this.dir)) {
+      if (!f.endsWith('.json')) continue;
+      try { const e = JSON.parse(fs.readFileSync(path.join(this.dir, f), 'utf8')) as T; this.cache.set(e.id, e); }
+      catch { /* skip corrupt file */ }
+    }
+    this.loaded = true;
+  }
+  private file(id: string) { return path.join(this.dir, `${id}.json`); }
+
+  async get(id: string) { this.ensureLoaded(); return this.cache.get(id); }
+  async list() { this.ensureLoaded(); return [...this.cache.values()]; }
+  async query(pred: (t: T) => boolean) { this.ensureLoaded(); return [...this.cache.values()].filter(pred); }
+  async put(entity: T) {
+    this.ensureLoaded();
+    this.cache.set(entity.id, structuredClone(entity));
+    const tmp = this.file(entity.id) + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(entity, null, 2));
+    fs.renameSync(tmp, this.file(entity.id));   // atomic-ish write
+    return entity;
+  }
+  async delete(id: string) {
+    this.ensureLoaded();
+    const existed = this.cache.delete(id);
+    try { fs.unlinkSync(this.file(id)); } catch { /* already gone */ }
+    return existed;
+  }
+}
+
 export class FileStore implements Store {
+  private repos = new Map<string, FileRepo<any>>();
   constructor(private dataDir: string) {}
-
-  repo<T extends { id: string }>(collection: string): Repo<T> {
-    const dir = path.join(this.dataDir, collection);
-    const fileFor = (id: string) => path.join(dir, `${id}.json`);
-
-    const readOne = async (file: string): Promise<T | undefined> => {
-      try {
-        const text = await fs.readFile(file, 'utf8');
-        return JSON.parse(text) as T;
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
-        throw e;
-      }
-    };
-
-    return {
-      async get(id) { return readOne(fileFor(id)); },
-      async put(entity) {
-        await fs.mkdir(dir, { recursive: true });
-        await fs.writeFile(fileFor(entity.id), JSON.stringify(entity, null, 2), 'utf8');
-        return entity;
-      },
-      async delete(id) {
-        try { await fs.unlink(fileFor(id)); }
-        catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; }
-      },
-      async query(pred) {
-        let names: string[];
-        try { names = await fs.readdir(dir); }
-        catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return []; throw e; }
-        const jsonNames = names.filter((n) => n.endsWith('.json'));
-        const entities: (T | undefined)[] = await Promise.all(jsonNames.map((name) => readOne(path.join(dir, name))));
-        return entities.filter((e): e is T => e != null && pred(e));
-      },
-    };
+  repo<T extends Entity>(collection: string): Repository<T> {
+    let r = this.repos.get(collection);
+    if (!r) { r = new FileRepo<T>(path.join(this.dataDir, collection)); this.repos.set(collection, r); }
+    return r as Repository<T>;
   }
 }

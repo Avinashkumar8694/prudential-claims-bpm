@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Interaction States — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — every interaction state (ux_design/12 §9)</div>
+<div style="max-width:1100px; margin:0 auto; padding:40px 24px;">
+  <h1>Interaction states</h1>
+  <p class="muted" style="margin-top:6px; margin-bottom:28px; max-width:680px;">
+    Every list, detail, and form screen in this design must specify these. A design that only shows
+    the happy path isn't finished. Same tokens and components as the real screens.
+  </p>
+
+  <!-- EMPTY STATES -->
+  <div class="section-title">1 · Empty states — first-run, nothing exists yet</div>
+  <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:28px;">
+    <div class="card">
+      <div class="empty-state">
+        <div class="es-icon">▤</div>
+        <h3>No projects yet</h3>
+        <p>A project holds your processes, forms, data objects, and rules. Create one, or start from a sample.</p>
+        <div class="row" style="margin-top:12px;">
+          <button class="btn primary sm">+ New Project</button>
+          <button class="btn sm">Browse samples</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <div class="es-icon">◷</div>
+        <h3>No running instances</h3>
+        <p>Once you deploy a process and start it, its instances appear here with live status.</p>
+        <button class="btn sm" style="margin-top:12px;">▶ Start an instance</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <div class="es-icon" style="background:var(--green-bg); color:var(--green);">✓</div>
+        <h3>Inbox zero</h3>
+        <p>No tasks are waiting on you right now. Group tasks you can claim will show under "Available".</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <div class="es-icon" style="background:var(--green-bg); color:var(--green);">✓</div>
+        <h3>No execution errors</h3>
+        <p>Nothing has failed in the selected time range. Errors appear here the moment they happen.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZERO RESULTS -->
+  <div class="section-title">2 · Zero results — data exists, the filter excluded it (never the same as empty)</div>
+  <div class="card" style="margin-bottom:28px;">
+    <div class="filterbar" style="margin:0; border:none; border-bottom:1px solid var(--border); border-radius:0;">
+      <span class="chip on">Status: Failed</span>
+      <span class="chip on">SLA: Violated</span>
+      <span class="chip on">Last 7 days</span>
+      <div class="spacer"></div>
+      <button class="btn sm">Clear all filters</button>
+    </div>
+    <div class="empty-state">
+      <div class="es-icon" style="background:var(--surface-2); color:var(--muted);">🔍</div>
+      <h3>No instances match these filters</h3>
+      <p>128 instances exist, but none are both <b>failed</b> and <b>SLA violated</b> in the last 7 days.</p>
+      <button class="btn sm" style="margin-top:12px;">Clear all filters</button>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="section-title">3 · Loading — skeletons shaped like the content, never a bare spinner</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:28px;">
+    <div class="card" style="padding:14px;">
+      <div class="skeleton skeleton-line" style="width:35%; height:14px; margin-bottom:14px;"></div>
+      <div class="skeleton skeleton-line" style="width:100%;"></div>
+      <div class="skeleton skeleton-line" style="width:92%;"></div>
+      <div class="skeleton skeleton-line" style="width:96%;"></div>
+      <div class="skeleton skeleton-line" style="width:88%;"></div>
+    </div>
+    <div class="card" style="padding:14px;">
+      <div class="row" style="gap:12px; margin-bottom:12px;">
+        <div class="skeleton" style="width:40px; height:40px; border-radius:50%;"></div>
+        <div style="flex:1;">
+          <div class="skeleton skeleton-line" style="width:45%;"></div>
+          <div class="skeleton skeleton-line" style="width:28%;"></div>
+        </div>
+      </div>
+      <div class="skeleton skeleton-card"></div>
+    </div>
+  </div>
+
+  <!-- ERROR / DENIED -->
+  <div class="section-title">4 · Error &amp; permission states</div>
+  <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:28px;">
+    <div class="card">
+      <div class="empty-state">
+        <div class="es-icon" style="background:var(--red-bg); color:var(--red);">⚠</div>
+        <h3>Couldn't load instances</h3>
+        <p>The server returned an error. Your filters are preserved.</p>
+        <button class="btn sm" style="margin-top:12px;">Retry</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <div class="es-icon" style="background:var(--amber-bg); color:var(--amber);">🔒</div>
+        <h3>You don't have access</h3>
+        <p>Viewing instances needs the <code>workflow:view</code> permission. Ask an administrator.</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="empty-state">
+        <div class="es-icon" style="background:var(--surface-2); color:var(--muted);">?</div>
+        <h3>Instance not found</h3>
+        <p>Instance #9999 doesn't exist, or was purged by the retention policy.</p>
+        <button class="btn sm" style="margin-top:12px;">← Back to Instances</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INLINE / TRANSIENT -->
+  <div class="section-title">5 · Inline &amp; transient feedback</div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:28px;">
+    <div>
+      <p class="muted" style="font-size:12px; margin-bottom:8px;">Connection banner (realtime dropped)</p>
+      <div class="card" style="padding:10px 14px; display:flex; align-items:center; gap:10px; border-color:var(--amber); background:var(--amber-bg);">
+        <span>⚠</span><span style="font-size:13px;">Live updates disconnected — reconnecting…</span>
+        <div class="spacer"></div><button class="btn sm">Retry now</button>
+      </div>
+
+      <p class="muted" style="font-size:12px; margin:16px 0 8px;">Field-level validation</p>
+      <div class="card" style="padding:14px;">
+        <div class="field">
+          <label>Process name</label>
+          <input value="" placeholder="Name" style="border-color:var(--red); box-shadow:0 0 0 3px var(--red-bg);" />
+          <span style="font-size:11.5px; color:var(--red);">A process name is required.</span>
+        </div>
+      </div>
+
+      <p class="muted" style="font-size:12px; margin:16px 0 8px;">Unsaved changes</p>
+      <div class="card" style="padding:10px 14px; display:flex; align-items:center; gap:10px;">
+        <span class="badge waiting">● Unsaved</span>
+        <span class="muted" style="font-size:12.5px;">3 changes not yet saved</span>
+        <div class="spacer"></div><button class="btn primary sm">Save</button>
+      </div>
+    </div>
+
+    <div>
+      <p class="muted" style="font-size:12px; margin-bottom:8px;">Toasts (bottom-right, auto-dismiss)</p>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <div class="card" style="padding:11px 14px; display:flex; align-items:center; gap:10px; border-left:3px solid var(--green);">
+          <span>✅</span><span style="font-size:13px;">Deployed <b>v13</b> to production</span>
+        </div>
+        <div class="card" style="padding:11px 14px; display:flex; align-items:center; gap:10px; border-left:3px solid var(--red);">
+          <span>❌</span><span style="font-size:13px;">Couldn't abort #1092 — already completed</span>
+        </div>
+        <div class="card" style="padding:11px 14px; display:flex; align-items:center; gap:10px; border-left:3px solid var(--primary);">
+          <span>↩</span><span style="font-size:13px;">Node deleted</span><div class="spacer"></div>
+          <a style="font-size:12.5px; color:var(--primary); font-weight:600; cursor:pointer;">Undo</a>
+        </div>
+      </div>
+
+      <p class="muted" style="font-size:12px; margin:16px 0 8px;">Bulk-action result (per row, never all-or-nothing)</p>
+      <div class="card" style="padding:14px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Claimed 2 of 4 tasks</div>
+        <div class="panel-list" style="font-size:12.5px;">
+          <div class="prow" style="justify-content:space-between;"><span>Review claim #4021</span><span class="badge active">claimed</span></div>
+          <div class="prow" style="justify-content:space-between;"><span>Approve refund #398</span><span class="badge active">claimed</span></div>
+          <div class="prow" style="justify-content:space-between;"><span>Verify docs #4022</span><span class="badge archived">already owned by maria</span></div>
+          <div class="prow" style="justify-content:space-between;"><span>Assign reviewer #4019</span><span class="badge archived">wrong status</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE MECHANICS -->
+  <div class="section-title">6 · Table mechanics — sort, pagination, density</div>
+  <div class="card" style="margin-bottom:28px;">
+    <table>
+      <thead><tr>
+        <th style="cursor:pointer;">ID ↓</th><th style="cursor:pointer;">Process</th>
+        <th style="cursor:pointer;">Status</th><th style="cursor:pointer;">Started</th>
+      </tr></thead>
+      <tbody>
+        <tr><td>#1092</td><td>Claim Intake</td><td><span class="badge failed">failed</span></td><td>2h ago</td></tr>
+        <tr><td>#1091</td><td>Claim Intake</td><td><span class="badge running">running</span></td><td>2h 14m ago</td></tr>
+      </tbody>
+    </table>
+    <div class="row" style="padding:10px 14px; border-top:1px solid var(--border);">
+      <span class="muted" style="font-size:12.5px;">Showing 1–25 of 128</span>
+      <div class="spacer"></div>
+      <select style="margin-right:8px;"><option>25 / page</option><option>50 / page</option></select>
+      <button class="btn sm" disabled>← Prev</button>
+      <span class="chip on">1</span><span class="chip">2</span><span class="chip">3</span>
+      <button class="btn sm">Next →</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

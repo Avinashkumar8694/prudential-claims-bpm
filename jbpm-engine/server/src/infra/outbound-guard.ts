@@ -1,39 +1,42 @@
-// SSRF protection for the HTTP (service) node's author-supplied ABSOLUTE URLs only — a relative URL
-// (appended to the deployment's own operator-configured integration base URL) is trusted and never
-// gated here; only a process author typing a full http(s):// URL directly is subject to this check,
-// since that's the only path where arbitrary/attacker-influenced hosts could ever reach this server's
-// own network.
+// SSRF guard for HTTP service tasks whose `url` field is a full ABSOLUTE url — author-controlled (a
+// workflow author can put anything there), unlike a relative url, which is appended to the
+// deployment's operator-configured, trusted integrationBaseUrl and is deliberately NOT gated here
+// (gating it too would block the default dev setup, whose base url is itself http://localhost:3000 —
+// see docs/07-security.md section 5 and http/handler.ts's own url-resolution comment).
 import dns from 'node:dns/promises';
 import net from 'node:net';
+import { config } from './config.ts';
 
-const BLOCKED_HOSTS = new Set(['localhost', '169.254.169.254', 'metadata.google.internal']);
+const PRIVATE_V4 = [/^169\.254\./, /^10\./, /^172\.(1[6-9]|2\d|3[01])\./, /^192\.168\./, /^127\./, /^0\./];
 
-function isPrivateIp(ip: string): boolean {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    if (a === 127) return true;
-    if (a === 10) return true;
-    if (a === 169 && b === 254) return true;
-    if (a === 172 && b! >= 16 && b! <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 0) return true;
-    return false;
+function isBlockedIp(ip: string): boolean {
+  const kind = net.isIP(ip);
+  if (kind === 4) return PRIVATE_V4.some((re) => re.test(ip));
+  if (kind === 6) {
+    const l = ip.toLowerCase();
+    return l === '::1' || l.startsWith('fe80:') || l.startsWith('fc') || l.startsWith('fd')
+      || l.startsWith('::ffff:127.') || l.startsWith('::ffff:169.254.') || l.startsWith('::ffff:10.')
+      || l.startsWith('::ffff:192.168.');
   }
-  if (net.isIPv6(ip)) return ip === '::1' || ip.startsWith('fc') || ip.startsWith('fd') || ip.startsWith('fe80');
   return false;
 }
 
-export async function assertOutboundAllowed(url: string): Promise<void> {
-  const parsed = new URL(url);
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error(`unsupported protocol "${parsed.protocol}"`);
-  const host = parsed.hostname.toLowerCase();
-  if (BLOCKED_HOSTS.has(host)) throw new Error(`outbound request to "${host}" is blocked`);
-  if (net.isIP(host)) {
-    if (isPrivateIp(host)) throw new Error(`outbound request to private/link-local address "${host}" is blocked`);
-    return;
+function isAllowlisted(hostname: string): boolean {
+  return config.outboundAllowlist.some((h) => h === hostname || hostname.endsWith(`.${h}`));
+}
+
+/** Throws if `absoluteUrl`'s host is (or resolves to) a private/link-local/loopback/metadata address
+ *  and isn't explicitly allowlisted (OUTBOUND_ALLOWLIST env — comma-separated hostnames or ".suffix"
+ *  domains). Blocks the classic cloud-metadata SSRF target (169.254.169.254) by the same private/
+ *  link-local rule, no special-case needed. */
+export async function assertOutboundAllowed(absoluteUrl: string): Promise<void> {
+  const { hostname } = new URL(absoluteUrl);
+  if (isAllowlisted(hostname)) return;
+  const literalIp = net.isIP(hostname) !== 0;
+  // an unresolvable hostname isn't an SSRF concern (fetch() will fail with its own, clearer network
+  // error) — only a hostname that DOES resolve, to a blocked range, is what this guard is for.
+  const ips = literalIp ? [hostname] : (await dns.lookup(hostname, { all: true }).catch(() => [])).map((r) => r.address);
+  if (ips.some(isBlockedIp)) {
+    throw new Error(`outbound call to "${hostname}" blocked: private/link-local/loopback address (SSRF protection) — add it to OUTBOUND_ALLOWLIST if this is intentional`);
   }
-  let addrs: string[];
-  try { addrs = (await dns.lookup(host, { all: true })).map((a) => a.address); }
-  catch { return; } // unresolvable host — let fetch() itself fail naturally, not our concern here
-  for (const ip of addrs) if (isPrivateIp(ip)) throw new Error(`"${host}" resolves to a private/link-local address (${ip}) — blocked`);
 }

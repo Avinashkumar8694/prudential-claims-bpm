@@ -1,106 +1,106 @@
+// Workflow lifecycle: create (with a main branch + initial draft v1), read/update, permissions, vars.
 import type { AppContext } from '../../context.ts';
-import { Collections, type Workflow, type Branch, type Version, type Folder, type Deployment } from '../../domain.ts';
-import { notFound, conflict, validation } from '../../infra/errors.ts';
+import { Collections, type Branch, type Folder, type Version, type Workflow, type WorkflowPermission } from '../../domain.ts';
+import type { EngineProject, EngineVar } from '../../sdk/index.ts';
+import { notFound, validation } from '../../infra/errors.ts';
 
-function slugify(name: string): string {
-  return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'workflow';
+const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+function emptyEngine(id: string, name: string, key: string): EngineProject {
+  return {
+    id: key, name,
+    processes: [{
+      id: `${key}.process`, name, package: 'com.acme',
+      vars: [], nodes: [{ id: 'start', type: 'start', name: 'Start' }], flows: [],
+    }],
+  } as unknown as EngineProject;
 }
 
-export interface ListWorkflowsOptions { folderId?: string | null; includeArchived?: boolean; search?: string; }
-
-export class WorkflowsService {
+export class WorkflowService {
   constructor(private ctx: AppContext) {}
-  private repo() { return this.ctx.store.repo<Workflow>(Collections.workflows); }
-  private branches() { return this.ctx.store.repo<Branch>(Collections.branches); }
-  private versions() { return this.ctx.store.repo<Version>(Collections.versions); }
+  private wf() { return this.ctx.store.repo<Workflow>(Collections.workflows); }
+  private br() { return this.ctx.store.repo<Branch>(Collections.branches); }
+  private ve() { return this.ctx.store.repo<Version>(Collections.versions); }
+  private fo() { return this.ctx.store.repo<Folder>(Collections.folders); }
 
-  async list(opts: ListWorkflowsOptions = {}): Promise<Workflow[]> {
-    let rows = await this.repo().query((w) => w.tenantId === this.ctx.tenantId);
-    if (opts.folderId !== undefined) rows = rows.filter((w) => (w.folderId ?? null) === opts.folderId);
-    if (!opts.includeArchived) rows = rows.filter((w) => !w.archived);
-    if (opts.search) { const q = opts.search.toLowerCase(); rows = rows.filter((w) => w.name.toLowerCase().includes(q) || w.key.toLowerCase().includes(q)); }
-    return rows.sort((a, b) => a.name.localeCompare(b.name));
+  private async assertFolderValid(folderId: string | null | undefined): Promise<void> {
+    if (!folderId) return;
+    const f = await this.fo().get(folderId);
+    if (!f || f.tenantId !== this.ctx.tenantId) throw notFound('Folder');
+  }
+
+  async list(): Promise<Workflow[]> {
+    return (await this.wf().query((w) => w.tenantId === this.ctx.tenantId && !w.archived))
+      .sort((a, b) => a.name.localeCompare(b.name));
   }
 
   async get(id: string): Promise<Workflow> {
-    const w = await this.repo().get(id);
-    if (!w || w.tenantId !== this.ctx.tenantId) throw notFound('workflow');
+    const w = await this.wf().get(id);
+    if (!w || w.tenantId !== this.ctx.tenantId) throw notFound('Workflow');
     return w;
   }
 
-  private async assertFolderExists(folderId: string): Promise<void> {
-    const f = await this.ctx.store.repo<Folder>(Collections.folders).get(folderId);
-    if (!f || f.tenantId !== this.ctx.tenantId) throw notFound('folder');
-  }
+  async create(input: { name: string; key?: string; description?: string; folderId?: string | null }, actor: string): Promise<Workflow> {
+    const name = (input.name || '').trim();
+    if (!name) throw validation('name is required');
+    const key = slug(input.key || name);
+    // Archived workflows don't count as a collision — list() already hides them, so a name should be
+    // freely reusable once its previous holder is archived, not permanently reserved by a hidden record.
+    const dupe = await this.wf().query((w) => w.tenantId === this.ctx.tenantId && w.key === key && !w.archived);
+    if (dupe.length) throw validation(`key "${key}" already exists`);
+    await this.assertFolderValid(input.folderId);
 
-  private async uniqueKey(name: string): Promise<string> {
-    const base = slugify(name);
-    const existing = await this.repo().query((w) => w.tenantId === this.ctx.tenantId);
-    const keys = new Set(existing.map((w) => w.key));
-    return keys.has(base) ? `${base}-${Date.now()}` : base;
-  }
-
-  /** Creates the workflow AND its default branch ("main", protected) AND that branch's initial, empty
-   *  draft version (number 1) — a workflow always has somewhere to start authoring immediately, exactly
-   *  matching the real shape of a freshly-created draft (no `engine` at all until first saved). */
-  async create(name: string, folderId: string | undefined, actor: string): Promise<Workflow> {
-    if (!name.trim()) throw validation('workflow name is required');
-    if (folderId) await this.assertFolderExists(folderId);
     const now = this.ctx.clock();
-    const workflowId = this.ctx.newId();
+    const wfId = this.ctx.newId();
     const branchId = this.ctx.newId();
     const versionId = this.ctx.newId();
 
-    const version: Version = { id: versionId, tenantId: this.ctx.tenantId, workflowId, branchId, number: 1, state: 'draft', createdAt: now, createdBy: actor };
-    await this.versions().put(version);
-    const branch: Branch = { id: branchId, tenantId: this.ctx.tenantId, workflowId, name: 'main', headVersionId: versionId, protected: true, createdAt: now, createdBy: actor };
-    await this.branches().put(branch);
     const workflow: Workflow = {
-      id: workflowId, tenantId: this.ctx.tenantId, key: await this.uniqueKey(name), name: name.trim(), folderId,
-      defaultBranchId: branchId, permissions: [], variables: [],
-      createdAt: now, createdBy: actor, updatedAt: now, updatedBy: actor, archived: false,
+      id: wfId, tenantId: this.ctx.tenantId, name, key, description: input.description,
+      defaultBranchId: branchId, permissions: [], variables: [], folderId: input.folderId || null,
+      createdAt: now, createdBy: actor, updatedAt: now, updatedBy: actor,
     };
-    await this.repo().put(workflow);
-    await this.ctx.audit({ kind: 'workflow.created', actor, workflowId, data: { name: workflow.name } });
+    const branch: Branch = {
+      id: branchId, tenantId: this.ctx.tenantId, workflowId: wfId, name: 'main',
+      headVersionId: versionId, protected: true, createdAt: now, createdBy: actor,
+    };
+    const version: Version = {
+      id: versionId, tenantId: this.ctx.tenantId, workflowId: wfId, branchId,
+      number: 1, state: 'draft', engine: emptyEngine(wfId, name, key),
+      createdAt: now, createdBy: actor,
+    };
+
+    await this.wf().put(workflow);
+    await this.br().put(branch);
+    await this.ve().put(version);
+    await this.ctx.audit({ actor, kind: 'workflow.created', workflowId: wfId, data: { name, key } });
     return workflow;
   }
 
-  async rename(id: string, name: string, actor: string): Promise<Workflow> {
-    if (!name.trim()) throw validation('workflow name is required');
+  async update(id: string, patch: Partial<Pick<Workflow, 'name' | 'description' | 'permissions' | 'variables' | 'folderId'>>, actor: string): Promise<Workflow> {
     const w = await this.get(id);
-    w.name = name.trim(); w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
-    await this.repo().put(w);
+    if (patch.name !== undefined) w.name = patch.name.trim() || w.name;
+    if (patch.description !== undefined) w.description = patch.description;
+    if (patch.permissions !== undefined) w.permissions = patch.permissions;
+    if (patch.variables !== undefined) w.variables = patch.variables;
+    if (patch.folderId !== undefined) { await this.assertFolderValid(patch.folderId); w.folderId = patch.folderId; }
+    w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
+    await this.wf().put(w);
+    await this.ctx.audit({ actor, kind: 'workflow.updated', workflowId: id });
     return w;
   }
 
-  async move(id: string, folderId: string | undefined, actor: string): Promise<Workflow> {
-    const w = await this.get(id);
-    if (folderId) await this.assertFolderExists(folderId);
-    w.folderId = folderId; w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
-    await this.repo().put(w);
-    return w;
+  async setPermissions(id: string, permissions: WorkflowPermission[], actor: string) {
+    return this.update(id, { permissions }, actor);
+  }
+  async setVariables(id: string, variables: EngineVar[], actor: string) {
+    return this.update(id, { variables }, actor);
   }
 
-  async setArchived(id: string, archived: boolean, actor: string): Promise<Workflow> {
+  async archive(id: string, actor: string): Promise<void> {
     const w = await this.get(id);
-    w.archived = archived; w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
-    await this.repo().put(w);
-    await this.ctx.audit({ kind: archived ? 'workflow.archived' : 'workflow.unarchived', actor, workflowId: id });
-    return w;
-  }
-
-  /** Only a workflow with no deployment history at all may be hard-deleted — anything that was ever
-   *  deployed keeps its audit/instance trail meaningful, so archive it instead. */
-  async delete(id: string): Promise<void> {
-    await this.get(id);
-    const anyDeployment = await this.ctx.store.repo<Deployment>(Collections.deployments).query((d) => d.tenantId === this.ctx.tenantId && d.workflowId === id);
-    if (anyDeployment.length) throw conflict('workflow has deployment history — archive it instead of deleting');
-    const branches = await this.branches().query((b) => b.tenantId === this.ctx.tenantId && b.workflowId === id);
-    for (const b of branches) {
-      const versions = await this.versions().query((v) => v.tenantId === this.ctx.tenantId && v.branchId === b.id);
-      for (const v of versions) await this.versions().delete(v.id);
-      await this.branches().delete(b.id);
-    }
-    await this.repo().delete(id);
+    w.archived = true; w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
+    await this.wf().put(w);
+    await this.ctx.audit({ actor, kind: 'workflow.archived', workflowId: id });
   }
 }

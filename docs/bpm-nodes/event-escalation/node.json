@@ -1,0 +1,12 @@
+{
+  "id": "_e",
+  "type": "endEvent",
+  "bpmnElement": "endEvent",
+  "eventType": "escalation",
+  "escalationRef": "ESC",
+  "name": "Escalate",
+  "incoming": [
+    "_f"
+  ],
+  "bpmn": "<bpmn2:endEvent id=\"_e\" name=\"Escalate\"><bpmn2:incoming>_f</bpmn2:incoming><bpmn2:escalationEventDefinition id=\"_d\" escalationRef=\"ESC\"/></bpmn2:endEvent>"
+}

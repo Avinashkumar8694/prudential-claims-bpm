@@ -1,0 +1,25 @@
+{
+  "id": "_START",
+  "type": "startEvent",
+  "subtype": "none",
+  "bpmnElement": "startEvent",
+  "name": "Start",
+  "position": {
+    "x": 80,
+    "y": 380,
+    "width": 40,
+    "height": 40
+  },
+  "incoming": [],
+  "outgoing": [
+    "_f1"
+  ],
+  "properties": {
+    "elementname": "Start"
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "scripts": {},
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:startEvent id=\"_START\" name=\"Start\"><bpmn2:extensionElements><drools:metaData name=\"elementname\"><drools:metaValue><![CDATA[Start]]></drools:metaValue></drools:metaData></bpmn2:extensionElements><bpmn2:outgoing>_f1</bpmn2:outgoing></bpmn2:startEvent>"
+}

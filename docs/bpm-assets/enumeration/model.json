@@ -1,0 +1,18 @@
+{
+  "kind": "enumeration",
+  "$note": "jBPM-side .enumeration map PRODUCED by enumerationsToModel from the engine enums in engine.json. You author engine.json, not this.",
+  "model": {
+    "enums": {
+      "Claim.status": [
+        "NEW",
+        "OPEN",
+        "APPROVED",
+        "REJECTED"
+      ],
+      "Claim.type": [
+        "DEATH=Death claim",
+        "TI=Total & permanent disability"
+      ]
+    }
+  }
+}

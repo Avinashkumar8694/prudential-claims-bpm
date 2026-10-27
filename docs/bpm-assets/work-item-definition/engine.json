@@ -1,0 +1,14 @@
+{
+  "workItems": [
+    {
+      "name": "SendEmail",
+      "displayName": "Send Email",
+      "category": "Communication",
+      "parameters": { "to": "String", "subject": "String", "body": "String" },
+      "results": { "messageId": "String" }
+    }
+  ],
+  "deployment": { "handlers": ["Rest"] },
+
+  "$note": "You usually write NOTHING here: the SDK auto-includes jBPM's standard work items (Rest, Email, WebService, Log) — definitions AND handler registration — in every generated project. Declare `workItems` ONLY for a CUSTOM task type beyond that set; it extends the defaults by name. `parameters`/`results` are simple name->type maps (no MVEL). fromEngineProject emits global/WorkDefinitions.wid + registers handlers in the deployment descriptor. See scenarios.md §0 (DEFAULT_WORK_ITEMS is exported); model.json shows the jBPM-side .wid."
+}

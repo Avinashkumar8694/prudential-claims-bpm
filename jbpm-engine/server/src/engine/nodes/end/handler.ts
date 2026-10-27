@@ -1,25 +1,24 @@
-// End event — completes the path; terminate ends the current (sub)process scope (`terminateAll`
-// escalates that all the way to the root); error-throw raises an error; a signal throw broadcasts to
-// every waiting listener process-wide, a message throw delivers to exactly one (point-to-point); an
-// escalation throw propagates through this SAME instance's own boundary/event-sub-process scope chain
-// (see execution-engine.ts's raiseEscalation — NOT a cross-instance broadcast); a compensation end
-// event runs the recorded compensation handlers before completing.
+// End event — completes the path; terminate ends the whole instance; error-throw raises an error; a
+// signal/message/escalation throw broadcasts to any waiting listener before completing (same delivery
+// as an intermediate throw — see throw/handler.ts — but the path ends here instead of continuing); a
+// compensation end event runs the recorded compensation handlers before completing the path.
 import type { NodeHandler } from '../types.ts';
 export const handler: NodeHandler = async (c) => {
-  const n = c.node as any;
-  if (n.result === 'terminate') return { end: 'terminate', terminateAll: n.terminateAll === true };
+  if (c.node.result === 'terminate') return { end: 'terminate' };
   // Presence check, not truthiness: the properties panel writes `throw: { error: '' }` the instant
-  // "error" is picked from the dropdown, before a code is typed in.
-  if (n.throw && 'error' in n.throw) return { end: 'error', outcome: 'error-throw' };
-  if (n.throw?.compensation) return { vars: await c.compensate(n.throw?.ref), end: 'complete', outcome: 'compensated' };
-  if (n.throw?.escalation) {
-    await c.escalate(n.throw.escalation);
-    return { end: 'complete', outcome: `escalated:${n.throw.escalation}` };
+  // "error" is picked from the dropdown, before a code is typed in — a truthy check here would treat
+  // that as "no error configured" and silently fall through to a normal completion instead (the exact
+  // bug this comment is here to stop from recurring). execution-engine.ts's own handling of the
+  // resulting 'error' end (see runToQuiescence) already defaults an empty code to 'ERROR'.
+  if (c.node.throw && 'error' in c.node.throw) return { end: 'error', outcome: 'error-throw' };
+  if (c.node.event?.compensation || c.node.result === 'compensate') {
+    return { vars: await c.compensate(c.node.event?.ref), end: 'complete', outcome: 'compensated' };
   }
-  const kind: 'signal' | 'message' | undefined = n.throw?.signal ? 'signal' : n.throw?.message ? 'message' : undefined;
-  const name = n.throw?.signal || n.throw?.message;
-  if (kind && name) {
-    await c.broadcast(name, kind, n.throw?.correlationKey);
+  const name = c.node.throw?.signal || c.node.throw?.message || c.node.throw?.escalation;
+  if (name) {
+    const ck = c.node.throw?.correlationKey;
+    const correlationValue = typeof ck === 'string' && ck.startsWith('$') ? (c.inst.variables[ck.slice(1)] as string | undefined) : undefined;
+    await c.broadcast(name, correlationValue);
     return { end: 'complete', outcome: `threw:${name}` };
   }
   return { end: 'complete' };

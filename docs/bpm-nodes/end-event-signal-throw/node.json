@@ -1,0 +1,27 @@
+{
+  "id": "_END_PROMOTE",
+  "type": "endEvent",
+  "subtype": "signalThrow",
+  "bpmnElement": "endEvent",
+  "name": "System Claim Process",
+  "position": {
+    "x": 2420,
+    "y": 230,
+    "width": 40,
+    "height": 40
+  },
+  "incoming": [
+    "_fp4"
+  ],
+  "outgoing": [],
+  "properties": {
+    "signalRef": "_sig_StartSystemClaim",
+    "signalName": "StartSystemClaim",
+    "elementname": "System Claim Process"
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "scripts": {},
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:endEvent id=\"_END_PROMOTE\" name=\"System Claim Process\"><bpmn2:incoming>_fp4</bpmn2:incoming><bpmn2:signalEventDefinition id=\"_id3\" signalRef=\"_sig_StartSystemClaim\"/></bpmn2:endEvent>"
+}

@@ -1,36 +1,42 @@
+// Express auth middleware: verifies the bearer JWT (requireAuth) and checks role-granted permissions
+// (requirePermission) against the IAM roles collection. Wired in app.ts / routes.ts. Replaces the
+// previous "trust whatever X-User header the caller sends" actor resolution entirely.
 import type { Request, Response, NextFunction } from 'express';
+import { verifyToken, permissionGrants } from '../infra/auth.ts';
+import { authRequired, forbidden } from '../infra/errors.ts';
+import { Collections, type Role } from '../domain.ts';
 import type { AppContext } from '../context.ts';
-import { IamService, verifyToken, type AuthedUser } from '../modules/iam/service.ts';
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    user?: AuthedUser;
-    ctx?: AppContext;
+export function requireAuth(req: Request, _res: Response, next: NextFunction) {
+  const header = req.header('authorization') || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : undefined;
+  if (!token) return next(authRequired());
+  try {
+    const claims = verifyToken(token);
+    (req as any).user = claims;
+    (req as any).actor = claims.username;   // routes.ts's actorOf(req) keeps working unchanged
+    next();
+  } catch {
+    next(authRequired('invalid or expired token'));
   }
 }
 
-/** Verifies the bearer token (pure — no store access), then builds a tenant-scoped AppContext for
- *  everything downstream via the tenant id carried IN the token's own claims. */
-export function requireAuth(makeCtx: (tenantId: string) => AppContext) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    const header = req.headers.authorization;
-    if (!header?.startsWith('Bearer ')) { res.status(401).json({ error: 'missing bearer token' }); return; }
+/** Must run after requireAuth (needs req.user) and the ctx-attaching middleware (needs req.ctx for a
+ *  tenant-scoped role lookup) — both already true for anything mounted under app.ts's protected `/api`
+ *  router. Resolves the caller's role NAMES (from their JWT) to permission sets via the roles
+ *  collection (see modules/iam/service.ts's DEFAULT_ROLES for the seeded set), same as
+ *  IamService.authorize() — kept separate since this one is Express-shaped (middleware, not a promise
+ *  the caller awaits directly) and has no reason to depend on the rest of IamService. */
+export function requirePermission(action: string) {
+  return async (req: Request, _res: Response, next: NextFunction) => {
     try {
-      const user = verifyToken(header.slice(7));
-      req.user = user;
-      req.ctx = makeCtx(user.tenantId);
+      const user = (req as any).user as { roles: string[] } | undefined;
+      if (!user) throw authRequired();
+      const ctx = (req as any).ctx as AppContext;
+      const roles = await ctx.store.repo<Role>(Collections.roles).query((r) => r.tenantId === ctx.tenantId && user.roles.includes(r.name));
+      const perms = roles.flatMap((r) => r.permissions);
+      if (!permissionGrants(perms, action)) throw forbidden(`missing permission: ${action}`);
       next();
-    } catch (e) {
-      res.status(401).json({ error: (e as Error).message });
-    }
-  };
-}
-
-export function requirePermission(permission: string) {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    if (!req.user || !req.ctx) { res.status(401).json({ error: 'unauthenticated' }); return; }
-    const iam = new IamService(req.ctx);
-    if (!(await iam.hasPermission(req.user, permission))) { res.status(403).json({ error: `missing permission "${permission}"` }); return; }
-    next();
+    } catch (e) { next(e); }
   };
 }

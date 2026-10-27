@@ -1,24 +1,62 @@
-import express, { type Express, type Request, type Response, type NextFunction } from 'express';
-import type { AppContext } from './context.ts';
-import { createRouter } from './http/routes.ts';
-import { ApiError } from './infra/errors.ts';
+// Express app assembly: shared store, per-request context, routes, error handler.
+import express from 'express';
+import type { Store } from './store/repository.ts';
+import { FileStore } from './store/file-store.ts';
+import { PgStore } from './store/pg-store.ts';
+import { config } from './infra/config.ts';
+import { makeContext } from './context.ts';
+import { buildRoutes } from './http/routes.ts';
+import { buildAuthRoutes } from './http/auth-routes.ts';
+import { requireAuth } from './http/auth-middleware.ts';
+import { errorMiddleware } from './infra/errors.ts';
 
-export function createApp(makeCtx: (tenantId: string) => AppContext): Express {
+/** STORE=pg switches from the file-per-entity dev store to a real Postgres-backed one (see
+ *  store/pg-store.ts) — same Repository<T> contract either way, no call-site changes needed. */
+function resolveStore(): Store {
+  if (config.store === 'pg') {
+    if (!config.pgUrl) throw new Error('STORE=pg requires PG_URL to be set');
+    return new PgStore(config.pgUrl);
+  }
+  return new FileStore(config.dataDir);
+}
+
+export function createApp(store?: Store) {
   const app = express();
+  const theStore: Store = store || resolveStore();
+  app.use(express.json({ limit: '4mb' }));
+
+  // simple CORS for the Angular dev origin
   app.use((req, res, next) => {
-    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-    if (req.method === 'OPTIONS') { res.status(204).end(); return; }
+    res.header('Access-Control-Allow-Origin', process.env.APP_ORIGIN || '*');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
+    if (req.method === 'OPTIONS') return res.status(204).end();
     next();
   });
-  app.use(express.json());
-  app.use('/api', createRouter(makeCtx));
-  app.use((_req, res) => { res.status(404).json({ error: 'not found' }); });
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    if (err instanceof ApiError) { res.status(err.status).json({ error: err.message, code: err.code, details: err.details }); return; }
-    console.error(err);
-    res.status(500).json({ error: 'internal server error' });
+
+  // minimal security headers (docs/07-security.md §8) — this API returns JSON only, never HTML
+  // (aside from /api/docs' own Swagger UI page, which needs its CDN scripts/styles left alone), so
+  // there's no templating/XSS surface a real CSP is protecting beyond stopping a browser from ever
+  // being tricked into rendering a JSON response as something else.
+  app.use((req, res, next) => {
+    res.header('X-Content-Type-Options', 'nosniff');
+    res.header('X-Frame-Options', 'DENY');
+    res.header('Referrer-Policy', 'no-referrer');
+    if (req.path !== '/api/docs') res.header('Content-Security-Policy', "default-src 'none'");
+    next();
   });
-  return app;
+
+  // per-request AppContext (single default tenant — see the "skip multi-tenancy" note in
+  // docs/07-security.md). The actor identity itself now comes from a verified JWT (requireAuth,
+  // mounted below), not a trust-any X-User header.
+  app.use((req, _res, next) => {
+    (req as any).ctx = makeContext({ store: theStore, tenantId: config.defaultTenant });
+    next();
+  });
+
+  app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'jbpm-engine-server', version: '0.1.0' }));
+  app.use('/api/auth', buildAuthRoutes());   // login only — must stay reachable without a token
+  app.use('/api', requireAuth, buildRoutes());
+  app.use(errorMiddleware);
+  return { app, store: theStore };
 }

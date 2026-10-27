@@ -1,0 +1,18 @@
+{
+  "process-level": true,
+  "lanes": [
+    {
+      "name": "System",
+      "nodes": [
+        "_boot",
+        "_route"
+      ]
+    },
+    {
+      "name": "Ops",
+      "nodes": [
+        "_review"
+      ]
+    }
+  ]
+}

@@ -1,24 +1,16 @@
-// Business Rule task — evaluate a DMN decision (rule.dmn) or a DRL ruleflow-group (rule.ruleflowGroup,
-// not available in this build — see decisioning.ts) over the instance variables; write results back.
+// Business Rule task — evaluate a DMN decision (rule.dmn), a DRL ruleflow-group (rule.ruleflowGroup),
+// a guided decision tree (rule.decisionTree) or a scorecard (rule.scorecard) over the instance
+// variables; write results back. Failure → RULE_ERROR.
 import type { NodeHandler } from '../types.ts';
-import type { EngineDecisionModel } from '../../../sdk/index.ts';
-import { evaluateDmn, evaluateRules } from '../../decisioning.ts';
-import { Collections, type Asset } from '../../../domain.ts';
+import { evaluateDmn, evaluateRules, evaluateDecisionTree, evaluateScorecard } from '../../decisioning.ts';
 
-export const handler: NodeHandler = async (c) => {
-  const n = c.node as any;
+export const handler: NodeHandler = (c) => {
+  const n = c.node;
   try {
-    if (n.dmn) {
-      const assets = await c.app.store.repo<Asset>(Collections.assets).query((a) =>
-        a.tenantId === c.app.tenantId && a.workflowId === c.inst.workflowId && a.kind === 'decisions');
-      const findModel = (namespace: string | undefined, model: string) =>
-        assets.find((a) => a.name === model || (a.model as EngineDecisionModel)?.namespace === namespace)?.model as EngineDecisionModel | undefined;
-      return { vars: evaluateDmn(findModel, n.dmn, c.inst.variables), outcome: 'dmn' };
-    }
-    if (n.ruleflowGroup) return { vars: evaluateRules(n.ruleflowGroup, c.inst.variables), outcome: `rules:${n.ruleflowGroup}` };
+    if (n.dmn) return { vars: evaluateDmn(c.dep.engine, n.dmn, c.inst.variables), outcome: 'dmn' };
+    if (n.decisionTree) return { vars: evaluateDecisionTree(c.dep.engine, n.decisionTree, c.inst.variables), outcome: `tree:${n.decisionTree}` };
+    if (n.scorecard) return { vars: evaluateScorecard(c.dep.engine, n.scorecard, c.inst.variables), outcome: `scorecard:${n.scorecard}` };
+    if (n.ruleflowGroup) return { vars: evaluateRules(c.dep.engine, n.ruleflowGroup, c.inst.variables), outcome: `rules:${n.ruleflowGroup}` };
     return {};
-  } catch (e) {
-    const code = (e as { code?: string }).code === 'RULE_ENGINE_UNAVAILABLE' ? 'RULE_ENGINE_UNAVAILABLE' : 'RULE_ERROR';
-    return { error: `rule evaluation failed: ${(e as Error).message}`, errorCode: code };
-  }
+  } catch (e) { return { error: `rule evaluation failed: ${(e as Error).message}`, errorCode: 'RULE_ERROR' }; }
 };

@@ -1,0 +1,47 @@
+{
+  "id": "_V_DECISION",
+  "type": "userTask",
+  "bpmnElement": "userTask",
+  "name": "Update Decision",
+  "position": {
+    "x": 1520,
+    "y": 370,
+    "width": 120,
+    "height": 60
+  },
+  "incoming": [
+    "_f8"
+  ],
+  "outgoing": [
+    "_f9"
+  ],
+  "properties": {
+    "elementname": "Update Decision"
+  },
+  "dataInputs": [
+    {
+      "name": "TaskName",
+      "from": "constant",
+      "value": "UpdateDecision"
+    },
+    {
+      "name": "Skippable",
+      "from": "constant",
+      "value": "false"
+    },
+    {
+      "name": "GroupId",
+      "from": "constant",
+      "value": "Verifier"
+    }
+  ],
+  "dataOutputs": [
+    {
+      "name": "verificationDecision",
+      "to": "verificationDecision",
+      "note": "form field -> process var (PROMOTE|HOLD|CLOSE)"
+    }
+  ],
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:userTask id=\"_V_DECISION\" name=\"Update Decision\"><bpmn2:ioSpecification> TaskName,Skippable,GroupId </bpmn2:ioSpecification> <assignments> TaskName=UpdateDecision, Skippable=false, GroupId=Verifier </assignments></bpmn2:userTask>"
+}

@@ -1,0 +1,36 @@
+{
+  "kind": "form",
+  "$note": "jBPM-side .frm PRODUCED by formToFrm from the engine form in engine.json (widgets derived from Claim field types). You author engine.json, not this.",
+  "model": {
+    "json": {
+      "id": "ClaimReview",
+      "name": "ClaimReview",
+      "model": {
+        "name": "ClaimReview",
+        "className": "com.acme.model.Claim"
+      },
+      "fields": [
+        {
+          "id": "amount",
+          "binding": "amount",
+          "label": "Claim amount",
+          "code": "DoubleBox",
+          "readOnly": true
+        },
+        {
+          "id": "status",
+          "binding": "status",
+          "label": "Status",
+          "code": "TextBox",
+          "required": true
+        },
+        {
+          "id": "urgent",
+          "binding": "urgent",
+          "label": "Urgent",
+          "code": "CheckBox"
+        }
+      ]
+    }
+  }
+}

@@ -1,15 +1,9 @@
-// Send task — always point-to-point (resolves the single oldest waiter), never broadcast to every
-// listener; optionally narrowed to instances whose own correlationKey matches.
+// Send task — sends a message (broadcast to waiting instances in the tenant), then continues.
 import type { NodeHandler } from '../types.ts';
-
-function resolveRef(spec: unknown, vars: Record<string, unknown>): string | undefined {
-  if (typeof spec !== 'string' || !spec) return undefined;
-  const v = spec.startsWith('$') ? vars[spec.slice(1)] : spec;
-  return v == null ? undefined : String(v);
-}
-
 export const handler: NodeHandler = async (c) => {
-  const n = c.node as any;
-  if (n.message) await c.broadcast(n.message, 'message', resolveRef(n.correlationKey, c.inst.variables));
+  const n = c.node;
+  const correlationValue = typeof n.correlationKey === 'string' && n.correlationKey.startsWith('$')
+    ? (c.inst.variables[n.correlationKey.slice(1)] as string | undefined) : undefined;
+  if (n.message) await c.broadcast(n.message, correlationValue);
   return { outcome: n.message ? `sent:${n.message}` : 'send' };
 };

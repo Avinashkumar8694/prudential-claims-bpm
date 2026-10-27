@@ -1,8 +1,26 @@
 {
   "name": "@fabrixly/bpmn-sdk",
   "version": "0.1.0",
-  "private": true,
-  "description": "Parse/serialize real jBPM BPMN2 XML projects; convert to/from this workspace's own simplified engine model.",
+  "description": "Round-trip a jBPM BPM project (BPMN 2.0) to/from a clean JSON model, and generate importable BPMN from JSON. TypeScript, zero runtime dependencies.",
+  "keywords": [
+    "bpmn",
+    "bpmn2",
+    "jbpm",
+    "workflow",
+    "process",
+    "sdk",
+    "json",
+    "codegen",
+    "kie",
+    "drools"
+  ],
+  "license": "MIT",
+  "author": "Neutrinos",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/neutrinos/bpmn-sdk.git"
+  },
+  "type": "commonjs",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -15,7 +33,31 @@
     "./package.json": "./package.json"
   },
   "bin": {
-    "bpmn-sdk": "./dist/cli.js"
+    "bpmn-sdk": "./bin/bpmn-sdk.js"
   },
-  "files": ["dist"]
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test test/",
+    "example": "npm run build && node examples/jbpm-project/01-basic-jbpm-project.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

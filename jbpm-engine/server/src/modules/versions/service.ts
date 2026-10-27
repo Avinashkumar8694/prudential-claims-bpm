@@ -1,87 +1,110 @@
+// Versions: immutable-once-published snapshots of the engine JSON on a branch.
+// Saving writes to the branch's head DRAFT (creating one if the head is published); publishing freezes
+// the draft and opens a fresh draft as the new head.
 import type { AppContext } from '../../context.ts';
-import { Collections, type Version, type Branch } from '../../domain.ts';
-import { ApiError, notFound, conflict, validation } from '../../infra/errors.ts';
-import { validateEngineProcess } from '../../sdk/index.ts';
-import { runEngineRulesForAll, type ValidationIssue } from '../validation/rules.ts';
+import { Collections, type Branch, type Version } from '../../domain.ts';
+import type { EngineProject } from '../../sdk/index.ts';
+import { conflict, notFound, validation } from '../../infra/errors.ts';
+import { ValidationService } from '../validation/service.ts';
 
-type EngineBundle = NonNullable<Version['engine']>;
+export interface DiffResult {
+  nodes: { added: string[]; removed: string[]; changed: string[] };
+  flows: { added: string[]; removed: string[]; changed: string[] };
+  vars: { added: string[]; removed: string[]; changed: string[] };
+}
 
-export interface PublishResult { version: Version; warnings: ValidationIssue[]; }
-
-export class VersionsService {
+export class VersionService {
   constructor(private ctx: AppContext) {}
-  private repo() { return this.ctx.store.repo<Version>(Collections.versions); }
-  private branches() { return this.ctx.store.repo<Branch>(Collections.branches); }
+  private ve() { return this.ctx.store.repo<Version>(Collections.versions); }
+  private br() { return this.ctx.store.repo<Branch>(Collections.branches); }
 
-  async get(id: string): Promise<Version> {
-    const v = await this.repo().get(id);
-    if (!v || v.tenantId !== this.ctx.tenantId) throw notFound('version');
+  private async mine(id: string): Promise<Version> {
+    const v = await this.ve().get(id);
+    if (!v || v.tenantId !== this.ctx.tenantId) throw notFound('Version');
     return v;
   }
 
-  async list(branchId: string): Promise<Version[]> {
-    return (await this.repo().query((v) => v.tenantId === this.ctx.tenantId && v.branchId === branchId)).sort((a, b) => b.number - a.number);
+  async get(id: string) { return this.mine(id); }
+
+  async listByBranch(branchId: string): Promise<Version[]> {
+    return (await this.ve().query((v) => v.tenantId === this.ctx.tenantId && v.branchId === branchId))
+      .sort((a, b) => a.number - b.number);
   }
 
-  async saveDraft(id: string, engine: EngineBundle, actor: string): Promise<Version> {
-    const version = await this.get(id);
-    if (version.state !== 'draft') throw conflict('only a draft version can be edited — publishing opens a new draft to continue from');
-    version.engine = engine;
-    await this.repo().put(version);
-    await this.ctx.audit({ kind: 'version.saved', actor, workflowId: version.workflowId, data: { versionId: version.id } });
+  /** Save engine JSON to the branch's head draft (creating a new draft if head is published). */
+  async saveDraft(branchId: string, engine: EngineProject, actor: string, message?: string): Promise<Version> {
+    const branch = await this.br().get(branchId);
+    if (!branch || branch.tenantId !== this.ctx.tenantId) throw notFound('Branch');
+
+    let head = branch.headVersionId ? await this.ve().get(branch.headVersionId) : undefined;
+    if (head && head.state === 'draft') {
+      head.engine = engine; head.message = message ?? head.message;
+      await this.ve().put(head);
+      await this.ctx.audit({ actor, kind: 'version.saved', workflowId: branch.workflowId, data: { versionId: head.id } });
+      return head;
+    }
+    // head is published (or none) -> open a new draft numbered after the current head
+    const all = await this.listByBranch(branchId);
+    const nextNumber = (all.at(-1)?.number || 0) + 1;
+    const version: Version = {
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, workflowId: branch.workflowId, branchId,
+      number: nextNumber, state: 'draft', engine, parentVersionId: head?.id, message,
+      createdAt: this.ctx.clock(), createdBy: actor,
+    };
+    await this.ve().put(version);
+    branch.headVersionId = version.id;
+    await this.br().put(branch);
+    await this.ctx.audit({ actor, kind: 'version.created', workflowId: branch.workflowId, data: { versionId: version.id, number: nextNumber } });
     return version;
   }
 
-  /** Same checks `publish()` runs, with no side effect — backs the builder's own "Validate" action,
-   *  which must be safe to click repeatedly while still drafting. */
-  async validateOnly(id: string): Promise<ValidationIssue[]> {
-    const version = await this.get(id);
-    if (!version.engine || !version.engine.processes.length) return [];
-    return this.runValidation(version.engine.processes);
+  /** Freeze a draft and open a new draft head that continues from it. Blocks on validation errors. */
+  async publish(id: string, actor: string, label?: string): Promise<{ published: Version; newDraft: Version }> {
+    const v = await this.mine(id);
+    if (v.state === 'published') throw conflict('version already published');
+    const proc = v.engine.processes?.[0];
+    if (!proc) throw validation('version has no process');
+    await new ValidationService().assertValid(proc, 'publish');   // no invalid/unconnected process is published
+    v.state = 'published'; v.label = label ?? v.label;
+    await this.ve().put(v);
+
+    const newDraft: Version = {
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, workflowId: v.workflowId, branchId: v.branchId,
+      number: v.number + 1, state: 'draft', engine: v.engine, parentVersionId: v.id,
+      createdAt: this.ctx.clock(), createdBy: actor,
+    };
+    await this.ve().put(newDraft);
+    const branch = await this.br().get(v.branchId);
+    if (branch) { branch.headVersionId = newDraft.id; await this.br().put(branch); }
+    await this.ctx.audit({ actor, kind: 'version.published', workflowId: v.workflowId, data: { versionId: v.id, label } });
+    return { published: v, newDraft };
   }
 
-  private runValidation(processes: EngineBundle['processes']): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    for (const p of processes) {
-      const sdkResult = validateEngineProcess(p);
-      for (const e of sdkResult.errors) issues.push({ code: 'bpmn2-structural', severity: 'error', scope: p.name || p.id, message: e });
-      for (const w of sdkResult.warnings) issues.push({ code: 'bpmn2-structural', severity: 'warning', scope: p.name || p.id, message: w });
-    }
-    issues.push(...runEngineRulesForAll(processes));
-    return issues;
+  async validate(id: string) {
+    const v = await this.mine(id);
+    const proc = v.engine.processes?.[0];
+    if (!proc) throw validation('version has no process');
+    return await new ValidationService().validate(proc);
   }
 
-  /** Validates (bpmn-sdk's own structural checks + this engine's additive rules), refuses on any
-   *  'error'-severity issue, then freezes this version and opens the NEXT draft on the same branch so
-   *  authoring can continue uninterrupted — mirrors what a real publish action does: you keep editing,
-   *  you just can't mutate what's already been published. */
-  async publish(id: string, actor: string): Promise<PublishResult> {
-    const version = await this.get(id);
-    if (version.state !== 'draft') throw conflict('version is already published');
-    if (!version.engine || !version.engine.processes.length) throw validation('cannot publish an empty version — add at least one process first');
-
-    const issues = this.runValidation(version.engine.processes);
-    const blocking = issues.filter((i) => i.severity === 'error');
-    if (blocking.length) throw new ApiError(400, `cannot publish: ${blocking.length} validation error(s)`, 'VALIDATION', blocking);
-
-    const now = this.ctx.clock();
-    version.state = 'published'; version.publishedAt = now; version.publishedBy = actor;
-    await this.repo().put(version);
-
-    const branch = await this.branches().get(version.branchId);
-    if (branch && branch.tenantId === this.ctx.tenantId) {
-      const nextDraft: Version = {
-        id: this.ctx.newId(), tenantId: this.ctx.tenantId, workflowId: version.workflowId, branchId: version.branchId,
-        number: version.number + 1, state: 'draft', engine: structuredClone(version.engine),
-        parentVersionId: version.id, createdAt: now, createdBy: actor,
-      };
-      await this.repo().put(nextDraft);
-      branch.headVersionId = nextDraft.id;
-      await this.branches().put(branch);
-    }
-
-    const warnings = issues.filter((i) => i.severity === 'warning');
-    await this.ctx.audit({ kind: 'version.published', actor, workflowId: version.workflowId, data: { versionId: version.id, warnings: warnings.length } });
-    return { version, warnings };
+  async diff(aId: string, bId: string): Promise<DiffResult> {
+    const a = await this.mine(aId); const b = await this.mine(bId);
+    const pa = a.engine.processes?.[0]; const pb = b.engine.processes?.[0];
+    const byId = <T extends { id?: string }>(arr: T[] = []) => new Map(arr.filter((x) => x.id).map((x) => [x.id as string, x]));
+    const delta = <T extends { id?: string }>(la: T[] = [], lb: T[] = []) => {
+      const ma = byId(la); const mb = byId(lb);
+      const added = [...mb.keys()].filter((k) => !ma.has(k));
+      const removed = [...ma.keys()].filter((k) => !mb.has(k));
+      const changed = [...ma.keys()].filter((k) => mb.has(k) && JSON.stringify(ma.get(k)) !== JSON.stringify(mb.get(k)));
+      return { added, removed, changed };
+    };
+    const varsA = (pa?.vars || []).map((v) => ({ id: v.name, ...v }));
+    const varsB = (pb?.vars || []).map((v) => ({ id: v.name, ...v }));
+    return {
+      nodes: delta(pa?.nodes as any, pb?.nodes as any),
+      flows: delta((pa?.flows || []).map((f, i) => ({ id: f.id || `${f.from}->${f.to}#${i}`, ...f })) as any,
+                   (pb?.flows || []).map((f, i) => ({ id: f.id || `${f.from}->${f.to}#${i}`, ...f })) as any),
+      vars: delta(varsA as any, varsB as any),
+    };
   }
 }

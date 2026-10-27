@@ -4,7 +4,7 @@ import type { NodeHandler } from '../types.ts';
 import { WORKITEM_HANDLERS } from '../../workitems/registry.ts';
 
 export const handler: NodeHandler = async (c) => {
-  const n = c.node as any;
+  const n = c.node;
   const h = WORKITEM_HANDLERS[n.handler];
   if (!h) return { error: `unknown work-item handler "${n.handler}"`, errorCode: 'SERVICE_ERROR' };
   const params: Record<string, unknown> = {};

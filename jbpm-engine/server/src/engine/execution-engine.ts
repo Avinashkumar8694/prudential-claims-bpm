@@ -1,95 +1,92 @@
-// Token-based interpreter over the SDK engine JSON. Deterministic core (clock/newId injected via
-// AppContext). Persists the instance after every runToQuiescence.
+// Token-based interpreter over the SDK engine JSON. See docs/08-execution-engine.md.
+// Deterministic core (clock/newId injected). Persists the instance after runToQuiescence.
 import type { AppContext } from '../context.ts';
 import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.ts';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
 import { NODE_HANDLERS, CHILD_OUTPUT_MAPPERS, buildMultiInstanceResult, type HandlerCtx, type HandlerResult } from './nodes/index.ts';
 import { varTypesOf, kcontextInfoOf, onActionOf } from './nodes/kcontext-info.ts';
+// Aliased (not `boundary`) since fireBoundary()'s own parameter below is already named `boundary`.
 import * as boundaryHandler from './nodes/boundary/handler.ts';
 import { computeDue } from './duration.ts';
-import { runScript, evalCondition } from './sandbox.ts';
+import { runScript } from './sandbox.ts';
 import { config } from '../infra/config.ts';
 import { conflict, quotaExceeded } from '../infra/errors.ts';
 import { SettingsService } from '../modules/settings/service.ts';
 
+// Error codes the Node runtime raises (documented in docs/14-error-handling.md); user codes also
+// allowed. Re-exported from nodes/boundary/handler.ts, which owns error-catch matching logic now.
 export const ENGINE_ERRORS = boundaryHandler.ENGINE_ERRORS;
-const ERROR_VAR = 'errorInfo';
+const ERROR_VAR = 'errorInfo';   // { code, node, message } bound when an error is caught
 
-export type EngineEvent = { kind: string; instanceId?: string; nodeId?: string; tokenId?: string; taskId?: string; [k: string]: unknown };
+export type EngineEvent =
+  | { kind: 'instance.started' | 'instance.updated' | 'instance.completed' | 'instance.failed'; instanceId: string }
+  | { kind: 'node.entered' | 'node.exited'; instanceId: string; nodeId: string; tokenId: string }
+  | { kind: 'task.created'; instanceId: string; taskId: string };
 
 export class ExecutionEngine {
   constructor(
     private ctx: AppContext,
-    private emit: (e: EngineEvent) => void,
-    private resolveCalled?: (processId: string, workflowId?: string) => Promise<{ dep: Deployment; processId: string } | undefined>,
+    private emit: (e: EngineEvent) => void = () => {},
+    /** resolve a called process id -> its active deployment (enables call-activity child instances) */
+    private resolveCalled?: (processId: string) => Promise<{ dep: Deployment; processId: string } | undefined>,
   ) {}
-
   private inst() { return this.ctx.store.repo<Instance>(Collections.instances); }
-  private timerRepo() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
-  private taskRepo() { return this.ctx.store.repo<Task>(Collections.tasks); }
+  private deps() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
 
-  proc(inst: Instance, dep: Deployment): EngineProcess {
-    const list = dep.engine?.processes || [];
-    return (inst.processId && list.find((p) => p.id === inst.processId)) || list[0]!;
+  // ---- process graph helpers ----
+  /** The process (definition) an instance runs — selected by its processId, else the first. */
+  private pick(dep: Deployment, processId?: string): EngineProcess {
+    const list = dep.engine.processes || [];
+    // Embedded sub-process: a composite id "parentProcess::nodeId" resolves to a synthetic process
+    // built from that subprocess node's own nodes/flows, so it runs as a nested instance.
+    if (processId && processId.includes('::')) {
+      const [parentId, nodeId] = processId.split('::');
+      const parent = list.find((x) => x.id === parentId) || list[0];
+      const sub = parent?.nodes.find((n) => n.id === nodeId) as any;
+      if (!sub) throw new Error('embedded sub-process not found');
+      return { id: processId, name: sub.name || 'Sub-process', nodes: sub.nodes || [], flows: sub.flows || [] } as EngineProcess;
+    }
+    const p = (processId && list.find((x) => x.id === processId)) || list[0];
+    if (!p) throw new Error('deployment has no process');
+    return p;
   }
-  private nodeMap(p: EngineProcess): Map<string, EngineNode> { return new Map((p.nodes || []).map((n) => [n.id!, n])); }
-  outgoing(p: EngineProcess, id: string): EngineFlow[] { return (p.flows || []).filter((f) => f.from === id); }
-  incoming(p: EngineProcess, id: string): EngineFlow[] { return (p.flows || []).filter((f) => f.to === id); }
-  private defaultTargets(p: EngineProcess, node: EngineNode, _inst: Instance): string[] {
-    return this.outgoing(p, node.id!).map((f) => f.to);
-  }
+  private proc(inst: Instance, dep: Deployment): EngineProcess { return this.pick(dep, inst.processId); }
+  private nodeMap(p: EngineProcess) { return new Map(p.nodes.map((n) => [n.id!, n])); }
+  private outgoing(p: EngineProcess, nodeId: string): EngineFlow[] { return p.flows.filter((f) => f.from === nodeId); }
+  private incoming(p: EngineProcess, nodeId: string): EngineFlow[] { return p.flows.filter((f) => f.to === nodeId); }
 
-  // ---- start ----
+  // ---- lifecycle ----
   async start(dep: Deployment, variables: Record<string, unknown>, actor: string, opts: { processId?: string; correlationKey?: string } = {}): Promise<Instance> {
-    const p = opts.processId ? (dep.engine.processes || []).find((x) => x.id === opts.processId) : dep.engine.processes?.[0];
-    if (!p) throw conflict(`process "${opts.processId}" not found in this deployment`);
+    const p = this.pick(dep, opts.processId);
+    const startNode = p.nodes.find((n) => n.type === 'start') || p.nodes[0];
+    if (!startNode) throw new Error('process has no start node');
     const now = this.ctx.clock();
     const seed: Record<string, unknown> = {};
     for (const v of p.vars || []) seed[v.name] = undefined;
-    // Prefer a plain (untriggered) start node for an explicit API-driven start; fall back to whatever
-    // start node exists (a process whose only start is signal/message/timer-triggered can still be
-    // kicked off directly through the management API).
-    const start = (p.nodes || []).find((n) => n.type === 'start' && (!('on' in n) || !(n as any).on || Object.keys((n as any).on).length === 0))
-      || (p.nodes || []).find((n) => n.type === 'start');
-    if (!start) throw conflict('process has no start node');
     const inst: Instance = {
-      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId,
-      processId: p.id, correlationKey: opts.correlationKey,
-      status: 'running', variables: { ...seed, ...variables },
-      tokens: [{ id: this.ctx.newId(), nodeId: start.id!, state: 'active', enteredAt: now }],
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId, processId: p.id,
+      correlationKey: opts.correlationKey, status: 'running', variables: { ...seed, ...variables },
+      tokens: [{ id: this.ctx.newId(), nodeId: startNode.id!, state: 'active', enteredAt: now }],
       history: [], startedAt: now, startedBy: actor,
     };
-    return this.runToQuiescence(inst, dep);
+    this.emit({ kind: 'instance.started', instanceId: inst.id });
+    // Every instance is created here — a direct start, a scheduled/cron start, a call-activity or
+    // multi-instance child, or a signal/message start-event peer instance (see startChild()/
+    // broadcast() below, both of which route through this same method) — so this is the one place
+    // that needs to log it for the Audit Log's PIID column to ever show a "started" row at all.
+    await this.ctx.audit({ actor, kind: 'instance.started', workflowId: dep.workflowId, deploymentId: dep.id, instanceId: inst.id, data: { processId: inst.processId } });
+    await this.runToQuiescence(inst, dep);
+    return inst;
   }
 
-  private async startChildReal(dep: Deployment, processId: string, vars: Record<string, unknown>, actor: string, parentInstanceId: string, parentTokenId: string, independent?: boolean): Promise<Instance> {
-    const p = (dep.engine.processes || []).find((x) => x.id === processId);
-    if (!p) throw conflict(`process "${processId}" not found`);
-    const now = this.ctx.clock();
-    const start = (p.nodes || []).find((n) => n.type === 'start');
-    if (!start) throw conflict(`process "${processId}" has no start node`);
-    const child: Instance = {
-      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId,
-      processId: p.id, status: 'running', variables: { ...vars },
-      tokens: [{ id: this.ctx.newId(), nodeId: start.id!, state: 'active', enteredAt: now }],
-      history: [], startedAt: now, startedBy: actor,
-      parentInstanceId, parentTokenId, ...(independent ? { independent: true } : {}),
-    };
-    return this.runToQuiescence(child, dep);
-  }
-
-  // ---- the main loop ----
+  /** Advance every active token until the instance waits, completes, aborts, or fails. */
   async runToQuiescence(inst: Instance, dep: Deployment): Promise<Instance> {
     const p = this.proc(inst, dep);
     const nodes = this.nodeMap(p);
     const joins: Record<string, Set<string>> = {};
     let guard = 0;
-    let terminateAll = false;
     try {
       while (inst.status === 'running') {
-        // Real jBPM's Conditional Catch/Boundary Event: re-checked passively every tick against
-        // whatever the instance's variables are RIGHT NOW.
-        await this.resolveConditionWaits(inst, p, nodes);
         const token = inst.tokens.find((t) => t.state === 'active');
         if (!token) break;
         if (++guard > 100000) throw new Error('step budget exceeded (possible loop)');
@@ -102,7 +99,7 @@ export class ExecutionEngine {
 
         let result: HandlerResult;
         try { result = await this.handle(node, inst, p, joins, dep, token.id); }
-        catch (e) { result = { error: (e as Error).message, errorCode: (e as { code?: string }).code || 'RUNTIME_ERROR' }; }
+        catch (e) { result = { error: (e as Error).message, errorCode: 'RUNTIME_ERROR' }; }
 
         if (result.vars) Object.assign(inst.variables, result.vars);
         visit.exitedAt = this.ctx.clock();
@@ -112,51 +109,59 @@ export class ExecutionEngine {
         if (result.wait) {
           token.state = 'waiting'; token.waitFor = result.wait;
           try {
-            if (result.wait.kind === 'timer' && result.wait.dueAt) {
-              const spec = (node as any).event?.timer;
-              const cycle = spec && typeof spec === 'object' ? spec.cycle : undefined;
-              await this.scheduleTimer(inst, token.id, node.id!, result.wait.dueAt, cycle);
-            }
+            if (result.wait.kind === 'timer' && result.wait.dueAt) await this.scheduleTimer(inst, token.id, node.id!, result.wait.dueAt);
+            // schedule any timer boundary events attached to this (now waiting) host node — WHICH
+            // boundaries match is boundary/handler.ts's own decision; scheduling the actual TimerJob
+            // still needs this.ctx.newId()/clock() and the timer repo, so that part stays here.
             for (const b of boundaryHandler.boundaryTimerHosts(p.nodes, node.id!)) {
               const spec = (b as any).event.timer;
               const cycle = typeof spec === 'object' ? spec.cycle : undefined;
               await this.scheduleTimer(inst, token.id, b.id!, computeDue(spec, this.ctx.clock()), cycle);
             }
           } catch (e) {
+            // couldn't durably schedule the timer (e.g. maxActiveTimers quota) — fail this node the
+            // same way a handler error does, rather than leave the token parked on a wait nothing
+            // will ever resolve (default maxActiveTimers is 0/unlimited, so this never fires unless
+            // an admin opted in — no behavior change for any existing deployment).
             this.removeToken(inst, token.id);
             const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'RUNTIME_ERROR';
             if (this.raiseError(inst, p, node.id!, code, (e as Error).message)) continue;
             inst.status = 'failed'; inst.error = { nodeId: node.id!, message: (e as Error).message, at: this.ctx.clock() }; break;
           }
+          // Message/signal/escalation boundaries get a WAITING token of their own, same idea as the
+          // timer boundaries just above but via a token broadcast()/signalInstance() can resume,
+          // instead of a TimerJob — see resumeToken()'s own boundary branch for what happens when one
+          // of these actually resolves.
           for (const b of boundaryHandler.messageBoundaryHosts(p.nodes, node.id!)) {
             inst.tokens.push({ id: this.ctx.newId(), nodeId: b.node.id!, state: 'waiting', waitFor: { kind: b.kind, ref: b.name }, enteredAt: this.ctx.clock() });
-          }
-          for (const b of boundaryHandler.conditionBoundaryHosts(p.nodes, node.id!)) {
-            inst.tokens.push({ id: this.ctx.newId(), nodeId: b.id!, state: 'waiting', waitFor: { kind: 'condition' }, enteredAt: this.ctx.clock() });
           }
           continue;
         }
         if (result.error) {
           this.removeToken(inst, token.id);
           const code = result.errorCode || 'RUNTIME_ERROR';
-          if (this.raiseError(inst, p, node.id!, code, result.error)) continue;
+          if (this.raiseError(inst, p, node.id!, code, result.error)) continue;   // routed to an error catch
           inst.status = 'failed'; inst.error = { nodeId: node.id!, message: result.error, at: this.ctx.clock() }; break;
         }
-        if (result.end === 'terminate') {
-          inst.tokens = []; inst.status = 'completed'; terminateAll = result.terminateAll === true;
-          if (terminateAll) inst.terminateAll = true;
-          break;
-        }
+        if (result.end === 'terminate') { inst.tokens = []; inst.status = 'completed'; break; }
         if (result.end === 'error') {
           this.removeToken(inst, token.id);
           const code = (node as any).throw?.error || 'ERROR';
           if (this.raiseError(inst, p, node.id!, code, `error end: ${code}`)) continue;
           inst.status = 'failed'; inst.error = { nodeId: node.id!, message: `unhandled error end (${code})`, at: this.ctx.clock() }; break;
         }
+        // an activity that completed normally and has a compensation boundary → remember its handler.
+        // WHICH boundaries match is boundary/handler.ts's decision; resolving the boundary's outgoing
+        // flow to find the actual handler node needs this.outgoing (flow-list access boundary's
+        // module doesn't have), so that resolution stays here.
         for (const b of boundaryHandler.compensationBoundaries(p.nodes, node.id!)) {
           const target = this.outgoing(p, b.id!)[0]?.to;
           if (target) (inst.compensations ||= []).push({ host: node.id!, handler: target });
         }
+        // consume current token, then spawn successors — never past a self-abort a script just
+        // triggered mid-handler (inst.status no longer 'running'): an aborted instance must not
+        // keep accumulating new tokens just because the node it aborted from "completed normally"
+        // from the handler's own point of view.
         this.removeHostToken(inst, p, token.id, node.id!);
         if (result.end === 'complete' || result.consume || inst.status !== 'running') { /* no successors */ }
         else {
@@ -164,6 +169,7 @@ export class ExecutionEngine {
           for (const t of targets) inst.tokens.push({ id: this.ctx.newId(), nodeId: t, state: 'active', enteredAt: this.ctx.clock() });
         }
       }
+      // settle final status
       if (inst.status === 'running') {
         inst.status = inst.tokens.some((t) => t.state === 'waiting') ? 'waiting' : 'completed';
       }
@@ -173,254 +179,303 @@ export class ExecutionEngine {
       inst.error = { nodeId: '', message: (err as Error).message, stack: (err as Error).stack, at: this.ctx.clock() };
       inst.endedAt = this.ctx.clock();
     }
-    await this.finalize(inst, terminateAll);
+    await this.inst().put(inst);
+    this.emit({ kind: inst.status === 'failed' ? 'instance.failed' : inst.status === 'completed' ? 'instance.completed' : 'instance.updated', instanceId: inst.id });
+    // Reached a terminal state → no orphans: abort any still-active child instances (e.g. a terminate
+    // end / failure left parallel call-activities or sub-processes running), AND no dangling tasks —
+    // an interrupting boundary timer/error cancels its host token here (see fireBoundary/raiseError)
+    // but never touched the separate Task record for that host, and a terminate end or unhandled
+    // failure can just as easily leave an OTHER parallel branch's task open. Any instance that just
+    // became completed/aborted/failed must leave zero actionable tasks behind.
+    if (inst.status === 'completed' || inst.status === 'aborted' || inst.status === 'failed') {
+      await this.cancelTimersForInstance(inst.id);
+      await this.exitOpenTasks(inst.id);
+      await this.abortDescendants(inst.id);
+    }
+    // Notify the parent's waiting call/sub-process token: completed → resume; aborted/failed → propagate.
+    if (inst.parentInstanceId) {
+      if (inst.status === 'completed') await this.tryResumeParent(inst);
+      else if (inst.status === 'aborted' || inst.status === 'failed') await this.tryFailParent(inst);
+    }
     return inst;
   }
 
-  /** Resolve any waiting Condition Catch/Boundary token whose event.condition now evaluates true. A
-   *  dialect the sandbox can't run (e.g. Java, unavailable in this build) fails that ONE token through
-   *  the normal error-catch routing rather than aborting the whole instance. */
-  private async resolveConditionWaits(inst: Instance, p: EngineProcess, nodes: Map<string, EngineNode>): Promise<void> {
-    for (const t of inst.tokens) {
-      if (t.state !== 'waiting' || t.waitFor?.kind !== 'condition') continue;
-      const node = nodes.get(t.nodeId) as any;
-      const expr = node?.event?.condition;
-      if (typeof expr !== 'string' || !expr) continue;
-      let matched: boolean;
-      try {
-        matched = await evalCondition(expr, node.event.lang, inst.variables);
-      } catch (e) {
-        this.removeToken(inst, t.id);
-        const code = (e as { code?: string }).code || 'RUNTIME_ERROR';
-        if (!this.raiseError(inst, p, node.id, code, (e as Error).message)) {
-          inst.status = 'failed'; inst.error = { nodeId: node.id, message: (e as Error).message, at: this.ctx.clock() };
-        }
-        continue;
-      }
-      if (!matched) continue;
-      if (node.type === 'boundary') {
-        this.removeToken(inst, t.id);
-        await this.activateBoundary(inst, p, node);
-      } else {
-        this.removeHostToken(inst, p, t.id, node.id);
-        for (const target of this.defaultTargets(p, node, inst)) {
-          inst.tokens.push({ id: this.ctx.newId(), nodeId: target, state: 'active', enteredAt: this.ctx.clock() });
-        }
-      }
+  /** Abort every still-active descendant instance (recursively), cancelling their timers. An
+   *  `independent` child (see `Instance.independent`) is skipped — its lifecycle isn't tied to its
+   *  parent's, so it keeps running standalone instead of being cascade-torn-down. */
+  private async abortDescendants(parentId: string): Promise<void> {
+    const children = await this.inst().query((c) =>
+      c.tenantId === this.ctx.tenantId && c.parentInstanceId === parentId &&
+      (c.status === 'running' || c.status === 'waiting' || c.status === 'suspended'));
+    for (const child of children) {
+      if (child.independent) continue;
+      child.status = 'aborted'; child.tokens = []; child.endedAt = this.ctx.clock();
+      await this.cancelTimersForInstance(child.id);
+      await this.exitOpenTasks(child.id);
+      await this.inst().put(child);
+      this.emit({ kind: 'instance.updated', instanceId: child.id });
+      await this.abortDescendants(child.id);
     }
   }
 
-  // ---- resume (wait states) ----
-  async resumeToken(inst: Instance, dep: Deployment, tokenId: string, vars?: Record<string, unknown>): Promise<Instance> {
-    if (inst.status === 'suspended') throw conflict('instance is suspended');
-    const token = inst.tokens.find((t) => t.id === tokenId);
-    if (!token || token.state !== 'waiting') throw conflict('token is not waiting');
-    if (vars) Object.assign(inst.variables, vars);
-    await this.cancelTimersForToken(inst, tokenId);
-    const p = this.proc(inst, dep);
-    const node = this.nodeMap(p).get(token.nodeId);
-    if (node?.type === 'boundary') {
-      this.removeToken(inst, tokenId);
-      await this.activateBoundary(inst, p, node);
-      inst.status = 'running';
-      return this.runToQuiescence(inst, dep);
-    }
-    if (node) this.removeHostToken(inst, p, tokenId, node.id!); else this.removeToken(inst, tokenId);
-    if (node) await this.cancelEventGatewaySiblings(inst, p, node.id!);
-    if (node && (node as any).onExit) {
-      const c = this.buildCtx(node, inst, p, {}, dep, tokenId);
-      const exitErr = await this.runLifecycle(node, 'onExit', c);
-      if (exitErr) {
-        if (!this.raiseError(inst, p, node.id!, 'SCRIPT_ERROR', exitErr)) {
-          inst.status = 'failed'; inst.error = { nodeId: node.id!, message: exitErr, at: this.ctx.clock() };
-        }
-        inst.status = inst.status === 'failed' ? 'failed' : 'running';
-        return this.runToQuiescence(inst, dep);
-      }
-    }
-    if (node) {
-      for (const b of boundaryHandler.compensationBoundaries(p.nodes, node.id!)) {
-        const target = this.outgoing(p, b.id!)[0]?.to;
-        if (target) (inst.compensations ||= []).push({ host: node.id!, handler: target });
-      }
-      for (const t of this.defaultTargets(p, node, inst)) inst.tokens.push({ id: this.ctx.newId(), nodeId: t, state: 'active', enteredAt: this.ctx.clock() });
-    }
-    inst.status = 'running';
-    return this.runToQuiescence(inst, dep);
+  /** No instance in a terminal state should leave an actionable task behind — see the callers'
+   *  comments for the specific ways a task's host activity can otherwise be cancelled without the
+   *  separate Task record ever finding out. 'exited' (jBPM's own term) covers every such case; a
+   *  task already completed/skipped/errored (its OWN terminal states) is untouched. */
+  private async exitOpenTasks(instanceId: string): Promise<void> {
+    const open = await this.ctx.store.repo<Task>(Collections.tasks).query((t) =>
+      t.tenantId === this.ctx.tenantId && t.instanceId === instanceId &&
+      (t.status === 'created' || t.status === 'reserved' || t.status === 'inprogress'));
+    for (const t of open) { t.status = 'exited'; await this.ctx.store.repo<Task>(Collections.tasks).put(t); }
   }
 
-  private async cancelEventGatewaySiblings(inst: Instance, p: EngineProcess, resolvedNodeId: string): Promise<void> {
-    const incoming = this.incoming(p, resolvedNodeId);
-    for (const f of incoming) {
-      const gw = this.nodeMap(p).get(f.from);
-      if (gw?.type !== 'gateway' || (gw as any).mode !== 'event') continue;
-      const siblingIds = new Set(this.outgoing(p, gw.id!).map((of) => of.to).filter((id) => id !== resolvedNodeId));
-      for (const t of [...inst.tokens]) {
-        if (siblingIds.has(t.nodeId) && t.state === 'waiting') {
-          await this.cancelTimersForToken(inst, t.id);
-          this.removeToken(inst, t.id);
-        }
-      }
+  /** Same, scoped to one token — an interrupting boundary cancels only ITS host token, which may be
+   *  one of several still-active branches on a parallel gateway; the instance itself stays running,
+   *  so exitOpenTasks(instanceId) above (only called once the whole instance settles) would never
+   *  reach this task otherwise. */
+  private async exitOpenTaskForToken(tokenId: string): Promise<void> {
+    const open = await this.ctx.store.repo<Task>(Collections.tasks).query((t) =>
+      t.tenantId === this.ctx.tenantId && t.tokenId === tokenId &&
+      (t.status === 'created' || t.status === 'reserved' || t.status === 'inprogress'));
+    for (const t of open) { t.status = 'exited'; await this.ctx.store.repo<Task>(Collections.tasks).put(t); }
+  }
+
+  /** Public entry: abort an instance and its whole subtree; also unblock a waiting parent. */
+  async abortInstance(inst: Instance): Promise<Instance> {
+    if (inst.status === 'completed' || inst.status === 'aborted') return inst;
+    inst.status = 'aborted'; inst.tokens = []; inst.endedAt = this.ctx.clock();
+    await this.cancelTimersForInstance(inst.id);
+    await this.exitOpenTasks(inst.id);
+    await this.inst().put(inst);
+    this.emit({ kind: 'instance.updated', instanceId: inst.id });
+    await this.abortDescendants(inst.id);
+    if (inst.parentInstanceId) await this.tryFailParent(inst);
+    return inst;
+  }
+
+  /** A child instance aborted/failed → remove the parent's waiting token and raise an error there
+   *  (routes to an error boundary if one is attached, otherwise the parent fails and cascades). */
+  private async tryFailParent(child: Instance): Promise<void> {
+    const parent = await this.inst().get(child.parentInstanceId!);
+    if (!parent || parent.status === 'completed' || parent.status === 'aborted' || parent.status === 'failed') return;
+    const token = parent.tokens.find((t) => t.state === 'waiting' &&
+      ((t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id) || (t.waitFor?.kind === 'multiInstance' && t.id === child.parentTokenId)));
+    if (!token) return;
+    const pdep = await this.deps().get(parent.deploymentId);
+    if (!pdep) return;
+    const p = this.pick(pdep, parent.processId);
+    if (token.waitFor?.kind === 'multiInstance') { await this.settleMultiInstance(parent, pdep, p, token); return; }
+    this.removeToken(parent, token.id);
+    // Same code family the sync completion path in call/handler.ts and subprocess/handler.ts raises
+    // for the identical failure, just detected later (the child instead parked in a wait) — kept in
+    // sync so a boundary/global catch sees the same code regardless of which path the child took.
+    const callNode = p.nodes.find((n) => n.id === token.nodeId) as any;
+    const prefix = callNode?.type === 'call' ? 'CALL' : 'SUBPROCESS';
+    const code = `${prefix}_${child.status === 'aborted' ? 'ABORTED' : 'ERROR'}`;
+    await this.failParentWith(parent, p, pdep, token.nodeId, code, `child instance ${child.status}: ${child.id}`);
+  }
+
+  /** A child instance completed → map its outputs into the parent and continue the parent flow. */
+  private async tryResumeParent(child: Instance): Promise<void> {
+    const parent = await this.inst().get(child.parentInstanceId!);
+    if (!parent) return;
+    const token = parent.tokens.find((t) => t.state === 'waiting' &&
+      ((t.waitFor?.kind === 'child' && t.waitFor?.ref === child.id) || (t.waitFor?.kind === 'multiInstance' && t.id === child.parentTokenId)));
+    if (!token) return;
+    const pdep = await this.deps().get(parent.deploymentId);
+    if (!pdep) return;
+    const p = this.pick(pdep, parent.processId);
+    if (token.waitFor?.kind === 'multiInstance') { await this.settleMultiInstance(parent, pdep, p, token); return; }
+    const callNode = p.nodes.find((n) => n.id === token.nodeId) as any;
+    // Mapping is node-type-specific (subprocess shares scope, call is isolated) — see each type's own
+    // mapChildOutputs in nodes/index.ts's CHILD_OUTPUT_MAPPERS (same logic the sync-completion path uses).
+    const mapper = callNode ? CHILD_OUTPUT_MAPPERS[callNode.type as string] : undefined;
+    const vars = mapper ? mapper(callNode, child) : {};
+    await this.resumeToken(parent, pdep, token.id, vars);
+  }
+
+  /** Shared terminal-outcome logic for a child settling into a parent's waiting call/subprocess/
+   *  multi-instance token: route to an error boundary if one is attached, otherwise fail the parent
+   *  and cascade upward — the same either way regardless of which node type raised it. */
+  private async failParentWith(parent: Instance, p: EngineProcess, pdep: Deployment, nodeId: string, code: string, message: string): Promise<void> {
+    if (this.raiseError(parent, p, nodeId, code, message)) {
+      parent.status = 'running';
+      await this.runToQuiescence(parent, pdep);   // handler token → runs recovery, then settles (may cascade)
+    } else {
+      parent.status = 'failed';
+      parent.error = { nodeId, message, at: this.ctx.clock() };
+      parent.endedAt = this.ctx.clock();
+      await this.exitOpenTasks(parent.id);
+      await this.inst().put(parent);
+      this.emit({ kind: 'instance.failed', instanceId: parent.id });
+      await this.abortDescendants(parent.id);
+      if (parent.parentInstanceId) await this.tryFailParent(parent);   // propagate up
     }
   }
 
-  /** Interrupt the (single) waiting host token this boundary is attached to (if `interrupting`), then
-   *  activate the boundary's own token. Non-recursive — safe to call from inside an already-running
-   *  main loop (resolveConditionWaits) as well as from the wait-resume paths (which recurse into
-   *  runToQuiescence themselves, afterward). */
-  private async activateBoundary(inst: Instance, p: EngineProcess, boundary: EngineNode): Promise<void> {
-    const hostIds = boundaryHandler.onList(boundary);
-    const host = inst.tokens.find((t) => t.state === 'waiting' && hostIds.includes(t.nodeId));
-    if (host && (boundary as any).interrupting !== false) {
-      this.removeHostToken(inst, p, host.id, host.nodeId);
-      await this.cancelTimersForToken(inst, host.id);
-      await this.exitOpenTaskForToken(host.id);
-    }
-    inst.tokens.push({ id: this.ctx.newId(), nodeId: boundary.id!, state: 'active', enteredAt: this.ctx.clock() });
-    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: boundary.id!, tokenId: inst.tokens.at(-1)!.id });
-  }
-
-  /** A timer boundary fired — `hostTokenId` (not the boundary's own; timer boundaries never get one)
-   *  is the exact host token the scheduled TimerJob recorded. */
-  private async fireBoundary(inst: Instance, dep: Deployment, boundary: EngineNode, hostTokenId: string): Promise<Instance> {
-    const p = this.proc(inst, dep);
-    const host = inst.tokens.find((t) => t.id === hostTokenId);
-    if (!host) return inst;
-    if ((boundary as any).interrupting !== false) {
-      this.removeHostToken(inst, p, hostTokenId, host.nodeId); await this.cancelTimersForToken(inst, hostTokenId);
-      await this.exitOpenTaskForToken(hostTokenId);
-    }
-    inst.tokens.push({ id: this.ctx.newId(), nodeId: boundary.id!, state: 'active', enteredAt: this.ctx.clock() });
-    inst.status = 'running';
-    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: boundary.id!, tokenId: inst.tokens.at(-1)!.id });
-    return this.runToQuiescence(inst, dep);
-  }
-
-  // ---- error handling ----
-  private raiseError(inst: Instance, p: EngineProcess, failingNodeId: string, code: string, message: string): boolean {
-    const handler = boundaryHandler.findErrorHandler(p.nodes, failingNodeId, code);
-    if (!handler) return false;
-    inst.variables[ERROR_VAR] = { code, node: failingNodeId, message };
-    if (boundaryHandler.isGlobalCatch(handler)) inst.tokens = [];
-    inst.tokens.push({ id: this.ctx.newId(), nodeId: handler.id!, state: 'active', enteredAt: this.ctx.clock() });
-    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: inst.tokens.at(-1)!.id });
-    return true;
-  }
-
-  private async raiseEscalation(inst: Instance, p: EngineProcess, code: string): Promise<boolean> {
-    const activeHostIds = new Set(inst.tokens.filter((t) => t.state === 'waiting' || t.state === 'active').map((t) => t.nodeId));
-    const handler = boundaryHandler.findEscalationHandler(p.nodes, activeHostIds, code);
-    if (!handler) return false;
-    if ((handler as any).interrupting !== false) {
-      const hostIds = boundaryHandler.onList(handler);
-      const global = hostIds.includes('*');
-      const hosts = inst.tokens.filter((t) => (t.state === 'waiting' || t.state === 'active') && (global || hostIds.includes(t.nodeId)));
-      for (const host of hosts) {
-        this.removeHostToken(inst, p, host.id, host.nodeId);
-        await this.cancelTimersForToken(inst, host.id);
-        await this.exitOpenTaskForToken(host.id);
+  /** One of a multi-instance (forEach) node's children just settled (completed/failed/aborted) —
+   *  re-derive the node's full state from ALL its children (found by parentTokenId, not stored on the
+   *  token itself — see WaitSpec's 'multiInstance' doc comment) and either: start the next item
+   *  (sequential, more items left, nothing failed yet), stay parked (parallel, some still running),
+   *  fail the node (any child aborted/failed — real MI default semantics), or resume with the
+   *  collected itemResult array (every child completed). */
+  private async settleMultiInstance(parent: Instance, pdep: Deployment, p: EngineProcess, token: Token): Promise<void> {
+    const n = p.nodes.find((node) => node.id === token.nodeId) as any;
+    if (!n) { this.removeToken(parent, token.id); return; }
+    const items = Array.isArray(parent.variables[n.over]) ? (parent.variables[n.over] as unknown[]) : [];
+    let siblings = (await this.inst().query((i) => i.tenantId === this.ctx.tenantId && i.parentInstanceId === parent.id && i.parentTokenId === token.id))
+      .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+    const alreadyFailed = siblings.some((s) => s.status === 'failed' || s.status === 'aborted');
+    if (!n.parallel && !alreadyFailed && siblings.length < items.length && siblings.every((s) => s.status === 'completed')) {
+      const item = items[siblings.length];
+      const childVars: Record<string, unknown> = {};
+      for (const v of (n.pass || [])) childVars[v] = parent.variables[v];
+      if (n.as) childVars[n.as] = item;
+      const resolved = this.resolveCalled ? await this.resolveCalled(n.process) : undefined;
+      if (resolved) {
+        await this.startChild(resolved.dep, resolved.processId, childVars, parent.startedBy, parent.id, token.id);
+        siblings = (await this.inst().query((i) => i.tenantId === this.ctx.tenantId && i.parentInstanceId === parent.id && i.parentTokenId === token.id))
+          .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
       }
     }
-    inst.tokens.push({ id: this.ctx.newId(), nodeId: handler.id!, state: 'active', enteredAt: this.ctx.clock() });
-    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: inst.tokens.at(-1)!.id });
-    return true;
+    const result = buildMultiInstanceResult(siblings, items.length, n);
+    if (result.wait) return;   // still outstanding children — stay parked, nothing to do yet
+    if (result.error) {
+      this.removeToken(parent, token.id);
+      await this.failParentWith(parent, p, pdep, token.nodeId!, result.errorCode || 'MULTIINSTANCE_ERROR', result.error);
+      return;
+    }
+    // Same "exit the wait node, spawn successors, resume the loop" path every other wait-node type
+    // resumes through — gets onExit/cancelEventGatewaySiblings/defaultTargets for free instead of
+    // duplicating them here.
+    await this.resumeToken(parent, pdep, token.id, result.vars);
   }
 
-  // ---- compensation ----
+  /** Start a child process instance linked to a parent token (call activity). `independent` decouples
+   *  the child's lifecycle from the parent's — see the `Instance.independent` doc comment. */
+  private async startChild(dep: Deployment, processId: string, vars: Record<string, unknown>, actor: string, parentInstanceId: string, parentTokenId: string, independent?: boolean): Promise<Instance> {
+    const p = this.pick(dep, processId);
+    const startNode = p.nodes.find((n) => n.type === 'start') || p.nodes[0];
+    const now = this.ctx.clock();
+    const child: Instance = {
+      id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId, processId: p.id,
+      status: 'running', variables: { ...vars },
+      tokens: [{ id: this.ctx.newId(), nodeId: startNode!.id!, state: 'active', enteredAt: now }],
+      history: [], startedAt: now, startedBy: actor, parentInstanceId, parentTokenId,
+      ...(independent ? { independent: true } : {}),
+    };
+    this.emit({ kind: 'instance.started', instanceId: child.id });
+    return this.runToQuiescence(child, dep);
+  }
+
+  /**
+   * Run compensation handlers for successfully-completed activities in reverse (LIFO) order. `ref`
+   * limits compensation to a single host activity; omitted → compensate everything recorded so far.
+   * Handlers execute inline (they don't spawn into the main flow); each is recorded in history.
+   */
   private async compensate(inst: Instance, p: EngineProcess, dep: Deployment, ref?: string): Promise<Record<string, unknown>> {
-    const list = inst.compensations || [];
-    const targets = ref ? list.filter((c) => c.host === ref) : [...list].reverse();
+    const all = inst.compensations || [];
+    const toRun = [...all].reverse().filter((c) => !ref || c.host === ref);
     const merged: Record<string, unknown> = {};
-    for (const comp of targets) {
-      const node = this.nodeMap(p).get(comp.handler);
-      if (!node) continue;
-      const tempTokenId = this.ctx.newId();
-      const c = this.buildCtx(node, inst, p, {}, dep, tempTokenId);
-      const h = NODE_HANDLERS[node.type];
-      if (!h) continue;
-      const res = await h(c);
+    const nodes = this.nodeMap(p);
+    for (const entry of toRun) {
+      const handler = nodes.get(entry.handler);
+      if (!handler) continue;
+      const visit: NodeVisit = { tokenId: 'compensation', nodeId: handler.id!, type: handler.type, enteredAt: this.ctx.clock() };
+      inst.history.push(visit);
+      this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: 'compensation' });
+      let res: HandlerResult;
+      try { res = await this.handle(handler, inst, p, {}, dep, 'compensation'); }
+      catch (e) { res = { error: (e as Error).message }; }
       if (res.vars) { Object.assign(inst.variables, res.vars); Object.assign(merged, res.vars); }
+      visit.exitedAt = this.ctx.clock(); visit.outcome = res.error ? `compensation-error: ${res.error}` : 'compensated';
+      this.emit({ kind: 'node.exited', instanceId: inst.id, nodeId: handler.id!, tokenId: 'compensation' });
     }
-    inst.compensations = ref ? list.filter((c) => c.host !== ref) : [];
+    // consume the entries we just compensated
+    inst.compensations = all.filter((c) => (ref ? c.host !== ref : false));
     return merged;
   }
 
-  // ---- signals / messages ----
-  /** Untargeted broadcast — 'message' resolves to the single oldest waiter across every instance;
-   *  'signal' fans out to every waiter AND every matching signal-start (real jBPM's own default
-   *  signal scope). `correlationKey`, when given, narrows delivery to only the waiting instance(s)
-   *  whose OWN correlationKey matches. */
-  private async broadcast(name: string, kind: 'signal' | 'message', correlationKey?: string): Promise<void> {
-    const waiters = (await this.inst().query((i) =>
-      i.tenantId === this.ctx.tenantId && i.status === 'waiting' &&
-      i.tokens.some((t) => t.state === 'waiting' && t.waitFor?.kind === kind && t.waitFor.ref === name) &&
-      (!correlationKey || i.correlationKey === correlationKey)))
-      .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
-    const targets = kind === 'message' ? waiters.slice(0, 1) : waiters;
-    for (const w of targets) {
-      const dep = await this.ctx.store.repo<Deployment>(Collections.deployments).get(w.deploymentId);
-      if (!dep) continue;
-      const token = w.tokens.find((t) => t.state === 'waiting' && t.waitFor?.kind === kind && t.waitFor.ref === name);
-      if (token) await this.resumeToken(w, dep, token.id);
+  /** Broadcast a signal/message to every waiting instance in the tenant (send/throw/end-throw), and
+   *  also start a fresh instance of any deployed process whose start event listens for this exact
+   *  name — the process-level counterpart to a mid-flow catch/boundary (real jBPM's signal-start /
+   *  message-start event). `correlationValue`, when the thrower declares one (see `EventDef.
+   *  correlationKey` — a $var reference resolved on the throwing side), narrows delivery to only the
+   *  instance(s) whose OWN `correlationKey` (set at `start()`) matches — otherwise EVERY instance
+   *  waiting on that name resumes, which is wrong the moment more than one instance of the same
+   *  process is waiting on the same message type at once (e.g. N claims all waiting on
+   *  "PaymentReceived" — without this, one payment webhook would incorrectly resume all N). Signal/
+   *  message-START events are never correlation-scoped: a brand-new instance has no correlationKey
+   *  yet to match against. */
+  private async broadcast(name: string, correlationValue?: string): Promise<void> {
+    const others = await this.inst().query((i) => i.tenantId === this.ctx.tenantId && (i.status === 'waiting' || i.status === 'running'));
+    for (const other of others) {
+      if (correlationValue !== undefined && other.correlationKey !== correlationValue) continue;
+      const hit = other.tokens.some((t) => t.state === 'waiting' && (t.waitFor?.kind === 'signal' || t.waitFor?.kind === 'message') && t.waitFor?.ref === name);
+      if (!hit) continue;
+      const dep = await this.deps().get(other.deploymentId);
+      if (dep) await this.signalInstance(other, dep, name);
     }
-    await this.startTriggeredProcesses(name, kind);
+    if (correlationValue === undefined) await this.startTriggeredProcesses(name);
   }
 
-  /** Spawn a fresh instance per active deployment whose start node's `on.signal`/`on.message` matches
-   *  (name, kind) exactly. A signal starts every matching deployment (broadcast); a message-triggered
-   *  start only fires when NOTHING was already waiting for it (checked by the caller — broadcast()
-   *  always calls this after resolving waiters, and a message-start is just one more potential
-   *  "recipient" alongside any waiting Receive/Catch, so every matching deployment still gets to spawn
-   *  once each — jBPM's own message-start semantics are point-to-point per LISTENER, not globally
-   *  single-fire). */
-  private async startTriggeredProcesses(name: string, kind: 'signal' | 'message'): Promise<void> {
-    const active = await this.ctx.store.repo<Deployment>(Collections.deployments).query((d) => d.tenantId === this.ctx.tenantId && d.status === 'active');
+  /** Signal/message-start events: begin a new instance of every active deployment's process whose
+   *  start node's `on.signal`/`on.message` matches `name`. */
+  private async startTriggeredProcesses(name: string): Promise<void> {
+    const active = await this.deps().query((d) => d.tenantId === this.ctx.tenantId && d.status === 'active');
     for (const dep of active) {
       for (const p of dep.engine?.processes || []) {
-        for (const n of p.nodes || []) {
-          if (n.type !== 'start') continue;
-          const on = (n as any).on;
-          const matches = kind === 'signal' ? on?.signal === name : on?.message === name;
-          if (!matches) continue;
-          await this.start(dep, {}, 'system', { processId: p.id });
-        }
+        const startNode = p.nodes.find((n) => n.type === 'start') as any;
+        const on = startNode?.on;
+        const kind = on?.signal === name ? 'signal' : on?.message === name ? 'message' : undefined;
+        if (kind) await this.start(dep, {}, kind, { processId: p.id });
       }
     }
   }
 
-  /** Deliver a signal to ONE specific instance by id (targeted, real jBPM's
-   *  KieRuntime.signalEvent(type, event, processInstanceId)). Payload merges into variables under the
-   *  signal's own name if the instance is waiting on a signal/message with this name; otherwise no-op. */
-  async signalTargeted(fromInst: Instance | undefined, dep: Deployment | undefined, targetInstanceId: string, name: string, payload?: unknown): Promise<void> {
-    const target = await this.inst().get(targetInstanceId);
-    if (!target || target.tenantId !== this.ctx.tenantId || target.status !== 'waiting') return;
-    const targetDep = await this.ctx.store.repo<Deployment>(Collections.deployments).get(target.deploymentId);
-    if (!targetDep) return;
-    const token = target.tokens.find((t) => t.state === 'waiting' && (t.waitFor?.kind === 'signal' || t.waitFor?.kind === 'message') && t.waitFor.ref === name);
-    if (!token) return;
-    const vars = payload !== undefined ? { [name]: payload } : undefined;
-    await this.resumeToken(target, targetDep, token.id, vars);
-  }
-
-  private async abortTargeted(_fromInst: Instance, targetInstanceId: string): Promise<void> {
-    const target = await this.inst().get(targetInstanceId);
-    if (!target || target.tenantId !== this.ctx.tenantId) return;
-    await this.abortInstance(target);
-  }
-
-  // ---- public instance-lifecycle operations (used by modules/instances/service.ts) ----
-  // NOTE: every public method here assumes it is the ONLY in-flight operation against this specific
-  // instance id — callers (the instances service) are responsible for serializing concurrent
-  // operations on the same instance (e.g. two task-completions racing on sibling multi-instance
-  // children), typically via a per-instance-id async mutex before loading + after persisting.
-
-  async abortInstance(inst: Instance): Promise<Instance> {
-    if (inst.status === 'completed' || inst.status === 'aborted' || inst.status === 'failed') return inst;
-    inst.status = 'aborted'; inst.tokens = []; inst.endedAt = this.ctx.clock();
-    await this.finalize(inst, false);
+  /** Deliver a signal/message to an instance: resume every token waiting on that name. */
+  async signalInstance(inst: Instance, dep: Deployment, name: string, payload?: unknown): Promise<Instance> {
+    const targets = inst.tokens
+      .filter((t) => t.state === 'waiting' && (t.waitFor?.kind === 'signal' || t.waitFor?.kind === 'message') && t.waitFor?.ref === name)
+      .map((t) => t.id);
+    for (const tid of targets) {
+      if (inst.tokens.find((t) => t.id === tid && t.state === 'waiting')) {
+        await this.resumeToken(inst, dep, tid, payload !== undefined ? { [name]: payload } : undefined);
+      }
+    }
     return inst;
   }
 
+  /** Deliver a signal to ONE specific instance by id — matches real jBPM's targeted
+   *  kcontext.getKieRuntime().signalEvent(type, event, processInstanceId), as opposed to broadcast()'s
+   *  session-wide delivery. A no-op (not an error) if the id doesn't resolve within this tenant —
+   *  matches how a script/condition kcontext call has no result to fail loudly against.
+   *
+   *  Self-targeted (the calling instance signaling itself) is special-cased to mutate `callerInst`
+   *  directly rather than re-fetching by id: the store's `.get()` returns whatever was last `.put()`,
+   *  a SEPARATE object from the one `runToQuiescence`'s loop is actively stepping through in memory.
+   *  Mutating a fresh fetch would get silently overwritten when the loop persists its own reference
+   *  at the end of its own processing — confirmed by a real test failure before this fix existed. */
+  private async signalTargeted(callerInst: Instance, callerDep: Deployment, targetInstanceId: string, name: string, payload?: unknown): Promise<void> {
+    if (targetInstanceId === callerInst.id) { await this.signalInstance(callerInst, callerDep, name, payload); return; }
+    const target = await this.inst().get(targetInstanceId);
+    if (!target || target.tenantId !== this.ctx.tenantId) return;
+    const dep = await this.deps().get(target.deploymentId);
+    if (dep) await this.signalInstance(target, dep, name, payload);
+  }
+
+  /** Abort ONE specific instance by id — matches real jBPM's kcontext.getKieRuntime().
+   *  abortProcessInstance(id). Reuses the same public abortInstance() the REST abort endpoint already
+   *  uses (aborts the whole subtree, cancels timers), so a script-triggered abort behaves identically
+   *  to an operator-triggered one. A no-op if the id doesn't resolve within this tenant. Self-targeted
+   *  case: see signalTargeted's comment — same reasoning, same fix. */
+  private async abortTargeted(callerInst: Instance, targetInstanceId: string): Promise<void> {
+    if (targetInstanceId === callerInst.id) { await this.abortInstance(callerInst); return; }
+    const target = await this.inst().get(targetInstanceId);
+    if (target && target.tenantId === this.ctx.tenantId) await this.abortInstance(target);
+  }
+
+  /** Re-trigger a node: drop a fresh active token onto it and run (retry a failed node or replay). */
   async retryNode(inst: Instance, dep: Deployment, nodeId: string): Promise<Instance> {
     inst.error = undefined;
     inst.tokens.push({ id: this.ctx.newId(), nodeId, state: 'active', enteredAt: this.ctx.clock() });
@@ -428,185 +483,155 @@ export class ExecutionEngine {
     return this.runToQuiescence(inst, dep);
   }
 
-  /** A variable edit (PUT /instances/:id/variables) may satisfy a condition wait that was previously
-   *  false — give resolveConditionWaits its per-tick chance to notice. */
-  async recheckConditions(inst: Instance, dep: Deployment): Promise<Instance> {
-    if (inst.status !== 'waiting' || !inst.tokens.some((t) => t.waitFor?.kind === 'condition')) return inst;
-    inst.status = 'running';
-    return this.runToQuiescence(inst, dep);
+  private removeToken(inst: Instance, tokenId: string) { inst.tokens = inst.tokens.filter((t) => t.id !== tokenId); }
+
+  /** Remove a host token AND any sibling message/signal/escalation boundary tokens still waiting on
+   *  it (see messageBoundaryHosts) — those are real entries in inst.tokens (unlike a timer boundary's
+   *  wait, which lives in a separate TimerJob record already cleaned up via cancelTimersForToken), so
+   *  leaving one behind after its host is gone for ANY reason — normal completion, a DIFFERENT
+   *  boundary interrupting it, direct resumption — would permanently block the instance from ever
+   *  settling out of 'waiting' (see runToQuiescence's settle check). */
+  private removeHostToken(inst: Instance, p: EngineProcess, hostTokenId: string, hostNodeId: string): void {
+    this.removeToken(inst, hostTokenId);
+    const boundaryIds = new Set(boundaryHandler.messageBoundaryHosts(p.nodes, hostNodeId).map((b) => b.node.id!));
+    if (boundaryIds.size) inst.tokens = inst.tokens.filter((t) => !(t.state === 'waiting' && boundaryIds.has(t.nodeId)));
   }
 
+  // ---- timers ----
+  private timerRepo() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
+  /** `cycle` (boundary timers only — see call site) lets TimerService reschedule this job for its next
+   *  occurrence after firing, instead of the one-shot behavior every other timer kind wants. */
+  private async scheduleTimer(inst: Instance, tokenId: string, nodeId: string, dueAt: string, cycle?: string) {
+    const { maxActiveTimers } = await new SettingsService(this.ctx).get();
+    if (maxActiveTimers) {
+      const active = await this.timerRepo().query((t) => t.tenantId === this.ctx.tenantId && t.status === 'scheduled');
+      if (active.length >= maxActiveTimers) {
+        throw quotaExceeded(`per-tenant active-timer quota exceeded (max ${maxActiveTimers})`, { quota: 'maxActiveTimers', max: maxActiveTimers, current: active.length });
+      }
+    }
+    await this.timerRepo().put({ id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: inst.id, tokenId, nodeId, kind: 'duration', dueAt, cycle, fired: 0, status: 'scheduled' });
+  }
+  /** Cancel a token's pending timers (host completed/resumed → its boundary/catch timers no longer apply). */
+  private async cancelTimersForToken(inst: Instance, tokenId: string) {
+    const jobs = await this.timerRepo().query((t) => t.instanceId === inst.id && t.tokenId === tokenId && t.status === 'scheduled');
+    for (const j of jobs) { j.status = 'cancelled'; await this.timerRepo().put(j); }
+  }
+  /** Cancel every pending timer for an instance (instance reached a terminal state). */
+  private async cancelTimersForInstance(instanceId: string) {
+    const jobs = await this.timerRepo().query((t) => t.instanceId === instanceId && t.status === 'scheduled');
+    for (const j of jobs) { j.status = 'cancelled'; await this.timerRepo().put(j); }
+  }
+
+  /** Event-Based Gateway race: `resolvedNodeId` just resolved its wait (timer/message/signal fired) —
+   *  if it's reached directly (single incoming flow) from a `mode:'event'` gateway, every OTHER branch
+   *  forked from that same gateway loses the race — cancel their still-waiting tokens (and any timer
+   *  jobs backing them) so they never also fire. Structural match by node id, like boundaryTimerHosts;
+   *  doesn't disambiguate concurrent activations of the same event gateway (e.g. inside a loop), same
+   *  simplification the join-count logic elsewhere in this engine already accepts. */
+  private async cancelEventGatewaySiblings(inst: Instance, p: EngineProcess, resolvedNodeId: string): Promise<void> {
+    const incoming = this.incoming(p, resolvedNodeId);
+    if (incoming.length !== 1) return;
+    const gateway = this.nodeMap(p).get(incoming[0]!.from);
+    if (!gateway || gateway.type !== 'gateway' || (gateway as any).mode !== 'event') return;
+    const siblingTargets = new Set(this.outgoing(p, gateway.id!).map((f) => f.to));
+    siblingTargets.delete(resolvedNodeId);
+    for (const s of inst.tokens.filter((t) => t.state === 'waiting' && siblingTargets.has(t.nodeId))) {
+      await this.cancelTimersForToken(inst, s.id);
+      this.removeToken(inst, s.id);
+    }
+  }
+  /** Fire a due timer job: boundary timer → activate the boundary; else resume the (catch) token.
+   *  Public — called externally from modules/instances/service.ts's timer-poll path. */
   async fireTimerJob(inst: Instance, dep: Deployment, nodeId: string, tokenId: string): Promise<Instance> {
     const node = this.nodeMap(this.proc(inst, dep)).get(nodeId);
     if (node?.type === 'boundary') return this.fireBoundary(inst, dep, node, tokenId);
     return this.resumeToken(inst, dep, tokenId);
   }
-
-  // ---- descendants ----
-  async abortDescendants(instanceId: string): Promise<void> {
-    const children = await this.inst().query((i) => i.tenantId === this.ctx.tenantId && i.parentInstanceId === instanceId && !i.independent);
-    for (const child of children) {
-      if (child.status === 'running' || child.status === 'waiting' || child.status === 'suspended') await this.abortInstance(child);
+  /** A timer boundary fired: interrupting cancels the host token; then run the boundary's recovery flow. */
+  private async fireBoundary(inst: Instance, dep: Deployment, boundary: EngineNode, hostTokenId: string): Promise<Instance> {
+    const host = inst.tokens.find((t) => t.id === hostTokenId);
+    if (!host) return inst;   // host already finished → stale timer
+    if ((boundary as any).interrupting !== false) {
+      this.removeHostToken(inst, this.proc(inst, dep), hostTokenId, host.nodeId); await this.cancelTimersForToken(inst, hostTokenId);
+      await this.exitOpenTaskForToken(hostTokenId);   // e.g. a user task cancelled out from under its assignee
     }
+    inst.tokens.push({ id: this.ctx.newId(), nodeId: boundary.id!, state: 'active', enteredAt: this.ctx.clock() });
+    inst.status = 'running';
+    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: boundary.id!, tokenId: inst.tokens.at(-1)!.id });
+    return this.runToQuiescence(inst, dep);
   }
-
-  // ---- token/host removal helpers ----
-  private removeToken(inst: Instance, tokenId: string) { inst.tokens = inst.tokens.filter((t) => t.id !== tokenId); }
-
-  private removeHostToken(inst: Instance, p: EngineProcess, hostTokenId: string, hostNodeId: string): void {
-    this.removeToken(inst, hostTokenId);
-    const boundaryIds = new Set([
-      ...boundaryHandler.messageBoundaryHosts(p.nodes, hostNodeId).map((b) => b.node.id!),
-      ...boundaryHandler.conditionBoundaryHosts(p.nodes, hostNodeId).map((b) => b.id!),
-    ]);
-    if (boundaryIds.size) inst.tokens = inst.tokens.filter((t) => !(t.state === 'waiting' && boundaryIds.has(t.nodeId)));
-  }
-
-  // ---- timers ----
-  private async scheduleTimer(inst: Instance, tokenId: string, nodeId: string, dueAt: string, cycle?: string): Promise<void> {
-    const { maxActiveTimers } = await new SettingsService(this.ctx).get();
-    if (maxActiveTimers) {
-      const active = await this.timerRepo().query((t) => t.tenantId === this.ctx.tenantId && t.status === 'scheduled');
-      if (active.length >= maxActiveTimers) throw quotaExceeded(`per-tenant active-timer quota exceeded (max ${maxActiveTimers})`, { quota: 'maxActiveTimers', max: maxActiveTimers, current: active.length });
+  /** A message/signal/escalation boundary's own waiting token resolved (see messageBoundaryHosts) —
+   *  same "interrupting cancels the host, then run the recovery flow" as fireBoundary, just resolved
+   *  via broadcast()/resumeToken() instead of a fired TimerJob, so the host has to be found by its
+   *  current waiting token rather than passed in directly (that's still the SAME host token id
+   *  fireBoundary takes; this just discovers it a different way). */
+  private async fireMessageBoundary(inst: Instance, dep: Deployment, boundary: EngineNode, boundaryTokenId: string): Promise<Instance> {
+    this.removeToken(inst, boundaryTokenId);
+    const p = this.proc(inst, dep);
+    const hostIds = boundaryHandler.onList(boundary);
+    const host = inst.tokens.find((t) => t.state === 'waiting' && hostIds.includes(t.nodeId));
+    if (host && (boundary as any).interrupting !== false) {
+      this.removeHostToken(inst, p, host.id, host.nodeId); await this.cancelTimersForToken(inst, host.id);
+      await this.exitOpenTaskForToken(host.id);
     }
-    const job: TimerJob = {
-      id: this.ctx.newId(), tenantId: this.ctx.tenantId, instanceId: inst.id, tokenId, nodeId,
-      kind: cycle ? 'cycle' : 'duration', dueAt, cycle, fired: 0, status: 'scheduled',
-    };
-    await this.timerRepo().put(job);
+    for (const t of this.defaultTargets(p, boundary, inst)) inst.tokens.push({ id: this.ctx.newId(), nodeId: t, state: 'active', enteredAt: this.ctx.clock() });
+    inst.status = 'running';
+    return this.runToQuiescence(inst, dep);
   }
 
-  private async cancelTimersForToken(inst: Instance, tokenId: string): Promise<void> {
-    const jobs = await this.timerRepo().query((t) => t.tenantId === this.ctx.tenantId && t.instanceId === inst.id && t.tokenId === tokenId && t.status === 'scheduled');
-    for (const j of jobs) { j.status = 'cancelled'; await this.timerRepo().put(j); }
-  }
-  private async cancelTimersForInstance(instanceId: string): Promise<void> {
-    const jobs = await this.timerRepo().query((t) => t.tenantId === this.ctx.tenantId && t.instanceId === instanceId && t.status === 'scheduled');
-    for (const j of jobs) { j.status = 'cancelled'; await this.timerRepo().put(j); }
+  // ---- error handling: route a raised error to a matching error-catch (boundary, or an event
+  // sub-process with an error start — jBPM's other common "global error handler" idiom) ----
+  // WHICH node matches (isErrorCatch/catchErrorName/isGlobalCatch/isCatchAll/globalNameMatches/
+  // findErrorHandler) is nodes/boundary/handler.ts's decision — see its own doc comment for the full
+  // "why" (jBPM error-code naming vs. this runtime's fixed ENGINE_ERRORS vocabulary). Only the
+  // orchestration that ACTS on a match (mutating instance/token state) stays here.
+
+  /** Route an error to a matching error-catch; returns true if handled (a handler token was spawned). */
+  private raiseError(inst: Instance, p: EngineProcess, failingNodeId: string, code: string, message: string): boolean {
+    const handler = boundaryHandler.findErrorHandler(p.nodes, failingNodeId, code);
+    if (!handler) return false;
+    inst.variables[ERROR_VAR] = { code, node: failingNodeId, message };
+    // a global catch (on: '*', or any event sub-process error-catch) is interrupting for the whole
+    // instance → cancel all other tokens. A host-specific boundary only ever cancels its own host,
+    // which the caller has already done before raiseError runs.
+    if (boundaryHandler.isGlobalCatch(handler)) inst.tokens = [];
+    inst.tokens.push({ id: this.ctx.newId(), nodeId: handler.id!, state: 'active', enteredAt: this.ctx.clock() });
+    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: inst.tokens.at(-1)!.id });
+    return true;
   }
 
-  // ---- tasks ----
-  private async exitOpenTaskForToken(tokenId: string): Promise<void> {
-    const tasks = await this.taskRepo().query((t) => t.tenantId === this.ctx.tenantId && t.tokenId === tokenId && t.status !== 'completed' && t.status !== 'skipped' && t.status !== 'exited' && t.status !== 'error');
-    for (const t of tasks) { t.status = 'exited'; await this.taskRepo().put(t); }
-  }
-  private async exitOpenTasks(instanceId: string): Promise<void> {
-    const tasks = await this.taskRepo().query((t) => t.tenantId === this.ctx.tenantId && t.instanceId === instanceId && t.status !== 'completed' && t.status !== 'skipped' && t.status !== 'exited' && t.status !== 'error');
-    for (const t of tasks) { t.status = 'exited'; await this.taskRepo().put(t); }
-  }
-
-  // ---- terminal-state bookkeeping (persist, notify, cascade cleanup, propagate to parent) ----
-  private async finalize(inst: Instance, terminateAllFlag: boolean): Promise<void> {
-    await this.inst().put(inst);
-    const kind = inst.status === 'failed' ? 'instance.failed' : inst.status === 'completed' ? 'instance.completed' : inst.status === 'aborted' ? 'instance.aborted' : 'instance.updated';
-    this.emit({ kind, instanceId: inst.id });
-    if (inst.status === 'completed' || inst.status === 'aborted' || inst.status === 'failed') {
-      await this.cancelTimersForInstance(inst.id);
-      await this.exitOpenTasks(inst.id);
-      await this.abortDescendants(inst.id);
-    }
-    if (inst.parentInstanceId) {
-      if (inst.status === 'completed') await this.tryResumeParent(inst, terminateAllFlag);
-      else if (inst.status === 'aborted' || inst.status === 'failed') await this.tryFailParent(inst);
-    }
-  }
-
-  // ---- parent/child resume propagation ----
-  private async tryResumeParent(child: Instance, terminateAll = false): Promise<void> {
-    if (!child.parentInstanceId || !child.parentTokenId) return;
-    const parent = await this.inst().get(child.parentInstanceId);
-    if (!parent) return;
-    const pdep = await this.ctx.store.repo<Deployment>(Collections.deployments).get(parent.deploymentId);
-    if (!pdep) return;
-    const p = this.proc(parent, pdep);
-    const token = parent.tokens.find((t) => t.id === child.parentTokenId && t.state === 'waiting' && t.waitFor?.kind === 'child' && t.waitFor.ref === child.id);
-    if (token) {
-      const callNode = this.nodeMap(p).get(token.nodeId);
-      const mapper = callNode && CHILD_OUTPUT_MAPPERS[callNode.type];
-      const vars = mapper ? mapper(callNode, child) : {};
-      if (terminateAll) {
-        this.removeHostToken(parent, p, token.id, token.nodeId);
-        parent.tokens = []; parent.status = 'completed'; parent.terminateAll = true;
-        await this.finalize(parent, true);
-        return;
-      }
-      await this.resumeToken(parent, pdep, token.id, vars);
-      return;
-    }
-    // Multi-instance sibling: the parent isn't waiting on THIS child's own token — it's waiting (or
-    // still running) with a 'multiInstance' wait on the SAME parentTokenId, tracking N siblings.
-    const miToken = parent.tokens.find((t) => t.id === child.parentTokenId);
-    if (miToken?.waitFor?.kind !== 'multiInstance' && miToken?.state !== 'active') return;
-    const node = this.nodeMap(p).get(miToken.nodeId) as any;
-    if (node?.type !== 'forEach') return;
-    const siblings = await this.inst().query((i) => i.tenantId === this.ctx.tenantId && i.parentInstanceId === parent.id && i.parentTokenId === miToken.id);
-    const total = Array.isArray(parent.variables[node.over]) ? (parent.variables[node.over] as unknown[]).length : siblings.length;
-    const result = buildMultiInstanceResult(siblings, total, node);
-    if (result.wait) return; // still waiting on more siblings
-    if (miToken.state !== 'waiting') return; // parent hasn't parked on this yet — nothing to resume
-    if (result.end === 'terminate') {
-      this.removeHostToken(parent, p, miToken.id, miToken.nodeId);
-      parent.tokens = []; parent.status = 'completed'; parent.terminateAll = true;
-      await this.finalize(parent, true);
-      return;
-    }
-    if (result.error) {
-      this.removeHostToken(parent, p, miToken.id, miToken.nodeId);
-      if (this.raiseError(parent, p, miToken.nodeId, result.errorCode || 'MULTIINSTANCE_ERROR', result.error)) {
-        parent.status = 'running';
-        await this.runToQuiescence(parent, pdep);
-        return;
-      }
-      parent.status = 'failed'; parent.error = { nodeId: miToken.nodeId, message: result.error, at: this.ctx.clock() };
-      await this.finalize(parent, false);
-      return;
-    }
-    await this.resumeToken(parent, pdep, miToken.id, result.vars);
-  }
-
-  private async tryFailParent(child: Instance): Promise<void> {
-    if (!child.parentInstanceId || !child.parentTokenId) return;
-    const parent = await this.inst().get(child.parentInstanceId);
-    if (!parent) return;
-    const pdep = await this.ctx.store.repo<Deployment>(Collections.deployments).get(parent.deploymentId);
-    if (!pdep) return;
-    const p = this.proc(parent, pdep);
-    const token = parent.tokens.find((t) => t.id === child.parentTokenId);
-    if (!token) return;
-    const callNode = this.nodeMap(p).get(token.nodeId);
-    const code = callNode?.type === 'call' ? 'CALL_ABORTED' : callNode?.type === 'forEach' ? 'MULTIINSTANCE_ERROR' : 'SUBPROCESS_ABORTED';
-    this.removeHostToken(parent, p, token.id, token.nodeId);
-    if (this.raiseError(parent, p, token.nodeId, code, `child instance ${child.status}`)) {
-      parent.status = 'running';
-      await this.runToQuiescence(parent, pdep);
-      return;
-    }
-    parent.status = 'failed'; parent.error = { nodeId: token.nodeId, message: `child instance ${child.status}`, at: this.ctx.clock() };
-    await this.finalize(parent, false);
+  private defaultTargets(p: EngineProcess, node: EngineNode, _inst: Instance): string[] {
+    return this.outgoing(p, node.id!).map((f) => f.to);
   }
 
   // ---- node dispatch ----
+  // Each node type's backend logic lives in src/engine/nodes/<type>/handler.ts (see NODE_HANDLERS).
+  // The engine builds a HandlerCtx (node + instance state + capabilities) and runs the handler.
   private buildCtx(node: EngineNode, inst: Instance, p: EngineProcess, joins: Record<string, Set<string>>, dep: Deployment, tokenId: string): HandlerCtx {
     return {
       node, inst, proc: p, dep, app: this.ctx, joins, tokenId,
       outgoing: (id) => this.outgoing(p, id),
       incoming: (id) => this.incoming(p, id),
       emit: (e) => this.emit(e),
-      startChild: (d, pid, vars, tok, independent) => this.startChildReal(d, pid, vars, inst.startedBy, inst.id, tok, independent),
-      broadcast: (name, kind, correlationKey) => this.broadcast(name, kind, correlationKey),
+      startChild: (d, pid, vars, tok, independent) => this.startChild(d, pid, vars, inst.startedBy, inst.id, tok, independent),
+      broadcast: (name, correlationValue) => this.broadcast(name, correlationValue),
       signal: (targetInstanceId, name, payload) => this.signalTargeted(inst, dep, targetInstanceId, name, payload),
       abort: (targetInstanceId) => this.abortTargeted(inst, targetInstanceId),
       compensate: (ref) => this.compensate(inst, p, dep, ref),
-      escalate: (code) => this.raiseEscalation(inst, p, code),
       resolveCalled: this.resolveCalled,
     };
   }
 
+  /** Real jBPM's generic onEntry-script/onExit-script action hooks (see bpmn-sdk's `WithLifecycle`) —
+   *  any activity node type may carry `onEntry`/`onExit` (+ `onEntryLang`/`onExitLang`), executed with
+   *  the exact same kcontext/vars/instance/node/meta-locals surface a script node gets (varTypesOf/
+   *  kcontextInfoOf/onActionOf — see kcontext-info.ts). Mutates `inst.variables` directly (no merge
+   *  step needed — same object reference `runScript` writes through). Returns an error message on
+   *  failure, undefined on success; never throws (caller decides how to route the failure). */
   private async runLifecycle(node: EngineNode, kind: 'onEntry' | 'onExit', c: HandlerCtx): Promise<string | undefined> {
     const text = (node as any)[kind] as string | undefined;
     if (!text) return undefined;
     const lang = (node as any)[`${kind}Lang`] as string | undefined;
-    if (lang && lang !== 'js' && lang !== 'java') return undefined;
     try {
       await runScript(text, c.inst.variables, config.scriptTimeoutMs, {
         ...kcontextInfoOf(c), lang, varTypes: varTypesOf(c), onAction: onActionOf(c),
@@ -619,14 +644,14 @@ export class ExecutionEngine {
 
   private async handle(node: EngineNode, inst: Instance, p: EngineProcess, joins: Record<string, Set<string>>, dep: Deployment, tokenId: string): Promise<HandlerResult> {
     const h = NODE_HANDLERS[node.type];
+    if (!h) return {};   // e.g. 'boundary' — spawned by the error router, then follows its outgoing flow
     const c = this.buildCtx(node, inst, p, joins, dep, tokenId);
     const entryErr = await this.runLifecycle(node, 'onEntry', c);
     if (entryErr) return { error: entryErr, errorCode: 'SCRIPT_ERROR' };
-    if (!h) {
-      const exitErr = await this.runLifecycle(node, 'onExit', c);
-      return exitErr ? { error: exitErr, errorCode: 'SCRIPT_ERROR' } : {};
-    }
     const result = await h(c);
+    // onExit fires exactly once, when the node instance actually completes — immediately here if it
+    // didn't wait/error; if it DID wait (userTask/receive/etc.), onExit instead runs in resumeToken()
+    // when the wait is actually over, matching real jBPM's onExit timing (never on error/abort paths).
     if (!result.wait && !result.error) {
       const exitErr = await this.runLifecycle(node, 'onExit', c);
       if (exitErr) return { ...result, error: exitErr, errorCode: 'SCRIPT_ERROR' };
@@ -634,13 +659,54 @@ export class ExecutionEngine {
     return result;
   }
 
-  /** Read-only diagram state for the instance/process canvas: which nodes are currently active vs.
-   *  already visited, per the token/history state. */
-  diagramState(inst: Instance): { activeNodeIds: string[]; visitedNodeIds: string[]; status: string } {
-    return {
-      activeNodeIds: inst.tokens.map((t) => t.nodeId),
-      visitedNodeIds: [...new Set(inst.history.map((h) => h.nodeId))],
-      status: inst.status,
-    };
+  // ---- resume (wait states) ----
+  /** Complete a wait node (task/timer/message/signal) and continue the instance. */
+  async resumeToken(inst: Instance, dep: Deployment, tokenId: string, vars?: Record<string, unknown>): Promise<Instance> {
+    // Proper ApiErrors (not bare Error) so every caller — direct service guards already reject most of
+    // these earlier, but this is the last line of defense for anything that reaches resumeToken without
+    // one (e.g. a manually-triggered timer job on a suspended instance) — gets a clean 409 instead of
+    // falling through to errorMiddleware's generic "Internal server error" 500.
+    if (inst.status === 'suspended') throw conflict('instance is suspended');   // nothing advances a paused tree
+    const token = inst.tokens.find((t) => t.id === tokenId);
+    if (!token || token.state !== 'waiting') throw conflict('token is not waiting');
+    if (vars) Object.assign(inst.variables, vars);
+    await this.cancelTimersForToken(inst, tokenId);   // host resumed → drop its pending boundary/catch timers
+    const p = this.proc(inst, dep);
+    const node = this.nodeMap(p).get(token.nodeId);
+    // A message/signal/escalation boundary's own waiting token (see messageBoundaryHosts) resolving —
+    // route through the same "cancel the host, then run the recovery flow" logic fireBoundary uses for
+    // a timer boundary, rather than the generic wait-node completion logic below (which assumes the
+    // RESUMED node itself is what was being waited on, true for a userTask/catch but not for a
+    // boundary, whose real host is a DIFFERENT, still-separately-tracked token).
+    if (node?.type === 'boundary') return this.fireMessageBoundary(inst, dep, node, tokenId);
+    // exit the wait node, spawn successors, resume the loop
+    if (node) this.removeHostToken(inst, p, tokenId, node.id!); else this.removeToken(inst, tokenId);
+    if (node) await this.cancelEventGatewaySiblings(inst, p, node.id!);
+    // A waiting node (userTask/receive/etc.) NOW actually completes — this is where its onExit fires
+    // (handle() already ran onExit for anything that finished immediately; a waiting node never got
+    // that chance, since it hadn't really "exited" yet when handle() first returned `wait`).
+    if (node && (node as any).onExit) {
+      const c = this.buildCtx(node, inst, p, {}, dep, tokenId);
+      const exitErr = await this.runLifecycle(node, 'onExit', c);
+      if (exitErr) {
+        if (!this.raiseError(inst, p, node.id!, 'SCRIPT_ERROR', exitErr)) {
+          inst.status = 'failed';
+          inst.error = { nodeId: node.id!, message: exitErr, at: this.ctx.clock() };
+          return this.runToQuiescence(inst, dep);   // status !== 'running' → settles/persists/cleans up, no looping
+        }
+        inst.status = 'running';
+        return this.runToQuiescence(inst, dep);
+      }
+    }
+    if (node) for (const t of this.defaultTargets(p, node, inst)) inst.tokens.push({ id: this.ctx.newId(), nodeId: t, state: 'active', enteredAt: this.ctx.clock() });
+    inst.status = 'running';
+    return this.runToQuiescence(inst, dep);
+  }
+
+  /** Diagram state for the live canvas highlight. */
+  diagramState(inst: Instance) {
+    const active = inst.tokens.map((t) => t.nodeId);
+    const visited = [...new Set(inst.history.map((h) => h.nodeId))];
+    return { activeNodeIds: active, visitedNodeIds: visited, status: inst.status };
   }
 }

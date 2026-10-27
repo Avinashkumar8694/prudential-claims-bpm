@@ -1,0 +1,21 @@
+{
+  "kind": "dataObject",
+  "model": {
+    "package": "com.acme.model",
+    "className": "Claim",
+    "fields": [
+      {
+        "name": "id",
+        "type": "String"
+      },
+      {
+        "name": "amount",
+        "type": "double"
+      },
+      {
+        "name": "status",
+        "type": "String"
+      }
+    ]
+  }
+}

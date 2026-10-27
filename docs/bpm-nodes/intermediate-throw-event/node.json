@@ -1,0 +1,15 @@
+{
+  "id": "_t",
+  "type": "intermediateThrowEvent",
+  "bpmnElement": "intermediateThrowEvent",
+  "eventType": "signal",
+  "signalName": "Go",
+  "name": "Throw Go",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "bpmn": "<bpmn2:intermediateThrowEvent id=\"_t\" name=\"Throw Go\">\u2026<bpmn2:signalEventDefinition id=\"_d\" signalRef=\"_sig_Go\"/></bpmn2:intermediateThrowEvent>"
+}

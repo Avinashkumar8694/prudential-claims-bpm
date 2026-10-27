@@ -1,27 +1,38 @@
-import { randomBytes } from 'node:crypto';
+// Sortable, dependency-free IDs (ULID-like: time prefix + random-ish suffix) and an injectable clock.
+// The execution engine takes clock/newId as injected deps so the step function stays deterministic.
+const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-/** A ULID-shaped id: sortable by creation time, URL-safe. Good enough for this project's needs
- *  without pulling in a dependency. */
-export function newId(): string {
-  const time = Date.now();
-  let timePart = '';
-  let t = time;
-  for (let i = 0; i < 10; i++) { timePart = CROCKFORD[t % 32] + timePart; t = Math.floor(t / 32); }
-  const rand = randomBytes(10);
-  let randPart = '';
-  for (const b of rand) randPart += CROCKFORD[b % 32];
-  return (timePart + randPart).slice(0, 26);
+function encodeTime(ms: number, len: number): string {
+  let out = '';
+  for (let i = len - 1; i >= 0; i--) { out = B32[ms % 32] + out; ms = Math.floor(ms / 32); }
+  return out;
 }
 
-/** A deterministic clock for tests — starts at `iso` and advances only when `.advance(ms)` is called,
- *  so time-sensitive engine behavior (timers, dueAt) is fully controllable and reproducible. */
-export function fakeClock(iso = '2025-01-01T00:00:00.000Z') {
-  let current = Date.parse(iso);
+let seq = 0;
+/** Monotonic-ish id. Not cryptographically random; fine for entity ids. */
+export function newId(nowMs = Date.now()): string {
+  seq = (seq + 1) % 0xffffff;
+  const time = encodeTime(nowMs, 10);
+  let rand = '';
+  const mix = (seq * 2654435761) >>> 0;
+  // keep r a NON-NEGATIVE 32-bit int at every step (>>>0); a signed XOR could make r%32 negative
+  // and index B32 out of range → 'undefined' chars in the id.
+  let r = (mix + (nowMs % 0x10000)) >>> 0;
+  for (let i = 0; i < 6; i++) { rand = B32[r % 32] + rand; r = (Math.floor(r / 32) + (i + 1) * 131 * (seq + 1)) >>> 0; }
+  return time + rand;
+}
+
+export type Clock = () => string; // ISO string
+export const systemClock: Clock = () => new Date().toISOString();
+
+/** A fixed/advanceable clock for tests. */
+export function fakeClock(startIso = '2025-01-01T00:00:00.000Z') {
+  let t = new Date(startIso).getTime();
+  const clock: Clock = () => new Date(t).toISOString();
   return {
-    clock: () => new Date(current).toISOString(),
-    advance: (ms: number) => { current += ms; },
-    set: (newIso: string) => { current = Date.parse(newIso); },
+    clock,
+    now: () => new Date(t).toISOString(),
+    advanceMs: (ms: number) => { t += ms; },
+    set: (iso: string) => { t = new Date(iso).getTime(); },
   };
 }
