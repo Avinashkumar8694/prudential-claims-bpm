@@ -356,6 +356,8 @@ public final class ScriptRunner {
         String qualified = "bpmscript.generated." + className;
         String returnType = asCondition ? "boolean" : "void";
         String source = "package bpmscript.generated;\n"
+            + "import bpmscript.KieFunctions;\n"
+            + "import org.json.*;\n"
             + "public class " + className + " {\n"
             + "  public static " + returnType + " run(bpmscript.KContext kcontext) throws Exception {\n"
             + userCode + "\n"

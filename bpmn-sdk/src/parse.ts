@@ -146,6 +146,22 @@ export function parseBpmnAll(xml: string): ProcessModel[] {
             const url = assignTo(el, '_UrlInputX'); nd.url = url ? url.replace('#{baseUrl}', '') : undefined;
             nd.method = assignTo(el, '_MethodInputX') || 'POST';
           } else { nd.subtype = 'reusable'; }
+          const portName = (ref: string, suffix: string) => ref.startsWith(`${el.attrs.id}_`) && ref.endsWith(suffix) ? ref.slice(el.attrs.id.length + 1, -suffix.length) : ref;
+          const inputs: Record<string, string> = {};
+          for (const a of kids(el, 'dataInputAssociation')) {
+            const port = portName(targetText(a), 'InputX');
+            const asg = kid(a, 'assignment');
+            const value = asg ? cdataText(kid(asg, 'from')) : sourceText(a);
+            if (port && value !== undefined) inputs[port] = asg ? (value || '') : `$${value}`;
+          }
+          const outputs: Record<string, string> = {};
+          for (const a of kids(el, 'dataOutputAssociation')) {
+            const port = portName(sourceText(a), 'OutputX');
+            const target = targetText(a);
+            if (port && target) outputs[target] = port;
+          }
+          if (Object.keys(inputs).length) (nd as any).inputs = inputs;
+          if (Object.keys(outputs).length) (nd as any).outputs = outputs;
           applyOnEntryExit(el, nd);
           nodes.push(nd); break;
         }

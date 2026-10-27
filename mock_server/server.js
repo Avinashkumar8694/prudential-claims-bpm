@@ -1066,6 +1066,67 @@ app.put('/kie-server/services/rest/server/containers/:containerId/tasks/:taskId/
   });
 });
 
+// ==========================================
+// Policy System Mock Endpoints
+// ==========================================
+const policyRouter = express.Router();
+
+// 1. Email & Notifications
+policyRouter.post('/policy-issue/email/send', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Policy issue email sent' }));
+policyRouter.post('/termination/email', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Termination email sent' }));
+policyRouter.post('/reinstatement/email/send', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Reinstatement email sent' }));
+policyRouter.post('/broker/record/change/email/send', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Broker record change email sent' }));
+policyRouter.post('/enrollment/file/content/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Content issue notification sent' }));
+policyRouter.post('/enrollment/file/format/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'File format issue notification sent' }));
+policyRouter.post('/enrollment/file/validation/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Validation success notification sent' }));
+policyRouter.post('/takeover/file/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Takeover notification sent' }));
+policyRouter.post('/policy/certificate/send-email', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Certificate email sent' }));
+policyRouter.post('/policy/id-card/send-email', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'ID card email sent' }));
+policyRouter.post('/policy/certificate/send-communication', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Communication sent' }));
+policyRouter.post('/certificate/available/notify', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Certificate available notified' }));
+policyRouter.post('/communications/retry', (req, res) => res.json({ status: 'SUCCESS', retried: true, message: 'Communications retry queued' }));
+
+// 2. Documents & Certificates
+policyRouter.post('/policy/certificate/create', (req, res) => res.json({ status: 'SUCCESS', certificateId: 'CERT-' + Date.now(), isError: false, message: 'Certificate created' }));
+policyRouter.post('/policy/certificate/physical/delivery', (req, res) => res.json({ status: 'SUCCESS', isError: false, deliveryError: false, tracking: 'TRK-CERT-1234' }));
+policyRouter.get('/policy/certificates/status', (req, res) => res.json({ status: 'READY', generated: true }));
+policyRouter.post('/policy/id-card/create', (req, res) => res.json({ status: 'SUCCESS', idCardId: 'IDC-' + Date.now(), isError: false, message: 'ID card created' }));
+policyRouter.post('/policy/id-card/physical/delivery', (req, res) => res.json({ status: 'SUCCESS', isError: false, deliveryError: false, tracking: 'TRK-IDC-1234' }));
+policyRouter.post('/policy/document/create', (req, res) => res.json({ status: 'SUCCESS', documentId: 'DOC-' + Date.now(), isError: false, generateDocumentDecision: 'Approve' }));
+policyRouter.post('/policy/physical-mail/eligibility', (req, res) => res.json({ status: 'SUCCESS', isPhysicalDelivery: false, isError: false, eligible: true }));
+policyRouter.post('/policy/physical/delivery', (req, res) => res.json({ status: 'SUCCESS', isError: false, deliveryError: false, tracking: 'TRK-DOC-1234' }));
+policyRouter.post('/policy/shipments', (req, res) => res.json({ status: 'SUCCESS', shipmentId: 'SHP-' + Date.now() }));
+
+// 3. Underwriting & Policy Checks
+policyRouter.post('/policy/issuance/complex-coverage-check', (req, res) => res.json({ status: 'SUCCESS', isComplex: false, complexCoverage: false, passed: true }));
+policyRouter.post('/policy/issuance/premium-check', (req, res) => res.json({ status: 'SUCCESS', premiumValid: true, amount: 1500.0, currency: 'USD' }));
+policyRouter.post('/policy/issuance/siu-check', (req, res) => res.json({ status: 'SUCCESS', siuClear: true, flagged: false, siu_flagged: false }));
+policyRouter.post('/policy/create-policy', (req, res) => res.json({ status: 'SUCCESS', policyNumber: 'POL-' + Date.now(), issueDate: new Date().toISOString() }));
+policyRouter.post('/policy/termination', (req, res) => res.json({ status: 'SUCCESS', isError: false, message: 'Policy terminated' }));
+policyRouter.post('/jet-issue/decision', (req, res) => res.json({ status: 'APPROVED', decision: 'APPROVED', complexCoverage: false }));
+policyRouter.post('/ofac/screening/run', (req, res) => res.json({ status: 'CLEAR', match: false, decision: 'CLEARED', ofac_status: 'CLEAR' }));
+policyRouter.post('/ofac/case/decision', (req, res) => res.json({ status: 'SUCCESS', decision: 'CLEARED' }));
+policyRouter.post('/ofac/escalation/notify', (req, res) => res.json({ status: 'SUCCESS', notified: true }));
+
+// 4. Case Management & Timeline
+policyRouter.post('/case-service/case/instance/signal/save', (req, res) => res.json({ status: 'SUCCESS', signalSaved: true }));
+policyRouter.post('/case/instance/update-status', (req, res) => res.json({ status: 'SUCCESS', caseStatus: 'UPDATED', caseId: req.body?.case_id }));
+policyRouter.patch('/case/instance/patch/data', (req, res) => res.json({ status: 'SUCCESS', patched: true }));
+policyRouter.post('/case/instance/abort', (req, res) => res.json({ status: 'SUCCESS', aborted: true }));
+policyRouter.post('/case/escalation/assign', (req, res) => res.json({ status: 'SUCCESS', assigned: true }));
+policyRouter.post('/policy/timeline/open', (req, res) => res.json({ status: 'SUCCESS', timelineId: 'TL-' + Date.now() }));
+policyRouter.post('/policy/timeline/close', (req, res) => res.json({ status: 'SUCCESS', closed: true }));
+policyRouter.post('/policy/timeline/workflow-step', (req, res) => res.json({ status: 'SUCCESS', stepRecorded: true }));
+policyRouter.post('/update/cid-pid', (req, res) => res.json({ status: 'SUCCESS', pid: 'PID-' + Date.now(), cid: req.body?.cid || 'CID-101' }));
+policyRouter.post('/quote-api/group/takeover/update', (req, res) => res.json({ status: 'SUCCESS', isError: false, message: 'Takeover updated' }));
+policyRouter.post('/error-retry/register', (req, res) => res.json({ status: 'SUCCESS', retryId: 'ERR-' + Date.now() }));
+
+// Mount policyRouter at multiple paths for root, /policy-api, /quote-api, /broker-ms-api
+app.use(policyRouter);
+app.use('/policy-api', policyRouter);
+app.use('/quote-api', policyRouter);
+app.use('/broker-ms-api', policyRouter);
+
 // Start the server
 app.listen(PORT, () => {
   console.log(`\x1b[32m==================================================\x1b[0m`);

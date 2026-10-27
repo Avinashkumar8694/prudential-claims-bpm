@@ -4,8 +4,26 @@
 // lifetime of this server; it dynamically javac-compiles each distinct script snippet once (cached by
 // source hash) and executes it against a real kcontext binding. Only the one script snippet actually
 // referenced by a node is ever compiled — never the whole jBPM project, no Maven/kjar involved.
+import fs from 'node:fs';
+import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { config } from '../infra/config.ts';
+
+function findJavaBinary(): string {
+  if (process.env.JAVA_HOME && fs.existsSync(path.join(process.env.JAVA_HOME, 'bin/java'))) {
+    return path.join(process.env.JAVA_HOME, 'bin/java');
+  }
+  for (const candidate of [
+    '/opt/homebrew/opt/openjdk@17/bin/java',
+    '/opt/homebrew/opt/openjdk@21/bin/java',
+    '/opt/homebrew/opt/openjdk/bin/java',
+    '/usr/local/opt/openjdk@17/bin/java',
+    '/usr/local/opt/openjdk/bin/java',
+  ]) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return 'java';
+}
 
 export interface PendingAction {
   kind: 'signal' | 'abort';
@@ -46,7 +64,7 @@ let starting: Promise<number> | undefined;
 function start(): Promise<number> {
   if (starting) return starting;
   starting = new Promise<number>((resolve, reject) => {
-    const proc = spawn('java', ['-cp', config.javaSidecarClasspath, 'bpmscript.Server', '0'], {
+    const proc = spawn(findJavaBinary(), ['-cp', config.javaSidecarClasspath, 'bpmscript.Server', '0'], {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     child = proc;

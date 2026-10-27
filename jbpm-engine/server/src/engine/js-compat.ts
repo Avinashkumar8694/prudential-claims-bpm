@@ -7,13 +7,7 @@
 // general Java interop bridge. A custom project-specific FQN (or any JDK type beyond the handful of
 // collections below) isn't resolvable here, matching the "no custom classes" boundary already
 // established for the real Java path (jbpm-engine/java-runtime).
-//
-// Every method below is installed as an OWN property of the created instance, never on a shared
-// prototype: java-compat.ts's own history found that adding `get`/`set` as OWN properties of
-// Object.prototype crashes a vm context's internal global-property machinery (not a catchable JS
-// error). That risk is specific to the SHARED prototype every object in the realm inherits from —
-// an ordinary object having its own method named `get`/`set`/`put` (exactly like real JS `Map`
-// already does) carries no such risk.
+import vm from 'node:vm';
 
 function makeArrayList(initial?: unknown[]): Record<string, unknown> {
   const data: unknown[] = initial ? initial.slice() : [];
@@ -68,13 +62,6 @@ const COLLECTION_FACTORIES: Record<string, () => Record<string, unknown>> = {
   'java.util.LinkedHashSet': makeHashSet,
 };
 
-/** `Java.type("java.util.ArrayList")` — GraalVM/Nashorn's explicit type-handle interop. Returns a
- *  function so `new Java.type(...)()` works: a constructor function that `return`s a plain object
- *  is honored by `new` in place of the freshly-allocated `this` (standard JS semantics) — but ONLY
- *  for an ordinary `function`, never an arrow function: arrow functions have no `[[Construct]]` slot
- *  at all, so `new (() => {})()` throws "is not a constructor" — a real bug caught by this file's
- *  own test (engine-js-compat.test.ts) assigning the result to a variable and `new`-ing it, exactly
- *  how `_scripting-javascript.md` §5 documents real scripts using `Java.type`. */
 function javaType(fqn: string): () => Record<string, unknown> {
   const factory = COLLECTION_FACTORIES[fqn];
   if (!factory) {
@@ -88,11 +75,58 @@ function javaType(fqn: string): () => Record<string, unknown> {
   return function () { return factory(); };
 }
 
-/** Installs `Java.type(...)` and the `java.util.*` package-global constructors (Nashorn's other,
- *  more common convention: `new java.util.ArrayList()` directly, no `Java.type` call) into a JS
- *  sandbox. Mutates `sandbox` in place, mirroring this codebase's existing install-shim pattern. */
+/** Installs realm-level prototypes (String.prototype.isEmpty, equals, Boolean.TRUE, etc.) */
+export function initVmRealm(sandbox: Record<string, unknown>): void {
+  vm.runInContext(`
+    if (!Object.prototype.isEmpty) {
+      Object.prototype.isEmpty = function() {
+        if (this == null) return true;
+        if (typeof this.length === "number") return this.length === 0;
+        if (typeof this.size === "function") return this.size() === 0;
+        if (typeof this.size === "number") return this.size === 0;
+        return Object.keys(this).length === 0;
+      };
+    }
+    if (!Object.prototype.equals) {
+      Object.prototype.equals = function(o) {
+        if (this === o) return true;
+        if (o == null) return false;
+        return this.valueOf() === (typeof o.valueOf === "function" ? o.valueOf() : o);
+      };
+    }
+    if (!String.prototype.isEmpty) {
+      String.prototype.isEmpty = function() { return this.length === 0; };
+    }
+    if (!String.prototype.equals) {
+      String.prototype.equals = function(o) { return this.valueOf() === String(o); };
+    }
+    if (!String.prototype.equalsIgnoreCase) {
+      String.prototype.equalsIgnoreCase = function(o) { return o != null && this.toLowerCase() === String(o).toLowerCase(); };
+    }
+    if (!Error.prototype.getMessage) {
+      Error.prototype.getMessage = function() { return this.message || String(this); };
+    }
+    if (!Error.prototype.getLocalizedMessage) {
+      Error.prototype.getLocalizedMessage = function() { return this.message || String(this); };
+    }
+    if (!Error.prototype.printStackTrace) {
+      Error.prototype.printStackTrace = function() { console.error(this.stack); };
+    }
+    String.valueOf = function(o) { return o == null ? "null" : String(o); };
+    if (typeof Boolean.TRUE === "undefined") {
+      Boolean.TRUE = { equals: function(o) { return Boolean(o) === true; }, valueOf: function() { return true; }, toString: function() { return "true"; } };
+      Boolean.FALSE = { equals: function(o) { return Boolean(o) === false; }, valueOf: function() { return false; }, toString: function() { return "false"; } };
+    }
+  `, sandbox);
+}
+
+/** Installs `Java.type(...)` and the `java.util.*` package-global constructors into a JS sandbox. */
 export function installJsCompat(sandbox: Record<string, unknown>): void {
   sandbox.Java = { type: javaType };
+  sandbox.Integer = { valueOf: (x: any) => parseInt(x, 10), parseInt: (x: any) => parseInt(x, 10) };
+  sandbox.Long = { valueOf: (x: any) => parseInt(x, 10), parseLong: (x: any) => parseInt(x, 10) };
+  sandbox.Double = { valueOf: (x: any) => parseFloat(x), parseDouble: (x: any) => parseFloat(x) };
+  sandbox.Float = { valueOf: (x: any) => parseFloat(x), parseFloat: (x: any) => parseFloat(x) };
   sandbox.java = {
     util: {
       ArrayList: function ArrayList() { return makeArrayList(); },
@@ -101,6 +135,134 @@ export function installJsCompat(sandbox: Record<string, unknown>): void {
       LinkedHashMap: function LinkedHashMap() { return makeHashMap(); },
       HashSet: function HashSet() { return makeHashSet(); },
       LinkedHashSet: function LinkedHashSet() { return makeHashSet(); },
+      Map: function Map() { return makeHashMap(); },
+      List: function List() { return makeArrayList(); },
+      Set: function Set() { return makeHashSet(); },
     },
+  };
+  sandbox.KieFunctions = {
+    equalsTo: (a: unknown, b: unknown) => {
+      if (a === b) return true;
+      if (a == null || b == null) return false;
+      return String(a) === String(b);
+    },
+    isTrue: (a: unknown) => {
+      if (typeof a === 'boolean') return a;
+      if (typeof a === 'string') return a.trim().toLowerCase() === 'true' || a.trim() === '1';
+      return Boolean(a);
+    },
+    isFalse: (a: unknown) => {
+      if (typeof a === 'boolean') return !a;
+      if (typeof a === 'string') return a.trim().toLowerCase() === 'false' || a.trim() === '0';
+      return !a;
+    },
+    isNull: (a: unknown) => a == null,
+    notNull: (a: unknown) => a != null,
+    isEmpty: (a: unknown) => a == null || String(a).trim() === '',
+  };
+
+  function makeJsonObject(initial?: any): Record<string, unknown> {
+    const data: Record<string, unknown> = (initial && typeof initial === 'string') ? JSON.parse(initial) : (initial && typeof initial === 'object') ? { ...initial } : {};
+    const self: Record<string, unknown> = {};
+    self.put = (k: string, v: unknown) => { data[k] = v; return self; };
+    self.get = (k: string) => data[k];
+    self.getString = (k: string) => data[k] == null ? null : String(data[k]);
+    self.optString = (k: string, fb = '') => data[k] == null ? fb : String(data[k]);
+    self.optBoolean = (k: string, fb = false) => {
+      const v = data[k];
+      if (v == null) return fb;
+      if (typeof v === 'boolean') return v;
+      const s = String(v).trim().toLowerCase();
+      return s === 'true' || s === '1';
+    };
+    self.optInt = (k: string, fb = 0) => {
+      const v = data[k];
+      if (v == null) return fb;
+      const n = parseInt(String(v), 10);
+      return isNaN(n) ? fb : n;
+    };
+    self.has = (k: string) => Object.prototype.hasOwnProperty.call(data, k);
+    self.isNull = (k: string) => data[k] == null;
+    self.toString = () => JSON.stringify(data);
+    return self;
+  }
+
+  sandbox.org = {
+    json: {
+      JSONObject: function JSONObject(init?: any) { return makeJsonObject(init); },
+      JSONArray: function JSONArray(init?: any) { return makeArrayList(Array.isArray(init) ? init : (typeof init === 'string' ? JSON.parse(init) : [])); },
+    },
+  };
+
+  function makeJacksonNode(initial?: any): Record<string, unknown> {
+    const data = initial;
+    const self: Record<string, unknown> = {
+      put: function (k: string, v: unknown) { if (data && typeof data === 'object') (data as any)[k] = v; return self; },
+      putPOJO: function (k: string, v: unknown) { if (data && typeof data === 'object') (data as any)[k] = v; return self; },
+      putNull: function (k: string) { if (data && typeof data === 'object') (data as any)[k] = null; return self; },
+      putArray: function (k: string) { const a: unknown[] = []; if (data && typeof data === 'object') (data as any)[k] = a; return makeJacksonArray(a); },
+      set: function (k: string, v: unknown) { if (data && typeof data === 'object') (data as any)[k] = v; return self; },
+      get: function (k: string) { return (data && typeof data === 'object') ? (data as any)[k] : undefined; },
+      path: function (k: string) { return makeJacksonNode((data && typeof data === 'object') ? (data as any)[k] : undefined); },
+      has: function (k: string) { return (data && typeof data === 'object') ? Object.prototype.hasOwnProperty.call(data, k) : false; },
+      hasNonNull: function (k: string) { return (data && typeof data === 'object') ? (data as any)[k] != null : false; },
+      isArray: function () { return Array.isArray(data); },
+      asBoolean: function (fb = false) {
+        if (data == null) return fb;
+        if (typeof data === 'boolean') return data;
+        const s = String(data).trim().toLowerCase();
+        return s === 'true' || s === '1';
+      },
+      asInt: function (fb = 0) { const n = parseInt(String(data), 10); return isNaN(n) ? fb : n; },
+      asText: function (fb = '') { return data == null ? fb : String(data); },
+      isNull: function () { return data == null; },
+      isMissingNode: function () { return data === undefined; },
+      size: function () { return Array.isArray(data) ? data.length : (typeof data === 'object' && data !== null ? Object.keys(data).length : 0); },
+      toString: function () { return typeof data === 'string' ? data : JSON.stringify(data); },
+    };
+    return self;
+  }
+
+  function makeJacksonArray(arr?: unknown[]): Record<string, unknown> {
+    const data = arr || [];
+    return {
+      addObject: function () { const o = {}; data.push(o); return makeJacksonNode(o); },
+      add: function (v: unknown) { data.push(v); return this; },
+      toString: function () { return JSON.stringify(data); },
+    };
+  }
+
+  sandbox.com = {
+    fasterxml: {
+      jackson: {
+        databind: {
+          ObjectMapper: function ObjectMapper() {
+            return {
+              createObjectNode: () => makeJacksonNode({}),
+              createArrayNode: () => makeJacksonArray([]),
+              readTree: (str: unknown) => {
+                try { return makeJacksonNode(typeof str === 'string' ? JSON.parse(str) : str); }
+                catch { return makeJacksonNode({}); }
+              },
+              writeValueAsString: (obj: unknown) => JSON.stringify(obj),
+            };
+          },
+          node: {
+            ObjectNode: function ObjectNode() { return makeJacksonNode({}); },
+            ArrayNode: function ArrayNode() { return makeJacksonArray([]); },
+          },
+        },
+      },
+    },
+  };
+
+  sandbox.System = {
+    out: {
+      println: (...args: unknown[]) => ((sandbox.console as any)?.log || console.log)(...args),
+      print: (...args: unknown[]) => ((sandbox.console as any)?.log || console.log)(...args),
+    },
+    getenv: (k: string) => ((sandbox.env as Record<string, string>)?.[k] || process.env[k] || ''),
+    getProperty: (k: string) => ((sandbox.env as Record<string, string>)?.[k] || process.env[k] || ''),
+    currentTimeMillis: () => Date.now(),
   };
 }

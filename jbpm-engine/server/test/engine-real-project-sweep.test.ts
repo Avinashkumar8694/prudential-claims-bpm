@@ -21,7 +21,7 @@ test.after(() => stopJavaSidecar());
 
 function findBpmnFiles(dir: string, out: string[] = []): string[] {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    if (entry.name === 'node_modules' || entry.name.startsWith('.') || entry.name === 'extracted_projects') continue;
     const p = path.join(dir, entry.name);
     if (entry.isDirectory()) findBpmnFiles(p, out);
     else if (entry.name.endsWith('.bpmn')) out.push(p);

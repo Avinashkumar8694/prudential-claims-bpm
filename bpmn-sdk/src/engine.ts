@@ -1272,7 +1272,7 @@ export function toEngine(m: ProcessModel): EngineProcess {
       case 'callActivity':
         if (n.subtype === 'multiInstance' && n.multiInstance) return { ...b, type: 'forEach', process: n.calledElement, over: n.multiInstance.collectionIn, as: n.multiInstance.itemVar, collectInto: n.multiInstance.collectionOut, itemResult: n.multiInstance.itemOutVar, parallel: !n.multiInstance.isSequential, pass: n.multiInstance.passthru, ...revLifecycle(n) };
         if (n.subtype === 'rest') return { ...b, type: 'http', method: n.method, url: n.url, ...(String(n.onExitFormat || '').includes('javascript') ? { lang: 'js' as Lang } : {}) }; // body/resultTo not reversed
-        return { ...b, type: 'call', process: n.calledElement, ...revLifecycle(n) };
+        return { ...b, type: 'call', process: n.calledElement, ...((n as any).inputs ? { inputs: (n as any).inputs } : {}), ...((n as any).outputs ? { outputs: (n as any).outputs } : {}), ...revLifecycle(n) };
       default: return { ...b, type: 'raw', raw: n.raw };
     }
   };

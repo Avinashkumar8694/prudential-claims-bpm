@@ -4,7 +4,7 @@ var __export = (target, all) => {
     __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// src/xml.ts
+// bpmn-sdk/src/xml.ts
 function decodeEntities(s) {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
 }
@@ -118,7 +118,7 @@ function stringifyNode(el2) {
   return inner ? `<${el2.name}${a}>${inner}</${el2.name}>` : `<${el2.name}${a}/>`;
 }
 
-// src/parse.ts
+// bpmn-sdk/src/parse.ts
 var RAW_SKIP = /* @__PURE__ */ new Set([
   "property",
   "sequenceFlow",
@@ -402,6 +402,22 @@ function parseBpmnAll(xml) {
           } else {
             nd.subtype = "reusable";
           }
+          const portName = (ref, suffix) => ref.startsWith(`${el2.attrs.id}_`) && ref.endsWith(suffix) ? ref.slice(el2.attrs.id.length + 1, -suffix.length) : ref;
+          const inputs = {};
+          for (const a of kids(el2, "dataInputAssociation")) {
+            const port = portName(targetText(a), "InputX");
+            const asg = kid(a, "assignment");
+            const value = asg ? cdataText(kid(asg, "from")) : sourceText(a);
+            if (port && value !== void 0) inputs[port] = asg ? value || "" : `$${value}`;
+          }
+          const outputs = {};
+          for (const a of kids(el2, "dataOutputAssociation")) {
+            const port = portName(sourceText(a), "OutputX");
+            const target = targetText(a);
+            if (port && target) outputs[target] = port;
+          }
+          if (Object.keys(inputs).length) nd.inputs = inputs;
+          if (Object.keys(outputs).length) nd.outputs = outputs;
           applyOnEntryExit(el2, nd);
           nodes.push(nd);
           break;
@@ -479,7 +495,7 @@ function parseBpmn(xml) {
   return all[0];
 }
 
-// src/constants.ts
+// bpmn-sdk/src/constants.ts
 var constants_exports = {};
 __export(constants_exports, {
   BUILTIN_ERRORS: () => BUILTIN_ERRORS,
@@ -553,7 +569,7 @@ var BUILTIN_ERRORS = {
   TERMINATE: "TERMINATE_CASE"
 };
 
-// src/serialize.ts
+// bpmn-sdk/src/serialize.ts
 function serializeProcess(proc) {
   let idc = 0;
   const uid = (p = "_id") => `${p}${++idc}`;
@@ -847,11 +863,11 @@ ${edges.join("\n")}
 `;
 }
 
-// src/project.ts
+// bpmn-sdk/src/project.ts
 import fs2 from "fs";
 import path2 from "path";
 
-// src/scaffold.ts
+// bpmn-sdk/src/scaffold.ts
 import fs from "fs";
 import path from "path";
 var SCAFFOLD_FILES = [
@@ -1120,7 +1136,7 @@ function writeDescriptor(descriptor, projectDir) {
   return written;
 }
 
-// src/project.ts
+// bpmn-sdk/src/project.ts
 function walk(dir, ext, out = []) {
   for (const e of fs2.readdirSync(dir, { withFileTypes: true })) {
     const p = path2.join(dir, e.name);
@@ -1155,7 +1171,7 @@ function writeProject(project, projectDir, opts = {}) {
   return written;
 }
 
-// src/validate.ts
+// bpmn-sdk/src/validate.ts
 function validateModel(proc) {
   const errors = [];
   const warnings = [];
@@ -1190,7 +1206,7 @@ function validateModel(proc) {
   return { ok: errors.length === 0, errors, warnings };
 }
 
-// src/wire.ts
+// bpmn-sdk/src/wire.ts
 function wireContainer(nodes, flows) {
   for (const n of nodes) {
     if (n.type !== "boundaryEvent") n.incoming = flows.filter((f) => f.targetRef === n.id).map((f) => f.id);
@@ -1203,7 +1219,7 @@ function autowire(p) {
   return p;
 }
 
-// src/assets.ts
+// bpmn-sdk/src/assets.ts
 var EXT_KIND = {
   ".drl": "drl",
   ".dmn": "dmn",
@@ -1553,7 +1569,7 @@ function buildAsset(asset) {
   }
 }
 
-// src/engine.ts
+// bpmn-sdk/src/engine.ts
 var PRIM = {
   string: "String",
   int: "Integer",
@@ -2616,7 +2632,7 @@ function toEngine(m) {
       case "callActivity":
         if (n.subtype === "multiInstance" && n.multiInstance) return { ...b, type: "forEach", process: n.calledElement, over: n.multiInstance.collectionIn, as: n.multiInstance.itemVar, collectInto: n.multiInstance.collectionOut, itemResult: n.multiInstance.itemOutVar, parallel: !n.multiInstance.isSequential, pass: n.multiInstance.passthru, ...revLifecycle(n) };
         if (n.subtype === "rest") return { ...b, type: "http", method: n.method, url: n.url, ...String(n.onExitFormat || "").includes("javascript") ? { lang: "js" } : {} };
-        return { ...b, type: "call", process: n.calledElement, ...revLifecycle(n) };
+        return { ...b, type: "call", process: n.calledElement, ...n.inputs ? { inputs: n.inputs } : {}, ...n.outputs ? { outputs: n.outputs } : {}, ...revLifecycle(n) };
       default:
         return { ...b, type: "raw", raw: n.raw };
     }
@@ -2699,4 +2715,3 @@ export {
   writeProject,
   writeProperties
 };
-//# sourceMappingURL=index.mjs.map

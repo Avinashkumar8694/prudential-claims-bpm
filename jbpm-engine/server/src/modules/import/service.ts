@@ -129,6 +129,89 @@ export function convertAssets(engine: EngineProject): AssetImportReport {
   return report;
 }
 
+export function javaScriptify(code?: string): string {
+  if (!code) return '';
+  let js = code;
+
+  // 1. Comments and system calls
+  js = js.replace(/System\.out\.println\s*\(/g, 'console.log(');
+  js = js.replace(/System\.out\.print\s*\(/g, 'console.log(');
+  js = js.replace(/System\.(getenv|getProperty)\s*\(\s*"([^"]+)"\s*\)/g, '((env && env["$2"]) || "")');
+  js = js.replace(/String\.valueOf\s*\(/g, 'String(');
+  js = js.replace(/\.length\s*\(\s*\)/g, '.length');
+
+  // 2. catch (Exception e) -> catch (e)
+  js = js.replace(/catch\s*\(\s*(?:[a-zA-Z0-9_\.]+\s+)?([a-zA-Z0-9_]+)\s*\)/g, 'catch ($1)');
+
+  // 3. new Class<Generics>() -> new Class()
+  js = js.replace(/new\s+([a-zA-Z0-9_\.]+)<[^>]+>\s*\(/g, 'new $1(');
+
+  // 4. .class literal -> ""
+  js = js.replace(/\.class\b/g, '');
+
+  // 5. Type casts: (Type) expr -> expr (only if preceded by non-word/operator)
+  const castPattern = /(?<![\w\.\$])\(\s*(?:int|long|double|float|boolean|char|short|byte|(?:[a-z0-9_]+\.)*[A-Z][a-zA-Z0-9_]*(?:<[^>]+>)?)\s*\)\s*(?![;,=\)])/g;
+  js = js.replace(castPattern, '');
+
+  // 6. Variable declarations: Type varName = -> let varName =
+  const declPattern = /\b(?:int|long|double|float|boolean|char|short|byte|(?:[a-z0-9_]+\.)*[A-Z][a-zA-Z0-9_]*(?:<[^>]+>)?)\s+([a-zA-Z0-9_]+)\s*([=;])/g;
+  js = js.replace(declPattern, 'let $1 $2');
+
+  // 7. For loops: for (Type x : list) -> for (let x of list)
+  js = js.replace(/for\s*\(\s*(?:[a-zA-Z0-9_\\.<>]+)\s+([a-zA-Z0-9_]+)\s*:\s*([^)]+)\)/g, 'for (let $1 of $2)');
+  js = js.replace(/for\s*\(\s*int\s+([a-zA-Z0-9_]+)\s*=/g, 'for (let $1 =');
+
+  return js;
+}
+
+export function convertProjectToNodeEngine(engine: EngineProject): EngineProject {
+  for (const proc of engine.processes || []) {
+    for (const node of proc.nodes || []) {
+      if (node.type === 'script') {
+        node.lang = 'js';
+        const js = javaScriptify(node.code);
+        node.code = js.trim() ? js : '// no-op';
+      }
+      if ((node as any).onEntry) {
+        (node as any).onEntryLang = 'js';
+        (node as any).onEntry = javaScriptify((node as any).onEntry);
+      }
+      if ((node as any).onExit) {
+        (node as any).onExitLang = 'js';
+        (node as any).onExit = javaScriptify((node as any).onExit);
+      }
+      if ((node as any).exitScript) {
+        (node as any).lang = 'js';
+        (node as any).exitScript = javaScriptify((node as any).exitScript);
+      }
+      if (node.type === 'subprocess' && Array.isArray((node as any).nodes)) {
+        for (const sub of (node as any).nodes) {
+          if (sub.type === 'script') {
+            sub.lang = 'js';
+            const js = javaScriptify(sub.code);
+            sub.code = js.trim() ? js : '// no-op';
+          }
+          if (sub.onEntry) { sub.onEntryLang = 'js'; sub.onEntry = javaScriptify(sub.onEntry); }
+          if (sub.onExit) { sub.onExitLang = 'js'; sub.onExit = javaScriptify(sub.onExit); }
+        }
+        for (const flow of (node as any).flows || []) {
+          if (flow.when) {
+            flow.lang = 'js';
+            flow.when = javaScriptify(flow.when);
+          }
+        }
+      }
+    }
+    for (const flow of proc.flows || []) {
+      if (flow.when) {
+        flow.lang = 'js';
+        flow.when = javaScriptify(flow.when);
+      }
+    }
+  }
+  return engine;
+}
+
 /** Reconstruct an EngineProject from a kjar file map (writes to a temp dir, parses, converts). */
 export function kjarToEngine(files: Record<string, string>): EngineProject {
   if (!files || !Object.keys(files).length) throw validation('no files to import');
@@ -139,7 +222,8 @@ export function kjarToEngine(files: Record<string, string>): EngineProject {
       fs.mkdirSync(path.dirname(p), { recursive: true });
       fs.writeFileSync(p, content);
     }
-    return toEngineProject(parseProject(dir));
+    const engine = toEngineProject(parseProject(dir));
+    return convertProjectToNodeEngine(engine);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

@@ -8,9 +8,23 @@ export const handler: NodeHandler = async (c) => {
   const h = WORKITEM_HANDLERS[n.handler];
   if (!h) return { error: `unknown work-item handler "${n.handler}"`, errorCode: 'SERVICE_ERROR' };
   const params: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(n.params || {})) params[k] = (typeof v === 'string' && v.startsWith('$')) ? c.inst.variables[v.slice(1)] : v;
+  const env = c.dep.env || {};
+  const instVars = c.inst.variables || {};
+  for (const [k, v] of Object.entries(n.params || {})) {
+    if (typeof v === 'string') {
+      if (v.startsWith('$')) {
+        params[k] = instVars[v.slice(1)] ?? env[v.slice(1)];
+      } else if (v.includes('${')) {
+        params[k] = v.replace(/\$\{([^}]+)\}/g, (_, name) => String(instVars[name] ?? env[name] ?? process.env[name] ?? ''));
+      } else {
+        params[k] = v;
+      }
+    } else {
+      params[k] = v;
+    }
+  }
   try {
-    const result = await h(params, c.dep.env || {});
+    const result = await h(params, env);
     const vars: Record<string, unknown> = {};
     for (const [varName, key] of Object.entries(n.resultTo || {})) vars[varName] = (result as any)[String(key)];
     return { vars, outcome: `workitem:${n.handler}` };

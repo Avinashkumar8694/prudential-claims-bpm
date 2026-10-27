@@ -27,7 +27,14 @@ import { IconComponent } from '../../shared/icon.component';
                   @for (o of f.options; track o) { <option [value]="o">{{ o }}</option> }
                 </select>
               }
-              @case ('code') { <textarea class="mono" rows="6" [ngModel]="val(f.key)" (ngModelChange)="set(f.key, $event)" [placeholder]="f.placeholder || ''"></textarea> }
+              @case ('code') {
+                @if (val('lang') === 'java' || val(f.key + 'Lang') === 'java') {
+                  <div class="lang-pill java"><span class="pill-badge">Java</span> <span class="pill-note">Imported from jBPM (language locked)</span></div>
+                } @else {
+                  <div class="lang-pill js"><span class="pill-badge">JavaScript</span> <span class="pill-note">Node.js Sandbox VM</span></div>
+                }
+                <textarea class="mono" rows="6" [ngModel]="val(f.key)" (ngModelChange)="set(f.key, $event)" [placeholder]="f.placeholder || ''"></textarea>
+              }
               @case ('textarea') { <textarea rows="3" [ngModel]="val(f.key)" (ngModelChange)="set(f.key, $event)" [placeholder]="f.placeholder || ''"></textarea> }
               @case ('stringlist') {
                 <div class="list">
@@ -146,6 +153,11 @@ import { IconComponent } from '../../shared/icon.component';
     input, select, textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit; }
     input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
     textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    .lang-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 6px; padding: 3px 8px; border-radius: 6px; }
+    .lang-pill.java { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+    .lang-pill.js { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+    .pill-badge { font-weight: 700; text-transform: uppercase; }
+    .pill-note { opacity: 0.85; font-size: 11px; }
     .mt { margin-top: 6px; }
     small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4; }
     .tog { display: flex; align-items: center; gap: 8px; } .tog input { width: auto; } .tog span { font-size: 13px; }

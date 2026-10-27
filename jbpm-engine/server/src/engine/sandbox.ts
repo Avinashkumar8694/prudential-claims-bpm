@@ -27,7 +27,7 @@
 // how a script using them still exports to plain, real-jBPM-runnable text.
 import vm from 'node:vm';
 import { executeJava, executeJavaCondition, type ActiveNodeInstance, type PendingAction } from './java-sidecar.ts';
-import { installJsCompat } from './js-compat.ts';
+import { installJsCompat, initVmRealm } from './js-compat.ts';
 import { acquireScriptSlot } from '../infra/quotas.ts';
 
 /** matches real jBPM's org.kie.api.runtime.process.ProcessInstance state constants — see
@@ -92,8 +92,14 @@ function buildKcontext(vars: Record<string, unknown>, info: KContextInfo, action
     signalEvent: (type: string, event?: unknown) => { actions.push({ kind: 'signal', type, payload: event, targetInstanceId: selfId }); },
   };
   const nodeInstance = { getId: () => info.nodeInstanceId ?? '', getNodeId: () => info.nodeId ?? '', getNodeName: () => info.nodeName ?? '' };
+  const envMap: Record<string, any> = { ...(info.env || {}) };
+  const environment = {
+    ...envMap,
+    get: (k: string) => envMap[k] ?? process.env[k] ?? null,
+    set: (k: string, v: unknown) => { envMap[k] = v; if (info.env) info.env[k] = String(v); },
+  };
   const kieRuntime = {
-    getEnvironment: () => ({ ...(info.env || {}) }),
+    getEnvironment: () => environment,
     // one function handles both the session-wide broadcast (2 args) and targeted delivery (3 args) —
     // JS has no method overloading, unlike the Java-dialect twin's two signalEvent overloads.
     signalEvent: (type: string, event?: unknown, processInstanceId?: string) => {
@@ -224,6 +230,7 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
   };
   installJsCompat(sandbox);
   vm.createContext(sandbox);
+  initVmRealm(sandbox);
   // snapshot bare-name values BEFORE running, so afterward we can sync back only what a bare-name
   // ASSIGNMENT actually changed — see the comment below for why this must be change-detected, not
   // "copy everything back".
@@ -247,12 +254,17 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
   // engine-flow.test.ts's `kcontext.setVariable("greeted", true)` on a variable declared as `bool`).
   for (const k of Object.keys(sandbox)) {
     if (RESERVED_SANDBOX_KEYS.has(k)) continue;
+    if (typeof sandbox[k] === 'function') continue;
     if (!(k in before) || !Object.is(sandbox[k], before[k])) vars[k] = sandbox[k];
   }
   if (opts.onAction) await resolveActions(actions, opts.onAction);
 }
 
-const RESERVED_SANDBOX_KEYS = new Set(['kcontext', 'vars', 'instance', 'node', 'env', 'console', 'Java', 'java']);
+const RESERVED_SANDBOX_KEYS = new Set([
+  'kcontext', 'vars', 'instance', 'node', 'env', 'console',
+  'Java', 'java', 'System', 'KieFunctions', 'org', 'com', 'Boolean',
+  'String', 'Number', 'Object', 'Array', 'Integer', 'Long', 'Double', 'Float',
+]);
 
 /** deployment/instance context for a condition — same shape ScriptOpts carries for scripts, kept
  *  separate since a condition doesn't take the full ScriptOpts bag (no log sink). Conditions CAN
@@ -297,6 +309,7 @@ export async function evalCondition(expr: string | undefined, lang: string | und
   };
   installJsCompat(sandbox);
   vm.createContext(sandbox);
+  initVmRealm(sandbox);
   try {
     const body = /return\b/.test(expr) ? expr : `return (${expr});`;
     const result = !!vm.runInContext(`(function(){ ${body} })()`, sandbox, { timeout: timeoutMs });

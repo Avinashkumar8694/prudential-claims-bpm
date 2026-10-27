@@ -8,3 +8,7 @@ project/
 node_modules/
 .DS_Store
 .claude/
+*.class
+jbpm-engine/java-runtime/out/
+extracted_projects/
+.data/
