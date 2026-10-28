@@ -193,6 +193,8 @@ export class WorkflowInstanceService {
   /** Delegates the case's current open task. If more than one task is open, `taskId` disambiguates —
    *  matches the plan's "current open task" convenience while still supporting the general case. */
   async delegate(id: string, to: string, actor: string, taskId?: string): Promise<Task> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
     const mine = await this.tasks(id);
     const open = mine.filter((t) => t.status !== 'completed' && t.status !== 'skipped' && t.status !== 'exited' && t.status !== 'error');
     const target = taskId ? open.find((t) => t.id === taskId) : open.length === 1 ? open[0] : undefined;

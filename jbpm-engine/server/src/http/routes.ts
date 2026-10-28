@@ -461,22 +461,22 @@ export function buildRoutes(): Router {
   r.get('/query/analytics/summary', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).summary(req.query as any))));
   r.get('/query/jobs', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).jobs(s(req)) })));
 
-  // --- IAM: users, groups, roles (admin-only) ---
+  // --- IAM: users, groups, roles (admin-only mutation, directory read allowed for task managers) ---
   const iam = (req: Request) => new IamService(ctxOf(req));
-  r.get('/users', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listUsers() })));
+  r.get('/users', perm('admin:iam', 'task:manage'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listUsers() })));
   r.post('/users', perm('admin:iam'), asyncHandler(async (req, res) => {
     const input = { ...(req.body || {}) };
     if (input.password) input.password = decryptInTransit(input.password);
     res.status(201).json(await iam(req).createUser(input, actorOf(req)));
   }));
-  r.get('/users/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).getUser(req.params.id))));
+  r.get('/users/:id', perm('admin:iam', 'task:manage'), asyncHandler(async (req, res) => res.json(await iam(req).getUser(req.params.id))));
   r.patch('/users/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).updateUser(req.params.id, req.body, actorOf(req)))));
   r.post('/users/:id/password', perm('admin:iam'), asyncHandler(async (req, res) => {
     const plain = decryptInTransit(req.body?.password);
     await iam(req).setPassword(req.params.id, plain, actorOf(req));
     res.status(204).end();
   }));
-  r.get('/groups', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listGroups() })));
+  r.get('/groups', perm('admin:iam', 'task:manage'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listGroups() })));
   r.post('/groups', perm('admin:iam'), asyncHandler(async (req, res) => res.status(201).json(await iam(req).createGroup(req.body, actorOf(req)))));
   r.delete('/groups/:id', perm('admin:iam'), asyncHandler(async (req, res) => { await iam(req).deleteGroup(req.params.id, actorOf(req)); res.status(204).end(); }));
   r.get('/roles', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listRoles() })));

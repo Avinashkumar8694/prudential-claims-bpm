@@ -2,6 +2,7 @@ import { Component, OnDestroy, computed, inject, signal, HostListener } from '@a
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { JsonPipe, SlicePipe } from '@angular/common';
+import { firstValueFrom } from 'rxjs';
 import { InstanceApiService } from '../../core/api/instance-api.service';
 import { DeploymentApiService } from '../../core/api/deployment-api.service';
 import { WorkflowApiService } from '../../core/api/workflow-api.service';
@@ -9,6 +10,7 @@ import { WorkflowInstanceApiService } from '../../core/api/workflow-instance-api
 import { QueryApiService } from '../../core/api/query-api.service';
 import { OpsApiService } from '../../core/api/ops-api.service';
 import { SystemApiService } from '../../core/api/system-api.service';
+import { IamApiService } from '../../core/api/iam-api.service';
 import { AuthService } from '../../core/auth/auth.service';
 import { RealtimeService } from '../../core/realtime.service';
 import { ToastService } from '../../shared/toast.service';
@@ -1005,6 +1007,7 @@ export class InstanceDetailComponent implements OnDestroy {
   private queryApi = inject(QueryApiService);
   private opsApi = inject(OpsApiService);
   private systemApi = inject(SystemApiService);
+  private iamApi = inject(IamApiService);
   private auth = inject(AuthService);
   private realtime = inject(RealtimeService);
   private toast = inject(ToastService);
@@ -1370,7 +1373,14 @@ export class InstanceDetailComponent implements OnDestroy {
 
   async delegateCaseTask(t: Task) {
     const bc = this.boundCase(); if (!bc) return;
-    const to = await this.modal.prompt({ title: `Delegate: ${t.name}`, message: 'Delegate task to username:', placeholder: 'worker1' });
+    const users = await firstValueFrom(this.iamApi.listUsers()).catch(() => []);
+    const activeUsernames = (users || []).filter((u) => u.active !== false).map((u) => u.username);
+    const to = await this.modal.prompt({
+      title: `Delegate: ${t.name}`,
+      message: 'Select a registered user to delegate this case task to:',
+      options: activeUsernames.length ? activeUsernames : undefined,
+      placeholder: 'username',
+    });
     if (!to || !to.trim()) return;
     this.wfInstApi.delegate(bc.workflowInstance.id, to.trim(), t.id).subscribe({
       next: () => { this.toast.success(`Task delegated to ${to.trim()}`); this.load(); },

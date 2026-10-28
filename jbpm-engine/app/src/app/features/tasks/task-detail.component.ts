@@ -5,12 +5,13 @@ import { SlicePipe } from '@angular/common';
 import { AuthService } from '../../core/auth/auth.service';
 import { TaskApiService } from '../../core/api/task-api.service';
 import { InstanceApiService } from '../../core/api/instance-api.service';
+import { IamApiService } from '../../core/api/iam-api.service';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
 import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
 import { IconComponent } from '../../shared/icon.component';
 import { KeyValueListComponent, KVPair, pairsToRecord } from '../../shared/key-value-list.component';
-import type { AuditEvent, Task, TaskComment } from '../../core/models';
+import type { AppGroup, AppUser, AuditEvent, Task, TaskComment } from '../../core/models';
 
 type Tab = 'work' | 'details' | 'assignments' | 'comments' | 'admin' | 'logs';
 const TABS: { key: Tab; label: string }[] = [
@@ -120,10 +121,31 @@ const TABS: { key: Tab; label: string }[] = [
                   <span>Task is {{ task()!.status }} — delegation and reassignment are disabled.</span>
                 </div>
               } @else {
-                <div class="row">
-                  <input placeholder="username" [(ngModel)]="delegateTo" [disabled]="isReadOnly()" style="flex:1;" />
-                  <button class="btn sm" [disabled]="isReadOnly() || !delegateTo.trim()" (click)="delegate()">Delegate</button>
+                <div class="row" style="gap: 8px;">
+                  <select [(ngModel)]="delegateTo" [disabled]="isReadOnly() || !activeUsers().length" style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;">
+                    <option value="" disabled selected>-- Select a registered user to delegate --</option>
+                    @if (task()?.group && groupMembers().length) {
+                      <optgroup [label]="'Members of group ' + task()!.group">
+                        @for (u of groupMembers(); track u.id) {
+                          <option [value]="u.username">{{ u.username }} @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
+                        }
+                      </optgroup>
+                      <optgroup label="Other Registered Users">
+                        @for (u of otherUsers(); track u.id) {
+                          <option [value]="u.username">{{ u.username }} @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
+                        }
+                      </optgroup>
+                    } @else {
+                      @for (u of activeUsers(); track u.id) {
+                        <option [value]="u.username">{{ u.username }} @if (u.groups.length) { [{{ u.groups.join(', ') }}] } @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
+                      }
+                    }
+                  </select>
+                  <button class="btn sm" [disabled]="isReadOnly() || !delegateTo.trim() || !isValidUser(delegateTo)" (click)="delegate()">Delegate</button>
                 </div>
+                @if (!activeUsers().length) {
+                  <p class="muted sm" style="margin-top: 6px;">No registered active users found in directory.</p>
+                }
               }
             </div>
           }
@@ -174,9 +196,19 @@ const TABS: { key: Tab; label: string }[] = [
               <button class="btn sm" [disabled]="isReadOnly()" (click)="saveAdmin()">Update</button>
 
               <div class="section-title">Forward to a user or group</div>
-              <div class="row" style="margin-bottom:16px;">
-                <input placeholder="username" [(ngModel)]="forwardUser" [disabled]="isReadOnly()" style="flex:1;" />
-                <input placeholder="or group" [(ngModel)]="forwardGroup" [disabled]="isReadOnly()" style="flex:1;" />
+              <div class="row" style="gap: 8px; margin-bottom:16px;">
+                <select [(ngModel)]="forwardUser" [disabled]="isReadOnly()" style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;">
+                  <option value="">-- Forward to User (optional) --</option>
+                  @for (u of activeUsers(); track u.id) {
+                    <option [value]="u.username">{{ u.username }}</option>
+                  }
+                </select>
+                <select [(ngModel)]="forwardGroup" [disabled]="isReadOnly()" style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;">
+                  <option value="">-- Forward to Group (optional) --</option>
+                  @for (g of groups(); track g.id) {
+                    <option [value]="g.name">{{ g.name }}</option>
+                  }
+                </select>
                 <button class="btn sm" [disabled]="isReadOnly() || (!forwardUser.trim() && !forwardGroup.trim())" (click)="forward()">Forward</button>
               </div>
 
@@ -242,6 +274,7 @@ const TABS: { key: Tab; label: string }[] = [
 export class TaskDetailComponent {
   private api = inject(TaskApiService);
   private instApi = inject(InstanceApiService);
+  private iamApi = inject(IamApiService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
@@ -254,6 +287,24 @@ export class TaskDetailComponent {
   loading = signal(true);
   tab = signal<Tab>((this.route.snapshot.queryParamMap.get('tab') as Tab) || 'work');
   tabDefs = TABS;
+
+  users = signal<AppUser[]>([]);
+  groups = signal<AppGroup[]>([]);
+  activeUsers = computed(() => this.users().filter((u) => u.active !== false));
+  groupMembers = computed(() => {
+    const g = this.task()?.group;
+    return g ? this.activeUsers().filter((u) => (u.groups || []).includes(g)) : [];
+  });
+  otherUsers = computed(() => {
+    const g = this.task()?.group;
+    return g ? this.activeUsers().filter((u) => !(u.groups || []).includes(g)) : this.activeUsers();
+  });
+  isValidUser = (username: string): boolean => {
+    const trimmed = (username || '').trim();
+    if (!trimmed) return false;
+    const all = this.activeUsers();
+    return all.length === 0 || all.some((u) => u.username === trimmed);
+  };
 
   outputPairs: KVPair[] = [];
   comments = signal<TaskComment[]>([]);
@@ -299,6 +350,14 @@ export class TaskDetailComponent {
     });
     this.api.listComments(this.id()).subscribe((c) => this.comments.set(c));
     this.api.taskEvents(this.id()).subscribe((e) => this.events.set(e));
+    this.iamApi.listUsers().subscribe({
+      next: (u) => this.users.set(u || []),
+      error: () => {},
+    });
+    this.iamApi.listGroups().subscribe({
+      next: (g) => this.groups.set(g || []),
+      error: () => {},
+    });
   }
   private refresh() { this.load(); }
   private onError(e: any) { this.toast.error(e?.error?.error?.message || 'That action could not be completed'); }
@@ -329,14 +388,33 @@ export class TaskDetailComponent {
 
   delegate() {
     if (this.isReadOnly()) return;
-    this.api.delegateTask(this.id(), this.delegateTo.trim()).subscribe({
-      next: () => { this.toast.success(`Delegated to ${this.delegateTo.trim()}`); this.delegateTo = ''; this.refresh(); },
+    const target = this.delegateTo.trim();
+    if (!target) {
+      this.toast.error('Please select a user to delegate to');
+      return;
+    }
+    if (!this.isValidUser(target)) {
+      this.toast.error(`User "${target}" is not registered in the system`);
+      return;
+    }
+    this.api.delegateTask(this.id(), target).subscribe({
+      next: () => { this.toast.success(`Delegated to ${target}`); this.delegateTo = ''; this.refresh(); },
       error: (e) => this.onError(e),
     });
   }
   forward() {
     if (this.isReadOnly()) return;
-    this.api.forwardTask(this.id(), { user: this.forwardUser.trim() || undefined, group: this.forwardGroup.trim() || undefined }).subscribe({
+    const u = this.forwardUser.trim();
+    const g = this.forwardGroup.trim();
+    if (!u && !g) {
+      this.toast.error('Please select a user or group to forward to');
+      return;
+    }
+    if (u && !this.isValidUser(u)) {
+      this.toast.error(`User "${u}" is not registered in the system`);
+      return;
+    }
+    this.api.forwardTask(this.id(), { user: u || undefined, group: g || undefined }).subscribe({
       next: () => { this.toast.success('Forwarded'); this.forwardUser = ''; this.forwardGroup = ''; this.refresh(); },
       error: (e) => this.onError(e),
     });

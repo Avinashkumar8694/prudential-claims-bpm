@@ -1,6 +1,6 @@
 // User-task inbox: list/claim/complete. Completing a task resumes the waiting instance token.
 import type { AppContext } from '../../context.ts';
-import { Collections, type AuditEvent, type Deployment, type Task, type TaskComment, type User } from '../../domain.ts';
+import { Collections, type AuditEvent, type Deployment, type Group, type Task, type TaskComment, type User } from '../../domain.ts';
 import { InstanceService } from '../instances/service.ts';
 import { NotificationService } from '../notifications/service.ts';
 import type { EngineEvent } from '../../engine/execution-engine.ts';
@@ -194,16 +194,26 @@ export class TaskService {
   /** jBPM Delegate: hand the task to a specific user (goes to their inbox as reserved). */
   async delegate(id: string, to: string, user: string): Promise<Task> {
     const t = await this.get(id);
-    if (!to?.trim()) throw validation('target user is required');
+    const target = (to || '').trim();
+    if (!target) throw validation('target user is required');
     await this.assertInstanceActionable(t);
     if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
-    if (t.excludedOwners?.includes(to)) throw conflict(`${to} is excluded from this task`);
+    if (t.excludedOwners?.includes(target)) throw conflict(`${target} is excluded from this task`);
+
+    // Ensure user exists in system if users are provisioned
+    const registeredUsers = await this.ctx.store.repo<User>(Collections.users).query((u) => u.tenantId === this.ctx.tenantId);
+    if (registeredUsers.length > 0) {
+      const u = registeredUsers.find((x) => x.username === target);
+      if (!u) throw conflict(`cannot delegate to "${target}": user is not registered in the system`);
+      if (!u.active) throw conflict(`cannot delegate to "${target}": user account is inactive`);
+    }
+
     const from = t.assignee;
-    t.assignee = to; t.status = 'reserved';
+    t.assignee = target; t.status = 'reserved';
     await this.repo().put(t);
-    await this.ctx.audit({ actor: user, kind: 'task.delegated', instanceId: t.instanceId, taskId: t.id, data: { from, to } });
+    await this.ctx.audit({ actor: user, kind: 'task.delegated', instanceId: t.instanceId, taskId: t.id, data: { from, to: target } });
     await new NotificationService(this.ctx).notify({
-      userId: to, kind: 'task-assigned', title: `Task "${t.name}" was delegated to you`,
+      userId: target, kind: 'task-assigned', title: `Task "${t.name}" was delegated to you`,
       body: `by ${user}`, link: `/tasks/${t.id}`, taskId: t.id, instanceId: t.instanceId,
     });
     return t;
@@ -213,17 +223,36 @@ export class TaskService {
    *  claim it (unlike delegate, which reserves it for them directly). */
   async forward(id: string, to: { user?: string; group?: string }, user: string): Promise<Task> {
     const t = await this.get(id);
-    if (!to?.user?.trim() && !to?.group?.trim()) throw validation('a target user or group is required');
+    const targetUser = (to?.user || '').trim();
+    const targetGroup = (to?.group || '').trim();
+    if (!targetUser && !targetGroup) throw validation('a target user or group is required');
     await this.assertInstanceActionable(t);
     if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
+
+    if (targetUser) {
+      const registeredUsers = await this.ctx.store.repo<User>(Collections.users).query((u) => u.tenantId === this.ctx.tenantId);
+      if (registeredUsers.length > 0) {
+        const u = registeredUsers.find((x) => x.username === targetUser);
+        if (!u) throw conflict(`cannot forward to "${targetUser}": user is not registered in the system`);
+        if (!u.active) throw conflict(`cannot forward to "${targetUser}": user account is inactive`);
+      }
+    }
+    if (targetGroup) {
+      const registeredGroups = await this.ctx.store.repo<Group>(Collections.groups).query((g) => g.tenantId === this.ctx.tenantId);
+      if (registeredGroups.length > 0) {
+        const g = registeredGroups.find((x) => x.name === targetGroup);
+        if (!g) throw conflict(`cannot forward to group "${targetGroup}": group does not exist in the system`);
+      }
+    }
+
     const from = t.assignee;
     t.assignee = undefined; t.status = 'created';
-    if (to.group?.trim()) t.group = to.group.trim();
+    if (targetGroup) t.group = targetGroup;
     await this.repo().put(t);
-    await this.ctx.audit({ actor: user, kind: 'task.forwarded', instanceId: t.instanceId, taskId: t.id, data: { from, to } });
-    if (to.user?.trim()) {
+    await this.ctx.audit({ actor: user, kind: 'task.forwarded', instanceId: t.instanceId, taskId: t.id, data: { from, to: { user: targetUser || undefined, group: targetGroup || undefined } } });
+    if (targetUser) {
       await new NotificationService(this.ctx).notify({
-        userId: to.user.trim(), kind: 'task-assigned', title: `Task "${t.name}" was forwarded to you`,
+        userId: targetUser, kind: 'task-assigned', title: `Task "${t.name}" was forwarded to you`,
         body: `by ${user} — claim it to start`, link: `/tasks/${t.id}`, taskId: t.id, instanceId: t.instanceId,
       });
     }
