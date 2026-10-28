@@ -1,154 +1,684 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { SlicePipe } from '@angular/common';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { DecimalPipe, JsonPipe, SlicePipe } from '@angular/common';
+import { forkJoin } from 'rxjs';
 import { QueryApiService } from '../../core/api/query-api.service';
 import { InstanceApiService } from '../../core/api/instance-api.service';
 import { WorkflowApiService } from '../../core/api/workflow-api.service';
+import { WorkflowDefinitionApiService } from '../../core/api/workflow-definition-api.service';
+import { WorkflowInstanceApiService } from '../../core/api/workflow-instance-api.service';
+import { WorkflowAnalyticsApiService, type WorkflowInstanceSummary } from '../../core/api/workflow-analytics-api.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { ToastService } from '../../shared/toast.service';
 import { IconComponent } from '../../shared/icon.component';
-import type { Instance, Summary, Task, Workflow } from '../../core/models';
+import type { Instance, ProcessAnalytics, QueryDefinition, QueryFilter, QueryOp, QueryRunResult, QueryableEntity, SavedQuery, Summary, Task, TaskAnalytics, Workflow, WorkflowDefinition, WorkflowTat } from '../../core/models';
 
-/**
- * Landing dashboard (ux_design/08 — "home-dashboard").
- *
- * Exists because `QueryApiService.analyticsSummary()` and the per-user task queries were fully
- * implemented server-side and had *no* consumer in the UI at all — the app redirected straight to
- * the project grid, which is the builder's view, not the view an operator or process owner wants on
- * login. KPI tiles link through to the screen that explains each number rather than being decorative.
- *
- * Content is permission-aware: a user with only `task:manage` sees their work and nothing else.
- */
+type HomeTab = 'overview' | 'processes' | 'tasks' | 'cases' | 'queries';
+
+interface StatusRow { key: string; label: string; color: string; count: number; pctOfMax: number; share: number; }
+
+const ENTITIES: QueryableEntity[] = ['workflowInstance', 'workflowInstanceAudit', 'workflowInstanceComment', 'instance', 'task'];
+const OPS: QueryOp[] = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'contains'];
+
+function humanMs(ms: number): string {
+  if (!ms || ms <= 0) return '0s';
+  if (ms < 1000) return '<1s';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return s % 60 ? `${m}m ${s % 60}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h}h ${String(m % 60).padStart(2, '0')}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  return h % 24 ? `${d}d ${h % 24}h` : `${d}d`;
+}
+
+const INSTANCE_STATUSES = [
+  { key: 'running', label: 'Running', color: 'var(--blue)' },
+  { key: 'waiting', label: 'Waiting', color: 'var(--amber)' },
+  { key: 'completed', label: 'Completed', color: 'var(--green)' },
+  { key: 'suspended', label: 'Suspended', color: 'var(--purple)' },
+  { key: 'failed', label: 'Failed', color: 'var(--red)' },
+  { key: 'aborted', label: 'Aborted', color: 'var(--muted)' },
+];
+const TASK_STATUSES = [
+  { key: 'created', label: 'Created', color: 'var(--amber)' },
+  { key: 'reserved', label: 'Reserved', color: 'var(--purple)' },
+  { key: 'inprogress', label: 'In progress', color: 'var(--blue)' },
+  { key: 'error', label: 'Error', color: 'var(--red)' },
+];
+
 @Component({
   selector: 'app-home',
   standalone: true,
-  imports: [IconComponent, RouterLink, SlicePipe],
+  imports: [FormsModule, RouterLink, SlicePipe, DecimalPipe, JsonPipe, IconComponent],
   template: `
     <div class="page">
       <header class="head">
         <div>
           <h1>{{ greeting() }}, {{ auth.user()?.username }}</h1>
-          <p class="sub">Here's what's happening across your projects.</p>
+          <p class="sub">Centralized intelligence: real-time process performance, human workloads, case metrics, and reports.</p>
         </div>
         <span class="spacer"></span>
-        @if (canBuild()) { <a class="btn primary" routerLink="/projects"><app-icon name="plus" [size]="15" /> New project</a> }
+        <button class="btn sm" (click)="load()"><app-icon name="refresh" [size]="14" /> Refresh</button>
+        <button class="btn sm" (click)="exportCsv()" [disabled]="loading()">
+          <app-icon name="download" [size]="14" /> Export CSV
+        </button>
+        @if (canBuild()) {
+          <button class="btn sm" (click)="openStartCase()"><app-icon name="plus" [size]="13" /> New Case</button>
+          <a class="btn primary sm" routerLink="/instances/start"><app-icon name="play" [size]="13" /> New Process</a>
+        }
       </header>
+
+      <!-- Navigation Tabs -->
+      <nav class="tabs" role="tablist">
+        <button role="tab" [class.active]="tab() === 'overview'" (click)="setTab('overview')">Overview</button>
+        <button role="tab" [class.active]="tab() === 'processes'" (click)="setTab('processes')">Processes</button>
+        <button role="tab" [class.active]="tab() === 'tasks'" (click)="setTab('tasks')">Tasks</button>
+        <button role="tab" [class.active]="tab() === 'cases'" (click)="setTab('cases')">Cases &amp; Workflows</button>
+        <button role="tab" [class.active]="tab() === 'queries'" (click)="setTab('queries')">Ad-Hoc Query Engine</button>
+      </nav>
 
       @if (loading()) {
         <div class="kpis">
-          @for (_ of [1,2,3,4]; track $index) { <div class="card kpi skeleton" style="height:96px"></div> }
+          @for (_ of [1,2,3,4,5,6]; track $index) { <div class="card kpi skeleton" style="height:90px"></div> }
         </div>
+        <div class="chartgrid"><div class="skeleton skeleton-card tall"></div><div class="skeleton skeleton-card tall"></div></div>
       } @else {
+        <!-- Global Executive KPIs (Always visible for quick reference) -->
         <div class="kpis">
           @if (canView()) {
             <a class="card kpi" routerLink="/instances">
-              <span class="n">{{ activeInstances() }}</span>
-              <span class="l">Active instances</span>
+              <span class="n" style="color: var(--blue);">{{ activeInstances() }}</span>
+              <span class="l">Active Instances</span>
+            </a>
+            <a class="card kpi" routerLink="/instances">
+              <span class="n" style="color: var(--green);">{{ completedInstances() }}</span>
+              <span class="l">Completed Instances</span>
+            </a>
+            <a class="card kpi" routerLink="/errors">
+              <span class="n" [class.red]="failedInstances() > 0">{{ failedInstances() }}</span>
+              <span class="l">Failed / Errors</span>
             </a>
           }
           @if (canTasks()) {
             <a class="card kpi" routerLink="/tasks">
               <span class="n amber">{{ openTasks() }}</span>
-              <span class="l">Open tasks</span>
+              <span class="l">Open Tasks</span>
             </a>
           }
           @if (canView()) {
             <a class="card kpi" routerLink="/deployments">
-              <span class="n">{{ summary()?.deployments?.active ?? 0 }}</span>
-              <span class="l">Active deployments</span>
+              <span class="n" style="color: var(--purple);">{{ summary()?.deployments?.active ?? 0 }}</span>
+              <span class="l">Active Deployments</span>
             </a>
-            <a class="card kpi" routerLink="/instances">
-              <span class="n" [class.red]="failedInstances() > 0">{{ failedInstances() }}</span>
-              <span class="l">Failed instances</span>
+            <a class="card kpi" routerLink="/instances" [queryParams]="{type: 'cases'}">
+              <span class="n">{{ caseSummary()?.total ?? 0 }}</span>
+              <span class="l">Total Cases</span>
             </a>
           }
         </div>
 
-        <div class="cols">
-          @if (canTasks()) {
+        <!-- ==================== TAB 1: OVERVIEW ==================== -->
+        @if (tab() === 'overview') {
+          <div class="chartgrid">
+            <section class="card chart">
+              <div class="row charthead">
+                <h3>Process Instances Status Mix</h3>
+                <div class="spacer"></div>
+                <span class="muted small tnum">{{ instTotal() }} total</span>
+              </div>
+              <p class="chartsub">Overall distribution across all running, waiting, and completed executions</p>
+              @if (instTotal() > 0) {
+                <div class="barlist">
+                  @for (r of instStatusRows(); track r.key) {
+                    <div class="barrow">
+                      <div class="row lab">
+                        <span class="dot" [style.background]="r.color"></span>
+                        <span>{{ r.label }}</span>
+                        <div class="spacer"></div>
+                        <span class="tnum muted">{{ r.count }}</span>
+                      </div>
+                      <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="nodata">No instances yet — start one from a deployment to populate analytics.</p>
+              }
+            </section>
+
+            <section class="card chart donutcard">
+              <div class="row charthead">
+                <h3>Execution State Ratio</h3>
+              </div>
+              @if (instTotal() > 0) {
+                <div class="donutwrap">
+                  <div class="donut" [style.background]="instDonut()" role="img" aria-label="Instance status distribution">
+                    <div class="hole"><span class="tnum">{{ instTotal() }}</span></div>
+                  </div>
+                  <div class="legend">
+                    @for (r of nonZero(instStatusRows()); track r.key) {
+                      <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <p class="nodata">Nothing to chart yet.</p>
+              }
+            </section>
+          </div>
+
+          <div class="cols">
+            @if (canTasks()) {
+              <section class="card panel">
+                <div class="p-head">
+                  <h2>My Open Tasks</h2>
+                  <span class="spacer"></span>
+                  <a class="link" routerLink="/tasks">View all <app-icon name="arrowRight" [size]="13" /></a>
+                </div>
+                @if (myTasks().length === 0) {
+                  <div class="empty-state sm">
+                    <div class="es-icon"><app-icon name="success" [size]="22" /></div>
+                    <h3>Inbox zero</h3>
+                    <p>You have no tasks assigned right now.</p>
+                  </div>
+                } @else {
+                  <ul class="rows">
+                    @for (t of myTasks(); track t.id) {
+                      <li><a [routerLink]="['/tasks', t.id]">
+                        <span class="tname">{{ t.name }}</span>
+                        <span class="spacer"></span>
+                        @if (t.dueAt) { <span class="due" [class.over]="isOverdue(t)">{{ dueLabel(t) }}</span> }
+                        @else { <span class="badge">no due date</span> }
+                      </a></li>
+                    }
+                  </ul>
+                }
+              </section>
+            }
+
             <section class="card panel">
               <div class="p-head">
-                <h2>My open tasks</h2>
+                <h2>Recent Executions</h2>
                 <span class="spacer"></span>
-                <a class="link" routerLink="/tasks">View all <app-icon name="arrowRight" [size]="13" /></a>
+                <a class="link" routerLink="/instances">View all <app-icon name="arrowRight" [size]="13" /></a>
               </div>
-              @if (myTasks().length === 0) {
+              @if (recent().length === 0) {
                 <div class="empty-state sm">
-                  <div class="es-icon"><app-icon name="success" [size]="22" /></div>
-                  <h3>Inbox zero</h3>
-                  <p>You have no tasks assigned right now.</p>
+                  <div class="es-icon"><app-icon name="clock" [size]="22" /></div>
+                  <h3>Nothing yet</h3>
+                  <p>Process activity will appear here once instances start running.</p>
                 </div>
               } @else {
                 <ul class="rows">
-                  @for (t of myTasks(); track t.id) {
-                    <li><a routerLink="/tasks">
-                      <span class="tname">{{ t.name }}</span>
+                  @for (i of recent(); track i.id) {
+                    <li><a [routerLink]="['/instances', i.id]">
+                      <span class="dot" [style.background]="statusColor(i.status)"></span>
+                      <span class="tname">{{ procName(i) }} <span class="mono muted" [title]="i.id">{{ shortId(i.id) }}</span></span>
                       <span class="spacer"></span>
-                      @if (t.dueAt) { <span class="due" [class.over]="isOverdue(t)">{{ dueLabel(t) }}</span> }
-                      @else { <span class="badge">no due date</span> }
+                      @if (i.caseInstanceId) {
+                        <span class="case-chip-sm"><app-icon name="inbox" [size]="10" /> {{ shortId(i.caseInstanceId) }}</span>
+                      }
+                      <span class="muted when">{{ i.status }}</span>
                     </a></li>
                   }
                 </ul>
               }
             </section>
-          }
+          </div>
+        }
 
-          <section class="card panel">
-            <div class="p-head"><h2>Recent activity</h2></div>
-            @if (recent().length === 0) {
-              <div class="empty-state sm">
-                <div class="es-icon"><app-icon name="clock" [size]="22" /></div>
-                <h3>Nothing yet</h3>
-                <p>Process activity will appear here once instances start running.</p>
+        <!-- ==================== TAB 2: PROCESSES ==================== -->
+        @if (tab() === 'processes') {
+          <div class="chartgrid">
+            <section class="card chart">
+              <div class="row charthead">
+                <h3>Instances by Status</h3>
+                <div class="spacer"></div>
+                <span class="muted small tnum">{{ instTotal() }} total</span>
               </div>
+              <p class="chartsub">Every process instance recorded by the execution engine</p>
+              @if (instTotal() > 0) {
+                <div class="barlist">
+                  @for (r of instStatusRows(); track r.key) {
+                    <div class="barrow">
+                      <div class="row lab">
+                        <span class="dot" [style.background]="r.color"></span>
+                        <span>{{ r.label }}</span>
+                        <div class="spacer"></div>
+                        <span class="tnum muted">{{ r.count }}</span>
+                      </div>
+                      <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="nodata">No instances yet.</p>
+              }
+            </section>
+
+            <section class="card chart donutcard">
+              <div class="row charthead"><h3>Status Distribution</h3></div>
+              @if (instTotal() > 0) {
+                <div class="donutwrap">
+                  <div class="donut" [style.background]="instDonut()" role="img" aria-label="Instance status distribution">
+                    <div class="hole"><span class="tnum">{{ instTotal() }}</span></div>
+                  </div>
+                  <div class="legend">
+                    @for (r of nonZero(instStatusRows()); track r.key) {
+                      <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <p class="nodata">Nothing to chart yet.</p>
+              }
+            </section>
+          </div>
+
+          <section class="card tablecard">
+            <div class="row cardhead">
+              <h3>Duration by Process Definition</h3>
+              <div class="spacer"></div>
+              <span class="muted small">Completed instances only</span>
+            </div>
+            @if (byProcess().length) {
+              <table>
+                <thead><tr><th>Process ID</th><th class="num">Executions</th><th class="num">Avg Duration</th><th class="num">Min</th><th class="num">Max</th></tr></thead>
+                <tbody>
+                  @for (p of byProcess(); track p.processId) {
+                    <tr>
+                      <td><b>{{ p.processId }}</b></td>
+                      <td class="num tnum">{{ p.count }}</td>
+                      <td class="num">
+                        <span class="avgcell">
+                          <span class="avgbar"><span [style.width.%]="pctOf(p.avgMs, maxProcAvg())"></span></span>
+                          <span class="tnum">{{ ms(p.avgMs) }}</span>
+                        </span>
+                      </td>
+                      <td class="num tnum muted">{{ ms(p.minMs) }}</td>
+                      <td class="num tnum muted">{{ ms(p.maxMs) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             } @else {
-              <ul class="rows">
-                @for (i of recent(); track i.id) {
-                  <li><a routerLink="/instances">
-                    <span class="dot" [style.background]="statusColor(i.status)"></span>
-                    <span class="tname">{{ procName(i) }} <span class="mono muted" [title]="i.id">{{ shortId(i.id) }}</span></span>
-                    <span class="spacer"></span>
-                    <span class="muted when">{{ i.status }}</span>
-                  </a></li>
-                }
-              </ul>
+              <p class="nodata pad">No completed instances recorded yet.</p>
             }
           </section>
+        }
+
+        <!-- ==================== TAB 3: TASKS ==================== -->
+        @if (tab() === 'tasks') {
+          <div class="chartgrid">
+            <section class="card chart">
+              <div class="row charthead">
+                <h3>Open Tasks by Status</h3>
+                <div class="spacer"></div>
+                <span class="muted small tnum">{{ openTotal() }} open</span>
+              </div>
+              <p class="chartsub">Current human queue across all groups and assignees</p>
+              @if (openTotal() > 0) {
+                <div class="barlist">
+                  @for (r of taskStatusRows(); track r.key) {
+                    <div class="barrow">
+                      <div class="row lab">
+                        <span class="dot" [style.background]="r.color"></span>
+                        <span>{{ r.label }}</span>
+                        <div class="spacer"></div>
+                        <span class="tnum muted">{{ r.count }}</span>
+                      </div>
+                      <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="nodata">No open tasks right now — all work is completed.</p>
+              }
+            </section>
+
+            <section class="card chart donutcard">
+              <div class="row charthead"><h3>Task State Mix</h3></div>
+              @if (openTotal() > 0) {
+                <div class="donutwrap">
+                  <div class="donut" [style.background]="taskDonut()" role="img" aria-label="Open task status distribution">
+                    <div class="hole"><span class="tnum">{{ openTotal() }}</span></div>
+                  </div>
+                  <div class="legend">
+                    @for (r of nonZero(taskStatusRows()); track r.key) {
+                      <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <p class="nodata">Nothing to chart yet.</p>
+              }
+            </section>
+          </div>
+
+          <div class="two-col">
+            <section class="card tablecard">
+              <div class="row cardhead"><h3>Open Tasks by Assignee</h3></div>
+              @if (byAssignee().length) {
+                <table>
+                  <thead><tr><th>Assignee</th><th class="num">Open Tasks</th><th style="width: 120px;">Load Ratio</th></tr></thead>
+                  <tbody>
+                    @for (a of byAssignee(); track a.user) {
+                      <tr>
+                        <td><b>{{ a.user || '(unassigned)' }}</b></td>
+                        <td class="num tnum">{{ a.count }}</td>
+                        <td>
+                          <span class="avgcell">
+                            <span class="avgbar"><span [style.width.%]="loadRatio(a.count) * 100" [style.background]="loadColor(a.count)"></span></span>
+                          </span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <p class="nodata pad">No assigned tasks right now.</p>
+              }
+            </section>
+
+            <section class="card tablecard">
+              <div class="row cardhead">
+                <h3>Duration by User Task</h3>
+                <div class="spacer"></div>
+                <span class="muted small">Completed tasks only</span>
+              </div>
+              @if (byTask().length) {
+                <table>
+                  <thead><tr><th>Task Name</th><th class="num">Completed</th><th class="num">Avg Turnaround</th></tr></thead>
+                  <tbody>
+                    @for (t of byTask(); track t.name) {
+                      <tr>
+                        <td><b>{{ t.name }}</b></td>
+                        <td class="num tnum">{{ t.count }}</td>
+                        <td class="num">
+                          <span class="avgcell">
+                            <span class="avgbar"><span [style.width.%]="pctOf(t.avgMs, maxTaskAvg())"></span></span>
+                            <span class="tnum">{{ ms(t.avgMs) }}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <p class="nodata pad">No completed human tasks yet.</p>
+              }
+            </section>
+          </div>
+        }
+
+        <!-- ==================== TAB 4: CASES & WORKFLOWS ==================== -->
+        @if (tab() === 'cases') {
+          <div class="grid" style="margin-bottom: 20px;">
+            <div class="card pad">
+              <h3>Cases by Status</h3>
+              @if (caseSummary(); as s) {
+                <p class="big">{{ s.total }}</p>
+                @for (kv of statusEntries(s.byStatus); track kv[0]) {
+                  <div class="kvrow"><span>{{ kv[0] }}</span><span class="tnum font-bold">{{ kv[1] }}</span></div>
+                }
+                @if (s.withoutPiid) { <p class="muted sm" style="margin-top:8px;">{{ s.withoutPiid }} initiated without BPM instance</p> }
+              } @else { <p class="muted">Loading case summary…</p> }
+            </div>
+            <div class="card pad">
+              <h3>TAT by Workflow Definition (Case Level)</h3>
+              @if (tat(); as t) {
+                @for (r of t.byWorkflowName; track r.workflowName) {
+                  <div class="kvrow">
+                    <span>{{ r.workflowName }}</span>
+                    <span class="tnum">{{ ms(r.avgMs) }} avg ({{ r.count }})</span>
+                  </div>
+                }
+                @if (!t.byWorkflowName.length) { <p class="muted sm">No completed cases yet.</p> }
+              } @else { <p class="muted">Loading TAT…</p> }
+            </div>
+            <div class="card pad">
+              <h3>TAT by User (Task Execution)</h3>
+              @if (tat(); as t) {
+                @for (r of t.byUser; track r.user) {
+                  <div class="kvrow">
+                    <span>{{ r.user }}</span>
+                    <span class="tnum">{{ ms(r.avgMs) }} avg ({{ r.count }})</span>
+                  </div>
+                }
+                @if (!t.byUser.length) { <p class="muted sm">No completed tasks yet.</p> }
+              } @else { <p class="muted">Loading TAT…</p> }
+            </div>
+          </div>
+        }
+
+        <!-- ==================== TAB 5: AD-HOC QUERIES ==================== -->
+        @if (tab() === 'queries') {
+          <h2 class="section-h">Custom Ad-Hoc Query Engine</h2>
+          <div class="card pad" style="margin-bottom: 20px;">
+            <div class="row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+              <label class="fld"><span>Entity</span>
+                <select [(ngModel)]="entity">@for (e of entities; track e) { <option [value]="e">{{ e }}</option> }</select>
+              </label>
+              <label class="fld"><span>Group by (optional)</span>
+                <input [(ngModel)]="groupBy" placeholder="e.g. status, data.amount" />
+              </label>
+              <label class="fld"><span>Metric</span>
+                <select [(ngModel)]="metric">
+                  <option value="">(none — list rows)</option>
+                  <option value="count">count</option>
+                  <option value="avgDurationMs">avgDurationMs</option>
+                </select>
+              </label>
+              @if (metric === 'avgDurationMs') {
+                <label class="fld"><span>Duration from field</span><input [(ngModel)]="durationFrom" placeholder="createdAt" /></label>
+                <label class="fld"><span>Duration to field</span><input [(ngModel)]="durationTo" placeholder="updatedAt" /></label>
+              }
+            </div>
+
+            <div class="section-title">Filters</div>
+            @for (f of filters; track f) {
+              <div class="fieldrow">
+                <input class="fkey" [(ngModel)]="f.field" placeholder="field, e.g. data.amount" />
+                <select [(ngModel)]="f.op">@for (o of ops; track o) { <option [value]="o">{{ o }}</option> }</select>
+                <input [(ngModel)]="f.value" placeholder="value" />
+                <button class="btn sm danger" (click)="removeFilter(f)"><app-icon name="trash" [size]="12" /></button>
+              </div>
+            }
+            <div style="margin-bottom: 14px;">
+              <button class="btn sm" (click)="addFilter()"><app-icon name="plus" [size]="12" /> Add filter</button>
+            </div>
+
+            <div class="row actionrow">
+              <button class="btn primary sm" (click)="runQuery()"><app-icon name="play" [size]="12" /> Run Query</button>
+              <input class="save-name" [(ngModel)]="saveName" placeholder="Save as…" style="max-width: 200px;" />
+              <label class="reqlbl"><input type="checkbox" [(ngModel)]="saveShared" /> Shared</label>
+              <button class="btn sm" (click)="saveQuery()">Save Query</button>
+            </div>
+            @if (queryError()) { <p class="err">{{ queryError() }}</p> }
+
+            @if (queryResult(); as r) {
+              <div style="margin-top: 16px;">
+                <div class="section-title">Query Results</div>
+                @if (r.groups) {
+                  <table class="restbl"><thead><tr><th>Key</th><th>Count</th>@if (metric==='avgDurationMs') { <th>Avg ms</th> }</tr></thead>
+                    <tbody>@for (g of r.groups; track g.key) { <tr><td>{{ g.key }}</td><td>{{ g.count }}</td>@if (metric==='avgDurationMs') { <td>{{ g.avgDurationMs }}</td> }</tr> }</tbody>
+                  </table>
+                } @else {
+                  <pre class="mono sm restext">{{ r.rows | json }}</pre>
+                }
+              </div>
+            }
+          </div>
+
+          <h2 class="section-h">Saved Queries</h2>
+          <div class="card pad">
+            @if (savedQueries().length === 0) {
+              <p class="muted sm">No saved queries yet. Configure a query above and save it to access it anytime.</p>
+            } @else {
+              @for (sq of savedQueries(); track sq.id) {
+                <div class="sqrow">
+                  <div>
+                    <strong>{{ sq.name }}</strong>
+                    <span class="muted sm"> · {{ sq.definition.entity }} · by {{ sq.createdBy }}</span>
+                  </div>
+                  <div class="row" style="gap: 6px;">
+                    <button class="btn sm" (click)="loadSavedQuery(sq)">Load</button>
+                    <button class="btn sm danger" (click)="deleteSavedQuery(sq)"><app-icon name="trash" [size]="12" /></button>
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
+      }
+
+      <!-- Start Case Modal -->
+      @if (startingCase(); as sc) {
+        <div class="modal-bg" (click)="closeStartCase()">
+          <div class="modal" (click)="$event.stopPropagation()">
+            <div class="modal-h">
+              <span>Start Case Instance</span>
+              <span class="spacer"></span>
+              <button class="x" (click)="closeStartCase()"><app-icon name="close" [size]="15" /></button>
+            </div>
+            <div class="modal-body">
+              <label class="fld">
+                <span>Workflow Definition (Case Type)</span>
+                <select [(ngModel)]="sc.workflowName">
+                  <option value="" disabled>Select a workflow definition...</option>
+                  @for (wd of workflowDefinitions(); track wd.id) {
+                    <option [value]="wd.name">{{ wd.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="fld">
+                <span>Case Business Data (JSON)</span>
+                <textarea rows="4" [(ngModel)]="sc.workflowData" placeholder='{"claimNumber": "CLM-1001", "amount": 1500}'></textarea>
+              </label>
+              <label class="fld">
+                <span>Process Variables (JSON, optional)</span>
+                <textarea rows="3" [(ngModel)]="sc.variables" placeholder='{"priority": "high"}'></textarea>
+              </label>
+              @if (startCaseError()) { <p class="err">{{ startCaseError() }}</p> }
+              <button class="btn primary full" [disabled]="startingCaseLoading()" (click)="submitStartCase()">
+                {{ startingCaseLoading() ? 'Starting...' : 'Start Case' }}
+              </button>
+            </div>
+          </div>
         </div>
       }
     </div>
   `,
   styles: [`
-    .page { padding: 28px 32px 32px; display: flex; flex-direction: column; gap: 22px; }
-    .head { display: flex; align-items: flex-start; gap: 16px; }
-    h1 { font-size: var(--text-2xl); letter-spacing: -.02em; }
-    .sub { margin-top: 4px; color: var(--text-secondary); }
+    .page { padding: 24px 32px 32px; display: flex; flex-direction: column; gap: 18px; max-width: 1400px; margin: 0 auto; }
+    .head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+    h1 { font-size: var(--text-2xl); letter-spacing: -.02em; margin: 0 0 4px; }
+    .sub { margin: 0; color: var(--text-secondary); font-size: 13.5px; }
     .spacer { flex: 1; }
 
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
-    /* Tinted top edge: the one place the brand gradient appears on an otherwise calm surface, so the
-       numbers read as the page's focal point without shouting. */
-    .kpi { position: relative; overflow: hidden; padding: 18px 20px; display: flex; flex-direction: column; gap: 2px; }
-    .kpi::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad-brand); }
-    .kpi .n { font-size: var(--text-2xl); font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-    .kpi .n.amber { color: var(--amber); } .kpi .n.red { color: var(--red); }
-    .kpi .l { font-size: var(--text-xs); color: var(--muted); }
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 4px; }
+    .tabs button { border: none; background: transparent; padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+    .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
 
+    /* KPIs */
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+    .kpi { position: relative; overflow: hidden; padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; }
+    .kpi::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad-brand); }
+    .kpi .n { font-size: 26px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .kpi .n.amber { color: var(--amber); } .kpi .n.red { color: var(--red); }
+    .kpi .l { font-size: var(--text-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+
+    /* Charts */
+    .chartgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .chartgrid { grid-template-columns: 1fr; } }
+    .chart { padding: 18px; }
+    .charthead { display: flex; align-items: center; margin-bottom: 2px; }
+    .charthead h3 { font-size: 14px; margin: 0; }
+    .chartsub { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+    .barlist { display: flex; flex-direction: column; gap: 10px; }
+    .lab { font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .track { width: 100%; height: 6px; background: var(--surface-3); border-radius: var(--radius-pill); overflow: hidden; }
+    .track span { display: block; height: 100%; border-radius: var(--radius-pill); transition: width .3s ease; }
+    .nodata { color: var(--muted); font-size: 12.5px; padding: 20px 0; text-align: center; }
+
+    /* Donut */
+    .donutcard .donutwrap { display: flex; align-items: center; gap: 24px; padding: 10px 0; }
+    .donut { width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
+    .hole { width: 76px; height: 76px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font-weight: 650; font-size: 18px; }
+    .legend { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
+    .legend .li { display: flex; align-items: center; gap: 7px; }
+    .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+
+    /* Panels & Lists */
     .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
     .panel { padding: 18px 20px; }
     .p-head { display: flex; align-items: center; margin-bottom: 10px; }
-    h2 { font-size: var(--text-lg); }
-    .link { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--primary); font-weight: 600; }
-
-    .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-    .rows a { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--text); }
+    h2 { font-size: var(--text-lg); margin: 0; }
+    .link { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-xs); color: var(--primary); font-weight: 600; text-decoration: none; }
+    .rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+    .rows a { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--text); text-decoration: none; }
     .rows a:hover { background: var(--surface-3); }
     .tname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .when { font-size: var(--text-xs); text-transform: capitalize; }
     .due { font-size: var(--text-xs); font-weight: 600; padding: 3px 9px; border-radius: var(--radius-pill); background: var(--green-bg); color: var(--green); white-space: nowrap; }
     .due.over { background: var(--red-bg); color: var(--red); }
-    .empty-state.sm { padding: 26px 12px; }
-    .empty-state.sm .es-icon { width: 46px; height: 46px; border-radius: 15px; }
+    .case-chip-sm { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 10px; background: rgba(59,130,246,0.12); color: #2563eb; font-size: 11px; font-family: var(--font-mono); font-weight: 600; }
+    .empty-state.sm { padding: 26px 12px; text-align: center; }
+
+    /* Duration tables */
+    .tablecard { overflow: hidden; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+    .cardhead { padding: 14px 16px 10px; display: flex; align-items: center; }
+    .cardhead h3 { font-size: 14px; margin: 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 9px 14px; font-size: 12.5px; border-bottom: 1px solid var(--border); }
+    th.num, td.num { text-align: right; }
+    .avgcell { display: inline-flex; align-items: center; gap: 8px; }
+    .avgbar { width: 64px; height: 6px; background: var(--surface-3); border-radius: var(--radius-pill); overflow: hidden; flex-shrink: 0; }
+    .avgbar span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--grad-brand); }
+    .pad { padding: 16px; }
+    .small { font-size: 11.5px; }
+
+    /* Case metrics */
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .big { font-size: 32px; font-weight: 700; margin: 4px 0 12px; }
+    .kvrow { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+
+    /* Query builder */
+    .section-h { font-size: 15px; margin: 20px 0 10px; }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin: 12px 0 6px; }
+    .fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+    .fld input, .fld select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; background: var(--surface); color: inherit; }
+    .fieldrow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+    .fieldrow input, .fieldrow select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; background: var(--surface); color: inherit; }
+    .fieldrow .fkey { width: 180px; }
+    .actionrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .reqlbl { font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; }
+    .restbl { width: 100%; margin-top: 8px; }
+    .restext { background: var(--surface-2); padding: 12px; border-radius: 8px; max-height: 280px; overflow: auto; font-family: var(--font-mono); font-size: 12px; }
+    .sqrow { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .sqrow:last-child { border-bottom: none; }
+    .err { color: var(--red); font-size: 12px; margin-top: 6px; }
+    .btn.danger { color: var(--red); }
+    .font-bold { font-weight: 700; }
+    .tnum { font-variant-numeric: tabular-nums; }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
+
+    /* Modal */
+    .modal-bg { position: fixed; inset: 0; background: rgba(16,24,40,.4); display: grid; place-items: center; z-index: 50; }
+    .modal { background: var(--surface); border-radius: 14px; width: 480px; max-width: 92vw; max-height: 86vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
+    .modal-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; }
+    .modal-h .x { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); }
+    .modal-body { padding: 16px 18px; overflow: auto; }
+    .modal-body .fld { margin-bottom: 12px; }
+    .modal-body textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; font-family: var(--font-mono); background: var(--surface); color: inherit; }
+    .modal-body select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; background: var(--surface); color: inherit; }
+    .btn.full { width: 100%; justify-content: center; margin-top: 6px; }
   `],
 })
 export class HomeComponent {
@@ -156,12 +686,45 @@ export class HomeComponent {
   private q = inject(QueryApiService);
   private instApi = inject(InstanceApiService);
   private wfApi = inject(WorkflowApiService);
+  private wfDefApi = inject(WorkflowDefinitionApiService);
+  private wfInstApi = inject(WorkflowInstanceApiService);
+  private analyticsApi = inject(WorkflowAnalyticsApiService);
+  private toast = inject(ToastService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
 
+  tab = signal<HomeTab>('overview');
   loading = signal(true);
   summary = signal<Summary | null>(null);
+  procs = signal<ProcessAnalytics | null>(null);
+  tasks = signal<TaskAnalytics | null>(null);
+  caseSummary = signal<WorkflowInstanceSummary | null>(null);
+  tat = signal<WorkflowTat | null>(null);
+
   myTasks = signal<Task[]>([]);
   recent = signal<Instance[]>([]);
-  private workflows = signal<Workflow[]>([]);
+  workflows = signal<Workflow[]>([]);
+  workflowDefinitions = signal<WorkflowDefinition[]>([]);
+
+  // Ad-hoc query signals
+  entities = ENTITIES;
+  ops = OPS;
+  entity: QueryableEntity = 'workflowInstance';
+  groupBy = '';
+  metric: 'count' | 'avgDurationMs' | '' = '';
+  durationFrom = '';
+  durationTo = '';
+  filters: QueryFilter[] = [];
+  queryResult = signal<QueryRunResult | null>(null);
+  queryError = signal('');
+  saveName = '';
+  saveShared = false;
+  savedQueries = signal<SavedQuery[]>([]);
+
+  // Start case modal
+  startingCase = signal<{ workflowName: string; variables: string; workflowData: string } | null>(null);
+  startCaseError = signal('');
+  startingCaseLoading = signal(false);
 
   canView = computed(() => this.auth.hasPermission('workflow:view'));
   canTasks = computed(() => this.auth.hasPermission('task:manage'));
@@ -171,41 +734,83 @@ export class HomeComponent {
     const s = this.summary()?.instances.byStatus ?? {};
     return (s['running'] ?? 0) + (s['waiting'] ?? 0);
   });
+  completedInstances = computed(() => this.summary()?.instances.byStatus?.['completed'] ?? 0);
   failedInstances = computed(() => this.summary()?.instances.byStatus?.['failed'] ?? 0);
   openTasks = computed(() => {
     const s = this.summary()?.tasks.byStatus ?? {};
-    // "open" = anything not terminal, matching how the Tasks screen counts its inbox
     return Object.entries(s).filter(([k]) => k !== 'completed' && k !== 'skipped')
       .reduce((a, [, v]) => a + v, 0);
   });
 
+  instStatusRows = computed<StatusRow[]>(() => this.statusRows(this.procs()?.byStatus, INSTANCE_STATUSES));
+  instTotal = computed(() => this.instStatusRows().reduce((a, r) => a + r.count, 0));
+  instDonut = computed(() => this.donutGradient(this.instStatusRows()));
+  byProcess = computed(() => [...(this.procs()?.byProcess ?? [])].sort((a, b) => b.count - a.count));
+  maxProcAvg = computed(() => Math.max(...this.byProcess().map((p) => p.avgMs), 1));
+
+  taskStatusRows = computed<StatusRow[]>(() => this.statusRows(this.tasks()?.openByStatus, TASK_STATUSES));
+  openTotal = computed(() => this.taskStatusRows().reduce((a, r) => a + r.count, 0));
+  taskDonut = computed(() => this.donutGradient(this.taskStatusRows()));
+  byAssignee = computed(() => [...(this.tasks()?.byAssignee ?? [])].sort((a, b) => b.count - a.count));
+  maxAssigneeCount = computed(() => Math.max(...this.byAssignee().map((w) => w.count), 1));
+  byTask = computed(() => [...(this.tasks()?.byTask ?? [])].sort((a, b) => b.count - a.count));
+  maxTaskAvg = computed(() => Math.max(...this.byTask().map((t) => t.avgMs), 1));
+
   constructor() {
-    // AuthService populates user/permissions ASYNCHRONOUSLY after boot (a queueMicrotask-deferred
-    // /auth/me call). Reading hasPermission() synchronously here would return false on a hard
-    // navigation, so every request would be skipped and the tiles would render a permanent zero —
-    // which is exactly what happened. `ready` resolves once that first fetch settles.
-    this.auth.ready.then(() => this.load());
+    this.route.queryParamMap.subscribe((m) => {
+      const t = m.get('tab') as HomeTab;
+      if (t && ['overview', 'processes', 'tasks', 'cases', 'queries'].includes(t)) {
+        this.tab.set(t);
+      }
+    });
+    this.auth.ready.then(() => {
+      this.load();
+      this.loadCaseAndQueries();
+    });
   }
 
-  private load() {
+  setTab(t: HomeTab) {
+    this.tab.set(t);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge' });
+  }
+
+  load() {
+    this.loading.set(true);
     const user = this.auth.user()?.username;
-    const done = () => this.loading.set(false);
+
+    forkJoin({
+      summary: this.q.analyticsSummary(),
+      procs: this.q.analyticsProcesses(),
+      tasks: this.q.analyticsTasks(),
+    }).subscribe({
+      next: ({ summary, procs, tasks }) => {
+        this.summary.set(summary);
+        this.procs.set(procs);
+        this.tasks.set(tasks);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
 
     if (this.canView()) {
-      this.q.analyticsSummary().subscribe({ next: (s) => this.summary.set(s), error: () => {} });
-      this.instApi.listInstances({}).subscribe({
-        next: (list: Instance[]) => this.recent.set([...list].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)).slice(0, 5)),
-        error: () => {},
+      this.instApi.listInstances({}).subscribe((list) => {
+        this.recent.set([...list].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)).slice(0, 6));
       });
-      this.wfApi.listWorkflows().subscribe({ next: (w: Workflow[]) => this.workflows.set(w), error: () => {} });
+      this.wfApi.listWorkflows().subscribe((ws) => this.workflows.set(ws));
+      this.wfDefApi.list().subscribe((defs) => this.workflowDefinitions.set(defs));
     }
+
     if (this.canTasks() && user) {
-      this.q.userTasks(user).subscribe({
-        next: (t) => this.myTasks.set(t.filter((x) => x.status !== 'completed').slice(0, 5)),
-        error: () => {},
+      this.q.userTasks(user).subscribe((ts) => {
+        this.myTasks.set(ts.filter((x) => x.status !== 'completed' && x.status !== 'skipped').slice(0, 6));
       });
     }
-    done();
+  }
+
+  loadCaseAndQueries() {
+    this.analyticsApi.summary().subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
+    this.analyticsApi.tat().subscribe({ next: (t) => this.tat.set(t), error: () => {} });
+    this.analyticsApi.listSavedQueries().subscribe({ next: (qs: SavedQuery[]) => this.savedQueries.set(qs), error: () => {} });
   }
 
   greeting() {
@@ -213,9 +818,7 @@ export class HomeComponent {
     return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   }
   procName(i: Instance) { return (i.processId || i.workflowId || '').split('.').pop() || i.workflowId; }
-  /** Tail of a ULID: the first 8 chars are the ms timestamp, so same-batch ids front-slice
-   *  identically (three rows all reading "01KZBZ4N" on the live list). The random part is the END. */
-  shortId(id: string) { return id.length > 10 ? '\u2026' + id.slice(-7) : id; }
+  shortId(id: string) { return id.length > 10 ? '…' + id.slice(-7) : id; }
 
   statusColor(s: string) {
     return s === 'failed' ? 'var(--red)' : s === 'completed' ? 'var(--green)'
@@ -229,5 +832,163 @@ export class HomeComponent {
     const abs = Math.abs(ms), m = Math.round(abs / 60000), h = Math.round(abs / 3600000);
     const rel = m < 60 ? `${m}m` : h < 48 ? `${h}h` : `${Math.round(abs / 86400000)}d`;
     return ms < 0 ? `${rel} overdue` : `due in ${rel}`;
+  }
+
+  statusEntries(byStatus: Record<string, number>): [string, number][] {
+    return Object.entries(byStatus || {});
+  }
+
+  // ---- Query builder ----
+  addFilter() { this.filters.push({ field: '', op: 'eq', value: '' }); }
+  removeFilter(f: QueryFilter) { this.filters = this.filters.filter((x) => x !== f); }
+
+  private buildDef(): QueryDefinition {
+    const d: QueryDefinition = { entity: this.entity };
+    const validFilters = this.filters.filter((f) => f.field.trim());
+    if (validFilters.length) d.filters = validFilters;
+    if (this.groupBy.trim()) d.groupBy = this.groupBy.trim();
+    if (this.metric) {
+      d.metric = this.metric;
+      if (this.metric === 'avgDurationMs') {
+        d.durationFrom = this.durationFrom.trim() || undefined;
+        d.durationTo = this.durationTo.trim() || undefined;
+      }
+    }
+    return d;
+  }
+
+  runQuery() {
+    this.queryError.set('');
+    this.analyticsApi.runQuery(this.buildDef()).subscribe({
+      next: (res) => this.queryResult.set(res),
+      error: (e) => this.queryError.set(e?.error?.error?.message || 'Query failed'),
+    });
+  }
+
+  saveQuery() {
+    if (!this.saveName.trim()) { this.queryError.set('Name is required to save'); return; }
+    this.analyticsApi.saveQuery(this.saveName.trim(), this.buildDef(), this.saveShared).subscribe({
+      next: () => {
+        this.toast.success('Query saved');
+        this.saveName = '';
+        this.loadCaseAndQueries();
+      },
+      error: (e) => this.queryError.set(e?.error?.error?.message || 'Failed to save query'),
+    });
+  }
+
+  loadSavedQuery(sq: SavedQuery) {
+    this.entity = sq.definition.entity;
+    this.groupBy = sq.definition.groupBy || '';
+    this.metric = sq.definition.metric || '';
+    this.durationFrom = sq.definition.durationFrom || '';
+    this.durationTo = sq.definition.durationTo || '';
+    this.filters = sq.definition.filters ? [...sq.definition.filters] : [];
+    this.runQuery();
+  }
+
+  deleteSavedQuery(sq: SavedQuery) {
+    this.analyticsApi.deleteSavedQuery(sq.id).subscribe({
+      next: () => {
+        this.toast.success('Query deleted');
+        this.savedQueries.update((l) => l.filter((x) => x.id !== sq.id));
+      },
+      error: (e: any) => this.toast.error(e?.error?.error?.message || 'Delete failed'),
+    });
+  }
+
+  // ---- Start Case Modal ----
+  openStartCase() {
+    this.startCaseError.set('');
+    const firstDef = this.workflowDefinitions()[0]?.name || '';
+    this.startingCase.set({ workflowName: firstDef, variables: '{}', workflowData: '{}' });
+  }
+  closeStartCase() { this.startingCase.set(null); }
+  submitStartCase() {
+    const s = this.startingCase(); if (!s) return;
+    if (!s.workflowName.trim()) { this.startCaseError.set('Workflow definition is required'); return; }
+    let variables: Record<string, unknown>, workflowData: Record<string, unknown>;
+    try { variables = s.variables.trim() ? JSON.parse(s.variables) : {}; }
+    catch { this.startCaseError.set('Variables must be valid JSON'); return; }
+    try { workflowData = s.workflowData.trim() ? JSON.parse(s.workflowData) : {}; }
+    catch { this.startCaseError.set('Business data must be valid JSON'); return; }
+
+    this.startingCaseLoading.set(true);
+    this.wfInstApi.create({ workflowName: s.workflowName.trim(), variables, workflowData }).subscribe({
+      next: (w) => {
+        this.startingCaseLoading.set(false);
+        this.toast.success('Case started successfully');
+        this.closeStartCase();
+        this.load();
+        if (w.piid) this.router.navigate(['/instances', w.piid]);
+      },
+      error: (e) => {
+        this.startingCaseLoading.set(false);
+        this.startCaseError.set(e?.error?.error?.message || 'Start case failed');
+      },
+    });
+  }
+
+  // ---- Helpers ----
+  ms = humanMs;
+  pctOf(v: number, max: number): number { return max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0; }
+  nonZero(rows: StatusRow[]): StatusRow[] { return rows.filter((r) => r.count > 0); }
+  loadRatio(count: number): number { return count / this.maxAssigneeCount(); }
+  loadColor(count: number): string {
+    const r = this.loadRatio(count);
+    return r > 0.75 ? 'var(--red)' : r > 0.4 ? 'var(--amber)' : 'var(--green)';
+  }
+
+  private statusRows(byStatus: Record<string, number> | undefined, meta: { key: string; label: string; color: string }[]): StatusRow[] {
+    if (!byStatus) return [];
+    const known = meta.map((m) => ({ ...m, count: byStatus[m.key] ?? 0 }));
+    const extra = Object.keys(byStatus)
+      .filter((k) => !meta.some((m) => m.key === k) && byStatus[k] > 0)
+      .map((k) => ({ key: k, label: k, color: 'var(--muted)', count: byStatus[k] }));
+    const rows = [...known, ...extra];
+    const total = rows.reduce((a, r) => a + r.count, 0);
+    const max = Math.max(...rows.map((r) => r.count), 1);
+    return rows.map((r) => ({
+      ...r,
+      pctOfMax: (r.count / max) * 100,
+      share: total ? Math.round((r.count / total) * 100) : 0,
+    }));
+  }
+
+  private donutGradient(rows: StatusRow[]): string {
+    const active = rows.filter((r) => r.count > 0);
+    const total = active.reduce((a, r) => a + r.count, 0);
+    if (!total) return 'var(--surface-3)';
+    let acc = 0;
+    const stops = active.map((r) => {
+      const from = (acc / total) * 100;
+      acc += r.count;
+      const to = (acc / total) * 100;
+      return `${r.color} ${from.toFixed(2)}% ${to.toFixed(2)}%`;
+    });
+    return `conic-gradient(${stops.join(', ')})`;
+  }
+
+  exportCsv() {
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    let header: string[]; let rows: unknown[][]; let name: string;
+    if (this.tab() === 'tasks') {
+      header = ['Task', 'Count', 'Avg (ms)'];
+      rows = this.byTask().map((t) => [t.name, t.count, t.avgMs]);
+      name = 'tasks-analytics.csv';
+    } else if (this.tab() === 'cases') {
+      header = ['Workflow', 'Count', 'Avg (ms)'];
+      rows = (this.tat()?.byWorkflowName || []).map((w) => [w.workflowName, w.count, w.avgMs]);
+      name = 'cases-analytics.csv';
+    } else {
+      header = ['Process', 'Count', 'Avg (ms)', 'Min (ms)', 'Max (ms)'];
+      rows = this.byProcess().map((p) => [p.processId, p.count, p.avgMs, p.minMs, p.maxMs]);
+      name = 'processes-analytics.csv';
+    }
+    const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name; a.click();
+    URL.revokeObjectURL(url);
   }
 }
