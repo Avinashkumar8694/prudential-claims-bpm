@@ -87,16 +87,79 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
 
         <div class="tabgrid" [class.full]="tab() === 'diagram'">
           @if (tab() !== 'diagram') {
-            <aside class="card relcard">
-              <div class="section-title first">Related processes</div>
-              <div class="row relrow"><span class="muted lbl">Parent</span>@if (parent()) { <button class="lnkbtn" (click)="goto(parent()!.id)">{{ procName(parent()!) }} #{{ shortId(parent()!.id) }}</button> } @else { <span class="badge">none</span> }</div>
-              <div class="row relrow"><span class="muted lbl">This</span><span class="badge active">● {{ procName(inst()!) }} #{{ shortId(inst()!.id) }}</span></div>
-              @if (children().length) {
-                <div class="section-title">Children</div>
-                @for (c of children(); track c.id) {
-                  <button class="prow lnkbtn" (click)="goto(c.id)"><span>{{ procName(c) }}</span><span class="badge" [style.color]="statusColor(c.status)">#{{ shortId(c.id) }}</span></button>
+            <aside class="hierarchy-rail card">
+              <div class="hierarchy-head">
+                <span class="hierarchy-title"><app-icon name="branch" [size]="14" /> Process Hierarchy</span>
+              </div>
+
+              <!-- Parent Node Section -->
+              <div class="hierarchy-section">
+                <div class="hierarchy-lbl">PARENT PROCESS</div>
+                @if (parent(); as p) {
+                  <div class="hier-node hier-parent" (click)="goto(p.id)" role="button" tabindex="0" [title]="'Navigate to parent: ' + procName(p)">
+                    <div class="node-icon"><app-icon name="arrowLeft" [size]="13" /></div>
+                    <div class="node-body">
+                      <div class="node-name" [title]="procName(p)">{{ procName(p) }}</div>
+                      <div class="node-meta">
+                        <span class="mono">#{{ shortId(p.id) }}</span>
+                        <span class="status-dot" [style.background]="statusColor(p.status)"></span>
+                        <span class="node-status">{{ p.status }}</span>
+                      </div>
+                    </div>
+                  </div>
+                } @else {
+                  <div class="hier-node hier-root">
+                    <span class="muted sm">Root Process (No Parent)</span>
+                  </div>
                 }
-              }
+              </div>
+
+              <div class="hier-connector"><div class="connector-line"></div></div>
+
+              <!-- Current Live Instance Node -->
+              <div class="hierarchy-section">
+                <div class="hier-node hier-current">
+                  <div class="node-badge">THIS INSTANCE</div>
+                  <div class="node-main">
+                    <div class="current-indicator" [style.background]="statusColor(inst()!.status)"></div>
+                    <div class="node-body">
+                      <div class="node-name bold" [title]="procName(inst()!)">{{ procName(inst()!) }}</div>
+                      <div class="node-meta">
+                        <span class="mono">#{{ shortId(inst()!.id) }}</span>
+                        <span class="status-pill sm" [style.color]="statusColor(inst()!.status)" [style.background]="statusColor(inst()!.status) + '18'">{{ inst()!.status }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hier-connector"><div class="connector-line"></div></div>
+
+              <!-- Sub-processes / Call Activities -->
+              <div class="hierarchy-section">
+                <div class="hierarchy-lbl">SUB-PROCESSES ({{ children().length }})</div>
+                @if (children().length) {
+                  <div class="children-tree">
+                    @for (c of children(); track c.id) {
+                      <div class="hier-node hier-child" (click)="goto(c.id)" role="button" tabindex="0" [title]="'Navigate to sub-process: ' + procName(c)">
+                        <div class="node-icon"><app-icon name="cornerDownRight" [size]="13" /></div>
+                        <div class="node-body">
+                          <div class="node-name" [title]="procName(c)">{{ procName(c) }}</div>
+                          <div class="node-meta">
+                            <span class="mono">#{{ shortId(c.id) }}</span>
+                            <span class="status-dot" [style.background]="statusColor(c.status)"></span>
+                            <span class="node-status">{{ c.status }}</span>
+                          </div>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="hier-node hier-none">
+                    <span class="muted sm">No sub-processes executed</span>
+                  </div>
+                }
+              </div>
             </aside>
           }
           <div class="maincol">
@@ -500,11 +563,12 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
     .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
     .tabs button { border: none; background: transparent; padding: 9px 4px; margin-right: 18px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
     .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
-    /* Related Processes is a nav aid, not the main content — a narrow LEFT rail keeps it out of the
-       way. The Diagram tab drops it entirely (see [class.full]) so the canvas gets the full page width
-       instead of losing a fixed column to a panel that's rarely relevant while reading a diagram. */
-    .tabgrid { display: grid; grid-template-columns: 200px 1fr; gap: 16px; align-items: start; }
+    /* Process Hierarchy left rail with comfortable 280px width to avoid cramping and wrapping */
+    .tabgrid { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
     .tabgrid.full { grid-template-columns: 1fr; }
+    @media (max-width: 960px) {
+      .tabgrid { grid-template-columns: 1fr; }
+    }
     .maincol { min-width: 0; }
     .pad { padding: 18px; }
     .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin: 16px 0 8px; }
@@ -883,14 +947,36 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
     .logs th, .logs td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); font-size: 12px; } .logs th { color: var(--muted); }
     .histtbl { width: 100%; margin: 4px 0 8px; } .histtbl td { padding: 4px 8px; border-bottom: 1px dashed var(--border); }
     .ta-r { text-align: right; white-space: nowrap; }
-    .relcard { padding: 12px; align-self: start; font-size: 12.5px; }
-    .relcard .section-title { font-size: 10px; margin: 10px 0 6px; }
-    .lbl { font-size: 11px; }
-    .relcard .prow, .relcard .lnkbtn { font-size: 12px; }
-    /* The narrow rail is intentional (see .tabgrid above) — badges here need to wrap onto their own
-       line instead of overflowing the card, since "processName #shortId" routinely won't fit 200px. */
-    .relrow { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-bottom: 8px; }
-    .relcard .badge { white-space: normal; word-break: break-word; line-height: 1.4; }
+    .hierarchy-rail { padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 8px; box-shadow: var(--shadow-sm); }
+    .hierarchy-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 2px; }
+    .hierarchy-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+
+    .hierarchy-section { display: flex; flex-direction: column; gap: 6px; }
+    .hierarchy-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+
+    .hier-node { border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; background: var(--surface-2); transition: all 0.15s ease; position: relative; }
+    .hier-node.hier-parent, .hier-node.hier-child { cursor: pointer; display: flex; align-items: center; gap: 10px; user-select: none; }
+    .hier-node.hier-parent:hover, .hier-node.hier-child:hover { border-color: var(--primary); background: var(--surface-3); transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .hier-node.hier-root, .hier-node.hier-none { border-style: dashed; background: transparent; padding: 8px 12px; text-align: center; }
+
+    .hier-current { border: 1.5px solid var(--primary); background: var(--surface); box-shadow: 0 2px 8px rgba(37,99,235,0.08); padding: 10px 12px; }
+    .node-badge { display: inline-block; font-size: 9.5px; font-weight: 800; letter-spacing: 0.06em; color: var(--primary); margin-bottom: 6px; text-transform: uppercase; }
+    .node-main { display: flex; align-items: center; gap: 10px; }
+    .current-indicator { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 3px rgba(37,99,235,0.2); animation: pulse 2s infinite; flex-shrink: 0; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(37,99,235,0.4); } 70% { box-shadow: 0 0 0 6px rgba(37,99,235,0); } 100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); } }
+
+    .node-icon { color: var(--muted); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .node-body { flex: 1; min-width: 0; }
+    .node-name { font-size: 13px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .node-name.bold { font-weight: 700; }
+    .node-meta { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-size: 11.5px; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .node-status { font-size: 11px; text-transform: capitalize; color: var(--text-secondary); }
+    .status-pill { padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 600; text-transform: capitalize; }
+
+    .hier-connector { display: flex; justify-content: center; height: 12px; align-items: center; }
+    .connector-line { width: 2px; height: 100%; background: var(--border); }
+    .children-tree { display: flex; flex-direction: column; gap: 6px; }
     .case-chip-header { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(59,130,246,0.12); color: #2563eb; font-size: 12.5px; border: 1px solid rgba(59,130,246,0.25); }
     .badge.active { background: var(--green-bg); color: var(--green); }
     .badge.inactive { background: var(--red-bg); color: var(--red); }
@@ -1121,10 +1207,34 @@ export class InstanceDetailComponent implements OnDestroy {
         });
       },
     });
-    this.api.instanceGraph(this.id()).subscribe((g) => this.graph.set(g as any));
     this.api.relatedInstances(this.id()).subscribe((r) => { this.parent.set(r.parent); this.children.set(r.children); });
-    this.queryApi.instanceTasks(this.id()).subscribe((tasks) => this.openTasks.set(tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped')));
-    this.opsApi.listErrors({ instanceId: this.id(), acknowledged: false }).subscribe((r) => this.errors.set(r.items));
+    this.ensureTabData(this.tab(), true);
+  }
+
+  private loadedTabs = new Set<string>();
+
+  ensureTabData(tab: Tab, force = false) {
+    if (!force && this.loadedTabs.has(tab)) return;
+    this.loadedTabs.add(tab);
+
+    if (tab === 'diagram') {
+      this.api.instanceGraph(this.id()).subscribe((g) => this.graph.set(g as any));
+    } else if (tab === 'details') {
+      this.queryApi.instanceTasks(this.id()).subscribe((tasks) =>
+        this.openTasks.set(tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped'))
+      );
+      if (this.inst()?.status === 'failed') {
+        this.opsApi.listErrors({ instanceId: this.id(), acknowledged: false }).subscribe((r) => this.errors.set(r.items));
+      }
+    } else if (tab === 'case') {
+      const bc = this.boundCase();
+      if (bc) {
+        this.wfInstApi.listComments(bc.workflowInstance.id).subscribe((c) => this.caseComments.set(c));
+        this.wfInstApi.listAudits(bc.workflowInstance.id).subscribe((a) => this.caseAudits.set(a));
+      }
+    } else if (tab === 'logs') {
+      this.opsApi.listErrors({ instanceId: this.id(), acknowledged: false }).subscribe((r) => this.errors.set(r.items));
+    }
   }
 
   loadCase(caseId: string) {
@@ -1132,11 +1242,13 @@ export class InstanceDetailComponent implements OnDestroy {
       next: (agg) => {
         this.boundCase.set(agg);
         this.caseDataText = JSON.stringify(agg.workflowInstance.data || {}, null, 2);
+        if (this.tab() === 'case') {
+          this.wfInstApi.listComments(caseId).subscribe((c) => this.caseComments.set(c));
+          this.wfInstApi.listAudits(caseId).subscribe((a) => this.caseAudits.set(a));
+        }
       },
       error: () => {},
     });
-    this.wfInstApi.listComments(caseId).subscribe((c) => this.caseComments.set(c));
-    this.wfInstApi.listAudits(caseId).subscribe((a) => this.caseAudits.set(a));
   }
 
   saveCaseData() {
@@ -1238,7 +1350,11 @@ export class InstanceDetailComponent implements OnDestroy {
     });
   }
 
-  setTab(t: Tab) { this.tab.set(t); this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true }); }
+  setTab(t: Tab) {
+    this.tab.set(t);
+    this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.ensureTabData(t);
+  }
   goto(id: string) { this.router.navigate(['/instances', id]); }
 
   visual(t: string) { return this.catalog()?.diagram?.[t] || { icon: 'info', color: '#64748b', shape: 'rectangle' as const }; }

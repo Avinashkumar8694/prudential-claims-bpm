@@ -125,7 +125,7 @@ export class SideNavComponent {
     }
     if (this.auth.hasPermission('task:manage')) base.push({ label: 'Tasks', icon: 'tasks', link: '/tasks' });
     if (this.auth.hasPermission('query:read')) {
-      base.push({ label: 'Reports & Analytics', icon: 'chart', link: '/reports' });
+      base.push({ label: 'Reports & Exports', icon: 'file', link: '/reports' });
     }
     return base;
   });

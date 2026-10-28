@@ -1329,13 +1329,54 @@ export class HomeComponent {
     });
     this.auth.ready.then(() => {
       this.load();
-      this.loadCaseAndQueries();
     });
   }
+
+  private loadedTabs = new Set<string>();
 
   setTab(t: HomeTab) {
     this.tab.set(t);
     this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge' });
+    this.ensureTabData(t);
+  }
+
+  ensureTabData(t: HomeTab) {
+    if (this.loadedTabs.has(t)) return;
+    this.loadedTabs.add(t);
+
+    const user = this.auth.user()?.username;
+    const params = this.filterParams();
+
+    if (t === 'overview') {
+      if (this.canView()) {
+        this.instApi.listInstances({}).subscribe((list) => {
+          this.recent.set([...list].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)).slice(0, 6));
+        });
+      }
+      if (this.canTasks() && user) {
+        this.q.userTasks(user).subscribe((ts) => {
+          this.myTasks.set(ts.filter((x) => x.status !== 'completed' && x.status !== 'skipped').slice(0, 6));
+        });
+      }
+    } else if (t === 'processes') {
+      this.q.analyticsProcesses(params).subscribe({
+        next: (procs) => this.procs.set(procs),
+        error: () => {},
+      });
+    } else if (t === 'tasks') {
+      this.q.analyticsTasks(params).subscribe({
+        next: (tasks) => this.tasks.set(tasks),
+        error: () => {},
+      });
+    } else if (t === 'cases') {
+      const caseParams = { since: params.since, from: params.from, to: params.to };
+      this.analyticsApi.summary(caseParams).subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
+      this.analyticsApi.tat(caseParams).subscribe({ next: (t) => this.tat.set(t), error: () => {} });
+      this.wfApi.listWorkflows().subscribe((ws) => this.workflows.set(ws));
+      this.wfDefApi.list().subscribe((defs) => this.workflowDefinitions.set(defs));
+    } else if (t === 'queries') {
+      this.analyticsApi.listSavedQueries().subscribe({ next: (qs: SavedQuery[]) => this.savedQueries.set(qs), error: () => {} });
+    }
   }
 
   setTimeWindow(w: TimeWindow) {
@@ -1358,6 +1399,7 @@ export class HomeComponent {
       this.customFrom.set('');
       this.customTo.set('');
     }
+    this.loadedTabs.clear();
     this.load();
   }
 
@@ -1379,6 +1421,7 @@ export class HomeComponent {
       return;
     }
     this.timeWindow.set('custom');
+    this.loadedTabs.clear();
     this.load();
   }
 
@@ -1386,58 +1429,30 @@ export class HomeComponent {
     this.customFrom.set('');
     this.customTo.set('');
     this.timeWindow.set('all');
+    this.loadedTabs.clear();
     this.load();
   }
 
   onProcessChange() {
+    this.loadedTabs.clear();
     this.load();
   }
 
   load() {
     this.loading.set(true);
-    const user = this.auth.user()?.username;
     const params = this.filterParams();
 
-    forkJoin({
-      summary: this.q.analyticsSummary(params),
-      procs: this.q.analyticsProcesses(params),
-      tasks: this.q.analyticsTasks(params),
-    }).subscribe({
-      next: ({ summary, procs, tasks }) => {
+    // Summary is always needed for top KPI cards
+    this.q.analyticsSummary(params).subscribe({
+      next: (summary) => {
         this.summary.set(summary);
-        this.procs.set(procs);
-        this.tasks.set(tasks);
         this.loading.set(false);
       },
       error: () => this.loading.set(false),
     });
 
-    if (this.canView()) {
-      this.instApi.listInstances({}).subscribe((list) => {
-        this.recent.set([...list].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)).slice(0, 6));
-      });
-      this.wfApi.listWorkflows().subscribe((ws) => this.workflows.set(ws));
-      this.wfDefApi.list().subscribe((defs) => this.workflowDefinitions.set(defs));
-    }
-
-    if (this.canTasks() && user) {
-      this.q.userTasks(user).subscribe((ts) => {
-        this.myTasks.set(ts.filter((x) => x.status !== 'completed' && x.status !== 'skipped').slice(0, 6));
-      });
-    }
-
-    this.loadCaseAndQueries();
-  }
-
-  loadCaseAndQueries() {
-    const params = {
-      since: this.filterParams().since,
-      from: this.filterParams().from,
-      to: this.filterParams().to,
-    };
-    this.analyticsApi.summary(params).subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
-    this.analyticsApi.tat(params).subscribe({ next: (t) => this.tat.set(t), error: () => {} });
-    this.analyticsApi.listSavedQueries().subscribe({ next: (qs: SavedQuery[]) => this.savedQueries.set(qs), error: () => {} });
+    // On-demand fetch strictly for the currently active tab
+    this.ensureTabData(this.tab());
   }
 
   greeting() {
@@ -1540,7 +1555,7 @@ export class HomeComponent {
       next: () => {
         this.toast.success('Query saved');
         this.saveName = '';
-        this.loadCaseAndQueries();
+        this.analyticsApi.listSavedQueries().subscribe({ next: (qs: SavedQuery[]) => this.savedQueries.set(qs), error: () => {} });
       },
       error: (e) => this.queryError.set(e?.error?.error?.message || 'Failed to save query'),
     });

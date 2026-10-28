@@ -8,6 +8,7 @@ import { makeContext } from './context.ts';
 import { buildRoutes } from './http/routes.ts';
 import { buildAuthRoutes } from './http/auth-routes.ts';
 import { requireAuth } from './http/auth-middleware.ts';
+import { getEphemeralPublicKey } from './infra/crypto.ts';
 import { errorMiddleware } from './infra/errors.ts';
 
 /** STORE=pg switches from the file-per-entity dev store to a real Postgres-backed one (see
@@ -55,6 +56,11 @@ export function createApp(store?: Store) {
   });
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'jbpm-engine-server', version: '0.1.0' }));
+  app.get('/api/crypto/public-key', (_req, res) => res.json({
+    publicKey: getEphemeralPublicKey(),
+    algorithm: 'RSA-OAEP',
+    hash: 'SHA-256'
+  }));
   app.use('/api/auth', buildAuthRoutes());   // login only — must stay reachable without a token
   app.use('/api', requireAuth, buildRoutes());
   app.use(errorMiddleware);

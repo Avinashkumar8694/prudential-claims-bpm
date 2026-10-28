@@ -3,6 +3,7 @@
 import type { AppContext } from '../../context.ts';
 import { Collections, type SystemSettings } from '../../domain.ts';
 import { validation } from '../../infra/errors.ts';
+import { encryptAtRest, decryptAtRest } from '../../infra/crypto.ts';
 
 export const DEFAULT_SETTINGS: Omit<SystemSettings, 'id' | 'tenantId'> = {
   defaultPageSize: 20,
@@ -29,7 +30,25 @@ export class SettingsService {
 
   async get(): Promise<SystemSettings> {
     const existing = await this.repo().get('system');
-    if (existing && existing.tenantId === this.ctx.tenantId) return existing;
+    if (existing && existing.tenantId === this.ctx.tenantId) {
+      return {
+        ...existing,
+        smtpPasswordConfigured: Boolean(existing.smtpPassword),
+        smtpPassword: existing.smtpPassword ? '••••••••' : undefined,
+      };
+    }
+    return { id: 'system', tenantId: this.ctx.tenantId, ...DEFAULT_SETTINGS };
+  }
+
+  /** Internal retrieval for background runners (e.g. mail delivery) with decrypted secrets */
+  async getDecrypted(): Promise<SystemSettings> {
+    const existing = await this.repo().get('system');
+    if (existing && existing.tenantId === this.ctx.tenantId) {
+      return {
+        ...existing,
+        smtpPassword: existing.smtpPassword ? decryptAtRest(existing.smtpPassword) : undefined,
+      };
+    }
     return { id: 'system', tenantId: this.ctx.tenantId, ...DEFAULT_SETTINGS };
   }
 
@@ -53,14 +72,25 @@ export class SettingsService {
         throw validation(`${k} must be a non-negative integer (0 = unlimited)`);
       }
     }
-    const current = await this.get();
+    const currentRaw = (await this.repo().get('system')) || { id: 'system', tenantId: this.ctx.tenantId, ...DEFAULT_SETTINGS };
+    
+    // Encrypt secrets at rest before persisting
+    const preparedPatch = { ...patch };
+    if (preparedPatch.smtpPassword) {
+      if (preparedPatch.smtpPassword === '••••••••' || !preparedPatch.smtpPassword.trim()) {
+        delete preparedPatch.smtpPassword; // preserve current
+      } else {
+        preparedPatch.smtpPassword = encryptAtRest(preparedPatch.smtpPassword);
+      }
+    }
+
     const next: SystemSettings = {
-      ...current, ...patch,
+      ...currentRaw, ...preparedPatch,
       id: 'system', tenantId: this.ctx.tenantId,
       updatedAt: this.ctx.clock(), updatedBy: actor,
     };
     await this.repo().put(next);
     await this.ctx.audit({ actor, kind: 'settings.updated', data: { changed: Object.keys(patch) } });
-    return next;
+    return this.get();
   }
 }

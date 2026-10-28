@@ -187,6 +187,7 @@ export interface SystemSettings extends Entity {
   sessionTimeoutHours: number;
   emailEnabled: boolean;
   emailFrom?: string; smtpHost?: string; smtpPort?: number;
+  smtpUser?: string; smtpPassword?: string; smtpPasswordConfigured?: boolean;
   /** System-wide instance creation mode allowed ('both' | 'case-only' | 'process-only') */
   instanceCreationMode?: 'both' | 'case-only' | 'process-only';
   /** per-tenant resource quotas — undefined/0 means unlimited (default, so existing tenants are

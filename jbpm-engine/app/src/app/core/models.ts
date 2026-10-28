@@ -148,6 +148,7 @@ export interface SystemSettings {
   sessionTimeoutHours: number;
   emailEnabled: boolean;
   emailFrom?: string; smtpHost?: string; smtpPort?: number;
+  smtpUser?: string; smtpPassword?: string; smtpPasswordConfigured?: boolean;
   instanceCreationMode?: 'both' | 'case-only' | 'process-only';
   /** per-tenant resource quotas; 0/undefined = unlimited. */
   maxActiveInstances?: number;

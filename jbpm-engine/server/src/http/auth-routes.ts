@@ -9,6 +9,7 @@ import { IamService } from '../modules/iam/service.ts';
 import { requireAuth } from './auth-middleware.ts';
 import type { JwtClaims } from '../infra/auth.ts';
 import { rateLimit } from './rate-limit.ts';
+import { decryptInTransit } from '../infra/crypto.ts';
 
 const ctxOf = (req: Request): AppContext => (req as any).ctx;
 
@@ -20,7 +21,8 @@ export function buildAuthRoutes(): Router {
   const r = Router();
   r.post('/login', loginLimiter, asyncHandler(async (req, res) => {
     const { username, password } = req.body || {};
-    res.json(await new IamService(ctxOf(req)).login(String(username || ''), String(password || '')));
+    const decryptedPassword = decryptInTransit(password);
+    res.json(await new IamService(ctxOf(req)).login(String(username || ''), String(decryptedPassword || '')));
   }));
   // "what can I actually do" — lets the frontend resolve real permissions (including custom roles
   // created later via the admin UI) instead of hardcoding a mirror of DEFAULT_ROLES.
@@ -33,7 +35,9 @@ export function buildAuthRoutes(): Router {
   // one), independent of the admin-only POST /users/:id/password.
   r.post('/me/password', requireAuth, asyncHandler(async (req, res) => {
     const claims = (req as any).user as JwtClaims;
-    await new IamService(ctxOf(req)).changeOwnPassword(claims.sub, req.body?.currentPassword, req.body?.newPassword);
+    const currentPassword = decryptInTransit(req.body?.currentPassword);
+    const newPassword = decryptInTransit(req.body?.newPassword);
+    await new IamService(ctxOf(req)).changeOwnPassword(claims.sub, currentPassword, newPassword);
     res.status(204).end();
   }));
   return r;

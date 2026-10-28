@@ -33,6 +33,7 @@ import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
 import { hub } from '../infra/ws-hub.ts';
 import { requirePermission } from './auth-middleware.ts';
 import { rateLimit } from './rate-limit.ts';
+import { decryptInTransit } from '../infra/crypto.ts';
 
 const ctxOf = (req: Request): AppContext => (req as any).ctx;
 const actorOf = (req: Request): string => (req as any).actor;
@@ -370,7 +371,11 @@ export function buildRoutes(): Router {
 
   // --- system settings (singleton; readable by anyone signed in, writable by admins) ---
   r.get('/settings/system', asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).get())));
-  r.put('/settings/system', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).update(req.body || {}, actorOf(req)))));
+  r.put('/settings/system', perm('admin:iam'), asyncHandler(async (req, res) => {
+    const patch = { ...(req.body || {}) };
+    if (patch.smtpPassword) patch.smtpPassword = decryptInTransit(patch.smtpPassword);
+    res.json(await new SettingsService(ctxOf(req)).update(patch, actorOf(req)));
+  }));
 
   // --- query / task-admin / analytics (jBPM KIE-Server-style; see docs/17) ---
   const q = (req: Request) => new QueryService(ctxOf(req));
@@ -391,10 +396,18 @@ export function buildRoutes(): Router {
   // --- IAM: users, groups, roles (admin-only) ---
   const iam = (req: Request) => new IamService(ctxOf(req));
   r.get('/users', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listUsers() })));
-  r.post('/users', perm('admin:iam'), asyncHandler(async (req, res) => res.status(201).json(await iam(req).createUser(req.body, actorOf(req)))));
+  r.post('/users', perm('admin:iam'), asyncHandler(async (req, res) => {
+    const input = { ...(req.body || {}) };
+    if (input.password) input.password = decryptInTransit(input.password);
+    res.status(201).json(await iam(req).createUser(input, actorOf(req)));
+  }));
   r.get('/users/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).getUser(req.params.id))));
   r.patch('/users/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).updateUser(req.params.id, req.body, actorOf(req)))));
-  r.post('/users/:id/password', perm('admin:iam'), asyncHandler(async (req, res) => { await iam(req).setPassword(req.params.id, req.body?.password, actorOf(req)); res.status(204).end(); }));
+  r.post('/users/:id/password', perm('admin:iam'), asyncHandler(async (req, res) => {
+    const plain = decryptInTransit(req.body?.password);
+    await iam(req).setPassword(req.params.id, plain, actorOf(req));
+    res.status(204).end();
+  }));
   r.get('/groups', perm('admin:iam'), asyncHandler(async (req, res) => res.json({ items: await iam(req).listGroups() })));
   r.post('/groups', perm('admin:iam'), asyncHandler(async (req, res) => res.status(201).json(await iam(req).createGroup(req.body, actorOf(req)))));
   r.delete('/groups/:id', perm('admin:iam'), asyncHandler(async (req, res) => { await iam(req).deleteGroup(req.params.id, actorOf(req)); res.status(204).end(); }));

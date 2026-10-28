@@ -135,6 +135,11 @@ type SettingsTab = 'account' | 'system';
                 <div class="setting-row"><div class="lbl">From address</div><input type="email" [(ngModel)]="s.emailFrom" placeholder="bpm@example.com" style="width:240px;" /></div>
                 <div class="setting-row"><div class="lbl">SMTP host</div><input [(ngModel)]="s.smtpHost" placeholder="smtp.example.com" style="width:240px;" /></div>
                 <div class="setting-row"><div class="lbl">SMTP port</div><input type="number" [(ngModel)]="s.smtpPort" style="width:90px;" /></div>
+                <div class="setting-row"><div class="lbl">SMTP user</div><input [(ngModel)]="s.smtpUser" placeholder="smtp-user" style="width:240px;" /></div>
+                <div class="setting-row">
+                  <div class="lbl">SMTP password <span class="badge" title="RSA encrypted in-transit and at-rest"><app-icon name="lock" [size]="11" /> RSA Protected</span></div>
+                  <input type="password" [(ngModel)]="s.smtpPassword" placeholder="••••••••" style="width:240px;" />
+                </div>
               }
             </section>
 

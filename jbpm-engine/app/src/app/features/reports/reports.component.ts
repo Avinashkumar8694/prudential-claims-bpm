@@ -1,1179 +1,789 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { DecimalPipe, JsonPipe } from '@angular/common';
-import { forkJoin } from 'rxjs';
-import { QueryApiService } from '../../core/api/query-api.service';
-import { WorkflowApiService } from '../../core/api/workflow-api.service';
-import { WorkflowAnalyticsApiService, type WorkflowInstanceSummary } from '../../core/api/workflow-analytics-api.service';
-import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
+import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { IconComponent } from '../../shared/icon.component';
+import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
 import { ToastService } from '../../shared/toast.service';
-import type {
-  ProcessAnalytics,
-  QueryDefinition,
-  QueryFilter,
-  QueryOp,
-  QueryRunResult,
-  QueryableEntity,
-  SavedQuery,
-  Summary,
-  TaskAnalytics,
-  Workflow,
-  WorkflowTat,
-} from '../../core/models';
+import { InstanceApiService } from '../../core/api/instance-api.service';
+import { TaskApiService } from '../../core/api/task-api.service';
+import { WorkflowInstanceApiService } from '../../core/api/workflow-instance-api.service';
+import { OpsApiService } from '../../core/api/ops-api.service';
+import { QueryApiService } from '../../core/api/query-api.service';
+import { AuthService } from '../../core/auth/auth.service';
+import type { Instance, Task, WorkflowInstance, AuditEvent, ProcessDef } from '../../core/models';
 
-type ReportsTab = 'overview' | 'processes' | 'tasks' | 'cases' | 'queries';
-type TimeWindow = 'all' | '1d' | '7d' | '30d' | '90d' | 'custom';
-
-interface StatusRow {
-  key: string;
-  label: string;
-  color: string;
-  count: number;
-  pctOfMax: number;
-  share: number;
-}
-
-const ENTITIES: QueryableEntity[] = ['workflowInstance', 'workflowInstanceAudit', 'workflowInstanceComment', 'instance', 'task'];
-const OPS: QueryOp[] = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'contains'];
+type ReportTab = 'executions' | 'sla' | 'cases' | 'audit' | 'adhoc';
+type TimeWindow = '1d' | '7d' | '30d' | '90d' | 'all' | 'custom';
 
 function humanMs(ms: number): string {
-  if (!ms || ms <= 0) return '0s';
-  if (ms < 1000) return '<1s';
-  const s = Math.round(ms / 1000);
+  if (ms < 0) return '0s';
+  const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  if (m < 60) return s % 60 ? `${m}m ${s % 60}s` : `${m}m`;
+  if (m < 60) return `${m}m ${s % 60}s`;
   const h = Math.floor(m / 60);
-  if (h < 24) return m % 60 ? `${h}h ${String(m % 60).padStart(2, '0')}m` : `${h}h`;
+  if (h < 24) return `${h}h ${m % 60}m`;
   const d = Math.floor(h / 24);
-  return h % 24 ? `${d}d ${h % 24}h` : `${d}d`;
+  return `${d}d ${h % 24}h`;
 }
 
-const INSTANCE_STATUSES = [
-  { key: 'running', label: 'Running', color: 'var(--blue)' },
-  { key: 'waiting', label: 'Waiting', color: 'var(--amber)' },
-  { key: 'completed', label: 'Completed', color: 'var(--green)' },
-  { key: 'suspended', label: 'Suspended', color: 'var(--purple)' },
-  { key: 'failed', label: 'Failed', color: 'var(--red)' },
-  { key: 'aborted', label: 'Aborted', color: 'var(--muted)' },
-];
-
-const TASK_STATUSES = [
-  { key: 'created', label: 'Created', color: 'var(--amber)' },
-  { key: 'reserved', label: 'Reserved', color: 'var(--purple)' },
-  { key: 'inprogress', label: 'In progress', color: 'var(--blue)' },
-  { key: 'error', label: 'Error', color: 'var(--red)' },
-];
+function downloadFile(content: string, filename: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [FormsModule, RouterLink, DecimalPipe, JsonPipe, BreadcrumbComponent, IconComponent],
+  imports: [CommonModule, FormsModule, RouterLink, IconComponent, BreadcrumbComponent],
   template: `
     <div class="page">
-      <div class="crumbwrap">
-        <app-breadcrumb [crumbs]="[{ label: 'Reports & Analytics' }, { label: tabLabel() }]" />
-      </div>
-
       <header class="pagehead">
         <div>
-          <h1>Reports &amp; Analytics</h1>
-          <p class="sub">Unified operational intelligence: process throughput, human task turnaround, case metrics, and ad-hoc queries.</p>
+          <app-breadcrumb [crumbs]="[{ label: 'Operational Reports & Exports' }, { label: tabLabel() }]" />
+          <h1>Operational Reports &amp; Exports</h1>
+          <p class="muted head-sub">Generate, filter, audit, and export operational execution records, task SLA breaches, case histories, and custom query reports.</p>
         </div>
-        <div class="spacer"></div>
-        <button class="btn sm" (click)="load()"><app-icon name="refresh" [size]="14" /> Refresh</button>
-        <button class="btn sm" (click)="exportCsv()" [disabled]="loading() || !!error()">
-          <app-icon name="download" [size]="14" /> Export CSV
-        </button>
+        <div class="head-actions">
+          <button class="btn sm" (click)="refreshCurrentTab()" [disabled]="loading()">
+            <app-icon name="refresh" [size]="14" /> Refresh
+          </button>
+          <button class="btn sm" (click)="exportJson()" [disabled]="loading() || isCurrentEmpty()">
+            <app-icon name="code" [size]="14" /> Export JSON
+          </button>
+          <button class="btn sm primary" (click)="exportCsv()" [disabled]="loading() || isCurrentEmpty()">
+            <app-icon name="download" [size]="14" /> Export CSV
+          </button>
+        </div>
       </header>
 
-      <!-- Global Filter Bar: Presets, Date Range Filter & Process Scope -->
+      <!-- Global Filter Bar -->
       <div class="filter-bar card">
-        <div class="filter-group">
-          <span class="f-label">Time Window:</span>
-          <div class="pills">
-            <button class="pill" [class.active]="timeWindow() === 'all'" (click)="setTimeWindow('all')">All Time</button>
-            <button class="pill" [class.active]="timeWindow() === '1d'" (click)="setTimeWindow('1d')">Today (24h)</button>
-            <button class="pill" [class.active]="timeWindow() === '7d'" (click)="setTimeWindow('7d')">Last 7D</button>
-            <button class="pill" [class.active]="timeWindow() === '30d'" (click)="setTimeWindow('30d')">Last 30D</button>
-            <button class="pill" [class.active]="timeWindow() === '90d'" (click)="setTimeWindow('90d')">Last 90D</button>
-            <button class="pill" [class.active]="timeWindow() === 'custom'" (click)="timeWindow.set('custom')">Custom</button>
+        <div class="filter-row">
+          <div class="filter-group">
+            <span class="f-label">Time Window:</span>
+            <div class="pills">
+              <button class="pill" [class.active]="timeWindow() === 'all'" (click)="setTimeWindow('all')">All Time</button>
+              <button class="pill" [class.active]="timeWindow() === '1d'" (click)="setTimeWindow('1d')">Today (24h)</button>
+              <button class="pill" [class.active]="timeWindow() === '7d'" (click)="setTimeWindow('7d')">Last 7D</button>
+              <button class="pill" [class.active]="timeWindow() === '30d'" (click)="setTimeWindow('30d')">Last 30D</button>
+              <button class="pill" [class.active]="timeWindow() === '90d'" (click)="setTimeWindow('90d')">Last 90D</button>
+              <button class="pill" [class.active]="timeWindow() === 'custom'" (click)="timeWindow.set('custom')">Custom</button>
+            </div>
+          </div>
+
+          <div class="filter-group date-range-group">
+            <span class="f-label"><app-icon name="calendar" [size]="13" /> Date Range:</span>
+            <div class="date-inputs">
+              <input type="date" [ngModel]="customFrom()" (ngModelChange)="onFromChange($event)" placeholder="Start Date" />
+              <span class="to-sep">→</span>
+              <input type="date" [ngModel]="customTo()" (ngModelChange)="onToChange($event)" placeholder="End Date" />
+              <button class="btn sm primary" (click)="applyCustomDateRange()" [disabled]="!customFrom() && !customTo()">Apply</button>
+              @if (customFrom() || customTo()) {
+                <button class="btn sm ghost" (click)="clearCustomDateRange()" title="Reset to All Time">✕</button>
+              }
+            </div>
+            @if (isDateFiltered()) {
+              <span class="range-badge"><app-icon name="calendar" [size]="11" /> {{ dateRangeLabel() }}</span>
+            }
           </div>
         </div>
 
-        <div class="filter-group date-range-group">
-          <span class="f-label"><app-icon name="calendar" [size]="13" /> Date Range:</span>
-          <div class="date-inputs">
-            <input type="date" [ngModel]="customFrom()" (ngModelChange)="onFromChange($event)" (keyup.enter)="applyCustomDateRange()" placeholder="YYYY-MM-DD" title="Start Date" />
-            <span class="to-sep">→</span>
-            <input type="date" [ngModel]="customTo()" (ngModelChange)="onToChange($event)" (keyup.enter)="applyCustomDateRange()" placeholder="YYYY-MM-DD" title="End Date" />
-            <button class="btn sm primary" (click)="applyCustomDateRange()" [disabled]="!customFrom() && !customTo()">Apply</button>
-            @if (customFrom() || customTo()) {
-              <button class="btn sm ghost" (click)="clearCustomDateRange()" title="Reset to All Time">✕</button>
-            }
+        <div class="filter-row sub-filter-row">
+          <div class="filter-group">
+            <span class="f-label">Search:</span>
+            <div class="searchbox">
+              <app-icon name="search" [size]="13" />
+              <input type="text" [(ngModel)]="searchQuery" placeholder="Filter by ID, name, initiator, or keyword..." />
+              @if (searchQuery) {
+                <button class="clear-search" (click)="searchQuery = ''">✕</button>
+              }
+            </div>
           </div>
-          @if (isDateFiltered()) {
-            <span class="range-badge" title="Active filtered range">
-              <app-icon name="calendar" [size]="11" /> {{ dateRangeLabel() }}
-            </span>
+
+          @if (tab() === 'executions' || tab() === 'cases') {
+            <div class="filter-group">
+              <span class="f-label">Process Scope:</span>
+              <select [(ngModel)]="selectedProcess" (change)="onFilterChange()">
+                <option value="">All Process Definitions</option>
+                @for (p of availableProcesses(); track p) {
+                  <option [value]="p">{{ p }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="filter-group">
+              <span class="f-label">Status:</span>
+              <select [(ngModel)]="statusFilter" (change)="onFilterChange()">
+                <option value="all">All Statuses</option>
+                <option value="running">Running</option>
+                <option value="waiting">Waiting (User Task / Timer)</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed / Error</option>
+                <option value="aborted">Aborted</option>
+                <option value="suspended">Suspended</option>
+              </select>
+            </div>
           }
-        </div>
 
-        <div class="filter-group right">
-          <span class="f-label">Process Scope:</span>
-          <select [(ngModel)]="selectedProcess" (change)="onProcessChange()">
-            <option value="">All Process Definitions</option>
-            @for (p of availableProcesses(); track p) {
-              <option [value]="p">{{ p }}</option>
-            }
-          </select>
+          @if (tab() === 'sla') {
+            <div class="filter-group">
+              <span class="f-label">SLA Scope:</span>
+              <div class="pills">
+                <button class="pill" [class.active]="slaFilter === 'all'" (click)="slaFilter = 'all'">All Open ({{ filteredSlaTasks().length }})</button>
+                <button class="pill red" [class.active]="slaFilter === 'overdue'" (click)="slaFilter = 'overdue'">Overdue Only ({{ countOverdue() }})</button>
+                <button class="pill amber" [class.active]="slaFilter === 'at-risk'" (click)="slaFilter = 'at-risk'">At Risk (&gt;80% SLA)</button>
+              </div>
+            </div>
+          }
         </div>
       </div>
 
       <!-- Navigation Tabs -->
       <nav class="tabs" role="tablist">
-        <button role="tab" [attr.aria-selected]="tab() === 'overview'" [class.active]="tab() === 'overview'" (click)="setTab('overview')">
-          <app-icon name="home" [size]="14" /> Overview
+        <button role="tab" [class.active]="tab() === 'executions'" (click)="setTab('executions')">
+          <app-icon name="instances" [size]="14" /> Process Executions
+          <span class="tab-count">{{ filteredExecutions().length }}</span>
         </button>
-        <button role="tab" [attr.aria-selected]="tab() === 'processes'" [class.active]="tab() === 'processes'" (click)="setTab('processes')">
-          <app-icon name="instances" [size]="14" /> Processes
+        <button role="tab" [class.active]="tab() === 'sla'" (click)="setTab('sla')">
+          <app-icon name="clock" [size]="14" /> Task SLA Breaches
+          <span class="tab-count" [class.red-badge]="countOverdue() > 0">{{ countOverdue() }}</span>
         </button>
-        <button role="tab" [attr.aria-selected]="tab() === 'tasks'" [class.active]="tab() === 'tasks'" (click)="setTab('tasks')">
-          <app-icon name="tasks" [size]="14" /> Tasks &amp; SLAs
+        <button role="tab" [class.active]="tab() === 'cases'" (click)="setTab('cases')">
+          <app-icon name="inbox" [size]="14" /> Case Resolutions
+          <span class="tab-count">{{ filteredCases().length }}</span>
         </button>
-        <button role="tab" [attr.aria-selected]="tab() === 'cases'" [class.active]="tab() === 'cases'" (click)="setTab('cases')">
-          <app-icon name="inbox" [size]="14" /> Cases &amp; Workflows
+        <button role="tab" [class.active]="tab() === 'audit'" (click)="setTab('audit')">
+          <app-icon name="shield" [size]="14" /> System Audit Trail
+          <span class="tab-count">{{ filteredAudits().length }}</span>
         </button>
-        <button role="tab" [attr.aria-selected]="tab() === 'queries'" [class.active]="tab() === 'queries'" (click)="setTab('queries')">
-          <app-icon name="search" [size]="14" /> Ad-Hoc Query Engine
+        <button role="tab" [class.active]="tab() === 'adhoc'" (click)="setTab('adhoc')">
+          <app-icon name="search" [size]="14" /> Ad-Hoc Report Builder
         </button>
       </nav>
 
+      <!-- Content Area -->
       @if (loading()) {
-        <div class="kpis">@for (i of [1, 2, 3, 4, 5, 6]; track i) { <div class="skeleton kpi-skel"></div> }</div>
-        <div class="chartgrid"><div class="skeleton skeleton-card tall"></div><div class="skeleton skeleton-card tall"></div></div>
-        <div class="skeleton skeleton-card"></div>
-      } @else if (error()) {
-        <div class="card">
-          <div class="empty-state">
-            <div class="es-icon"><app-icon name="warning" [size]="24" /></div>
-            <h3>Analytics unavailable</h3>
-            <p>{{ error() }}</p>
-            <button class="btn" (click)="load()"><app-icon name="refresh" [size]="14" /> Retry</button>
-          </div>
+        <div class="card pad skeleton-card">
+          <div class="skeleton-line" style="width: 40%; height: 20px; margin-bottom: 12px;"></div>
+          <div class="skeleton-line" style="width: 100%; height: 350px;"></div>
         </div>
       } @else {
-        <!-- Global Executive KPIs -->
-        <div class="kpis">
-          <a class="card kpi" routerLink="/instances" [queryParams]="{status: 'running'}">
-            <span class="kv tnum" style="color: var(--blue);">{{ activeInstances() }}</span>
-            <span class="kl">Active Instances</span>
-          </a>
-          <a class="card kpi" routerLink="/instances" [queryParams]="{status: 'completed'}">
-            <span class="kv tnum" style="color: var(--green);">{{ completedInstances() }}</span>
-            <span class="kl">Completed Instances</span>
-          </a>
-          <a class="card kpi" routerLink="/errors">
-            <span class="kv tnum" [class.red]="failedInstances() > 0">{{ failedInstances() }}</span>
-            <span class="kl">Failed / Errors</span>
-          </a>
-          <div class="card kpi">
-            <span class="kv tnum" [style.color]="failureRateColor()">{{ failureRate() }}%</span>
-            <span class="kl">Failure Rate</span>
-          </div>
-          <a class="card kpi" routerLink="/tasks">
-            <span class="kv tnum amber">{{ openTasks() }}</span>
-            <span class="kl">Open Tasks</span>
-          </a>
-          <div class="card kpi">
-            <span class="kv tnum" [style.color]="slaColor()">{{ slaRate() }}%</span>
-            <span class="kl">SLA Compliance</span>
-          </div>
-          <a class="card kpi" routerLink="/deployments">
-            <span class="kv tnum" style="color: var(--purple);">{{ summary()?.deployments?.active ?? 0 }}</span>
-            <span class="kl">Active Deployments</span>
-          </a>
-          <a class="card kpi" routerLink="/instances" [queryParams]="{type: 'cases'}">
-            <span class="kv tnum">{{ caseSummary()?.total ?? 0 }}</span>
-            <span class="kl">Total Cases</span>
-          </a>
-          <div class="card kpi" title="Durable timers currently scheduled">
-            <span class="kv tnum" style="color: #0284c7;">{{ activeTimers() }}</span>
-            <span class="kl">Active Timers</span>
-          </div>
-        </div>
-
-        <!-- ==================== Tab 1: Overview ==================== -->
-        @if (tab() === 'overview') {
-          @if (dailyThroughput().length > 0) {
-            <section class="card chart full-width" style="margin-bottom: 16px;">
-              <div class="row charthead">
-                <div>
-                  <h3>Execution Throughput Over Time</h3>
-                  <p class="chartsub">Daily instance starts vs. completions over the selected period</p>
-                </div>
-                <div class="spacer"></div>
-                <div class="chart-legend-inline">
-                  <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
-                  <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
-                  <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
-                </div>
+        <!-- ======================= Tab 1: Process Executions ======================= -->
+        @if (tab() === 'executions') {
+          <section class="card tablecard">
+            <div class="card-head">
+              <div class="card-title">
+                <span>Process Instance Executions Report</span>
+                <span class="badge">{{ filteredExecutions().length }} records</span>
               </div>
+              <span class="muted sm">Showing process runs within selected date range and filters</span>
+            </div>
 
-              <div class="throughput-chart">
-                @for (d of dailyThroughput(); track d.date) {
-                  <div class="tp-col" [title]="throughputTooltip(d)">
-                    <div class="tp-bars">
-                      @if (d.started > 0) {
-                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
-                      }
-                      @if (d.completed > 0) {
-                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
-                      }
-                      @if (d.failed > 0) {
-                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
-                      }
-                    </div>
-                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
-                  </div>
-                }
-              </div>
-            </section>
-          }
-
-          <div class="chartgrid">
-            <section class="card chart">
-              <div class="row charthead">
-                <h3>Process Instances Status Mix</h3>
-                <div class="spacer"></div>
-                <span class="muted small tnum">{{ instTotal() }} total</span>
-              </div>
-              <p class="chartsub">Distribution across all running, waiting, and completed executions</p>
-              @if (instTotal() > 0) {
-                <div class="barlist">
-                  @for (r of instStatusRows(); track r.key) {
-                    <div class="barrow">
-                      <div class="row lab">
-                        <span class="dot" [style.background]="r.color"></span>
-                        <span>{{ r.label }}</span>
-                        <div class="spacer"></div>
-                        <span class="tnum muted">{{ r.count }}</span>
-                      </div>
-                      <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
-                    </div>
-                  }
-                </div>
-              } @else {
-                <p class="nodata">No instances found for this filter scope.</p>
-              }
-            </section>
-
-            <section class="card chart donutcard">
-              <div class="row charthead">
-                <h3>Execution State Ratio</h3>
-              </div>
-              @if (instTotal() > 0) {
-                <div class="donutwrap">
-                  <div class="donut" [style.background]="instDonut()" role="img" aria-label="Instance status distribution">
-                    <div class="hole"><span class="tnum">{{ instTotal() }}</span></div>
-                  </div>
-                  <div class="legend">
-                    @for (r of nonZero(instStatusRows()); track r.key) {
-                      <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
-                    }
-                  </div>
-                </div>
-              } @else {
-                <p class="nodata">Nothing to chart yet.</p>
-              }
-            </section>
-          </div>
-
-          <div class="two-col">
-            <section class="card tablecard">
-              <div class="row cardhead">
-                <h3>Duration by Process Definition</h3>
-                <div class="spacer"></div>
-                <button class="btn sm" (click)="setTab('processes')">View All →</button>
-              </div>
-              @if (byProcess().length) {
-                <table>
-                  <thead><tr><th>Process</th><th class="num">Executions</th><th class="num">Avg Turnaround</th><th class="num">Action</th></tr></thead>
+            @if (filteredExecutions().length) {
+              <div class="table-wrap">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Instance ID</th>
+                      <th>Process Definition</th>
+                      <th>Status</th>
+                      <th>Initiator</th>
+                      <th>Started At</th>
+                      <th>Ended At</th>
+                      <th>Duration</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    @for (p of byProcess().slice(0, 5); track p.processId) {
+                    @for (row of pagedExecutions(); track row.id) {
                       <tr>
-                        <td><b>{{ p.processId }}</b></td>
-                        <td class="num tnum">{{ p.count }}</td>
-                        <td class="num">
-                          <span class="avgcell">
-                            <span class="avgbar"><span [style.width.%]="pctOf(p.avgMs, maxProcAvg())"></span></span>
-                            <span class="tnum">{{ ms(p.avgMs) }}</span>
+                        <td class="mono">
+                          <a class="lnk" [routerLink]="['/instances', row.id]">#{{ shortId(row.id) }}</a>
+                        </td>
+                        <td>
+                          <div class="proc-cell">
+                            <span class="bold">{{ procName(row) }}</span>
+                            @if (row.correlationKey) {
+                              <span class="sub-meta mono">Key: {{ row.correlationKey }}</span>
+                            }
+                          </div>
+                        </td>
+                        <td>
+                          <span class="status-pill sm" [style.color]="statusColor(row.status)" [style.background]="statusColor(row.status) + '18'">
+                            ● {{ row.status }}
                           </span>
                         </td>
-                        <td class="num">
-                          <a class="btn sm" [routerLink]="['/instances']" [queryParams]="{processId: p.processId}">View →</a>
+                        <td>{{ row.startedBy || 'system' }}</td>
+                        <td class="mono sm">{{ row.startedAt | slice:0:19 }}</td>
+                        <td class="mono sm">{{ row.endedAt ? (row.endedAt | slice:0:19) : '—' }}</td>
+                        <td class="mono sm bold">{{ calcDuration(row.startedAt, row.endedAt) }}</td>
+                        <td>
+                          <a class="btn sm" [routerLink]="['/instances', row.id]">Open</a>
                         </td>
                       </tr>
                     }
                   </tbody>
                 </table>
-              } @else {
-                <p class="nodata pad">No completed instances recorded yet.</p>
-              }
-            </section>
-
-            <section class="card tablecard">
-              <div class="row cardhead">
-                <h3>Duration by User Task</h3>
-                <div class="spacer"></div>
-                <button class="btn sm" (click)="setTab('tasks')">View All →</button>
               </div>
-              @if (byTask().length) {
-                <table>
-                  <thead><tr><th>Task Name</th><th class="num">Completed</th><th class="num">Avg Turnaround</th></tr></thead>
+
+              <!-- Pagination Footer -->
+              <div class="table-footer">
+                <span class="muted sm">Showing {{ (page() - 1) * pageSize + 1 }} - {{ minVal(page() * pageSize, filteredExecutions().length) }} of {{ filteredExecutions().length }}</span>
+                <div class="page-btns">
+                  <button class="btn sm" [disabled]="page() <= 1" (click)="page.set(page() - 1)">Previous</button>
+                  <span class="page-indicator">{{ page() }} / {{ maxPages(filteredExecutions().length) }}</span>
+                  <button class="btn sm" [disabled]="page() >= maxPages(filteredExecutions().length)" (click)="page.set(page() + 1)">Next</button>
+                </div>
+              </div>
+            } @else {
+              <div class="empty-state">
+                <app-icon name="instances" [size]="24" />
+                <h3>No process executions found</h3>
+                <p>No instances match the active time window, process definition, or search filters.</p>
+              </div>
+            }
+          </section>
+        }
+
+        <!-- ======================= Tab 2: Task SLA Breaches ======================= -->
+        @if (tab() === 'sla') {
+          <section class="card tablecard">
+            <div class="card-head">
+              <div class="card-title">
+                <span>Task SLA Breaches &amp; Overdue Report</span>
+                <span class="badge" [class.red]="countOverdue() > 0">{{ countOverdue() }} Overdue</span>
+              </div>
+              <span class="muted sm">Audit open human tasks for compliance, SLA breaches, and delays</span>
+            </div>
+
+            @if (filteredSlaTasks().length) {
+              <div class="table-wrap">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Task Name</th>
+                      <th>Process / Instance</th>
+                      <th>Priority</th>
+                      <th>Assignee</th>
+                      <th>Candidate Groups</th>
+                      <th>Created At</th>
+                      <th>Due Date</th>
+                      <th>SLA Status / Delay</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    @for (t of byTask().slice(0, 5); track t.name) {
-                      <tr>
-                        <td><b>{{ t.name }}</b></td>
-                        <td class="num tnum">{{ t.count }}</td>
-                        <td class="num">
-                          <span class="avgcell">
-                            <span class="avgbar"><span [style.width.%]="pctOf(t.avgMs, maxTaskAvg())"></span></span>
-                            <span class="tnum">{{ ms(t.avgMs) }}</span>
+                    @for (t of pagedSlaTasks(); track t.id) {
+                      <tr [class.breached-row]="isOverdue(t)">
+                        <td>
+                          <div class="proc-cell">
+                            <span class="bold">{{ t.name }}</span>
+                            <span class="sub-meta mono">#{{ shortId(t.id) }}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <a class="lnk mono" [routerLink]="['/instances', t.instanceId]">#{{ shortId(t.instanceId) }}</a>
+                        </td>
+                        <td>
+                          <span class="prio-pill" [class.urgent]="(t.priority ?? 50) < 30" [class.high]="(t.priority ?? 50) < 50">
+                            P{{ t.priority ?? 50 }}
                           </span>
+                        </td>
+                        <td>{{ t.assignee || 'Unassigned' }}</td>
+                        <td class="muted sm">{{ t.group || '—' }}</td>
+                        <td class="mono sm">{{ t.createdAt | slice:0:19 }}</td>
+                        <td class="mono sm">{{ t.dueAt ? (t.dueAt | slice:0:19) : 'No SLA set' }}</td>
+                        <td>
+                          @if (isOverdue(t)) {
+                            <span class="sla-badge breached">
+                              <app-icon name="warning" [size]="12" /> Overdue {{ overdueDelay(t.dueAt!) }}
+                            </span>
+                          } @else if (t.dueAt) {
+                            <span class="sla-badge on-track">
+                              <app-icon name="clock" [size]="12" /> Due in {{ remainingTime(t.dueAt) }}
+                            </span>
+                          } @else {
+                            <span class="muted sm">None</span>
+                          }
+                        </td>
+                        <td>
+                          <a class="btn sm" [routerLink]="['/tasks', t.id]">Open</a>
                         </td>
                       </tr>
                     }
                   </tbody>
                 </table>
-              } @else {
-                <p class="nodata pad">No completed human tasks recorded yet.</p>
-              }
-            </section>
-          </div>
+              </div>
+
+              <div class="table-footer">
+                <span class="muted sm">Showing {{ (slaPage() - 1) * pageSize + 1 }} - {{ minVal(slaPage() * pageSize, filteredSlaTasks().length) }} of {{ filteredSlaTasks().length }}</span>
+                <div class="page-btns">
+                  <button class="btn sm" [disabled]="slaPage() <= 1" (click)="slaPage.set(slaPage() - 1)">Previous</button>
+                  <span class="page-indicator">{{ slaPage() }} / {{ maxPages(filteredSlaTasks().length) }}</span>
+                  <button class="btn sm" [disabled]="slaPage() >= maxPages(filteredSlaTasks().length)" (click)="slaPage.set(slaPage() + 1)">Next</button>
+                </div>
+              </div>
+            } @else {
+              <div class="empty-state">
+                <app-icon name="check" [size]="24" />
+                <h3>No task SLA breaches found</h3>
+                <p>All open tasks are currently within their SLA thresholds.</p>
+              </div>
+            }
+          </section>
         }
 
-        <!-- ==================== Tab 2: Processes ==================== -->
-        @if (tab() === 'processes') {
-          @if (dailyThroughput().length > 0) {
-            <section class="card chart full-width" style="margin-bottom: 16px;">
-              <div class="row charthead">
-                <div>
-                  <h3>Execution Volume &amp; Daily Throughput</h3>
-                  <p class="chartsub">Instance completions and starts over time</p>
-                </div>
-                <div class="spacer"></div>
-                <div class="chart-legend-inline">
-                  <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
-                  <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
-                  <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
-                </div>
+        <!-- ======================= Tab 3: Case Resolutions ======================= -->
+        @if (tab() === 'cases') {
+          <section class="card tablecard">
+            <div class="card-head">
+              <div class="card-title">
+                <span>Case Resolutions &amp; Turnaround Report</span>
+                <span class="badge">{{ filteredCases().length }} cases</span>
               </div>
-              <div class="throughput-chart">
-                @for (d of dailyThroughput(); track d.date) {
-                  <div class="tp-col" [title]="throughputTooltip(d)">
-                    <div class="tp-bars">
-                      @if (d.started > 0) {
-                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
-                      }
-                      @if (d.completed > 0) {
-                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
-                      }
-                      @if (d.failed > 0) {
-                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
-                      }
-                    </div>
-                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
-                  </div>
-                }
-              </div>
-            </section>
-          }
+              <span class="muted sm">Detailed resolution lifecycle and duration audit per case instance</span>
+            </div>
 
-          <div class="chartgrid">
-            <section class="card chart">
-              <div class="row charthead">
-                <h3>Instances by Status</h3>
-                <div class="spacer"></div>
-                <span class="muted small tnum">{{ instTotal() }} total</span>
-              </div>
-              <p class="chartsub">Every instance recorded in this time scope</p>
-              @if (instTotal() > 0) {
-                <div class="barlist">
-                  @for (r of instStatusRows(); track r.key) {
-                    <div class="barrow">
-                      <div class="row lab">
-                        <span class="dot" [style.background]="r.color"></span>
-                        <span>{{ r.label }}</span>
-                        <div class="spacer"></div>
-                        <span class="tnum muted">{{ r.count }}</span>
-                      </div>
-                      <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
-                    </div>
-                  }
-                </div>
-              } @else {
-                <p class="nodata">No instances yet.</p>
-              }
-            </section>
-
-            <section class="card chart donutcard">
-              <div class="row charthead"><h3>Status Distribution</h3></div>
-              @if (instTotal() > 0) {
-                <div class="donutwrap">
-                  <div class="donut" [style.background]="instDonut()" role="img" aria-label="Instance status distribution">
-                    <div class="hole"><span class="tnum">{{ instTotal() }}</span></div>
-                  </div>
-                  <div class="legend">
-                    @for (r of nonZero(instStatusRows()); track r.key) {
-                      <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
+            @if (filteredCases().length) {
+              <div class="table-wrap">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Case ID</th>
+                      <th>Case Workflow</th>
+                      <th>Status</th>
+                      <th>Initiator</th>
+                      <th>Started At</th>
+                      <th>Completed At</th>
+                      <th>Resolution Time</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (c of pagedCases(); track c.id) {
+                      <tr>
+                        <td class="mono">
+                          <a class="lnk" [routerLink]="['/instances', c.piid || c.id]">#{{ shortId(c.id) }}</a>
+                        </td>
+                        <td>
+                          <div class="proc-cell">
+                            <span class="bold">{{ c.workflowName || c.workflowDefinitionId }}</span>
+                            @if (c.piid) {
+                              <span class="sub-meta mono">Process: #{{ shortId(c.piid) }}</span>
+                            }
+                          </div>
+                        </td>
+                        <td>
+                          <span class="status-pill sm" [style.color]="statusColor(c.status)" [style.background]="statusColor(c.status) + '18'">
+                            ● {{ c.status }}
+                          </span>
+                        </td>
+                        <td>{{ c.createdBy || 'system' }}</td>
+                        <td class="mono sm">{{ c.createdAt | slice:0:19 }}</td>
+                        <td class="mono sm">{{ c.status === 'completed' ? (c.updatedAt | slice:0:19) : '—' }}</td>
+                        <td class="mono sm bold">{{ calcDuration(c.createdAt, c.status === 'completed' ? c.updatedAt : undefined) }}</td>
+                        <td>
+                          <a class="btn sm" [routerLink]="['/instances', c.piid || c.id]">View</a>
+                        </td>
+                      </tr>
                     }
-                  </div>
-                </div>
-              } @else {
-                <p class="nodata">Nothing to chart yet.</p>
-              }
-            </section>
-          </div>
+                  </tbody>
+                </table>
+              </div>
 
-          <section class="card tablecard">
-            <div class="row cardhead">
-              <h3>Duration by Process Definition</h3>
-              <div class="spacer"></div>
-              <input class="search-input" [(ngModel)]="procSearch" placeholder="Search processes…" />
-            </div>
-            @if (filteredProcesses().length) {
-              <table>
-                <thead>
-                  <tr>
-                    <th>Process Definition</th>
-                    <th class="num">Executions</th>
-                    <th class="num">Avg Turnaround</th>
-                    <th class="num">Min</th>
-                    <th class="num">Max</th>
-                    <th class="num">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (p of filteredProcesses(); track p.processId) {
-                    <tr>
-                      <td><span class="font-bold">{{ p.processId }}</span></td>
-                      <td class="num tnum">{{ p.count }}</td>
-                      <td class="num">
-                        <span class="avgcell">
-                          <span class="avgbar"><span [style.width.%]="pctOf(p.avgMs, maxProcAvg())"></span></span>
-                          <span class="tnum">{{ ms(p.avgMs) }}</span>
-                        </span>
-                      </td>
-                      <td class="num tnum muted">{{ ms(p.minMs) }}</td>
-                      <td class="num tnum muted">{{ ms(p.maxMs) }}</td>
-                      <td class="num">
-                        <a class="btn sm" [routerLink]="['/instances']" [queryParams]="{processId: p.processId}">
-                          View Instances →
-                        </a>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+              <div class="table-footer">
+                <span class="muted sm">Showing {{ (casePage() - 1) * pageSize + 1 }} - {{ minVal(casePage() * pageSize, filteredCases().length) }} of {{ filteredCases().length }}</span>
+                <div class="page-btns">
+                  <button class="btn sm" [disabled]="casePage() <= 1" (click)="casePage.set(casePage() - 1)">Previous</button>
+                  <span class="page-indicator">{{ casePage() }} / {{ maxPages(filteredCases().length) }}</span>
+                  <button class="btn sm" [disabled]="casePage() >= maxPages(filteredCases().length)" (click)="casePage.set(casePage() + 1)">Next</button>
+                </div>
+              </div>
             } @else {
-              <p class="nodata pad">No completed instances match the current filters.</p>
+              <div class="empty-state">
+                <app-icon name="inbox" [size]="24" />
+                <h3>No case records found</h3>
+                <p>No cases match the selected filter criteria.</p>
+              </div>
             }
           </section>
         }
 
-        <!-- ============================== Tasks tab ============================== -->
-        @if (tab() === 'tasks') {
-        <div class="sla-grid">
-          <div class="card sla-card">
-            <span class="sla-title">SLA Compliance Rate</span>
-            <span class="sla-val" [style.color]="slaColor()">{{ slaRate() }}%</span>
-            <span class="sla-sub">{{ tasks()?.sla?.onTime ?? 0 }} of {{ tasks()?.sla?.totalWithDue ?? 0 }} tasks met SLA</span>
-          </div>
-          <div class="card sla-card">
-            <span class="sla-title">Overdue Tasks</span>
-            <span class="sla-val" [class.red]="(tasks()?.sla?.overdue ?? 0) > 0">{{ tasks()?.sla?.overdue ?? 0 }}</span>
-            <span class="sla-sub">Open tasks past due deadline</span>
-          </div>
-          <div class="card sla-card">
-            <span class="sla-title">Total Open Queue</span>
-            <span class="sla-val amber">{{ openTotal() }}</span>
-            <span class="sla-sub">Tasks currently waiting on humans</span>
-          </div>
-          <div class="card sla-card">
-            <span class="sla-title">Active Queues</span>
-            <span class="sla-val" style="color: var(--purple);">{{ taskGroups().length }}</span>
-            <span class="sla-sub">Distinct candidate group queues</span>
-          </div>
-        </div>
-
-        <div class="chartgrid">
-          <section class="card chart">
-            <div class="row charthead">
-              <h3>Open tasks by status</h3>
-              <div class="spacer"></div>
-              <span class="muted small tnum">{{ openTotal() }} open</span>
-            </div>
-            <p class="chartsub">current queue across all groups and assignees</p>
-            @if (openTotal() > 0) {
-              <div class="barlist">
-                @for (r of taskStatusRows(); track r.key) {
-                  <div class="barrow">
-                    <div class="row lab">
-                      <span class="dot" [style.background]="r.color"></span>
-                      <span>{{ r.label }}</span>
-                      <div class="spacer"></div>
-                      <span class="tnum muted">{{ r.count }}</span>
-                    </div>
-                    <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
-                  </div>
-                }
+        <!-- ======================= Tab 4: System Audit Trail ======================= -->
+        @if (tab() === 'audit') {
+          <section class="card tablecard">
+            <div class="card-head">
+              <div class="card-title">
+                <span>Compliance &amp; System Audit Trail</span>
+                <span class="badge">{{ filteredAudits().length }} audit logs</span>
               </div>
-            } @else {
-              <p class="nodata">No open tasks right now — all work is completed.</p>
-            }
-          </section>
+              <span class="muted sm">Immutable security and operational event trail</span>
+            </div>
 
-          <section class="card chart donutcard">
-            <div class="row charthead"><h3>Task state mix</h3></div>
-            @if (openTotal() > 0) {
-              <div class="donutwrap">
-                <div class="donut" [style.background]="taskDonut()" role="img" aria-label="Open task status distribution">
-                  <div class="hole"><span class="tnum">{{ openTotal() }}</span></div>
-                </div>
-                <div class="legend">
-                  @for (r of nonZero(taskStatusRows()); track r.key) {
-                    <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
-                  }
+            @if (filteredAudits().length) {
+              <div class="table-wrap">
+                <table class="report-table">
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Actor</th>
+                      <th>Action Kind</th>
+                      <th>Entity ID</th>
+                      <th>Payload Summary</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (a of pagedAudits(); track a.id) {
+                      <tr>
+                        <td class="mono sm">{{ a.at | slice:0:19 }}</td>
+                        <td><b>{{ a.actor }}</b></td>
+                        <td>
+                          <span class="badge action-badge">{{ a.kind }}</span>
+                        </td>
+                        <td class="mono sm">{{ (a.instanceId || a.taskId || a.workflowId) ? '#' + shortId((a.instanceId || a.taskId || a.workflowId)!) : '—' }}</td>
+                        <td class="mono sm muted audit-payload">{{ formatAuditData(a.data) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="table-footer">
+                <span class="muted sm">Showing {{ (auditPage() - 1) * pageSize + 1 }} - {{ minVal(auditPage() * pageSize, filteredAudits().length) }} of {{ filteredAudits().length }}</span>
+                <div class="page-btns">
+                  <button class="btn sm" [disabled]="auditPage() <= 1" (click)="auditPage.set(auditPage() - 1)">Previous</button>
+                  <span class="page-indicator">{{ auditPage() }} / {{ maxPages(filteredAudits().length) }}</span>
+                  <button class="btn sm" [disabled]="auditPage() >= maxPages(filteredAudits().length)" (click)="auditPage.set(auditPage() + 1)">Next</button>
                 </div>
               </div>
             } @else {
-              <p class="nodata">Nothing to chart yet.</p>
+              <div class="empty-state">
+                <app-icon name="shield" [size]="24" />
+                <h3>No audit events found</h3>
+                <p>No audit trail records match the search or date criteria.</p>
+              </div>
             }
-          </section>
-        </div>
-
-        @if (taskGroups().length > 0) {
-          <section class="card pad" style="margin-bottom: 16px;">
-            <div class="row charthead">
-              <h3>Open Workload by Group Queue</h3>
-              <div class="spacer"></div>
-              <span class="muted small">Team responsibility queues</span>
-            </div>
-            <div class="group-chips">
-              @for (g of taskGroups(); track g.group) {
-                <div class="group-chip">
-                  <span class="g-name"><app-icon name="user" [size]="12" /> {{ g.group }}</span>
-                  <span class="g-count">{{ g.count }}</span>
-                </div>
-              }
-            </div>
           </section>
         }
 
-        <div class="two-col">
-          <section class="card tablecard">
-            <div class="row cardhead"><h3>Open tasks by assignee</h3></div>
-            @if (byAssignee().length) {
-              <table>
-                <thead><tr><th>Assignee</th><th class="num">Open tasks</th><th style="width: 120px;">Load ratio</th></tr></thead>
-                <tbody>
-                  @for (a of byAssignee(); track a.user) {
-                    <tr>
-                      <td><b>{{ a.user || '(unassigned)' }}</b></td>
-                      <td class="num tnum">{{ a.count }}</td>
-                      <td>
-                        <span class="avgcell">
-                          <span class="avgbar"><span [style.width.%]="loadRatio(a.count) * 100" [style.background]="loadColor(a.count)"></span></span>
-                        </span>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            } @else {
-              <p class="nodata pad">No assigned tasks right now.</p>
-            }
-          </section>
-
-          <section class="card tablecard">
-            <div class="row cardhead">
-              <h3>Duration by user task</h3>
-              <div class="spacer"></div>
-              <input class="search-input sm" [(ngModel)]="taskSearch" placeholder="Filter tasks…" />
-            </div>
-            @if (filteredTasks().length) {
-              <table>
-                <thead><tr><th>Task</th><th class="num">Count</th><th class="num">Avg completion</th></tr></thead>
-                <tbody>
-                  @for (t of filteredTasks(); track t.name) {
-                    <tr>
-                      <td><b>{{ t.name }}</b></td>
-                      <td class="num tnum">{{ t.count }}</td>
-                      <td class="num">
-                        <span class="avgcell">
-                          <span class="avgbar"><span [style.width.%]="pctOf(t.avgMs, maxTaskAvg())"></span></span>
-                          <span class="tnum">{{ ms(t.avgMs) }}</span>
-                        </span>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            } @else {
-              <p class="nodata pad">No completed human tasks match the search.</p>
-            }
-          </section>
-        </div>
-      }
-
-      <!-- ============================== Cases tab ============================== -->
-      @if (tab() === 'cases') {
-        <div class="grid" style="margin-bottom: 20px;">
-          <div class="card pad">
-            <div class="row charthead">
-              <h3>Cases by status</h3>
-              <div class="spacer"></div>
-              <span class="muted small">{{ caseSummary()?.total ?? 0 }} total</span>
-            </div>
-            <p class="big">{{ caseSummary()?.total ?? 0 }}</p>
-            @if (caseSummary(); as s) {
-              <div class="barlist" style="margin-top: 12px;">
-                @for (kv of statusEntries(s.byStatus); track kv[0]) {
-                  <div class="barrow">
-                    <div class="row lab">
-                      <span>{{ kv[0] }}</span>
-                      <div class="spacer"></div>
-                      <span class="tnum font-bold">{{ kv[1] }}</span>
-                    </div>
-                    <div class="track"><span [style.width.%]="caseStatusPct(kv[1])" style="background: var(--blue);"></span></div>
-                  </div>
-                }
+        <!-- ======================= Tab 5: Ad-Hoc Report Builder ======================= -->
+        @if (tab() === 'adhoc') {
+          <section class="card pad query-builder-card">
+            <div class="card-head">
+              <div class="card-title">
+                <span>Ad-Hoc Report Engine &amp; Query Builder</span>
               </div>
-              @if (s.withoutPiid) {
-                <p class="muted sm" style="margin-top: 12px;"><app-icon name="warning" [size]="12" /> {{ s.withoutPiid }} cases initiated without BPM execution binding</p>
-              }
-            } @else {
-              <p class="muted">Loading case summary…</p>
-            }
-          </div>
+              <span class="muted sm">Build custom operational reports with multidimensional grouping and aggregation</span>
+            </div>
 
-          <div class="card pad">
-            <div class="row charthead">
-              <h3>Case Lifecycle Ratio</h3>
-            </div>
-            <div class="lifecycle-stats" style="margin-top: 16px;">
-              <div class="lc-item">
-                <span class="lc-val" style="color: var(--blue);">{{ caseSummary()?.activeCases ?? 0 }}</span>
-                <span class="lc-lbl">In-Flight / Active</span>
-              </div>
-              <div class="lc-item">
-                <span class="lc-val" style="color: var(--green);">{{ caseSummary()?.closedCases ?? 0 }}</span>
-                <span class="lc-lbl">Resolved / Closed</span>
-              </div>
-            </div>
-            <div class="track" style="margin-top: 14px; height: 10px;">
-              <span [style.width.%]="activeCaseRatio()" style="background: var(--blue); border-radius: 4px;"></span>
-            </div>
-            <p class="muted sm" style="margin-top: 8px;">{{ activeCaseRatio() }}% of total cases are currently active</p>
-          </div>
-
-          <div class="card pad">
-            <div class="row charthead">
-              <h3>Cases by Workflow Definition</h3>
-            </div>
-            <div class="barlist" style="margin-top: 12px;">
-              @for (kv of statusEntries(caseSummary()?.byWorkflowName || {}); track kv[0]) {
-                <div class="barrow">
-                  <div class="row lab">
-                    <span class="font-bold">{{ kv[0] }}</span>
-                    <div class="spacer"></div>
-                    <span class="tnum">{{ kv[1] }}</span>
-                  </div>
-                  <div class="track"><span [style.width.%]="caseWorkflowPct(kv[1])" style="background: var(--purple);"></span></div>
-                </div>
-              }
-              @if (!statusEntries(caseSummary()?.byWorkflowName || {}).length) {
-                <p class="nodata">No cases recorded yet.</p>
-              }
-            </div>
-          </div>
-        </div>
-
-        <div class="two-col">
-          <section class="card tablecard">
-            <div class="row cardhead">
-              <h3>Turnaround Time (TAT) by Workflow Definition</h3>
-              <div class="spacer"></div>
-              <input class="search-input sm" [(ngModel)]="caseSearch" placeholder="Filter workflows…" />
-            </div>
-            @if (filteredTatWorkflows().length) {
-              <table>
-                <thead><tr><th>Workflow Definition</th><th class="num">Completed</th><th class="num">Avg TAT</th><th class="num">Max</th></tr></thead>
-                <tbody>
-                  @for (r of filteredTatWorkflows(); track r.workflowName) {
-                    <tr>
-                      <td><b>{{ r.workflowName }}</b></td>
-                      <td class="num tnum">{{ r.count }}</td>
-                      <td class="num">
-                        <span class="avgcell">
-                          <span class="avgbar"><span [style.width.%]="pctOf(r.avgMs, maxCaseAvg())"></span></span>
-                          <span class="tnum">{{ ms(r.avgMs) }}</span>
-                        </span>
-                      </td>
-                      <td class="num tnum muted">{{ ms(r.maxMs) }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            } @else {
-              <p class="nodata pad">No completed cases recorded yet.</p>
-            }
-          </section>
-
-          <section class="card tablecard">
-            <div class="row cardhead">
-              <h3>Human Execution TAT by User</h3>
-              <div class="spacer"></div>
-              <span class="muted small">Assigned user turnaround speed</span>
-            </div>
-            @if (tat()?.byUser?.length) {
-              <table>
-                <thead><tr><th>User / Assignee</th><th class="num">Tasks</th><th class="num">Avg Speed</th></tr></thead>
-                <tbody>
-                  @for (u of tat()?.byUser || []; track u.user) {
-                    <tr>
-                      <td><b>{{ u.user || '(unassigned)' }}</b></td>
-                      <td class="num tnum">{{ u.count }}</td>
-                      <td class="num"><span class="tnum font-bold">{{ ms(u.avgMs) }}</span></td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            } @else {
-              <p class="nodata pad">No completed user tasks recorded yet.</p>
-            }
-          </section>
-        </div>
-      }
-
-      <!-- ============================== Queries tab ============================== -->
-      @if (tab() === 'queries') {
-        <div class="query-builder-wrap">
-          <div class="row charthead" style="margin-bottom: 12px;">
-            <div>
-              <h2>Custom Ad-Hoc Query Engine</h2>
-              <p class="chartsub">Cross-entity tenant-isolated query builder for process data, tasks, and cases.</p>
-            </div>
-            <div class="spacer"></div>
-            <div class="presets">
-              <span class="muted sm">Presets:</span>
-              <button class="btn sm" (click)="loadPreset('overdueTasks')">Overdue Tasks</button>
-              <button class="btn sm" (click)="loadPreset('activeCases')">Active Cases</button>
-              <button class="btn sm" (click)="loadPreset('failedInst')">Failed Instances</button>
-            </div>
-          </div>
-
-          <div class="card pad" style="margin-bottom: 20px;">
-            <div class="row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
-              <label class="fld"><span>Entity</span>
-                <select [(ngModel)]="entity">@for (e of entities; track e) { <option [value]="e">{{ e }}</option> }</select>
-              </label>
-              <label class="fld"><span>Group by (optional)</span>
-                <input [(ngModel)]="groupBy" placeholder="e.g. status, data.amount" />
-              </label>
-              <label class="fld"><span>Metric</span>
-                <select [(ngModel)]="metric">
-                  <option value="">(none — list rows)</option>
-                  <option value="count">count</option>
-                  <option value="avgDurationMs">avgDurationMs</option>
+            <div class="adhoc-controls">
+              <div class="control-box">
+                <label>1. Select Primary Entity:</label>
+                <select [(ngModel)]="adhocEntity" (change)="runAdhocQuery()">
+                  <option value="instances">Process Instances</option>
+                  <option value="tasks">Human Tasks</option>
+                  <option value="cases">Case Instances</option>
+                  <option value="audit">Audit Log Events</option>
                 </select>
-              </label>
-              @if (metric === 'avgDurationMs') {
-                <label class="fld"><span>Duration from field</span><input [(ngModel)]="durationFrom" placeholder="createdAt" /></label>
-                <label class="fld"><span>Duration to field</span><input [(ngModel)]="durationTo" placeholder="updatedAt" /></label>
-              }
-            </div>
-
-            <div class="section-title">Filters</div>
-            @for (f of filters; track f) {
-              <div class="fieldrow">
-                <input class="fkey" [(ngModel)]="f.field" placeholder="field, e.g. status or data.amount" />
-                <select [(ngModel)]="f.op">@for (o of ops; track o) { <option [value]="o">{{ o }}</option> }</select>
-                <input [(ngModel)]="f.value" placeholder="value" />
-                <button class="btn sm danger" (click)="removeFilter(f)"><app-icon name="trash" [size]="12" /></button>
               </div>
-            }
-            <div style="margin-bottom: 14px;">
-              <button class="btn sm" (click)="addFilter()"><app-icon name="plus" [size]="12" /> Add filter</button>
+
+              <div class="control-box">
+                <label>2. Group Results By:</label>
+                <select [(ngModel)]="adhocGroupBy" (change)="runAdhocQuery()">
+                  <option value="status">Status</option>
+                  <option value="name">Process / Definition Name</option>
+                  <option value="actor">Initiator / Assignee</option>
+                  <option value="day">Day (YYYY-MM-DD)</option>
+                </select>
+              </div>
+
+              <div class="control-box">
+                <label>3. Metric Aggregation:</label>
+                <select [(ngModel)]="adhocMetric" (change)="runAdhocQuery()">
+                  <option value="count">Record Count</option>
+                  <option value="duration">Average Duration (ms)</option>
+                  <option value="failure">Failure Rate (%)</option>
+                </select>
+              </div>
+
+              <div class="control-box run-box">
+                <button class="btn primary" (click)="runAdhocQuery()">
+                  <app-icon name="play" [size]="14" /> Execute Query
+                </button>
+              </div>
             </div>
 
-            <div class="row actionrow">
-              <button class="btn primary sm" (click)="runQuery()" [disabled]="runningQuery()">
-                <app-icon name="play" [size]="12" /> {{ runningQuery() ? 'Running...' : 'Run Query' }}
-              </button>
-              <input class="save-name" [(ngModel)]="saveName" placeholder="Save as…" style="max-width: 200px;" />
-              <label class="reqlbl"><input type="checkbox" [(ngModel)]="saveShared" /> Shared</label>
-              <button class="btn sm" (click)="saveQuery()">Save Query</button>
-            </div>
-            @if (queryError()) { <p class="err">{{ queryError() }}</p> }
-
-            @if (queryResult(); as r) {
-              <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
-                <div class="row" style="margin-bottom: 10px;">
-                  <div class="section-title" style="margin: 0;">Query Results</div>
-                  <span class="spacer"></span>
-                  @if (r.rows) {
-                    <div class="btn-group sm">
-                      <button class="btn sm" [class.primary]="queryViewMode() === 'table'" (click)="queryViewMode.set('table')">Table</button>
-                      <button class="btn sm" [class.primary]="queryViewMode() === 'json'" (click)="queryViewMode.set('json')">JSON</button>
-                    </div>
-                  }
-                  <button class="btn sm" (click)="exportQueryResults()">
-                    <app-icon name="download" [size]="12" /> Export Results
-                  </button>
+            @if (adhocResults.length) {
+              <div class="adhoc-results">
+                <div class="card-title" style="margin: 16px 0 8px;">
+                  <span>Aggregated Query Output</span>
+                  <span class="badge">{{ adhocResults.length }} groups</span>
                 </div>
 
-                @if (r.groups) {
-                  <table class="restbl">
-                    <thead><tr><th>Key</th><th class="num">Count</th>@if (metric==='avgDurationMs') { <th class="num">Avg ms</th> }</tr></thead>
+                <div class="table-wrap">
+                  <table class="report-table">
+                    <thead>
+                      <tr>
+                        <th>Group Key ({{ adhocGroupBy | uppercase }})</th>
+                        <th>Total Volume</th>
+                        <th>Percentage Share</th>
+                        <th>Calculated Metric</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      @for (g of r.groups; track g.key) {
+                      @for (row of adhocResults; track row.group) {
                         <tr>
-                          <td><b>{{ g.key }}</b></td>
-                          <td class="num tnum font-bold">{{ g.count }}</td>
-                          @if (metric==='avgDurationMs') { <td class="num tnum">{{ g.avgDurationMs }} ms</td> }
+                          <td><b>{{ row.group }}</b></td>
+                          <td class="bold">{{ row.count }}</td>
+                          <td>
+                            <div class="share-cell">
+                              <div class="share-bar-wrap">
+                                <div class="share-bar" [style.width.%]="row.share"></div>
+                              </div>
+                              <span class="mono sm">{{ row.share }}%</span>
+                            </div>
+                          </td>
+                          <td class="mono bold text-primary">{{ row.metricDisplay }}</td>
                         </tr>
                       }
                     </tbody>
                   </table>
-                } @else if (r.rows) {
-                  @if (queryViewMode() === 'table') {
-                    <div class="query-table-wrap">
-                      <table class="restbl">
-                        <thead>
-                          <tr>
-                            @for (col of queryColumns(); track col) {
-                              <th>{{ col }}</th>
-                            }
-                          </tr>
-                        </thead>
-                        <tbody>
-                          @for (row of r.rows; track row['id'] || $index) {
-                            <tr>
-                              @for (col of queryColumns(); track col) {
-                                <td>
-                                  @if (col === 'id') {
-                                    <span class="mono tnum font-bold">{{ formatColVal(row[col]) }}</span>
-                                  } @else if (col === 'status') {
-                                    <span class="badge" [style.color]="statusColor(formatColVal(row[col]))">{{ formatColVal(row[col]) }}</span>
-                                  } @else {
-                                    <span>{{ formatColVal(row[col]) }}</span>
-                                  }
-                                </td>
-                              }
-                            </tr>
-                          }
-                        </tbody>
-                      </table>
-                    </div>
-                    <p class="muted sm" style="margin-top: 8px;">Showing {{ r.rows.length }} result rows</p>
-                  } @else {
-                    <pre class="mono sm restext">{{ r.rows | json }}</pre>
-                  }
-                }
+                </div>
+              </div>
+            } @else {
+              <div class="empty-state" style="margin-top: 20px;">
+                <app-icon name="search" [size]="24" />
+                <h3>Ready to execute ad-hoc report</h3>
+                <p>Select your desired entity and grouping criteria above and click Execute Query.</p>
               </div>
             }
-          </div>
-
-          <h2 class="section-h">Saved Queries</h2>
-          <div class="card pad">
-            @if (savedQueries().length === 0) {
-              <p class="muted sm">No saved queries yet. Configure a query above and save it to access it anytime.</p>
-            } @else {
-              @for (sq of savedQueries(); track sq.id) {
-                <div class="sqrow">
-                  <div>
-                    <strong>{{ sq.name }}</strong>
-                    <span class="muted sm"> · {{ sq.definition.entity }} · by {{ sq.createdBy }}</span>
-                  </div>
-                  <div class="row" style="gap: 6px;">
-                    <button class="btn sm" (click)="loadSavedQuery(sq)">Load</button>
-                    <button class="btn sm danger" (click)="deleteSavedQuery(sq)"><app-icon name="trash" [size]="12" /></button>
-                  </div>
-                </div>
-              }
-            }
-          </div>
-        </div>
+          </section>
+        }
       }
-    }
-  </div>
+    </div>
   `,
   styles: [`
-    .page { padding: 24px 32px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; margin: 0 auto; }
-    .pagehead { display: flex; align-items: flex-start; gap: 16px; }
-    h1 { font-size: var(--text-2xl); letter-spacing: -.02em; margin: 0 0 4px; }
-    .sub { margin: 0; color: var(--text-secondary); font-size: 13.5px; }
-    .spacer { flex: 1; }
+    :host { display: block; }
+    .page { padding: 24px; max-width: 1400px; margin: 0 auto; }
+    .pagehead { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    h1 { font-size: 22px; margin: 4px 0 6px; font-weight: 700; }
+    .head-sub { margin: 0; font-size: 13.5px; max-width: 680px; }
+    .head-actions { display: flex; gap: 8px; align-items: center; }
 
     /* Filter Bar */
-    .filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 14px; flex-wrap: wrap; background: var(--surface); }
+    .filter-bar { padding: 14px 18px; margin-bottom: 18px; display: flex; flex-direction: column; gap: 12px; }
+    .filter-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .sub-filter-row { padding-top: 10px; border-top: 1px dashed var(--border); }
     .filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-    .f-label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; display: inline-flex; align-items: center; gap: 4px; }
-    .pills { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: var(--radius-sm); border: 1px solid var(--border); flex-wrap: wrap; }
-    .pill { border: none; background: transparent; padding: 5px 10px; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all .15s ease; }
-    .pill.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .date-range-group { display: flex; align-items: center; gap: 6px; }
-    .date-inputs { display: inline-flex; align-items: center; gap: 6px; }
-    .date-inputs input[type="date"] { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--surface); color: inherit; font-family: inherit; }
+    .f-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+    .pills { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: 8px; border: 1px solid var(--border); }
+    .pill { border: none; background: transparent; padding: 5px 12px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border-radius: 6px; cursor: pointer; transition: all 0.15s; }
+    .pill:hover { color: var(--text); background: var(--surface-3); }
+    .pill.active { background: var(--surface); color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .pill.red.active { color: var(--red); }
+    .pill.amber.active { color: var(--amber); }
+
+    .date-inputs { display: flex; align-items: center; gap: 6px; }
+    .date-inputs input[type="date"] { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; background: var(--surface); color: var(--text); }
     .to-sep { font-size: 12px; color: var(--muted); }
-    .range-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; background: var(--primary-50); color: var(--primary); padding: 3px 8px; border-radius: var(--radius-pill); border: 1px solid rgba(99,102,241,0.2); }
-    .filter-group select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12.5px; background: var(--surface); color: inherit; }
+    .range-badge { font-size: 11.5px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--blue-bg); color: var(--primary); display: inline-flex; align-items: center; gap: 5px; }
 
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 2px; }
-    .tabs button { border: none; background: transparent; padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 6px; }
+    .searchbox { display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; min-width: 260px; }
+    .searchbox input { border: none; background: transparent; outline: none; font-size: 12.5px; color: var(--text); width: 100%; }
+    .clear-search { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 12px; padding: 0 2px; }
+
+    select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; background: var(--surface); color: var(--text); outline: none; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+    .tabs button { border: none; background: transparent; padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 8px; }
     .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-count { font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--surface-3); color: var(--text-secondary); }
+    .tab-count.red-badge { background: var(--red-bg); color: var(--red); font-weight: 700; }
 
-    /* KPIs */
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 4px; }
-    .kpi { position: relative; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; cursor: pointer; border-radius: var(--radius-md); transition: background .15s ease; }
-    .kpi:hover { background: var(--surface-2); }
-    .kpi::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad-brand); }
-    .kv { font-size: 24px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
-    .kv.amber { color: var(--amber); } .kv.red { color: var(--red); }
-    .kl { font-size: var(--text-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+    /* Table & Cards */
+    .tablecard { padding: 0; overflow: hidden; }
+    .card-head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .card-title { font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .table-wrap { overflow-x: auto; }
+    .report-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    .report-table th { padding: 10px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .report-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .report-table tbody tr:hover { background: var(--surface-2); }
+    .report-table tbody tr.breached-row { background: rgba(239, 68, 68, 0.04); }
 
-    /* SLAs */
-    .sla-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
-    .sla-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
-    .sla-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
-    .sla-val { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .sla-sub { font-size: 11.5px; color: var(--muted); }
+    .proc-cell { display: flex; flex-direction: column; gap: 2px; }
+    .sub-meta { font-size: 11px; color: var(--muted); }
+    .status-pill { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: capitalize; display: inline-block; }
+    .prio-pill { padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; background: var(--surface-3); color: var(--muted); }
+    .prio-pill.urgent { background: var(--red-bg); color: var(--red); }
+    .prio-pill.high { background: var(--amber-bg); color: var(--amber); }
 
-    /* Throughput Timeline Chart */
-    .full-width { grid-column: 1 / -1; }
-    .throughput-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding: 16px 8px 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-    .tp-col { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; cursor: pointer; }
-    .tp-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; width: 100%; justify-content: center; }
-    .tp-bar { width: 8px; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s ease; }
-    .tp-bar.blue { background: var(--blue); }
-    .tp-bar.green { background: var(--green); }
-    .tp-bar.red { background: var(--red); }
-    .tp-label { font-size: 10px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
-    .chart-legend-inline { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-secondary); }
-    .leg-item { display: inline-flex; align-items: center; gap: 5px; }
-    .dot-sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+    .sla-badge { font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px; }
+    .sla-badge.breached { background: var(--red-bg); color: var(--red); }
+    .sla-badge.on-track { background: var(--green-bg); color: var(--green); }
 
-    /* Charts */
-    .chartgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-    @media (max-width: 900px) { .chartgrid { grid-template-columns: 1fr; } }
-    .chart { padding: 18px; }
-    .charthead { display: flex; align-items: center; margin-bottom: 2px; }
-    .charthead h3 { font-size: 14px; margin: 0; }
-    .chartsub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
-    .barlist { display: flex; flex-direction: column; gap: 10px; }
-    .lab { font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .track { width: 100%; height: 6px; background: var(--surface-3); border-radius: var(--radius-pill); overflow: hidden; }
-    .track span { display: block; height: 100%; border-radius: var(--radius-pill); transition: width .3s ease; }
-    .nodata { color: var(--muted); font-size: 12.5px; padding: 20px 0; text-align: center; }
+    .action-badge { font-size: 11px; text-transform: lowercase; font-family: monospace; background: var(--surface-3); color: var(--text-secondary); }
+    .audit-payload { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    /* Donut */
-    .donutcard .donutwrap { display: flex; align-items: center; gap: 24px; padding: 10px 0; }
-    .donut { width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; }
-    .hole { width: 76px; height: 76px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font-weight: 650; font-size: 18px; }
-    .legend { display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
-    .legend .li { display: flex; align-items: center; gap: 7px; }
-    .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+    .table-footer { padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border); background: var(--surface); }
+    .page-btns { display: flex; align-items: center; gap: 8px; }
+    .page-indicator { font-size: 12px; font-weight: 600; color: var(--muted); }
 
-    /* Tables */
-    .tablecard { overflow: hidden; }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
-    .cardhead { padding: 14px 16px 10px; display: flex; align-items: center; }
-    .cardhead h3 { font-size: 14px; margin: 0; }
-    .search-input { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--surface); color: inherit; width: 180px; }
-    .search-input.sm { width: 130px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { text-align: left; padding: 9px 14px; font-size: 12.5px; border-bottom: 1px solid var(--border); }
-    th.num, td.num { text-align: right; }
-    .avgcell { display: inline-flex; align-items: center; gap: 8px; }
-    .avgbar { width: 64px; height: 6px; background: var(--surface-3); border-radius: var(--radius-pill); overflow: hidden; flex-shrink: 0; }
-    .avgbar span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--grad-brand); }
-    .pad { padding: 16px; }
-    .small { font-size: 11.5px; }
+    .empty-state { padding: 48px 24px; text-align: center; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .empty-state h3 { margin: 6px 0 2px; color: var(--text); font-size: 15px; }
 
-    /* Groups */
-    .group-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-    .group-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
-    .g-name { font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
-    .g-count { font-weight: 700; background: var(--primary-50); color: var(--primary); padding: 2px 6px; border-radius: 10px; font-size: 11px; }
+    /* Ad-Hoc Report Builder */
+    .adhoc-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 16px 0 20px; padding: 16px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border); }
+    .control-box { display: flex; flex-direction: column; gap: 6px; }
+    .control-box label { font-size: 12px; font-weight: 700; color: var(--text); }
+    .run-box { justify-content: flex-end; }
+    .share-cell { display: flex; align-items: center; gap: 8px; }
+    .share-bar-wrap { width: 100px; height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
+    .share-bar { height: 100%; background: var(--primary); border-radius: 4px; }
+    .text-primary { color: var(--primary); }
 
-    /* Case metrics */
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-    .big { font-size: 32px; font-weight: 700; margin: 4px 0 12px; }
-    .lifecycle-stats { display: flex; gap: 24px; }
-    .lc-item { display: flex; flex-direction: column; gap: 2px; }
-    .lc-val { font-size: 24px; font-weight: 700; }
-    .lc-lbl { font-size: 11.5px; color: var(--muted); }
-
-    /* Query builder */
-    .section-h { font-size: 15px; margin: 20px 0 10px; }
-    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin: 12px 0 6px; }
-    .presets { display: flex; align-items: center; gap: 6px; }
-    .fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
-    .fld input, .fld select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; background: var(--surface); color: inherit; }
-    .fieldrow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
-    .fieldrow input, .fieldrow select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; background: var(--surface); color: inherit; }
-    .fieldrow .fkey { width: 180px; }
-    .actionrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
-    .reqlbl { font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; }
-    .restbl { width: 100%; margin-top: 8px; }
-    .query-table-wrap { max-height: 380px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; }
-    .restext { background: var(--surface-2); padding: 12px; border-radius: 8px; max-height: 280px; overflow: auto; font-family: var(--font-mono); font-size: 12px; }
-    .btn-group { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-    .btn-group .btn { border-radius: 0; border: none; }
-    .sqrow { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
-    .sqrow:last-child { border-bottom: none; }
-    .err { color: var(--red); font-size: 12px; margin-top: 6px; }
-    .btn.danger { color: var(--red); }
-    .font-bold { font-weight: 700; }
-    .tnum { font-variant-numeric: tabular-nums; }
-    .mono { font-family: var(--font-mono); font-size: 12px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .sm { font-size: 12px; }
+    .bold { font-weight: 600; }
+    .muted { color: var(--muted); }
+    .lnk { color: var(--primary); text-decoration: none; }
+    .lnk:hover { text-decoration: underline; }
+    .btn.ghost { border: none; background: transparent; color: var(--muted); }
+    .pad { padding: 20px; }
+    .skeleton-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+    .skeleton-line { background: var(--surface-3); border-radius: 4px; animation: pulse 1.5s infinite; }
   `],
 })
-export class ReportsComponent {
-  private api = inject(QueryApiService);
-  private wfApi = inject(WorkflowApiService);
-  private analyticsApi = inject(WorkflowAnalyticsApiService);
-  private route = inject(ActivatedRoute);
-  private router = inject(Router);
+export class ReportsComponent implements OnInit {
+  private instanceApi = inject(InstanceApiService);
+  private taskApi = inject(TaskApiService);
+  private wfInstApi = inject(WorkflowInstanceApiService);
+  private opsApi = inject(OpsApiService);
+  private queryApi = inject(QueryApiService);
   private toast = inject(ToastService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
 
-  tab = signal<ReportsTab>('overview');
-  timeWindow = signal<TimeWindow>('all');
-  customFrom = signal<string>('');
-  customTo = signal<string>('');
+  tab = signal<ReportTab>('executions');
+  loading = signal(false);
+
+  // Time Window & Filtering
+  timeWindow = signal<TimeWindow>('30d');
+  customFrom = signal('');
+  customTo = signal('');
+  searchQuery = '';
   selectedProcess = '';
-  loading = signal(true);
-  error = signal<string | null>(null);
-  runningQuery = signal(false);
+  statusFilter = 'all';
+  slaFilter = 'all';
 
-  // Search filter terms
-  procSearch = '';
-  taskSearch = '';
-  caseSearch = '';
-  queryViewMode = signal<'table' | 'json'>('table');
+  // Data sets
+  executions = signal<Instance[]>([]);
+  slaTasks = signal<Task[]>([]);
+  cases = signal<WorkflowInstance[]>([]);
+  audits = signal<AuditEvent[]>([]);
+  availableProcesses = signal<string[]>([]);
 
-  summary = signal<Summary | null>(null);
-  procs = signal<ProcessAnalytics | null>(null);
-  tasks = signal<TaskAnalytics | null>(null);
-  workflows = signal<Workflow[]>([]);
+  // Pagination states
+  pageSize = 15;
+  page = signal(1);
+  slaPage = signal(1);
+  casePage = signal(1);
+  auditPage = signal(1);
 
-  // Cases analytics
-  caseSummary = signal<WorkflowInstanceSummary | null>(null);
-  tat = signal<WorkflowTat | null>(null);
+  // Ad-Hoc Report builder state
+  adhocEntity: 'instances' | 'tasks' | 'cases' | 'audit' = 'instances';
+  adhocGroupBy: 'status' | 'name' | 'actor' | 'day' = 'status';
+  adhocMetric: 'count' | 'duration' | 'failure' = 'count';
+  adhocResults: { group: string; count: number; share: number; metricDisplay: string }[] = [];
 
-  // Custom Query
-  entities = ENTITIES;
-  ops = OPS;
-  entity: QueryableEntity = 'workflowInstance';
-  groupBy = '';
-  metric: 'count' | 'avgDurationMs' | '' = '';
-  durationFrom = '';
-  durationTo = '';
-  filters: QueryFilter[] = [];
-  queryResult = signal<QueryRunResult | null>(null);
-  queryError = signal('');
-  saveName = '';
-  saveShared = false;
-  savedQueries = signal<SavedQuery[]>([]);
+  private loadedTabs = new Set<string>();
 
-  tabLabel = computed(() => {
-    switch (this.tab()) {
-      case 'overview': return 'Executive Overview';
-      case 'tasks': return 'Tasks & SLAs';
-      case 'cases': return 'Cases & Workflows';
-      case 'queries': return 'Ad-Hoc Queries';
-      default: return 'Processes';
+  ngOnInit() {
+    const qTab = this.route.snapshot.queryParamMap.get('tab') as ReportTab;
+    if (qTab && ['executions', 'sla', 'cases', 'audit', 'adhoc'].includes(qTab)) {
+      this.tab.set(qTab);
     }
-  });
-
-  private filterParams = computed(() => {
-    const tw = this.timeWindow();
-    let since: string | undefined;
-    let from: string | undefined;
-    let to: string | undefined;
-    let days: number | undefined;
-    const now = Date.now();
-
-    if (tw === 'custom' || (this.customFrom() && this.customTo())) {
-      from = this.customFrom().trim() || undefined;
-      to = this.customTo().trim() || undefined;
-    } else if (tw === '1d') {
-      since = new Date(now - 86400000).toISOString();
-      days = 1;
-    } else if (tw === '7d') {
-      since = new Date(now - 7 * 86400000).toISOString();
-      days = 7;
-    } else if (tw === '30d') {
-      since = new Date(now - 30 * 86400000).toISOString();
-      days = 30;
-    } else if (tw === '90d') {
-      since = new Date(now - 90 * 86400000).toISOString();
-      days = 90;
-    }
-
-    return {
-      since,
-      from,
-      to,
-      days,
-      processId: this.selectedProcess.trim() || undefined,
-    };
-  });
-
-  isDateFiltered = computed(() => {
-    return this.timeWindow() !== 'all' || !!this.customFrom() || !!this.customTo();
-  });
-
-  dateRangeLabel = computed(() => {
-    if (this.customFrom() && this.customTo()) return `${this.customFrom()} to ${this.customTo()}`;
-    if (this.customFrom()) return `Since ${this.customFrom()}`;
-    if (this.customTo()) return `Until ${this.customTo()}`;
-    const tw = this.timeWindow();
-    if (tw === '1d') return 'Past 24 hours';
-    if (tw === '7d') return 'Past 7 days';
-    if (tw === '30d') return 'Past 30 days';
-    if (tw === '90d') return 'Past 90 days';
-    return 'All time';
-  });
-
-  availableProcesses = computed(() => {
-    const set = new Set<string>();
-    for (const w of this.workflows()) if (w.id) set.add(w.id);
-    for (const p of this.procs()?.byProcess || []) if (p.processId) set.add(p.processId);
-    return [...set].sort();
-  });
-
-  constructor() {
-    this.route.queryParamMap.subscribe((m) => {
-      const t = m.get('tab') as ReportsTab;
-      if (t && ['overview', 'processes', 'tasks', 'cases', 'queries'].includes(t)) {
-        this.tab.set(t);
-      } else {
-        this.tab.set('overview');
-      }
-    });
-    this.load();
-    this.loadCaseAnalytics();
+    this.initProcessList();
+    this.setTimeWindow('30d');
   }
 
-  setTab(t: ReportsTab) {
+  initProcessList() {
+    this.queryApi.processDefinitions().subscribe({
+      next: (defs) => this.availableProcesses.set(defs.map((d) => d.processId).sort()),
+      error: () => {},
+    });
+  }
+
+  tabLabel(): string {
+    switch (this.tab()) {
+      case 'executions': return 'Process Executions';
+      case 'sla': return 'Task SLA Breaches';
+      case 'cases': return 'Case Resolutions';
+      case 'audit': return 'System Audit Trail';
+      case 'adhoc': return 'Ad-Hoc Report Engine';
+    }
+  }
+
+  setTab(t: ReportTab) {
+    this.tab.set(t);
     this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge' });
+    this.ensureTabData(t);
+  }
+
+  ensureTabData(t: ReportTab, force = false) {
+    if (!force && this.loadedTabs.has(t)) return;
+    this.loadedTabs.add(t);
+    this.loading.set(true);
+
+    if (t === 'executions') {
+      this.instanceApi.listInstances({}).subscribe({
+        next: (items) => { this.executions.set(items); this.loading.set(false); },
+        error: () => this.loading.set(false),
+      });
+    } else if (t === 'sla') {
+      this.taskApi.listTasks().subscribe({
+        next: (tasks) => {
+          this.slaTasks.set(tasks.filter((x) => x.status !== 'completed' && x.status !== 'skipped'));
+          this.loading.set(false);
+        },
+        error: () => this.loading.set(false),
+      });
+    } else if (t === 'cases') {
+      this.wfInstApi.list({}).subscribe({
+        next: (items) => { this.cases.set(items); this.loading.set(false); },
+        error: () => this.loading.set(false),
+      });
+    } else if (t === 'audit') {
+      this.opsApi.listAudit({ limit: 200 }).subscribe({
+        next: (res) => { this.audits.set(res.items); this.loading.set(false); },
+        error: () => this.loading.set(false),
+      });
+    } else if (t === 'adhoc') {
+      this.loading.set(false);
+      this.runAdhocQuery();
+    }
+  }
+
+  refreshCurrentTab() {
+    this.ensureTabData(this.tab(), true);
+  }
+
+  onFilterChange() {
+    this.page.set(1);
+    this.slaPage.set(1);
+    this.casePage.set(1);
+    this.auditPage.set(1);
   }
 
   setTimeWindow(w: TimeWindow) {
@@ -1196,411 +806,370 @@ export class ReportsComponent {
       this.customFrom.set('');
       this.customTo.set('');
     }
-    this.load();
+    this.loadedTabs.clear();
+    this.ensureTabData(this.tab(), true);
   }
 
-  onFromChange(val: string) {
-    this.customFrom.set(val);
-    this.timeWindow.set('custom');
-  }
-
-  onToChange(val: string) {
-    this.customTo.set(val);
-    this.timeWindow.set('custom');
-  }
+  onFromChange(val: string) { this.customFrom.set(val); this.timeWindow.set('custom'); }
+  onToChange(val: string) { this.customTo.set(val); this.timeWindow.set('custom'); }
 
   applyCustomDateRange() {
-    const from = this.customFrom();
-    const to = this.customTo();
-    if (from && to && from > to) {
+    if (this.customFrom() && this.customTo() && this.customFrom() > this.customTo()) {
       this.toast.error('Start date cannot be after end date.');
       return;
     }
     this.timeWindow.set('custom');
-    this.load();
+    this.loadedTabs.clear();
+    this.ensureTabData(this.tab(), true);
   }
 
   clearCustomDateRange() {
     this.customFrom.set('');
     this.customTo.set('');
     this.timeWindow.set('all');
-    this.load();
+    this.loadedTabs.clear();
+    this.ensureTabData(this.tab(), true);
   }
 
-  onProcessChange() {
-    this.load();
+  isDateFiltered(): boolean { return Boolean(this.customFrom() || this.customTo()); }
+  dateRangeLabel(): string {
+    if (this.customFrom() && this.customTo()) return `${this.customFrom()} → ${this.customTo()}`;
+    if (this.customFrom()) return `Since ${this.customFrom()}`;
+    if (this.customTo()) return `Until ${this.customTo()}`;
+    return 'All Time';
   }
 
-  load() {
-    this.loading.set(true);
-    this.error.set(null);
-    const params = this.filterParams();
-
-    forkJoin({
-      summary: this.api.analyticsSummary(params),
-      procs: this.api.analyticsProcesses(params),
-      tasks: this.api.analyticsTasks(params),
-    }).subscribe({
-      next: ({ summary, procs, tasks }) => {
-        this.summary.set(summary); this.procs.set(procs); this.tasks.set(tasks);
-        this.loading.set(false);
-      },
-      error: (e) => {
-        this.error.set(e?.error?.error?.message || 'Could not load analytics from the server.');
-        this.loading.set(false);
-      },
-    });
-
-    this.wfApi.listWorkflows().subscribe({ next: (ws) => this.workflows.set(ws), error: () => {} });
-    this.loadCaseAnalytics();
+  private filterByDate(dateStr?: string): boolean {
+    if (!this.isDateFiltered()) return true;
+    if (!dateStr) return false;
+    const d = dateStr.slice(0, 10);
+    if (this.customFrom() && d < this.customFrom()) return false;
+    if (this.customTo() && d > this.customTo()) return false;
+    return true;
   }
 
-  loadCaseAnalytics() {
-    const params = {
-      since: this.filterParams().since,
-      from: this.filterParams().from,
-      to: this.filterParams().to,
-    };
-    this.analyticsApi.summary(params).subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
-    this.analyticsApi.tat(params).subscribe({ next: (t) => this.tat.set(t), error: () => {} });
-    this.analyticsApi.listSavedQueries().subscribe({ next: (q: SavedQuery[]) => this.savedQueries.set(q), error: () => {} });
-  }
+  // ---- Filtered Lists ----
+  filteredExecutions = computed(() => {
+    const q = this.searchQuery.toLowerCase().trim();
+    const proc = this.selectedProcess;
+    const stat = this.statusFilter;
 
-  // ---- Executive Overview & Process Metrics ----
-  activeInstances = computed(() => {
-    const s = this.summary()?.instances.byStatus ?? {};
-    return (s['running'] ?? 0) + (s['waiting'] ?? 0);
-  });
-  completedInstances = computed(() => this.summary()?.instances.byStatus?.['completed'] ?? 0);
-  failedInstances = computed(() => this.summary()?.instances.byStatus?.['failed'] ?? 0);
-  failureRate = computed(() => this.procs()?.failureRate ?? 0);
-  failureRateColor = computed(() => {
-    const r = this.failureRate();
-    return r > 5 ? 'var(--red)' : r > 0 ? 'var(--amber)' : 'var(--green)';
-  });
-  openTasks = computed(() => {
-    const s = this.summary()?.tasks.byStatus ?? {};
-    return Object.entries(s).filter(([k]) => k !== 'completed' && k !== 'skipped')
-      .reduce((a, [, v]) => a + v, 0);
-  });
-  activeTimers = computed(() => this.summary()?.jobs?.scheduled ?? 0);
-
-  kpis = computed(() => {
-    const s = this.summary();
-    const p = this.procs();
-    if (!s) return [];
-    return [
-      { label: 'Total instances', value: s.instances.total, color: '' },
-      { label: 'Running', value: s.instances.byStatus['running'] ?? 0, color: 'var(--blue)' },
-      { label: 'Completed', value: s.instances.byStatus['completed'] ?? 0, color: 'var(--green)' },
-      { label: 'Failed', value: s.instances.byStatus['failed'] ?? 0, color: 'var(--red)' },
-      { label: 'Failure rate', value: `${p?.failureRate ?? 0}%`, color: (p?.failureRate ?? 0) > 0 ? 'var(--red)' : 'var(--green)' },
-      { label: 'Active deployments', value: s.deployments.active, color: 'var(--purple)' },
-    ];
-  });
-
-  dailyThroughput = computed(() => this.procs()?.dailyThroughput ?? []);
-  maxThroughputVal = computed(() => {
-    const list = this.dailyThroughput();
-    let max = 1;
-    for (const d of list) {
-      if (d.started > max) max = d.started;
-      if (d.completed > max) max = d.completed;
-      if (d.failed > max) max = d.failed;
-    }
-    return max;
-  });
-
-  formatDayLabel(d: string): string {
-    const parts = d.split('-');
-    return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
-  }
-
-  throughputTooltip(d: { date: string; started: number; completed: number; failed: number }): string {
-    return `${d.date}: ${d.started} started, ${d.completed} completed, ${d.failed} failed`;
-  }
-
-  pctOfThroughput(val: number): number {
-    if (!val || val <= 0) return 0;
-    const max = this.maxThroughputVal();
-    return max > 0 ? Math.max(4, Math.min(100, (val / max) * 100)) : 0;
-  }
-
-  statusColor(s: string) {
-    const low = (s || '').toLowerCase();
-    return low === 'failed' || low === 'error' ? 'var(--red)'
-      : low === 'completed' || low === 'resolved' || low === 'closed' || low === 'approved' ? 'var(--green)'
-      : low === 'aborted' || low === 'cancelled' ? 'var(--muted)'
-      : low === 'suspended' ? 'var(--purple)'
-      : low === 'waiting' || low === 'created' || low === 'reserved' ? 'var(--amber)'
-      : 'var(--blue)';
-  }
-
-  instStatusRows = computed<StatusRow[]>(() => this.statusRows(this.procs()?.byStatus, INSTANCE_STATUSES));
-  instTotal = computed(() => this.instStatusRows().reduce((a, r) => a + r.count, 0));
-  instDonut = computed(() => this.donutGradient(this.instStatusRows()));
-  byProcess = computed(() => [...(this.procs()?.byProcess ?? [])].sort((a, b) => b.count - a.count));
-  filteredProcesses = computed(() => {
-    const q = this.procSearch.trim().toLowerCase();
-    if (!q) return this.byProcess();
-    return this.byProcess().filter((p) => p.processId.toLowerCase().includes(q));
-  });
-  maxProcAvg = computed(() => Math.max(...this.byProcess().map((p) => p.avgMs), 1));
-
-  // ---- Tasks Tab ----
-  slaRate = computed(() => this.tasks()?.sla?.complianceRate ?? 100);
-  slaColor = computed(() => {
-    const rate = this.slaRate();
-    return rate >= 95 ? 'var(--green)' : rate >= 80 ? 'var(--amber)' : 'var(--red)';
-  });
-  taskGroups = computed(() => this.tasks()?.byGroup ?? []);
-
-  taskStatusRows = computed<StatusRow[]>(() => this.statusRows(this.tasks()?.openByStatus, TASK_STATUSES));
-  openTotal = computed(() => this.taskStatusRows().reduce((a, r) => a + r.count, 0));
-  taskDonut = computed(() => this.donutGradient(this.taskStatusRows()));
-  byAssignee = computed(() => [...(this.tasks()?.byAssignee ?? [])].sort((a, b) => b.count - a.count));
-  maxAssigneeCount = computed(() => Math.max(...this.byAssignee().map((w) => w.count), 1));
-  byTask = computed(() => [...(this.tasks()?.byTask ?? [])].sort((a, b) => b.count - a.count));
-  filteredTasks = computed(() => {
-    const q = this.taskSearch.trim().toLowerCase();
-    if (!q) return this.byTask();
-    return this.byTask().filter((t) => t.name.toLowerCase().includes(q));
-  });
-  maxTaskAvg = computed(() => Math.max(...this.byTask().map((t) => t.avgMs), 1));
-
-  // ---- Cases Tab Helpers ----
-  statusEntries(byStatus: Record<string, number>): [string, number][] {
-    return Object.entries(byStatus || {});
-  }
-  caseStatusPct(count: number): number {
-    const total = this.caseSummary()?.total ?? 0;
-    return total > 0 ? (count / total) * 100 : 0;
-  }
-  caseWorkflowPct(count: number): number {
-    const total = this.caseSummary()?.total ?? 0;
-    return total > 0 ? (count / total) * 100 : 0;
-  }
-  activeCaseRatio(): number {
-    const total = this.caseSummary()?.total ?? 0;
-    const active = this.caseSummary()?.activeCases ?? 0;
-    return total > 0 ? Math.round((active / total) * 100) : 0;
-  }
-  filteredTatWorkflows = computed(() => {
-    const list = this.tat()?.byWorkflowName || [];
-    const q = this.caseSearch.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((w) => w.workflowName.toLowerCase().includes(q));
-  });
-  maxCaseAvg = computed(() => Math.max(...(this.tat()?.byWorkflowName || []).map((w) => w.avgMs), 1));
-
-  // ---- Custom Queries ----
-  queryColumns = computed(() => {
-    const rows = this.queryResult()?.rows;
-    if (!rows || rows.length === 0) return [];
-    const keySet = new Set<string>();
-    const priority = ['id', 'workflowName', 'name', 'status', 'createdAt', 'assignee', 'group'];
-    for (const p of priority) {
-      if (rows.some((r) => r[p] !== undefined)) keySet.add(p);
-    }
-    for (const r of rows.slice(0, 5)) {
-      for (const k of Object.keys(r)) {
-        if (!k.startsWith('_') && keySet.size < 8) keySet.add(k);
+    return this.executions().filter((i) => {
+      if (!this.filterByDate(i.startedAt)) return false;
+      if (proc && (i.processId !== proc && i.workflowId !== proc)) return false;
+      if (stat !== 'all' && i.status !== stat) return false;
+      if (q) {
+        const matches = i.id.toLowerCase().includes(q)
+          || (i.processId || '').toLowerCase().includes(q)
+          || (i.workflowId || '').toLowerCase().includes(q)
+          || (i.startedBy || '').toLowerCase().includes(q)
+          || (i.correlationKey || '').toLowerCase().includes(q);
+        if (!matches) return false;
       }
-    }
-    return [...keySet];
+      return true;
+    });
   });
 
-  addFilter() { this.filters.push({ field: '', op: 'eq', value: '' }); }
-  removeFilter(f: QueryFilter) { this.filters = this.filters.filter((x) => x !== f); }
+  filteredSlaTasks = computed(() => {
+    const q = this.searchQuery.toLowerCase().trim();
+    const filter = this.slaFilter;
 
-  private buildDef(): QueryDefinition {
-    const d: QueryDefinition = { entity: this.entity };
-    const validFilters = this.filters.filter((f) => f.field.trim());
-    if (validFilters.length) d.filters = validFilters;
-    if (this.groupBy.trim()) d.groupBy = this.groupBy.trim();
-    if (this.metric) {
-      d.metric = this.metric;
-      if (this.metric === 'avgDurationMs') {
-        d.durationFrom = this.durationFrom.trim() || undefined;
-        d.durationTo = this.durationTo.trim() || undefined;
+    return this.slaTasks().filter((t) => {
+      if (!this.filterByDate(t.createdAt)) return false;
+      if (filter === 'overdue' && !this.isOverdue(t)) return false;
+      if (filter === 'at-risk' && !this.isAtRisk(t)) return false;
+      if (q) {
+        const matches = t.id.toLowerCase().includes(q)
+          || t.name.toLowerCase().includes(q)
+          || (t.assignee || '').toLowerCase().includes(q)
+          || (t.instanceId || '').toLowerCase().includes(q);
+        if (!matches) return false;
       }
+      return true;
+    });
+  });
+
+  filteredCases = computed(() => {
+    const q = this.searchQuery.toLowerCase().trim();
+    const proc = this.selectedProcess;
+    const stat = this.statusFilter;
+
+    return this.cases().filter((c) => {
+      if (!this.filterByDate(c.createdAt)) return false;
+      if (proc && c.workflowDefinitionId !== proc) return false;
+      if (stat !== 'all' && c.status !== stat) return false;
+      if (q) {
+        const matches = c.id.toLowerCase().includes(q)
+          || (c.workflowName || '').toLowerCase().includes(q)
+          || (c.createdBy || '').toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  });
+
+  filteredAudits = computed(() => {
+    const q = this.searchQuery.toLowerCase().trim();
+
+    return this.audits().filter((a) => {
+      if (!this.filterByDate(a.at)) return false;
+      if (q) {
+        const ent = a.instanceId || a.taskId || a.workflowId || '';
+        const matches = a.id.toLowerCase().includes(q)
+          || a.actor.toLowerCase().includes(q)
+          || a.kind.toLowerCase().includes(q)
+          || ent.toLowerCase().includes(q)
+          || JSON.stringify(a.data || {}).toLowerCase().includes(q);
+        if (!matches) return false;
+      }
+      return true;
+    });
+  });
+
+  // ---- Paging Helpers ----
+  pagedExecutions = computed(() => {
+    const list = this.filteredExecutions();
+    const start = (this.page() - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  });
+
+  pagedSlaTasks = computed(() => {
+    const list = this.filteredSlaTasks();
+    const start = (this.slaPage() - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  });
+
+  pagedCases = computed(() => {
+    const list = this.filteredCases();
+    const start = (this.casePage() - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  });
+
+  pagedAudits = computed(() => {
+    const list = this.filteredAudits();
+    const start = (this.auditPage() - 1) * this.pageSize;
+    return list.slice(start, start + this.pageSize);
+  });
+
+  maxPages(count: number): number { return Math.max(1, Math.ceil(count / this.pageSize)); }
+  minVal(a: number, b: number): number { return Math.min(a, b); }
+
+  countOverdue(): number {
+    return this.slaTasks().filter((t) => this.isOverdue(t)).length;
+  }
+
+  isOverdue(t: Task): boolean {
+    return Boolean(t.dueAt && Date.parse(t.dueAt) < Date.now());
+  }
+
+  isAtRisk(t: Task): boolean {
+    if (!t.dueAt) return false;
+    const due = Date.parse(t.dueAt);
+    const now = Date.now();
+    const created = t.createdAt ? Date.parse(t.createdAt) : now - 86400000;
+    const total = due - created;
+    if (total <= 0) return true;
+    const elapsed = now - created;
+    return (elapsed / total) >= 0.8 && !this.isOverdue(t);
+  }
+
+  overdueDelay(dueAt: string): string {
+    const diff = Date.now() - Date.parse(dueAt);
+    return humanMs(diff);
+  }
+
+  remainingTime(dueAt?: string): string {
+    if (!dueAt) return '—';
+    const diff = Date.parse(dueAt) - Date.now();
+    return humanMs(diff);
+  }
+
+  calcDuration(start?: string, end?: string): string {
+    if (!start) return '—';
+    const s = Date.parse(start);
+    const e = end ? Date.parse(end) : Date.now();
+    return humanMs(e - s);
+  }
+
+  procName(i: Instance): string {
+    return (i.processId || i.workflowId || '').split('.').pop() || i.workflowId;
+  }
+
+  shortId(id: string): string {
+    return id.length > 10 ? id.slice(-7) : id;
+  }
+
+  statusColor(s: string): string {
+    return ({
+      running: '#2563eb',
+      waiting: '#f59e0b',
+      completed: '#16a34a',
+      failed: '#dc2626',
+      aborted: '#6b7280',
+      suspended: '#7c3aed',
+    } as any)[s] || '#6b7280';
+  }
+
+  formatAuditData(data?: Record<string, unknown>): string {
+    if (!data || Object.keys(data).length === 0) return '—';
+    return JSON.stringify(data);
+  }
+
+  isCurrentEmpty(): boolean {
+    switch (this.tab()) {
+      case 'executions': return this.filteredExecutions().length === 0;
+      case 'sla': return this.filteredSlaTasks().length === 0;
+      case 'cases': return this.filteredCases().length === 0;
+      case 'audit': return this.filteredAudits().length === 0;
+      case 'adhoc': return this.adhocResults.length === 0;
     }
-    return d;
   }
 
-  runQuery() {
-    this.queryError.set('');
-    this.runningQuery.set(true);
-    this.analyticsApi.runQuery(this.buildDef()).subscribe({
-      next: (res) => {
-        this.queryResult.set(res);
-        this.runningQuery.set(false);
-      },
-      error: (e) => {
-        this.runningQuery.set(false);
-        this.queryError.set(e?.error?.error?.message || 'Query failed');
-      },
-    });
-  }
+  // ---- Ad-Hoc Report Builder Engine ----
+  runAdhocQuery() {
+    let source: any[] = [];
+    if (this.adhocEntity === 'instances') source = this.executions();
+    else if (this.adhocEntity === 'tasks') source = this.slaTasks();
+    else if (this.adhocEntity === 'cases') source = this.cases();
+    else if (this.adhocEntity === 'audit') source = this.audits();
 
-  saveQuery() {
-    if (!this.saveName.trim()) { this.queryError.set('Name is required to save'); return; }
-    this.analyticsApi.saveQuery(this.saveName.trim(), this.buildDef(), this.saveShared).subscribe({
-      next: () => {
-        this.toast.success('Query saved');
-        this.saveName = '';
-        this.loadCaseAnalytics();
-      },
-      error: (e) => this.queryError.set(e?.error?.error?.message || 'Failed to save query'),
-    });
-  }
-
-  loadSavedQuery(sq: SavedQuery) {
-    this.entity = sq.definition.entity;
-    this.groupBy = sq.definition.groupBy || '';
-    this.metric = sq.definition.metric || '';
-    this.durationFrom = sq.definition.durationFrom || '';
-    this.durationTo = sq.definition.durationTo || '';
-    this.filters = sq.definition.filters ? [...sq.definition.filters] : [];
-    this.runQuery();
-  }
-
-  deleteSavedQuery(sq: SavedQuery) {
-    this.analyticsApi.deleteSavedQuery(sq.id).subscribe({
-      next: () => {
-        this.toast.success('Query deleted');
-        this.savedQueries.update((l) => l.filter((x) => x.id !== sq.id));
-      },
-      error: (e: any) => this.toast.error(e?.error?.error?.message || 'Delete failed'),
-    });
-  }
-
-  loadPreset(preset: 'overdueTasks' | 'activeCases' | 'failedInst') {
-    if (preset === 'overdueTasks') {
-      this.entity = 'task';
-      this.groupBy = 'group';
-      this.metric = 'count';
-      this.filters = [{ field: 'status', op: 'ne', value: 'completed' }];
-    } else if (preset === 'activeCases') {
-      this.entity = 'workflowInstance';
-      this.groupBy = 'workflowName';
-      this.metric = 'count';
-      this.filters = [{ field: 'status', op: 'ne', value: 'closed' }];
-    } else if (preset === 'failedInst') {
-      this.entity = 'instance';
-      this.groupBy = 'processId';
-      this.metric = 'count';
-      this.filters = [{ field: 'status', op: 'eq', value: 'failed' }];
-    }
-    this.runQuery();
-  }
-
-  formatColVal(val: unknown): string {
-    if (val === undefined || val === null) return '—';
-    if (typeof val === 'object') return JSON.stringify(val);
-    return String(val);
-  }
-
-  // ---- General Helpers ----
-  ms = humanMs;
-  pctOf(v: number, max: number): number { return max > 0 ? Math.max(0, Math.min(100, (v / max) * 100)) : 0; }
-  nonZero(rows: StatusRow[]): StatusRow[] { return rows.filter((r) => r.count > 0); }
-  loadRatio(count: number): number { return count / this.maxAssigneeCount(); }
-  loadColor(count: number): string {
-    const r = this.loadRatio(count);
-    return r > 0.75 ? 'var(--red)' : r > 0.4 ? 'var(--amber)' : 'var(--green)';
-  }
-
-  private statusRows(byStatus: Record<string, number> | undefined, meta: { key: string; label: string; color: string }[]): StatusRow[] {
-    if (!byStatus) return [];
-    const known = meta.map((m) => ({ ...m, count: byStatus[m.key] ?? 0 }));
-    const extra = Object.keys(byStatus)
-      .filter((k) => !meta.some((m) => m.key === k) && byStatus[k] > 0)
-      .map((k) => ({ key: k, label: k, color: 'var(--muted)', count: byStatus[k] }));
-    const rows = [...known, ...extra];
-    const total = rows.reduce((a, r) => a + r.count, 0);
-    const max = Math.max(...rows.map((r) => r.count), 1);
-    return rows.map((r) => ({
-      ...r,
-      pctOfMax: (r.count / max) * 100,
-      share: total ? Math.round((r.count / total) * 100) : 0,
-    }));
-  }
-
-  private donutGradient(rows: StatusRow[]): string {
-    const active = rows.filter((r) => r.count > 0);
-    const total = active.reduce((a, r) => a + r.count, 0);
-    if (!total) return 'var(--surface-3)';
-    let acc = 0;
-    const stops = active.map((r) => {
-      const from = (acc / total) * 100;
-      acc += r.count;
-      const to = (acc / total) * 100;
-      return `${r.color} ${from.toFixed(2)}% ${to.toFixed(2)}%`;
-    });
-    return `conic-gradient(${stops.join(', ')})`;
-  }
-
-  exportQueryResults() {
-    const res = this.queryResult();
-    if (!res) return;
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    let header: string[]; let rows: unknown[][];
-    if (res.groups) {
-      header = ['Key', 'Count', ...(this.metric === 'avgDurationMs' ? ['Avg Duration (ms)'] : [])];
-      rows = res.groups.map((g) => [g.key, g.count, ...(this.metric === 'avgDurationMs' ? [g.avgDurationMs ?? ''] : [])]);
-    } else if (res.rows && res.rows.length > 0) {
-      header = this.queryColumns();
-      rows = res.rows.map((r) => header.map((col) => this.formatColVal(r[col])));
-    } else {
+    if (!source.length) {
+      // Lazy load entity if empty
+      if (this.adhocEntity === 'instances') this.instanceApi.listInstances({}).subscribe((l) => { this.executions.set(l); this.runAdhocQuery(); });
+      else if (this.adhocEntity === 'tasks') this.taskApi.listTasks().subscribe((l) => { this.slaTasks.set(l); this.runAdhocQuery(); });
+      else if (this.adhocEntity === 'cases') this.wfInstApi.list({}).subscribe((l) => { this.cases.set(l); this.runAdhocQuery(); });
+      else if (this.adhocEntity === 'audit') this.opsApi.listAudit({ limit: 200 }).subscribe((l) => { this.audits.set(l.items); this.runAdhocQuery(); });
       return;
     }
-    const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = `query-${this.entity}-results.csv`; a.click();
-    URL.revokeObjectURL(url);
+
+    const groups: Record<string, { count: number; totalMs: number; failCount: number }> = {};
+    for (const item of source) {
+      let g = 'Other';
+      if (this.adhocGroupBy === 'status') g = item.status || 'unknown';
+      else if (this.adhocGroupBy === 'name') g = item.processId || item.workflowName || item.workflowId || item.name || item.kind || 'unknown';
+      else if (this.adhocGroupBy === 'actor') g = item.startedBy || item.assignee || item.actor || 'system';
+      else if (this.adhocGroupBy === 'day') g = (item.startedAt || item.createdAt || item.at || '').slice(0, 10) || 'unknown';
+
+      if (!groups[g]) groups[g] = { count: 0, totalMs: 0, failCount: 0 };
+      groups[g].count++;
+      if (item.status === 'failed' || item.status === 'error') groups[g].failCount++;
+
+      const s = item.startedAt || item.createdAt || item.at;
+      const e = item.endedAt || item.completedAt;
+      if (s && e) {
+        groups[g].totalMs += (Date.parse(e) - Date.parse(s));
+      }
+    }
+
+    const total = source.length;
+    this.adhocResults = Object.entries(groups).map(([group, val]) => {
+      let metricDisplay = `${val.count} items`;
+      if (this.adhocMetric === 'duration') {
+        const avg = val.count > 0 ? Math.round(val.totalMs / val.count) : 0;
+        metricDisplay = humanMs(avg);
+      } else if (this.adhocMetric === 'failure') {
+        const pct = val.count > 0 ? Math.round((val.failCount / val.count) * 100) : 0;
+        metricDisplay = `${pct}% fail`;
+      }
+      return {
+        group,
+        count: val.count,
+        share: total ? Math.round((val.count / total) * 100) : 0,
+        metricDisplay,
+      };
+    }).sort((a, b) => b.count - a.count);
   }
 
+  // ---- CSV / JSON Export Engine ----
   exportCsv() {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    let header: string[]; let rows: unknown[][]; let name: string;
-    if (this.tab() === 'overview') {
-      header = ['Metric', 'Value'];
-      rows = [
-        ['Active Instances', this.activeInstances()],
-        ['Completed Instances', this.completedInstances()],
-        ['Failed Instances', this.failedInstances()],
-        ['Failure Rate (%)', this.failureRate()],
-        ['Open Tasks', this.openTasks()],
-        ['SLA Compliance (%)', this.slaRate()],
-        ['Active Deployments', this.summary()?.deployments?.active ?? 0],
-        ['Total Cases', this.caseSummary()?.total ?? 0],
-        ['Active Timers', this.activeTimers()],
-        ['Process Scope', this.selectedProcess || 'All Processes'],
-        ['Date Range', this.dateRangeLabel()],
-      ];
-      name = 'reports-overview-summary.csv';
-    } else if (this.tab() === 'processes') {
-      header = ['Process Definition', 'Executions', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
-      rows = this.byProcess().map((p) => [p.processId, p.count, p.avgMs, p.minMs, p.maxMs]);
-      name = 'reports-processes.csv';
-    } else if (this.tab() === 'tasks') {
-      header = ['Task Name', 'Completed Count', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
-      rows = this.byTask().map((t) => [t.name, t.count, t.avgMs, t.minMs, t.maxMs]);
-      name = 'reports-tasks.csv';
-    } else if (this.tab() === 'queries') {
-      this.exportQueryResults();
-      return;
-    } else {
-      header = ['Workflow Definition', 'Completed Cases', 'Avg TAT (ms)', 'Min (ms)', 'Max (ms)'];
-      rows = (this.tat()?.byWorkflowName || []).map((w) => [w.workflowName, w.count, w.avgMs, w.minMs, w.maxMs]);
-      name = 'reports-cases.csv';
+    let headers: string[] = [];
+    let rows: unknown[][] = [];
+    let filename = 'report.csv';
+
+    if (this.tab() === 'executions') {
+      filename = `process-executions-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      headers = ['Instance ID', 'Process Definition', 'Status', 'Initiator', 'Started At', 'Ended At', 'Duration (ms)', 'Correlation Key'];
+      rows = this.filteredExecutions().map((i) => [
+        i.id,
+        this.procName(i),
+        i.status,
+        i.startedBy,
+        i.startedAt,
+        i.endedAt || '',
+        i.startedAt && i.endedAt ? Date.parse(i.endedAt) - Date.parse(i.startedAt) : '',
+        i.correlationKey || '',
+      ]);
+    } else if (this.tab() === 'sla') {
+      filename = `task-sla-breaches-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      headers = ['Task ID', 'Task Name', 'Process Instance ID', 'Priority', 'Assignee', 'Group', 'Created At', 'Due Date', 'Is Overdue'];
+      rows = this.filteredSlaTasks().map((t) => [
+        t.id,
+        t.name,
+        t.instanceId,
+        t.priority ?? 50,
+        t.assignee || '',
+        t.group || '',
+        t.createdAt,
+        t.dueAt || '',
+        this.isOverdue(t) ? 'YES' : 'NO',
+      ]);
+    } else if (this.tab() === 'cases') {
+      filename = `case-resolutions-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      headers = ['Case ID', 'Workflow Name', 'Status', 'Initiator', 'Started At', 'Completed At', 'Process Instance ID'];
+      rows = this.filteredCases().map((c) => [
+        c.id,
+        c.workflowName || c.workflowDefinitionId,
+        c.status,
+        c.createdBy || 'system',
+        c.createdAt,
+        c.status === 'completed' ? c.updatedAt : '',
+        c.piid || '',
+      ]);
+    } else if (this.tab() === 'audit') {
+      filename = `system-audit-trail-${new Date().toISOString().slice(0, 10)}.csv`;
+      headers = ['Audit ID', 'Timestamp', 'Actor', 'Kind', 'Entity ID', 'Data'];
+      rows = this.filteredAudits().map((a) => [
+        a.id,
+        a.at,
+        a.actor,
+        a.kind,
+        a.instanceId || a.taskId || a.workflowId || '',
+        JSON.stringify(a.data || {}),
+      ]);
+    } else if (this.tab() === 'adhoc') {
+      filename = `ad-hoc-query-report-${new Date().toISOString().slice(0, 10)}.csv`;
+      headers = ['Group', 'Count', 'Share (%)', 'Metric'];
+      rows = this.adhocResults.map((r) => [r.group, r.count, r.share, r.metricDisplay]);
     }
-    const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a');
-    a.href = url; a.download = name; a.click();
-    URL.revokeObjectURL(url);
+
+    const csvContent = [headers.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))].join('\r\n');
+    downloadFile(csvContent, filename, 'text/csv;charset=utf-8;');
+    this.toast.success(`Exported ${filename}`);
+  }
+
+  exportJson() {
+    let data: unknown;
+    let filename = 'report.json';
+
+    if (this.tab() === 'executions') {
+      filename = `process-executions-${new Date().toISOString().slice(0, 10)}.json`;
+      data = this.filteredExecutions();
+    } else if (this.tab() === 'sla') {
+      filename = `task-sla-breaches-${new Date().toISOString().slice(0, 10)}.json`;
+      data = this.filteredSlaTasks();
+    } else if (this.tab() === 'cases') {
+      filename = `case-resolutions-${new Date().toISOString().slice(0, 10)}.json`;
+      data = this.filteredCases();
+    } else if (this.tab() === 'audit') {
+      filename = `system-audit-trail-${new Date().toISOString().slice(0, 10)}.json`;
+      data = this.filteredAudits();
+    } else if (this.tab() === 'adhoc') {
+      filename = `ad-hoc-query-${new Date().toISOString().slice(0, 10)}.json`;
+      data = this.adhocResults;
+    }
+
+    downloadFile(JSON.stringify(data, null, 2), filename, 'application/json;charset=utf-8;');
+    this.toast.success(`Exported ${filename}`);
   }
 }
