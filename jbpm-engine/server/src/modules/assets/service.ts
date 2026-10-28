@@ -15,7 +15,7 @@ import {
   evaluateGuidedTable, evaluateTestScenario,
 } from '../../engine/decisioning.ts';
 
-export interface AssetRef { kind: string; process: string; nodeId?: string; nodeName?: string; via: string; }
+export interface AssetRef { kind: string; process: string; processId?: string; nodeId?: string; nodeName?: string; via: string; }
 
 export class AssetsService {
   private wf: WorkflowService;
@@ -46,7 +46,7 @@ export class AssetsService {
     const refs: AssetRef[] = [];
     const visit = (proc: EngineProcess, nodes: EngineNode[]) => {
       for (const n of nodes) {
-        const push = (via: string) => refs.push({ kind, process: proc.name || proc.id, nodeId: (n as any).id, nodeName: (n as any).name, via });
+        const push = (via: string) => refs.push({ kind, process: proc.name || proc.id, processId: proc.id, nodeId: (n as any).id, nodeName: (n as any).name || (n as any).id, via });
         if (kind === 'forms' && (n as any).type === 'userTask' && (n as any).form === name) push('form');
         if (kind === 'rulesets' && (n as any).type === 'rule' && (n as any).ruleflowGroup === name) push('ruleflowGroup');
         if (kind === 'decisions' && (n as any).type === 'rule' && (n as any).dmn?.model === name) push('dmn.model');
@@ -65,20 +65,35 @@ export class AssetsService {
     for (const proc of engine.processes || []) {
       visit(proc, proc.nodes || []);
       if (kind === 'types' && (proc.vars || []).some((v) => v.type === name)) {
-        refs.push({ kind, process: proc.name || proc.id, via: 'process variable' });
+        refs.push({ kind, process: proc.name || proc.id, processId: proc.id, via: 'process variable' });
+      }
+    }
+    if (kind === 'types') {
+      for (const f of ((engine as any).forms || [])) {
+        if (f.model?.className === name || f.model?.className?.endsWith('.' + name)) {
+          refs.push({ kind, process: `Form: ${f.name}`, via: 'form model' });
+        }
+      }
+    }
+    if (kind !== 'tests') {
+      for (const t of ((engine as any).tests || [])) {
+        if (t.target === name) {
+          refs.push({ kind, process: `Test Suite: ${t.name}`, via: 'test target' });
+        }
       }
     }
     return refs;
   }
 
-  async list(projectId: string): Promise<{ kinds: { key: string; label: string; nameField: string }[]; assets: Record<string, { name: string; usedBy: number }[]> }> {
+  async list(projectId: string): Promise<{ kinds: { key: string; label: string; nameField: string }[]; assets: Record<string, { name: string; usedBy: number; refs: AssetRef[] }[]> }> {
     const { engine } = await this.head(projectId);
-    const assets: Record<string, { name: string; usedBy: number }[]> = {};
+    const assets: Record<string, { name: string; usedBy: number; refs: AssetRef[] }[]> = {};
     for (const k of ASSET_KINDS) {
       const arr = ((engine as any)[k.key] as any[]) || [];
       assets[k.key] = arr.map((a) => {
         const name = a[k.nameField] || a.name || a.group || a.id || '(unnamed)';
-        return { name, usedBy: this.findRefs(engine, k.key, name).length };
+        const refs = this.findRefs(engine, k.key, name);
+        return { name, usedBy: refs.length, refs };
       });
     }
     return { kinds: ASSET_KINDS.map((k) => ({ key: k.key, label: k.label, nameField: k.nameField })), assets };

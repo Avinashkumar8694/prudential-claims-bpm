@@ -1,5 +1,6 @@
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ProjectContextService } from './project-context.service';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
@@ -65,7 +66,22 @@ const EXTRA_FIELDS: Record<string, ExtraField[]> = {
   ],
 };
 
-interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: number; }
+export interface AssetRefInfo {
+  kind: string;
+  process: string;
+  processId?: string;
+  nodeId?: string;
+  nodeName?: string;
+  via: string;
+}
+
+interface AssetRow {
+  kind: string;
+  kindLabel: string;
+  name: string;
+  usedBy: number;
+  refs: AssetRefInfo[];
+}
 
 /**
  * Asset library (ux_design/mockups/assets-overview.html): kind sidebar with counts + search, a list
@@ -119,7 +135,18 @@ interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: numb
                   <tr>
                     <td><button class="lnk" (click)="openDetail(a)">{{ a.name }}</button></td>
                     <td><span class="badge">{{ a.kindLabel }}</span></td>
-                    <td>@if (a.usedBy > 0) { <span class="badge active">{{ a.usedBy }} reference{{ a.usedBy === 1 ? '' : 's' }}</span> } @else { <span class="badge inactive">unused</span> }</td>
+                    <td>
+                      @if (a.usedBy > 0) {
+                        <button class="used-by-pill" (click)="openUsageModal(a, $event)" title="View all usages and navigate to canvas">
+                          <span class="ref-summary">{{ getLatestRefSummary(a) }}</span>
+                          @if (a.usedBy > 1) {
+                            <span class="ref-count-tag">+{{ a.usedBy - 1 }}</span>
+                          }
+                        </button>
+                      } @else {
+                        <span class="badge inactive">unused</span>
+                      }
+                    </td>
                     <td class="menucell" (click)="$event.stopPropagation()">
                       <button class="kebab" (click)="menuFor.set(menuFor() === a ? null : a)" aria-label="Asset actions" aria-haspopup="menu"><app-icon name="more" [size]="15" /></button>
                       @if (menuFor() === a) {
@@ -190,8 +217,18 @@ interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: numb
               <div class="section-title first">Referenced by</div>
               @if (d.usedBy.length) {
                 <div class="panel-list">
-                  @for (r of d.usedBy; track r.process + (r.nodeId || '')) {
-                    <div class="prow"><span>{{ r.process }}@if (r.nodeName) { · {{ r.nodeName }} }</span><span class="muted sm">{{ r.via }}</span></div>
+                  @for (r of d.usedBy; track r.process + (r.nodeId || '') + r.via) {
+                    <div class="prow-card">
+                      <div class="prow-left">
+                        <span class="prow-main">{{ r.process }}@if (r.nodeName) { · {{ r.nodeName }} }</span>
+                        <span class="muted sm via-tag">via: {{ r.via }}</span>
+                      </div>
+                      @if (r.processId) {
+                        <button class="btn sm ghost open-canvas-btn" (click)="navigateToRef(r)" title="Open this node in canvas builder">
+                          Open in Canvas ↗
+                        </button>
+                      }
+                    </div>
                   }
                 </div>
                 <p class="muted sm">Deletion is blocked while anything above still points at this asset.</p>
@@ -342,6 +379,52 @@ interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: numb
         </div>
       </div>
     }
+
+    @if (usageModalFor(); as u) {
+      <div class="modal-bg" (click)="closeUsageModal()">
+        <div class="modal usage-modal" (click)="$event.stopPropagation()">
+          <div class="modal-h">
+            <div class="usage-title-row">
+              <span>Usages: <strong>{{ u.name }}</strong></span>
+              <span class="badge active">{{ u.usedBy }} reference{{ u.usedBy === 1 ? '' : 's' }}</span>
+            </div>
+            <span class="spacer"></span>
+            <button class="x" (click)="closeUsageModal()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+          </div>
+          <div class="modal-body">
+            <p class="usage-lead">This <strong>{{ u.kindLabel }}</strong> is referenced by the following process flows and nodes:</p>
+            <div class="usage-list">
+              @for (ref of u.refs; track ref.process + (ref.nodeId || '') + ref.via) {
+                <div class="usage-card">
+                  <div class="usage-info">
+                    <div class="usage-proc">
+                      <app-icon name="workflows" [size]="14" />
+                      <strong>{{ ref.process }}</strong>
+                    </div>
+                    @if (ref.nodeName) {
+                      <div class="usage-node">
+                        <span class="node-bullet">↳</span>
+                        <span class="node-lbl">Node:</span>
+                        <strong>{{ ref.nodeName }}</strong>
+                        <code class="node-id">({{ ref.nodeId }})</code>
+                      </div>
+                    }
+                    <div class="usage-meta">
+                      <span class="via-tag">via: {{ ref.via }}</span>
+                    </div>
+                  </div>
+                  @if (ref.processId) {
+                    <button class="btn sm primary open-canvas-btn" (click)="navigateToRef(ref)" title="Open this node in canvas builder">
+                      Open in Canvas ↗
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; max-width: 760px; line-height: 1.5; }
@@ -434,12 +517,36 @@ interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: numb
     .res-json { margin: 0; font-size: 11.5px; background: var(--surface); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); overflow-x: auto; max-height: 220px; font-family: monospace; }
     .help-txt { font-size: 11px; color: var(--muted); margin-top: 2px; display: block; }
     .err-list { margin: 0; padding-left: 20px; color: var(--red); font-size: 12.5px; }
+
+    .used-by-pill { display: inline-flex; align-items: center; gap: 6px; max-width: 320px; padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-size: 12px; font-weight: 500; cursor: pointer; text-align: left; transition: all .15s ease; }
+    .used-by-pill:hover { background: var(--surface-3); border-color: var(--primary); color: var(--primary); }
+    .ref-summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ref-count-tag { background: var(--primary); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; flex-shrink: 0; }
+    .usage-modal { width: 620px; max-width: 95vw; }
+    .usage-title-row { display: flex; align-items: center; gap: 10px; }
+    .usage-lead { font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+    .usage-list { display: flex; flex-direction: column; gap: 10px; }
+    .usage-card { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; transition: border-color .15s; }
+    .usage-card:hover { border-color: var(--primary-200, var(--primary)); }
+    .usage-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .usage-proc { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--text); }
+    .usage-node { display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--text-secondary); padding-left: 14px; }
+    .node-bullet { color: var(--muted); }
+    .node-lbl { color: var(--muted); font-size: 11.5px; }
+    .node-id { font-size: 11px; color: var(--muted); background: var(--surface); padding: 1px 4px; border-radius: 4px; font-family: monospace; }
+    .usage-meta { padding-left: 14px; }
+    .via-tag { display: inline-block; font-size: 11px; background: var(--surface-3); padding: 2px 6px; border-radius: 4px; color: var(--muted); font-family: monospace; }
+    .open-canvas-btn { flex-shrink: 0; white-space: nowrap; }
+    .prow-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; }
+    .prow-left { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .prow-main { font-size: 13px; font-weight: 500; }
   `],
 })
 export class ProjectAssetsComponent {
   ctx = inject(ProjectContextService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
+  private router = inject(Router);
 
   // Clicks inside the menu/kebab stop propagation (see the template), so this only ever sees clicks
   // genuinely outside the menu — safe to unconditionally close on every document click.
@@ -454,9 +561,11 @@ export class ProjectAssetsComponent {
   addName = '';
   private fieldVal: Record<string, string> = {};
 
-  detail = signal<{ row: AssetRow; usedBy: { kind: string; process: string; nodeId?: string; nodeName?: string; via: string }[]; raw: any } | null>(null);
+  detail = signal<{ row: AssetRow; usedBy: { kind: string; process: string; processId?: string; nodeId?: string; nodeName?: string; via: string }[]; raw: any } | null>(null);
   detailError = signal('');
   detailTab = signal<'config' | 'test'>('config');
+
+  usageModalFor = signal<AssetRow | null>(null);
 
   // Test & Simulation State
   testLoading = signal<boolean>(false);
@@ -468,7 +577,15 @@ export class ProjectAssetsComponent {
   allRows = computed<AssetRow[]>(() => {
     const out: AssetRow[] = [];
     for (const k of this.ctx.assetKinds()) {
-      for (const a of this.ctx.assets()[k.key] || []) out.push({ kind: k.key, kindLabel: k.label, name: a.name, usedBy: a.usedBy });
+      for (const a of this.ctx.assets()[k.key] || []) {
+        out.push({
+          kind: k.key,
+          kindLabel: k.label,
+          name: a.name,
+          usedBy: a.usedBy,
+          refs: (a as any).refs || [],
+        });
+      }
     }
     return out;
   });
@@ -479,6 +596,31 @@ export class ProjectAssetsComponent {
   });
   hasFilters = computed(() => !!this.kindFilter() || !!this.q.trim());
   resetFilters() { this.kindFilter.set(null); this.q = ''; }
+
+  openUsageModal(a: AssetRow, ev?: Event) {
+    if (ev) ev.stopPropagation();
+    this.usageModalFor.set(a);
+  }
+  closeUsageModal() {
+    this.usageModalFor.set(null);
+  }
+  getLatestRefSummary(a: AssetRow): string {
+    if (!a.refs || a.refs.length === 0) {
+      return a.usedBy > 0 ? `${a.usedBy} reference${a.usedBy === 1 ? '' : 's'}` : 'unused';
+    }
+    const r = a.refs[0];
+    if (r.nodeName) return `${r.process} · ${r.nodeName}`;
+    return r.process;
+  }
+  navigateToRef(ref: { processId?: string; nodeId?: string }) {
+    if (ref.processId) {
+      this.closeUsageModal();
+      this.closeDetail();
+      this.router.navigate(['/projects', this.ctx.id, 'processes', ref.processId], {
+        queryParams: ref.nodeId ? { nodeId: ref.nodeId } : undefined,
+      });
+    }
+  }
 
   extraFields(kind: string) { return EXTRA_FIELDS[kind] || []; }
   fv() { return this.fieldVal; }

@@ -72,7 +72,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
               </svg>
 
               @for (n of nodes(); track n.id) {
-                <div class="node" [class.sel]="selNode()?.id===n.id" [class.linking]="linkFrom()===n.id"
+                <div class="node" [attr.id]="'node-' + n.id" [class.sel]="selNode()?.id===n.id" [class.linking]="linkFrom()===n.id"
                      [class.droptarget]="linkFrom() && linkFrom()!==n.id && hasIn(n.type)"
                      [class.has-err]="hasErr(n.id)" [class.has-warn]="!hasErr(n.id) && hasWarn(n.id)"
                      [class.node-circle]="isCircle(n.type)"
@@ -472,6 +472,7 @@ export class ProcessCanvasComponent implements OnChanges {
   /** The project's assets by kind, passed straight through to the property modal's asset-reference
    *  pickers (see properties-panel.component.ts). Owned by ProjectContextService one level up. */
   @Input() assets: Record<string, { name: string; usedBy: number }[]> = {};
+  @Input() focusNodeId?: string | null;
   @Output() saved = new EventEmitter<void>();
 
   catalog = signal<Catalog | null>(null);
@@ -663,7 +664,19 @@ export class ProcessCanvasComponent implements OnChanges {
       if (!this.callableProcessesLoaded) { this.callableProcessesLoaded = true; this.api.callableProcesses().subscribe((ps) => this.callableProcesses.set(ps)); }
       this.api.getProcess(this.workflowId, this.processId).subscribe((p) => this.loadProcess(p));
       this.api.getWorkflow(this.workflowId).subscribe((w) => { this.branchId = w.defaultBranchId; });
+    } else if (changes['focusNodeId']?.currentValue) {
+      this.focusOnNode(this.focusNodeId!);
     }
+  }
+
+  focusOnNode(nodeId: string) {
+    const target = this.nodes().find((n) => n.id === nodeId);
+    if (!target) return;
+    this.openNodeEditor(target);
+    setTimeout(() => {
+      const el = document.getElementById(`node-${target.id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }, 50);
   }
 
   // ---- visuals / labels ----
@@ -693,6 +706,9 @@ export class ProcessCanvasComponent implements OnChanges {
     }
     this.saveState.set('saved');
     this.runValidate();
+    if (this.focusNodeId) {
+      setTimeout(() => this.focusOnNode(this.focusNodeId!), 100);
+    }
   }
 
   private buildProcess() {

@@ -38,7 +38,7 @@ export class ProjectContextService {
   id = this.route.snapshot.paramMap.get('id')!;
   wf = signal<Workflow | null>(null);
   processes = signal<{ id: string; name: string; nodes: number; flows: number }[]>([]);
-  assets = signal<Record<string, { name: string; usedBy: number }[]>>({});
+  assets = signal<Record<string, { name: string; usedBy: number; refs?: any[] }[]>>({});
   assetKinds = signal<{ key: string; label: string; nameField: string }[]>([]);
   vars = signal<{ name: string; type: string }[]>([]);
   name = ''; description = ''; baseUrl = '';

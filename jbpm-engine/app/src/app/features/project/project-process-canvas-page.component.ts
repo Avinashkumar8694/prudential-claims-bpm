@@ -37,7 +37,7 @@ import { IconComponent } from '../../shared/icon.component';
                 [title]="(canvas()?.errorCount() ?? 0) > 0 ? 'Fix validation errors before deploying' : 'Publish + deploy to prod'"><app-icon name="deployments" [size]="14" /> Deploy</button>
       </div>
       <div class="canvas-body">
-        @if (pid(); as p) { <app-process-canvas [workflowId]="ctx.id" [processId]="p" [assets]="ctx.assets()" (saved)="ctx.refreshCompatibility()" /> }
+        @if (pid(); as p) { <app-process-canvas [workflowId]="ctx.id" [processId]="p" [assets]="ctx.assets()" [focusNodeId]="nodeId()" (saved)="ctx.refreshCompatibility()" /> }
       </div>
     </div>
   `,
@@ -61,6 +61,7 @@ export class ProjectProcessCanvasPageComponent {
   canvas = viewChild(ProcessCanvasComponent);
 
   pid = toSignal(this.route.paramMap.pipe(map((m) => m.get('pid'))), { initialValue: this.route.snapshot.paramMap.get('pid') });
+  nodeId = toSignal(this.route.queryParamMap.pipe(map((m) => m.get('nodeId'))), { initialValue: this.route.snapshot.queryParamMap.get('nodeId') });
   processName = computed(() => this.ctx.processes().find((p) => p.id === this.pid())?.name);
 
   saveLabel() { return ({ saved: 'Saved', saving: 'Saving…', dirty: 'Unsaved' } as const)[this.canvas()?.saveState() ?? 'saved']; }
