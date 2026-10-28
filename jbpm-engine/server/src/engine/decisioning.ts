@@ -130,3 +130,141 @@ export function evaluateScorecard(engine: EngineProject, name: string, vars: Var
   if (reasons.length) out[`${target}Reasons`] = reasons;
   return out;
 }
+
+// ---- Guided decision table (SDK → .gdst) ----
+// A tabular ruleset over one fact: condition columns (field + op), action columns (field to set), and rows.
+export function evaluateGuidedTable(engine: EngineProject, name: string, vars: Vars): Vars {
+  const table = ((engine as any).guidedTables || []).find((t: any) => t.name === name);
+  if (!table) throw new Error(`guided decision table "${name}" not found`);
+  const fact: any = table.fact && vars[table.fact] && typeof vars[table.fact] === 'object' ? vars[table.fact] : vars;
+  const input = { ...fact };
+  const out = { ...fact };
+  const changed: Vars = {};
+  const fired: number[] = [];
+
+  const OPS: Record<string, (a: any, b: any) => boolean> = {
+    eq: (a, b) => a === b || String(a) === String(b),
+    ne: (a, b) => a !== b && String(a) !== String(b),
+    gt: (a, b) => Number(a) > Number(b),
+    gte: (a, b) => Number(a) >= Number(b),
+    lt: (a, b) => Number(a) < Number(b),
+    lte: (a, b) => Number(a) <= Number(b),
+  };
+
+  const conditions = table.conditions || [];
+  const actions = table.actions || [];
+  const rows = table.rows || [];
+
+  rows.forEach((row: any, i: number) => {
+    const matches = conditions.every((c: any) => {
+      const v = (row.when || {})[c.field];
+      if (v == null || v === '') return true; // empty cell = no constraint
+      const op = c.op || 'eq';
+      const fn = OPS[op] || OPS.eq;
+      return fn(input[c.field], v);
+    });
+
+    if (!matches) return;
+    fired.push(i + 1);
+    for (const a of actions) {
+      const v = (row.then || {})[a.field];
+      if (v !== undefined) {
+        out[a.field] = v;
+        changed[a.field] = v;
+      }
+    }
+  });
+
+  if (table.fact && table.fact !== name && vars[table.fact] && typeof vars[table.fact] === 'object') {
+    Object.assign(vars[table.fact], out);
+    changed[table.fact] = vars[table.fact];
+  } else {
+    Object.assign(vars, changed);
+  }
+  return { ...changed, _firedRows: fired };
+}
+
+// ---- Test scenario runner (SDK → .scesim) ----
+// Runs test cases against a target decision, ruleset, table, tree, or scorecard in the engine.
+export interface ScenarioCaseResult {
+  name: string;
+  pass: boolean;
+  actual: Record<string, unknown>;
+  expected: Record<string, unknown>;
+  failures: Array<{ field: string; expected: unknown; actual: unknown }>;
+}
+
+export function evaluateTestScenario(engine: EngineProject, suiteName: string): {
+  name: string;
+  target: string;
+  cases: ScenarioCaseResult[];
+  total: number;
+  passed: number;
+  failed: number;
+} {
+  const suite = ((engine as any).tests || []).find((s: any) => s.name === suiteName);
+  if (!suite) throw new Error(`test suite "${suiteName}" not found`);
+  const target = suite.target;
+  const cases = suite.cases || [];
+
+  const evaluateTarget = (given: Vars): Vars => {
+    // 1. DMN decision
+    if ((engine.decisions || []).some((d: any) => d.name === target)) {
+      return evaluateDmn(engine, { model: target, decision: '' }, { ...given });
+    }
+    // 2. DRL ruleset
+    if ((engine.rulesets || []).some((r: any) => r.group === target)) {
+      return evaluateRules(engine, target, { ...given });
+    }
+    // 3. Guided table
+    if (((engine as any).guidedTables || []).some((g: any) => g.name === target)) {
+      return evaluateGuidedTable(engine, target, { ...given });
+    }
+    // 4. Decision tree
+    if (((engine as any).decisionTrees || []).some((t: any) => t.name === target)) {
+      return evaluateDecisionTree(engine, target, { ...given });
+    }
+    // 5. Scorecard
+    if (((engine as any).scorecards || []).some((s: any) => s.name === target)) {
+      return evaluateScorecard(engine, target, { ...given });
+    }
+    throw new Error(`Target "${target}" not found among project decisions, rulesets, tables, trees, or scorecards`);
+  };
+
+  const results: ScenarioCaseResult[] = cases.map((c: any, i: number) => {
+    const given = c.given || {};
+    const expected = c.expect || {};
+    let actual: Vars = {};
+    const failures: Array<{ field: string; expected: unknown; actual: unknown }> = [];
+
+    try {
+      actual = evaluateTarget({ ...given });
+      for (const [k, expVal] of Object.entries(expected)) {
+        const actVal = actual[k];
+        if (actVal !== expVal && String(actVal) !== String(expVal)) {
+          failures.push({ field: k, expected: expVal, actual: actVal });
+        }
+      }
+    } catch (err: any) {
+      failures.push({ field: '_execution', expected: 'successful evaluation', actual: err.message });
+    }
+
+    return {
+      name: c.name || `Case ${i + 1}`,
+      pass: failures.length === 0,
+      actual,
+      expected,
+      failures,
+    };
+  });
+
+  const passed = results.filter((r) => r.pass).length;
+  return {
+    name: suite.name,
+    target,
+    cases: results,
+    total: results.length,
+    passed,
+    failed: results.length - passed,
+  };
+}

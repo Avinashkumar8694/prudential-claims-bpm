@@ -81,6 +81,8 @@ const paths: Record<string, any> = {
     delete: { tags: ['Processes'], summary: 'Remove a process', parameters: [idParam(), idParam('pid', 'Process id')], responses: { '204': { description: 'Removed' } } },
   },
   '/workflows/{id}/engine': { get: { tags: ['Projects'], summary: 'Assembled engine model (all processes + assets) for a project', parameters: [idParam()], responses: ok({ type: 'object' }) } },
+  '/workflows/{id}/export-engine': { get: { tags: ['Projects'], summary: 'Export project engine JSON for Node engine runner', parameters: [idParam()], responses: ok({ type: 'object' }) } },
+  '/workflows/{id}/jbpm-compatibility': { get: { tags: ['Projects'], summary: 'Inspect project compatibility with jBPM KIE runtime', parameters: [idParam()], responses: ok({ type: 'object', properties: { compatible: { type: 'boolean' }, errors: { type: 'array', items: { type: 'string' } }, warnings: { type: 'array', items: { type: 'string' } } } }) } },
   '/workflows/{id}/assets': {
     get: { tags: ['Assets'], summary: 'List project assets by kind', parameters: [idParam()], responses: ok({ type: 'object' }) },
     post: { tags: ['Assets'], summary: 'Add an asset', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { kind: { type: 'string' }, name: { type: 'string' }, fields: { type: 'object', description: 'Kind-specific fields beyond the name, e.g. { fact, baseline, target } for a scorecard — see GET /workflows/{id}/assets for each kind\'s nameField.' } } }), responses: created({ type: 'object' }) },
@@ -89,6 +91,9 @@ const paths: Record<string, any> = {
     get: { tags: ['Assets'], summary: 'Get one asset, with the process nodes that reference it', parameters: [idParam(), idParam('kind', 'Asset kind key, e.g. forms/rulesets/decisions'), idParam('name', "The asset's name (or nameField value, e.g. a ruleset's group)")], responses: ok({ type: 'object', properties: { kind: { type: 'string' }, asset: { type: 'object' }, usedBy: { type: 'array', items: { type: 'object' } } } }) },
     patch: { tags: ['Assets'], summary: 'Update an asset (rename and/or edit its fields); renaming re-points every process reference', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Current asset name')], requestBody: jsonBody({ type: 'object' }), responses: ok({ type: 'object', properties: { kind: { type: 'string' }, name: { type: 'string' } } }) },
     delete: { tags: ['Assets'], summary: 'Delete an asset — blocked (409) while any process node still references it', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Asset name')], responses: { '204': { description: 'Deleted' }, '409': { description: 'Still referenced', content: { 'application/json': { schema: ref('Error') } } } } },
+  },
+  '/workflows/{id}/assets/{kind}/{name}/test': {
+    post: { tags: ['Assets'], summary: 'Execute, simulate, or test an asset according to its jBPM purpose', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Asset name')], requestBody: jsonBody({ type: 'object' }, false), responses: ok({ type: 'object' }) },
   },
   '/workflows/{id}/branches': {
     get: { tags: ['Versioning'], summary: 'List branches', parameters: [idParam()], responses: ok(listOf('Branch')) },
@@ -105,6 +110,8 @@ const paths: Record<string, any> = {
   '/versions/{a}/diff/{b}': { get: { tags: ['Versioning'], summary: 'Diff two versions', parameters: [idParam('a', 'Version A'), idParam('b', 'Version B')], responses: ok({ type: 'object' }) } },
   '/versions/{id}/deploy': { post: { tags: ['Deployments'], summary: 'Deploy a published version', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { environment: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, env: { type: 'object' }, activate: { type: 'boolean' } } }), responses: created(ref('Deployment')) } },
   '/versions/{id}/export': { get: { tags: ['Import/Export'], summary: 'Export a version as a jBPM kjar (file map)', parameters: [idParam()], responses: ok({ type: 'object', properties: { files: { type: 'object', additionalProperties: { type: 'string' } } } }) } },
+  '/versions/{id}/export-engine': { get: { tags: ['Import/Export'], summary: 'Export version engine JSON for Node engine runner', parameters: [idParam()], responses: ok({ type: 'object' }) } },
+  '/versions/{id}/jbpm-compatibility': { get: { tags: ['Import/Export'], summary: 'Inspect version compatibility with jBPM KIE runtime', parameters: [idParam()], responses: ok({ type: 'object', properties: { compatible: { type: 'boolean' }, errors: { type: 'array', items: { type: 'string' } }, warnings: { type: 'array', items: { type: 'string' } } } }) } },
 
   '/deployments': { get: { tags: ['Deployments'], summary: 'List deployments across all projects', parameters: [q('workflowId', 'Filter by project'), q('environment', 'Filter by environment'), q('status', 'Filter by status')], responses: ok(listOf('Deployment')) } },
   '/workflows/{id}/deployments': { get: { tags: ['Deployments'], summary: 'List deployments for a project', parameters: [idParam()], responses: ok(listOf('Deployment')) } },

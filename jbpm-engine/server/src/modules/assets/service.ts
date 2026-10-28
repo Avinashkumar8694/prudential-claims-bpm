@@ -10,6 +10,10 @@ import { WorkflowService } from '../workflows/service.ts';
 import { VersionService } from '../versions/service.ts';
 import { ASSET_KINDS, ASSET_DEFS } from '../../assets/index.ts';
 import { notFound, validation, conflict } from '../../infra/errors.ts';
+import {
+  evaluateDmn, evaluateRules, evaluateDecisionTree, evaluateScorecard,
+  evaluateGuidedTable, evaluateTestScenario,
+} from '../../engine/decisioning.ts';
 
 export interface AssetRef { kind: string; process: string; nodeId?: string; nodeName?: string; via: string; }
 
@@ -46,6 +50,7 @@ export class AssetsService {
         if (kind === 'forms' && (n as any).type === 'userTask' && (n as any).form === name) push('form');
         if (kind === 'rulesets' && (n as any).type === 'rule' && (n as any).ruleflowGroup === name) push('ruleflowGroup');
         if (kind === 'decisions' && (n as any).type === 'rule' && (n as any).dmn?.model === name) push('dmn.model');
+        if (kind === 'guidedTables' && (n as any).type === 'rule' && (n as any).guidedTable === name) push('guidedTable');
         if (kind === 'decisionTrees' && (n as any).type === 'rule' && (n as any).decisionTree === name) push('decisionTree');
         if (kind === 'scorecards' && (n as any).type === 'rule' && (n as any).scorecard === name) push('scorecard');
         if (kind === 'messages') {
@@ -103,7 +108,7 @@ export class AssetsService {
     const { branchId, engine } = await this.head(projectId);
     const coll = ((engine as any)[kind] ||= []) as any[];
     if (coll.some((a) => (a[def.nameField] || a.name) === nm)) throw validation(`asset "${nm}" already exists`);
-    const seeded = def.seed(nm);
+    const seeded = def.seed(nm, fields);
     if (fields && typeof fields === 'object') {
       for (const k of Object.keys(seeded)) {
         if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
@@ -177,5 +182,92 @@ export class AssetsService {
     coll.splice(idx, 1);
     await this.ver.saveDraft(branchId, engine, actor);
     await this.ctx.audit({ actor, kind: 'asset.removed', workflowId: projectId, data: { kind, name } });
+  }
+
+  /** Run/test an asset based on its purpose (e.g. evaluate DMN/DRL/table/tree/scorecard, validate form/type, or run test suite). */
+  async testAsset(projectId: string, kind: string, name: string, inputPayload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const { engine } = await this.head(projectId);
+    const asset = this.findRaw(engine, kind, name);
+    if (!asset) throw notFound(`asset "${name}"`);
+
+    switch (kind) {
+      case 'decisions': {
+        const decisionName = (inputPayload.decision as string) || '';
+        const vars = (inputPayload.inputs || inputPayload.vars || inputPayload) as Record<string, unknown>;
+        const result = evaluateDmn(engine, { model: name, decision: decisionName }, vars);
+        return { success: true, kind, name, outputs: result };
+      }
+      case 'rulesets': {
+        const vars = (inputPayload.vars || inputPayload) as Record<string, unknown>;
+        const result = evaluateRules(engine, name, vars);
+        return { success: true, kind, name, outputs: result };
+      }
+      case 'guidedTables': {
+        const vars = (inputPayload.vars || inputPayload) as Record<string, unknown>;
+        const result = evaluateGuidedTable(engine, name, vars);
+        return { success: true, kind, name, outputs: result };
+      }
+      case 'decisionTrees': {
+        const vars = (inputPayload.vars || inputPayload) as Record<string, unknown>;
+        const result = evaluateDecisionTree(engine, name, vars);
+        return { success: true, kind, name, outputs: result };
+      }
+      case 'scorecards': {
+        const vars = (inputPayload.vars || inputPayload) as Record<string, unknown>;
+        const result = evaluateScorecard(engine, name, vars);
+        return { success: true, kind, name, outputs: result };
+      }
+      case 'tests': {
+        const result = evaluateTestScenario(engine, name);
+        return { success: true, kind, name, ...result };
+      }
+      case 'forms': {
+        const submission = (inputPayload.submission || inputPayload) as Record<string, unknown>;
+        const fields = (asset.fields || []) as any[];
+        const errors: string[] = [];
+        for (const f of fields) {
+          const val = submission[f.bind];
+          if (f.required && (val === undefined || val === null || val === '')) {
+            errors.push(`Field "${f.label || f.bind}" is required`);
+          }
+          if (val !== undefined && val !== null && val !== '') {
+            if ((f.widget === 'integer' || f.widget === 'number' || f.widget === 'decimal') && isNaN(Number(val))) {
+              errors.push(`Field "${f.label || f.bind}" must be a number`);
+            }
+          }
+        }
+        return { success: errors.length === 0, valid: errors.length === 0, errors, submission };
+      }
+      case 'types': {
+        const obj = (inputPayload.object || inputPayload) as Record<string, unknown>;
+        const typeFields = (asset.fields || []) as any[];
+        const errors: string[] = [];
+        for (const f of typeFields) {
+          const val = obj[f.name];
+          if (f.list && val !== undefined && !Array.isArray(val)) {
+            errors.push(`Property "${f.name}" must be a list/array`);
+          }
+        }
+        return { success: errors.length === 0, valid: errors.length === 0, errors, sample: obj };
+      }
+      case 'enumerations': {
+        const testVal = (inputPayload.value as string) || '';
+        const allowedVals = (asset.values || (asset.entries && asset.entries[Object.keys(asset.entries)[0]]) || []) as string[];
+        const allowed = allowedVals.includes(testVal);
+        return { success: true, allowed, value: testVal, allowedValues: allowedVals };
+      }
+      case 'messages': {
+        return {
+          success: true,
+          name,
+          dataType: asset.dataType || 'Object',
+          correlationKey: asset.correlationKey || 'correlationId',
+          description: asset.description,
+          activeReferences: this.findRefs(engine, kind, name),
+        };
+      }
+      default:
+        throw validation(`testing not supported for asset kind "${kind}"`);
+    }
   }
 }

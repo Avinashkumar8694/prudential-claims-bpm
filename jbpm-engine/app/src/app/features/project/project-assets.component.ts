@@ -6,22 +6,63 @@ import { ModalService } from '../../shared/modal.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AssetFieldsComponent } from './asset-fields.component';
 
-interface ExtraField { key: string; label: string; type: 'text' | 'number'; placeholder?: string; }
+interface ExtraField {
+  key: string;
+  label: string;
+  type: 'text' | 'number' | 'select';
+  placeholder?: string;
+  options?: string[];
+  default?: any;
+  help?: string;
+}
 
-// Each kind's only real schema is its seed() shape on the backend (src/assets/*/def.ts) — these extra
-// fields mirror that shape exactly, dot-paths nest (e.g. forms' 'model.className' → { model: { className } }).
-// Kinds not listed here (decisions, enumerations, types, messages) only take the name/nameField itself;
-// their seed shape is either just a name or starts with empty arrays/objects there's no useful upfront field for.
+// Each kind's schema and initial seed fields for creation dialogs tailored to each asset kind
 const EXTRA_FIELDS: Record<string, ExtraField[]> = {
-  forms: [{ key: 'model.className', label: 'Backing class', type: 'text', placeholder: 'com.acme.ClaimIntake' }],
-  guidedTables: [{ key: 'fact', label: 'Fact type', type: 'text', placeholder: 'Claim' }],
-  decisionTrees: [{ key: 'fact', label: 'Fact type', type: 'text', placeholder: 'Claim' }],
-  scorecards: [
-    { key: 'fact', label: 'Fact type', type: 'text', placeholder: 'Claim' },
-    { key: 'baseline', label: 'Baseline score', type: 'number', placeholder: '0' },
-    { key: 'target', label: 'Target field', type: 'text', placeholder: 'score' },
+  forms: [
+    { key: 'model.className', label: 'Backing Data Object / Class', type: 'text', placeholder: 'com.acme.model.ClaimForm', help: 'Java FQN or type name this form binds to' },
   ],
-  tests: [{ key: 'target', label: 'Target process/decision', type: 'text' }],
+  rulesets: [
+    { key: 'package', label: 'Java Package', type: 'text', placeholder: 'com.acme.rules', default: 'com.acme.rules', help: 'Package name for generated .drl' },
+    { key: 'ruleName', label: 'Initial Rule Name', type: 'text', placeholder: 'Standard Evaluation' },
+    { key: 'fact', label: 'Target Fact Type', type: 'text', placeholder: 'Claim' },
+  ],
+  decisions: [
+    { key: 'hitPolicy', label: 'Hit Policy', type: 'select', options: ['UNIQUE', 'FIRST', 'ANY', 'COLLECT'], default: 'UNIQUE', help: 'How matching rules are aggregated' },
+    { key: 'inputs', label: 'Input Variables (comma-separated)', type: 'text', placeholder: 'amount, creditScore' },
+    { key: 'outputs', label: 'Output Variables (comma-separated)', type: 'text', placeholder: 'approved, discount' },
+  ],
+  guidedTables: [
+    { key: 'fact', label: 'Fact Type', type: 'text', placeholder: 'Claim', help: 'The fact type the table conditions evaluate' },
+    { key: 'package', label: 'Package', type: 'text', placeholder: 'com.acme.rules', default: 'com.acme.rules' },
+  ],
+  decisionTrees: [
+    { key: 'fact', label: 'Fact Type', type: 'text', placeholder: 'Claim' },
+    { key: 'field', label: 'Root Test Field', type: 'text', placeholder: 'amount', help: 'Initial field tested at the root node' },
+    { key: 'package', label: 'Package', type: 'text', placeholder: 'com.acme.rules', default: 'com.acme.rules' },
+  ],
+  scorecards: [
+    { key: 'fact', label: 'Fact Type', type: 'text', placeholder: 'Claim' },
+    { key: 'baseline', label: 'Baseline Score', type: 'number', placeholder: '100', default: 100 },
+    { key: 'target', label: 'Target Score Field', type: 'text', placeholder: 'riskScore', default: 'riskScore' },
+    { key: 'package', label: 'Package', type: 'text', placeholder: 'com.acme.rules', default: 'com.acme.rules' },
+  ],
+  enumerations: [
+    { key: 'fact', label: 'Fact / Type Name', type: 'text', placeholder: 'Claim', help: 'Data type this enumeration applies to' },
+    { key: 'field', label: 'Field Name', type: 'text', placeholder: 'status' },
+    { key: 'values', label: 'Allowed Values (comma-separated)', type: 'text', placeholder: 'NEW, PENDING, APPROVED, REJECTED' },
+  ],
+  types: [
+    { key: 'package', label: 'Java Package', type: 'text', placeholder: 'com.acme.model', default: 'com.acme.model', help: 'Package for generated POJO .java' },
+  ],
+  messages: [
+    { key: 'dataType', label: 'Payload Data Type (Java FQN / Object)', type: 'text', placeholder: 'com.acme.model.Claim', default: 'Object' },
+    { key: 'correlationKey', label: 'Correlation Property', type: 'text', placeholder: 'claimId', default: 'correlationId', help: 'Instance variable name used for correlation' },
+    { key: 'description', label: 'Description', type: 'text', placeholder: 'Event contract for messaging' },
+  ],
+  tests: [
+    { key: 'target', label: 'Target Asset (Decision / Ruleset / Table)', type: 'text', placeholder: 'Eligibility', help: 'Asset name to test' },
+    { key: 'description', label: 'Description', type: 'text', placeholder: 'Unit test suite' },
+  ],
 };
 
 interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: number; }
@@ -104,13 +145,23 @@ interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: numb
           <div class="modal-h"><span>Add asset</span><span class="spacer"></span><button class="x" (click)="closeAdd()" aria-label="Close"><app-icon name="close" [size]="15" /></button></div>
           <div class="modal-body">
             <label class="fld"><span>Kind</span>
-              <select [(ngModel)]="addKind">
+              <select [(ngModel)]="addKind" (ngModelChange)="onKindChange($event)">
                 @for (k of ctx.assetKinds(); track k.key) { <option [value]="k.key">{{ k.label }}</option> }
               </select>
             </label>
             <label class="fld"><span>{{ nameFieldLabel(addKind) }}</span><input [(ngModel)]="addName" [placeholder]="nameFieldLabel(addKind)" /></label>
             @for (f of extraFields(addKind); track f.key) {
-              <label class="fld"><span>{{ f.label }}</span><input [type]="f.type" [placeholder]="f.placeholder || f.label" [ngModel]="fv()[f.key]" (ngModelChange)="fv()[f.key] = $event" /></label>
+              <label class="fld">
+                <span>{{ f.label }}</span>
+                @if (f.type === 'select') {
+                  <select [ngModel]="fv()[f.key] || f.default || ''" (ngModelChange)="fv()[f.key] = $event">
+                    @for (opt of f.options; track opt) { <option [value]="opt">{{ opt }}</option> }
+                  </select>
+                } @else {
+                  <input [type]="f.type" [placeholder]="f.placeholder || f.label" [ngModel]="fv()[f.key] || f.default || ''" (ngModelChange)="fv()[f.key] = $event" />
+                }
+                @if (f.help) { <small class="help-txt">{{ f.help }}</small> }
+              </label>
             }
             <button class="btn primary full" (click)="submitAdd()">Add asset</button>
           </div>
@@ -126,27 +177,167 @@ interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: numb
             <button class="x" (click)="closeDetail()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
           </div>
           <div class="modal-body">
-            <div class="section-title first">Referenced by</div>
-            @if (d.usedBy.length) {
-              <div class="panel-list">
-                @for (r of d.usedBy; track r.process + (r.nodeId || '')) {
-                  <div class="prow"><span>{{ r.process }}@if (r.nodeName) { · {{ r.nodeName }} }</span><span class="muted sm">{{ r.via }}</span></div>
+            <div class="subtabs">
+              <button class="subtab-btn" [class.active]="detailTab() === 'config'" (click)="detailTab.set('config')">
+                <app-icon name="edit" [size]="13" /> Configuration
+              </button>
+              <button class="subtab-btn" [class.active]="detailTab() === 'test'" (click)="openTestTab(d)">
+                <app-icon name="play" [size]="13" /> Test & Simulate
+              </button>
+            </div>
+
+            @if (detailTab() === 'config') {
+              <div class="section-title first">Referenced by</div>
+              @if (d.usedBy.length) {
+                <div class="panel-list">
+                  @for (r of d.usedBy; track r.process + (r.nodeId || '')) {
+                    <div class="prow"><span>{{ r.process }}@if (r.nodeName) { · {{ r.nodeName }} }</span><span class="muted sm">{{ r.via }}</span></div>
+                  }
+                </div>
+                <p class="muted sm">Deletion is blocked while anything above still points at this asset.</p>
+              } @else {
+                <p class="muted sm">Not referenced by any process — safe to delete.</p>
+              }
+
+              <div class="section-title">Configuration</div>
+              <app-asset-fields [kind]="d.row.kind" [value]="d.raw" />
+              @if (detailError()) { <p class="err">{{ detailError() }}</p> }
+
+              <div class="row actionrow">
+                <button class="btn primary sm" (click)="saveDetail()">Save</button>
+                <button class="btn sm" (click)="rename(d.row)">Rename</button>
+                <button class="btn sm danger" [disabled]="d.row.usedBy > 0" [title]="d.row.usedBy > 0 ? 'Referenced by ' + d.row.usedBy + ' node(s)' : ''" (click)="deleteFromDetail(d.row)">Delete</button>
+              </div>
+            } @else {
+              <!-- Test & Simulate Panel -->
+              <div class="test-panel">
+                <div class="test-header">
+                  <div>
+                    <h4 class="test-title">Test {{ d.row.kindLabel }}: {{ d.row.name }}</h4>
+                    <p class="test-desc">{{ testPurposeDesc(d.row.kind) }}</p>
+                  </div>
+                  <button class="btn primary" [disabled]="testLoading()" (click)="runTest(d)">
+                    <app-icon name="play" [size]="13" /> {{ testButtonLabel(d.row.kind) }}
+                  </button>
+                </div>
+
+                @if (d.row.kind === 'tests') {
+                  <div class="test-scenarios-panel">
+                    <p class="muted sm">Runs all test cases against target: <strong>{{ d.raw.target || 'None' }}</strong></p>
+                    <div class="cases-preview">
+                      @for (c of d.raw.cases || []; track $index) {
+                        <div class="case-card">
+                          <div class="case-name"><strong>Case {{ $index + 1 }}:</strong> {{ c.name || 'Unnamed' }}</div>
+                          <div class="case-io">
+                            <span class="io-lbl">Given:</span> <code>{{ jsonStr(c.given) }}</code>
+                            <span class="io-lbl">Expect:</span> <code>{{ jsonStr(c.expect) }}</code>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                } @else if (d.row.kind === 'forms') {
+                  <div class="test-form-preview card">
+                    <div class="sec-h">{{ d.raw.name }} Live Interactive Preview</div>
+                    <div class="form-grid">
+                      @for (f of d.raw.fields || []; track f.bind) {
+                        <div class="fld">
+                          <label>{{ f.label || f.bind }} @if (f.required) { <span class="req">*</span> }</label>
+                          @if (f.widget === 'textarea') {
+                            <textarea [(ngModel)]="testInputs[f.bind]" [placeholder]="f.placeholder || ''"></textarea>
+                          } @else if (f.widget === 'checkbox' || f.widget === 'boolean') {
+                            <label class="chk"><input type="checkbox" [(ngModel)]="testInputs[f.bind]" /> <span>{{ f.label || f.bind }}</span></label>
+                          } @else if (f.widget === 'number' || f.widget === 'integer' || f.widget === 'decimal') {
+                            <input type="number" [(ngModel)]="testInputs[f.bind]" [placeholder]="f.placeholder || ''" />
+                          } @else if (f.widget === 'date') {
+                            <input type="date" [(ngModel)]="testInputs[f.bind]" />
+                          } @else {
+                            <input type="text" [(ngModel)]="testInputs[f.bind]" [placeholder]="f.placeholder || ''" />
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                } @else if (d.row.kind === 'types') {
+                  <div class="java-preview-card card">
+                    <div class="java-hdr">
+                      <span>Generated jBPM Data Object POJO ({{ d.raw.package || 'com.acme.model' }}.{{ d.raw.name }})</span>
+                      <button class="btn sm ghost" (click)="copyJava(generateJavaPojo(d.raw))">
+                        {{ copiedJava() ? 'Copied!' : 'Copy .java' }}
+                      </button>
+                    </div>
+                    <pre class="code-box"><code>{{ generateJavaPojo(d.raw) }}</code></pre>
+                  </div>
+                } @else if (d.row.kind === 'enumerations') {
+                  <div class="enum-preview card">
+                    <label class="fld">
+                      <span>Form / Task Dropdown Preview for {{ d.raw.type || 'Claim' }}.{{ d.raw.field || 'status' }}</span>
+                      <select [(ngModel)]="testInputs['value']">
+                        @for (v of getEnumValues(d.raw); track v) {
+                          <option [value]="v">{{ v }}</option>
+                        }
+                      </select>
+                    </label>
+                  </div>
+                } @else {
+                  <!-- Standard input parameters grid -->
+                  <div class="card test-inputs-card">
+                    <div class="sec-h">Test Input Variables</div>
+                    <div class="test-inputs-grid">
+                      @for (key of getTestInputKeys(); track key) {
+                        <div class="fld">
+                          <label>{{ key }}</label>
+                          <input [(ngModel)]="testInputs[key]" [placeholder]="key" />
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+
+                @if (testError()) {
+                  <div class="err-box card">
+                    <app-icon name="error" [size]="16" /> {{ testError() }}
+                  </div>
+                }
+
+                @if (testResult(); as res) {
+                  <div class="result-box card">
+                    <div class="result-hdr">
+                      <span class="badge" [class.active]="res.success || res.valid" [class.inactive]="res.valid === false || res.failed > 0">
+                        {{ res.failed > 0 ? (res.passed + '/' + res.total + ' Passed') : (res.valid === false ? 'Validation Failed' : 'Success') }}
+                      </span>
+                      <span class="muted sm">Execution Result</span>
+                    </div>
+
+                    @if (res.cases) {
+                      <div class="scenario-results">
+                        @for (c of res.cases; track $index) {
+                          <div class="scen-card" [class.pass]="c.pass" [class.fail]="!c.pass">
+                            <div class="scen-hdr">
+                              <span class="badge" [class.active]="c.pass" [class.inactive]="!c.pass">{{ c.pass ? 'PASS' : 'FAIL' }}</span>
+                              <strong>{{ c.name }}</strong>
+                            </div>
+                            @if (!c.pass && c.failures?.length) {
+                              <div class="diff-box">
+                                @for (f of c.failures; track f.field) {
+                                  <div>Property <strong>{{ f.field }}</strong>: expected <code>{{ jsonStr(f.expected) }}</code> but got <code>{{ jsonStr(f.actual) }}</code></div>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
+                      </div>
+                    } @else if (res.errors?.length) {
+                      <ul class="err-list">
+                        @for (e of res.errors; track e) { <li>{{ e }}</li> }
+                      </ul>
+                    } @else {
+                      <pre class="res-json"><code>{{ jsonStr(res.outputs || res) }}</code></pre>
+                    }
+                  </div>
                 }
               </div>
-              <p class="muted sm">Deletion is blocked while anything above still points at this asset.</p>
-            } @else {
-              <p class="muted sm">Not referenced by any process — safe to delete.</p>
             }
-
-            <div class="section-title">Configuration</div>
-            <app-asset-fields [kind]="d.row.kind" [value]="d.raw" />
-            @if (detailError()) { <p class="err">{{ detailError() }}</p> }
-
-            <div class="row actionrow">
-              <button class="btn primary sm" (click)="saveDetail()">Save</button>
-              <button class="btn sm" (click)="rename(d.row)">Rename</button>
-              <button class="btn sm danger" [disabled]="d.row.usedBy > 0" [title]="d.row.usedBy > 0 ? 'Referenced by ' + d.row.usedBy + ' node(s)' : ''" (click)="deleteFromDetail(d.row)">Delete</button>
-            </div>
           </div>
         </div>
       </div>
@@ -197,10 +388,52 @@ interface AssetRow { kind: string; kindLabel: string; name: string; usedBy: numb
     .modal { background: var(--surface); border-radius: 14px; width: 440px; max-width: 92vw; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
     /* Wide enough that a rule's nested When/Then panels (see asset-fields.component) get real room —
        narrower and every nested list cramps back down to the single column this is meant to avoid. */
-    .modal.wide { width: 760px; max-width: 94vw; max-height: 86vh; }
+    .modal.wide { width: 820px; max-width: 95vw; max-height: 88vh; }
     .modal-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; }
     .modal-h .x { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); }
     .modal-body { padding: 16px 18px; overflow: auto; }
+
+    .subtabs { display: flex; gap: 8px; border-bottom: 1px solid var(--border); margin: -4px 0 14px; padding-bottom: 8px; }
+    .subtab-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); padding: 6px 12px; border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+    .subtab-btn:hover { background: var(--surface-2); }
+    .subtab-btn.active { background: var(--primary-50); border-color: var(--primary-200, var(--primary)); color: var(--primary); }
+
+    .test-panel { display: flex; flex-direction: column; gap: 14px; }
+    .test-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .test-title { font-size: 15px; font-weight: 700; margin: 0; }
+    .test-desc { font-size: 12px; color: var(--muted); margin: 4px 0 0; line-height: 1.4; }
+    .test-scenarios-panel, .test-form-preview, .java-preview-card, .enum-preview, .test-inputs-card { padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+    .cases-preview { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .case-card { padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+    .case-name { font-size: 12.5px; margin-bottom: 3px; }
+    .case-io { font-size: 11.5px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .io-lbl { color: var(--muted); font-weight: 600; }
+    .case-io code { background: var(--surface-2); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 11px; }
+
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 6px; }
+    .req { color: var(--red); }
+    .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; margin-top: 4px; }
+    .chk input { width: auto; margin: 0; }
+
+    .java-hdr { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 600; margin-bottom: 8px; }
+    .code-box { background: var(--surface-3); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 11.5px; overflow-x: auto; max-height: 240px; margin: 0; font-family: monospace; }
+
+    .test-inputs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 6px; }
+    .sec-h { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+
+    .err-box { border: 1px solid var(--red); background: rgba(239, 68, 68, 0.08); color: var(--red); padding: 10px 14px; border-radius: 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; }
+    .result-box { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+    .result-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .scenario-results { display: flex; flex-direction: column; gap: 6px; }
+    .scen-card { padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+    .scen-card.pass { border-color: rgba(34, 197, 94, 0.35); background: rgba(34, 197, 94, 0.04); }
+    .scen-card.fail { border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.04); }
+    .scen-hdr { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+    .diff-box { margin-top: 6px; font-size: 12px; color: var(--red); background: var(--surface); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(239, 68, 68, 0.2); }
+    .diff-box code { background: var(--surface-2); padding: 1px 4px; border-radius: 3px; font-family: monospace; }
+    .res-json { margin: 0; font-size: 11.5px; background: var(--surface); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border); overflow-x: auto; max-height: 220px; font-family: monospace; }
+    .help-txt { font-size: 11px; color: var(--muted); margin-top: 2px; display: block; }
+    .err-list { margin: 0; padding-left: 20px; color: var(--red); font-size: 12.5px; }
   `],
 })
 export class ProjectAssetsComponent {
@@ -223,6 +456,14 @@ export class ProjectAssetsComponent {
 
   detail = signal<{ row: AssetRow; usedBy: { kind: string; process: string; nodeId?: string; nodeName?: string; via: string }[]; raw: any } | null>(null);
   detailError = signal('');
+  detailTab = signal<'config' | 'test'>('config');
+
+  // Test & Simulation State
+  testLoading = signal<boolean>(false);
+  testResult = signal<any>(null);
+  testError = signal<string>('');
+  copiedJava = signal<boolean>(false);
+  testInputs: Record<string, any> = {};
 
   allRows = computed<AssetRow[]>(() => {
     const out: AssetRow[] = [];
@@ -243,10 +484,20 @@ export class ProjectAssetsComponent {
   fv() { return this.fieldVal; }
   nameFieldLabel(kind: string): string { return this.ctx.assetKinds().find((k) => k.key === kind)?.nameField === 'group' ? 'Ruleflow group name' : 'Name'; }
 
-  openAdd() {
-    this.addKind = this.ctx.assetKinds()[0]?.key || '';
-    this.addName = '';
+  onKindChange(kind: string) {
+    this.addKind = kind;
     this.fieldVal = {};
+    for (const f of this.extraFields(kind)) {
+      if (f.default !== undefined) {
+        this.fieldVal[f.key] = String(f.default);
+      }
+    }
+  }
+
+  openAdd() {
+    const firstKind = this.ctx.assetKinds()[0]?.key || 'forms';
+    this.onKindChange(firstKind);
+    this.addName = '';
     this.adding.set(true);
   }
   closeAdd() { this.adding.set(false); }
@@ -276,11 +527,190 @@ export class ProjectAssetsComponent {
       next: (r) => {
         this.detail.set({ row, usedBy: r.usedBy, raw: r.asset });
         this.detailError.set('');
+        this.detailTab.set('config');
       },
       error: (e) => this.toast.error(e?.error?.error?.message || 'Could not load asset'),
     });
   }
   closeDetail() { this.detail.set(null); }
+
+  openTestTab(d: any) {
+    this.detailTab.set('test');
+    this.testResult.set(null);
+    this.testError.set('');
+    this.initTestData(d.raw, d.row.kind);
+  }
+
+  initTestData(raw: any, kind: string) {
+    this.testInputs = {};
+    if (kind === 'forms') {
+      for (const f of raw?.fields || []) {
+        this.testInputs[f.bind] = f.widget === 'checkbox' || f.widget === 'boolean' ? false : (f.default ?? '');
+      }
+    } else if (kind === 'enumerations') {
+      const vals = this.getEnumValues(raw);
+      this.testInputs['value'] = vals[0] || 'NEW';
+    } else if (kind === 'decisions') {
+      if (Array.isArray(raw?.inputs)) {
+        for (const inp of raw.inputs) {
+          const k = typeof inp === 'string' ? inp : (inp.name || inp.id);
+          if (k) this.testInputs[k] = 100;
+        }
+      }
+      if (!Object.keys(this.testInputs).length) {
+        this.testInputs['amount'] = 1000;
+        this.testInputs['creditScore'] = 720;
+      }
+    } else if (kind === 'rulesets') {
+      this.testInputs['amount'] = 2500;
+      this.testInputs['region'] = 'NA';
+      this.testInputs['status'] = 'NEW';
+    } else if (kind === 'guidedTables') {
+      if (Array.isArray(raw?.conditions)) {
+        for (const c of raw.conditions) {
+          if (c.field) this.testInputs[c.field] = c.field === 'amount' ? 500 : (c.field === 'region' ? 'US' : 'VALID');
+        }
+      }
+      if (!Object.keys(this.testInputs).length) {
+        this.testInputs['amount'] = 500;
+        this.testInputs['region'] = 'US';
+      }
+    } else if (kind === 'decisionTrees') {
+      this.testInputs[raw?.field || 'amount'] = 1500;
+      this.testInputs['riskScore'] = 80;
+    } else if (kind === 'scorecards') {
+      this.testInputs['amount'] = 1200;
+      this.testInputs['age'] = 35;
+    } else if (kind === 'messages') {
+      this.testInputs['correlationId'] = 'CLAIM-1001';
+      this.testInputs['payload'] = { id: 'CLAIM-1001', amount: 500 };
+    }
+  }
+
+  getTestInputKeys(): string[] {
+    return Object.keys(this.testInputs);
+  }
+
+  testButtonLabel(kind: string): string {
+    switch (kind) {
+      case 'tests': return 'Run All Scenarios';
+      case 'decisions': return 'Evaluate Decision';
+      case 'rulesets': return 'Fire Rules';
+      case 'guidedTables': return 'Evaluate Table';
+      case 'decisionTrees': return 'Traverse Tree';
+      case 'scorecards': return 'Calculate Scorecard';
+      case 'forms': return 'Validate Submission';
+      case 'enumerations': return 'Validate Value';
+      case 'types': return 'Validate POJO Schema';
+      case 'messages': return 'Inspect Message';
+      default: return 'Execute Test';
+    }
+  }
+
+  testPurposeDesc(kind: string): string {
+    switch (kind) {
+      case 'forms': return 'Test interactive form layout, constraints, required field checks, and payload submission.';
+      case 'rulesets': return 'Execute Drools DRL pattern-matching against fact variables and inspect modified rule outcomes.';
+      case 'decisions': return 'Evaluate DMN decision tables and hit policies against input variables.';
+      case 'guidedTables': return 'Evaluate guided decision table conditions against facts and apply matched actions.';
+      case 'decisionTrees': return 'Traverse decision tree conditions and execute leaf node action consequences.';
+      case 'scorecards': return 'Calculate baseline and characteristic score weights against input attributes.';
+      case 'enumerations': return 'Validate allowed enumeration values and test form/task dropdown integration.';
+      case 'types': return 'Preview generated Java POJO data object definition with getters and setters for jBPM engine compatibility.';
+      case 'messages': return 'Validate BPMN 2.0 message contract, correlation property, and payload structure.';
+      case 'tests': return 'Execute all test scenario cases against the target asset and verify expected vs actual outcomes.';
+      default: return 'Test asset logic and execution.';
+    }
+  }
+
+  runTest(d: any) {
+    this.testLoading.set(true);
+    this.testError.set('');
+    this.testResult.set(null);
+
+    const payload: Record<string, any> = {};
+    for (const [k, v] of Object.entries(this.testInputs)) {
+      if (typeof v === 'string' && v.trim() !== '' && !isNaN(Number(v))) {
+        payload[k] = Number(v);
+      } else {
+        payload[k] = v;
+      }
+    }
+
+    this.ctx.testAsset(d.row.kind, d.row.name, payload).subscribe({
+      next: (res: any) => {
+        this.testLoading.set(false);
+        this.testResult.set(res);
+        if (res.success || res.valid || (res.passed !== undefined && res.failed === 0)) {
+          this.toast.success('Asset test passed');
+        } else if (res.failed > 0) {
+          this.toast.error(`${res.failed} test scenario case(s) failed`);
+        }
+      },
+      error: (err: any) => {
+        this.testLoading.set(false);
+        const msg = err?.error?.error?.message || err?.message || 'Asset test failed';
+        this.testError.set(msg);
+        this.toast.error(msg);
+      }
+    });
+  }
+
+  jsonStr(val: any): string {
+    try {
+      return typeof val === 'object' ? JSON.stringify(val, null, 2) : String(val);
+    } catch {
+      return String(val);
+    }
+  }
+
+  getEnumValues(raw: any): string[] {
+    if (Array.isArray(raw?.values)) return raw.values;
+    if (typeof raw?.values === 'string') {
+      return raw.values.split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+    if (raw?.entries && typeof raw.entries === 'object') {
+      return Object.keys(raw.entries);
+    }
+    return ['NEW', 'PENDING', 'APPROVED', 'REJECTED'];
+  }
+
+  generateJavaPojo(type: any): string {
+    const pkg = type?.package || 'com.acme.model';
+    const className = type?.name || 'DataObject';
+    const fields = Array.isArray(type?.fields) ? type.fields : [];
+    let code = `package ${pkg};\n\n`;
+    code += `/**\n * jBPM Data Object: ${className}\n */\n`;
+    code += `public class ${className} implements java.io.Serializable {\n\n`;
+    code += `    private static final long serialVersionUID = 1L;\n\n`;
+    for (const f of fields) {
+      const fType = f.type || 'String';
+      const fName = f.name || 'field';
+      code += `    private ${fType} ${fName};\n`;
+    }
+    code += `\n    public ${className}() {}\n\n`;
+    for (const f of fields) {
+      const fType = f.type || 'String';
+      const fName = f.name || 'field';
+      const cap = fName.charAt(0).toUpperCase() + fName.slice(1);
+      code += `    public ${fType} get${cap}() {\n        return this.${fName};\n    }\n\n`;
+      code += `    public void set${cap}(${fType} ${fName}) {\n        this.${fName} = ${fName};\n    }\n\n`;
+    }
+    code += `}\n`;
+    return code;
+  }
+
+  copyJava(code: string) {
+    if (navigator?.clipboard) {
+      navigator.clipboard.writeText(code).then(() => {
+        this.copiedJava.set(true);
+        setTimeout(() => this.copiedJava.set(false), 2000);
+      });
+    } else {
+      this.copiedJava.set(true);
+      setTimeout(() => this.copiedJava.set(false), 2000);
+    }
+  }
 
   // AssetFieldsComponent mutates `d.raw` in place (see its [value] input) — Save just re-sends the
   // whole object as the patch. The nameField key inside it always matches d.row.name already (rename

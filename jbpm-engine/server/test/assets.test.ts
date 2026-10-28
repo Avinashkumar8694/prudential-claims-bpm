@@ -57,3 +57,44 @@ test('AssetsService.add: fields cannot inject keys outside the kind\'s seed shap
   assert.strictEqual(engine.messages[0].evil, undefined, 'keys not in the seed shape are dropped');
   assert.strictEqual(({} as any).polluted, undefined, 'no prototype pollution');
 });
+
+test('AssetsService.testAsset evaluates guided decision tables', async () => {
+  const ctx = newCtx();
+  const wf = await new WorkflowService(ctx).create({ name: 'Claims' }, 'a');
+  const assets = new AssetsService(ctx);
+
+  await assets.add(wf.id, 'guidedTables', 'DiscountTable', 'a', { fact: 'Claim' });
+  const res: any = await assets.testAsset(wf.id, 'guidedTables', 'DiscountTable', { vars: { amount: 500 } });
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.outputs.approved, true);
+  assert.strictEqual(res.outputs.discount, 0.1);
+});
+
+test('AssetsService.testAsset runs test scenarios against decisions', async () => {
+  const ctx = newCtx();
+  const wf = await new WorkflowService(ctx).create({ name: 'Claims' }, 'a');
+  const assets = new AssetsService(ctx);
+
+  await assets.add(wf.id, 'decisions', 'Eligibility', 'a');
+  await assets.add(wf.id, 'tests', 'EligibilityTests', 'a', { target: 'Eligibility' });
+  const res: any = await assets.testAsset(wf.id, 'tests', 'EligibilityTests', {});
+  assert.strictEqual(res.success, true);
+  assert.strictEqual(res.total, 2);
+  assert.strictEqual(res.passed, 2);
+  assert.strictEqual(res.failed, 0);
+});
+
+test('AssetsService.testAsset validates form submission against form fields', async () => {
+  const ctx = newCtx();
+  const wf = await new WorkflowService(ctx).create({ name: 'Claims' }, 'a');
+  const assets = new AssetsService(ctx);
+
+  await assets.add(wf.id, 'forms', 'ClaimForm', 'a');
+  const validRes: any = await assets.testAsset(wf.id, 'forms', 'ClaimForm', { submission: { amount: 100, description: 'Medical expense' } });
+  assert.strictEqual(validRes.valid, true);
+  assert.strictEqual(validRes.errors.length, 0);
+
+  const invalidRes: any = await assets.testAsset(wf.id, 'forms', 'ClaimForm', { submission: { amount: '' } });
+  assert.strictEqual(invalidRes.valid, false);
+  assert.strictEqual(invalidRes.errors.length, 1);
+});

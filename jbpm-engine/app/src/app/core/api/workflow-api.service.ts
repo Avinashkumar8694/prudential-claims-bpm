@@ -55,6 +55,9 @@ export class WorkflowApiService extends ApiBase {
   updateAsset(projectId: string, kind: string, name: string, patch: Record<string, unknown>): Observable<{ kind: string; name: string }> {
     return this.http.patch<any>(`${this.base}/workflows/${projectId}/assets/${kind}/${encodeURIComponent(name)}`, patch);
   }
+  testAsset(projectId: string, kind: string, name: string, payload: Record<string, unknown> = {}): Observable<any> {
+    return this.http.post<any>(`${this.base}/workflows/${projectId}/assets/${kind}/${encodeURIComponent(name)}/test`, payload);
+  }
   deleteAsset(projectId: string, kind: string, name: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/workflows/${projectId}/assets/${kind}/${encodeURIComponent(name)}`);
   }

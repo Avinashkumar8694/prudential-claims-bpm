@@ -37,6 +37,7 @@ export const KIND_SCHEMAS: Record<string, AssetSection[]> = {
     ] }] },
   ],
   types: [
+    { title: 'Java Package', fields: [{ key: 'package', label: 'Package', widget: 'text', placeholder: 'com.acme.model' }] },
     { title: 'Fields', fields: [{ key: 'fields', label: 'Fields', itemLabel: 'Field', widget: 'rows', rowFields: [
       { key: 'name', label: 'Name', widget: 'text' },
       { key: 'type', label: 'Type', widget: 'select', options: ['string', 'int', 'long', 'double', 'bool', 'date', 'object'] },
@@ -44,10 +45,21 @@ export const KIND_SCHEMAS: Record<string, AssetSection[]> = {
     ] }] },
   ],
   enumerations: [
-    { title: 'Entries', fields: [{ key: 'entries', label: 'Entries', widget: 'keyval' }] },
+    { title: 'Target', fields: [
+      { key: 'type', label: 'Fact / Data Type', widget: 'text', placeholder: 'Claim' },
+      { key: 'field', label: 'Field Name', widget: 'text', placeholder: 'status' },
+    ] },
+    { title: 'Entries', fields: [{ key: 'entries', label: 'Entries Map (Fact.field = [values])', widget: 'keyval' }] },
   ],
-  messages: [],
+  messages: [
+    { title: 'Message Contract', fields: [
+      { key: 'dataType', label: 'Payload Data Type (Java FQN / Object)', widget: 'text', placeholder: 'com.acme.model.Claim' },
+      { key: 'correlationKey', label: 'Correlation Property', widget: 'text', placeholder: 'claimId', help: 'Process instance variable name matched when delivering throw/catch messages.' },
+      { key: 'description', label: 'Description', widget: 'text', placeholder: 'Event contract for messaging' },
+    ] },
+  ],
   rulesets: [
+    { title: 'Java Package', fields: [{ key: 'package', label: 'Package', widget: 'text', placeholder: 'com.acme.rules' }] },
     { title: 'Rules', fields: [{ key: 'rules', label: 'Rules', itemLabel: 'Rule', widget: 'rows', rowFields: [
       { key: 'name', label: 'Name', widget: 'text' },
       { key: 'priority', label: 'Priority (higher runs first)', widget: 'number' },
@@ -89,7 +101,7 @@ export const KIND_SCHEMAS: Record<string, AssetSection[]> = {
     ] }] },
   ],
   tests: [
-    { title: 'Target', fields: [{ key: 'target', label: 'Target process/decision/ruleset name', widget: 'text', help: 'Not read by anything today — this asset kind is documentation only, exported for tooling outside this app; nothing here re-runs these cases against the target automatically.' }] },
+    { title: 'Target', fields: [{ key: 'target', label: 'Target decision, ruleset, table, tree, or scorecard name', widget: 'text', help: 'The target asset this test suite verifies with Given/Expect assertions.' }] },
     { title: 'Cases', fields: [{ key: 'cases', label: 'Cases', itemLabel: 'Case', widget: 'rows', rowFields: [
       { key: 'name', label: 'Name', widget: 'text' },
       { key: 'given', label: 'Given (input variables)', widget: 'keyval', help: 'Keys should match the target\'s declared input/variable names.' },
@@ -134,7 +146,7 @@ const DECISION_TREE_HELP = "This engine's decision-tree evaluator descends one f
       }
       <button class="add" (click)="addTreeBranch()">+ add branch</button>
     } @else if (kind === 'guidedTables') {
-      <div class="fld"><label>Fact (variable, optional)</label><input [ngModel]="value.fact" (ngModelChange)="value.fact = $event || undefined; emit()" /><small>Documentation only — this asset kind has no runtime consumer in this engine, so nothing here reads Fact/Rows automatically.</small></div>
+      <div class="fld"><label>Fact (variable, optional)</label><input [ngModel]="value.fact" (ngModelChange)="value.fact = $event || undefined; emit()" /><small>The fact variable tested by the table conditions and updated by actions when executed by a business rule task.</small></div>
       <div class="sec-h">Condition columns</div>
       <div class="stringlist">
         @for (c of gtConditions(); track $index) { <div class="lrow"><input [ngModel]="c" (ngModelChange)="setListItem(gtConditions(), $index, $event)" /><button class="x" (click)="removeListItem(gtConditions(), $index)"><app-icon name="close" [size]="11" /></button></div> }

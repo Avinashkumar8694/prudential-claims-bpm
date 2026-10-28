@@ -5,7 +5,7 @@ export interface AssetKindDef {
   key: string;          // engine collection on EngineProject (forms, rulesets, decisions, …)
   label: string;
   nameField: string;    // which field holds the display name (e.g. 'name', 'group')
-  seed: (name: string) => any;
+  seed: (name: string, fields?: Record<string, any>) => any;
 }
 
 export const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
