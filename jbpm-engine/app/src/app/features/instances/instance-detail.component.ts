@@ -1444,13 +1444,18 @@ export class InstanceDetailComponent implements OnDestroy {
     const activeUsernames = (users || []).filter((u) => u.active !== false).map((u) => u.username);
     const to = await this.modal.prompt({
       title: `Delegate: ${t.name}`,
-      message: 'Select a registered user to delegate this case task to:',
+      message: 'Type or select a registered user to delegate this case task to:',
       options: activeUsernames.length ? activeUsernames : undefined,
-      placeholder: 'username',
+      placeholder: 'Type or select username...',
     });
     if (!to || !to.trim()) return;
-    this.wfInstApi.delegate(bc.workflowInstance.id, to.trim(), t.id).subscribe({
-      next: () => { this.toast.success(`Task delegated to ${to.trim()}`); this.load(); },
+    const target = to.trim();
+    if (activeUsernames.length && !activeUsernames.includes(target)) {
+      this.toast.error(`User "${target}" is not a registered active user`);
+      return;
+    }
+    this.wfInstApi.delegate(bc.workflowInstance.id, target, t.id).subscribe({
+      next: () => { this.toast.success(`Task delegated to ${target}`); this.load(); },
       error: (e) => this.toast.error(e?.error?.error?.message || 'Delegate failed'),
     });
   }

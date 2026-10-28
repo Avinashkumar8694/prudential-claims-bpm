@@ -123,25 +123,27 @@ const TABS: { key: Tab; label: string }[] = [
                 </div>
               } @else {
                 <div class="row" style="gap: 8px;">
-                  <select [(ngModel)]="delegateTo" [disabled]="isReadOnly() || !activeUsers().length" style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;">
-                    <option value="" disabled selected>-- Select a registered user to delegate --</option>
+                  <input
+                    [(ngModel)]="delegateTo"
+                    list="delegate-users-list"
+                    [disabled]="isReadOnly() || !activeUsers().length"
+                    placeholder="Type to search or select a registered user..."
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;"
+                  />
+                  <datalist id="delegate-users-list">
                     @if (task()?.group && groupMembers().length) {
-                      <optgroup [label]="'Members of group ' + task()!.group">
-                        @for (u of groupMembers(); track u.id) {
-                          <option [value]="u.username">{{ u.username }} @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
-                        }
-                      </optgroup>
-                      <optgroup label="Other Registered Users">
-                        @for (u of otherUsers(); track u.id) {
-                          <option [value]="u.username">{{ u.username }} @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
-                        }
-                      </optgroup>
-                    } @else {
-                      @for (u of activeUsers(); track u.id) {
-                        <option [value]="u.username">{{ u.username }} @if (u.groups.length) { [{{ u.groups.join(', ') }}] } @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
+                      @for (u of groupMembers(); track u.id) {
+                        <option [value]="u.username">Group: {{ task()!.group }} · {{ u.username }} @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
                       }
                     }
-                  </select>
+                    @for (u of (task()?.group ? otherUsers() : activeUsers()); track u.id) {
+                      <option [value]="u.username">{{ u.username }} @if (u.groups.length) { [{{ u.groups.join(', ') }}] } @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
+                    }
+                  </datalist>
                   <button class="btn sm" [disabled]="isReadOnly() || !delegateTo.trim() || !isValidUser(delegateTo)" (click)="delegate()">Delegate</button>
                 </div>
                 @if (!activeUsers().length) {
@@ -198,12 +200,22 @@ const TABS: { key: Tab; label: string }[] = [
 
               <div class="section-title">Forward to a user or group</div>
               <div class="row" style="gap: 8px; margin-bottom:16px;">
-                <select [(ngModel)]="forwardUser" [disabled]="isReadOnly()" style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;">
-                  <option value="">-- Forward to User (optional) --</option>
+                <input
+                  [(ngModel)]="forwardUser"
+                  list="forward-users-list"
+                  [disabled]="isReadOnly()"
+                  placeholder="Forward to user (type or select)..."
+                  autocomplete="off"
+                  autocorrect="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;"
+                />
+                <datalist id="forward-users-list">
                   @for (u of activeUsers(); track u.id) {
-                    <option [value]="u.username">{{ u.username }}</option>
+                    <option [value]="u.username">{{ u.username }} @if (u.roles.length) { ({{ u.roles.join(', ') }}) }</option>
                   }
-                </select>
+                </datalist>
                 <select [(ngModel)]="forwardGroup" [disabled]="isReadOnly()" style="flex:1; padding: 7px 10px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;">
                   <option value="">-- Forward to Group (optional) --</option>
                   @for (g of groups(); track g.id) {

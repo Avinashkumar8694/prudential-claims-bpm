@@ -16,17 +16,24 @@ import { ModalService } from './modal.service';
           } @else {
             @if (s.message) { <p>{{ s.message }}</p> }
             @if (s.options && s.options.length) {
-              <select
+              <input
                 [ngModel]="s.value"
                 (ngModelChange)="modal.updatePromptValue($event)"
-                class="modal-select"
+                list="modal-prompt-datalist"
+                class="modal-input"
+                [placeholder]="s.placeholder || 'Type to search or select an option...'"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="off"
+                spellcheck="false"
+                (keyup.enter)="confirmPrompt(s.value)"
                 autofocus
-              >
-                <option value="" disabled selected>-- Select an option --</option>
+              />
+              <datalist id="modal-prompt-datalist">
                 @for (opt of s.options; track opt) {
-                  <option [value]="opt">{{ opt }}</option>
+                  <option [value]="opt"></option>
                 }
-              </select>
+              </datalist>
             } @else {
               <input
                 [ngModel]="s.value"

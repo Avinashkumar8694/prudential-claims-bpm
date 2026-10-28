@@ -359,12 +359,17 @@ export class TaskInboxComponent {
     const activeUsernames = (users || []).filter((u) => u.active !== false).map((u) => u.username);
     const to = await this.modal.prompt({
       title: 'Reassign Tasks',
-      message: `Select a registered user to delegate ${actionable.length} selected task(s) to:`,
+      message: `Type or select a registered user to delegate ${actionable.length} selected task(s) to:`,
       options: activeUsernames.length ? activeUsernames : undefined,
-      placeholder: 'username',
+      placeholder: 'Type or select username...',
     });
     if (!to || !to.trim()) return;
-    Promise.all(actionable.map((t) => new Promise<{ ok: boolean }>((res) => this.api.delegateTask(t.id, to.trim()).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
+    const target = to.trim();
+    if (activeUsernames.length && !activeUsernames.includes(target)) {
+      this.toast.error(`User "${target}" is not a registered active user`);
+      return;
+    }
+    Promise.all(actionable.map((t) => new Promise<{ ok: boolean }>((res) => this.api.delegateTask(t.id, target).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
       .then((r) => this.bulkResult('Reassign', r));
   }
 
