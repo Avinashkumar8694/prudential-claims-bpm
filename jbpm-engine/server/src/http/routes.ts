@@ -261,6 +261,7 @@ export function buildRoutes(): Router {
     res.json(await new AuditService(ctxOf(req)).list({ ...rest, limit: limit ? Number(limit) : undefined, offset: offset ? Number(offset) : undefined }));
   }));
   r.get('/audit/facets', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new AuditService(ctxOf(req)).facets())));
+  r.get('/audit/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new AuditService(ctxOf(req)).get(req.params.id))));
 
   // --- notifications (always scoped to the caller — no cross-user reads) ---
   r.get('/notifications', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).listFor(actorOf(req), { unread: req.query.unread === 'true', limit: req.query.limit ? Number(req.query.limit) : undefined }))));

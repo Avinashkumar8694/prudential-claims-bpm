@@ -59,6 +59,11 @@ export const routes: Routes = [
         loadComponent: () => import('./features/ops/audit-log.component').then((m) => m.AuditLogComponent),
       },
       {
+        path: 'audit/:id',
+        canActivate: [permissionGuard('admin:iam')],
+        loadComponent: () => import('./features/ops/audit-detail.component').then((m) => m.AuditDetailComponent),
+      },
+      {
         path: 'admin',
         canActivate: [permissionGuard('admin:iam')],
         loadComponent: () => import('./features/admin/admin-shell.component').then((m) => m.AdminShellComponent),

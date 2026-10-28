@@ -2,6 +2,7 @@
 // The Audit Log screen filters on actor / kind / entity ids / time and pages newest-first.
 import type { AppContext } from '../../context.ts';
 import { Collections, type AuditEvent } from '../../domain.ts';
+import { notFound } from '../../infra/errors.ts';
 
 export interface AuditQuery {
   actor?: string;
@@ -47,5 +48,11 @@ export class AuditService {
       kinds: [...new Set(all.map((e) => e.kind))].sort(),
       actors: [...new Set(all.map((e) => e.actor))].sort(),
     };
+  }
+
+  async get(id: string): Promise<AuditEvent> {
+    const ev = await this.repo().get(id);
+    if (!ev || ev.tenantId !== this.ctx.tenantId) throw notFound('audit event not found');
+    return ev;
   }
 }

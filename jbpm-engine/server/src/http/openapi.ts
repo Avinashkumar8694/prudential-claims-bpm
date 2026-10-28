@@ -180,6 +180,7 @@ const paths: Record<string, any> = {
 
   '/audit': { get: { tags: ['Governance'], summary: 'Audit log (admin)', parameters: [q('actor', 'Filter by actor'), q('kind', "Exact kind or prefix ending in '.' (e.g. 'task.')"), q('workflowId', 'Filter by project'), q('deploymentId', 'Filter by deployment'), q('instanceId', 'Filter by instance'), q('taskId', 'Filter by task'), q('from', 'ISO lower bound'), q('to', 'ISO upper bound'), q('limit', 'Page size'), q('offset', 'Page offset')], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('AuditEvent') }, total: { type: 'integer' } } }) } },
   '/audit/facets': { get: { tags: ['Governance'], summary: 'Distinct kinds + actors for the filter dropdowns (admin)', responses: ok({ type: 'object', properties: { kinds: { type: 'array', items: { type: 'string' } }, actors: { type: 'array', items: { type: 'string' } } } }) } },
+  '/audit/{id}': { get: { tags: ['Governance'], summary: 'Get an audit event (admin)', parameters: [idParam()], responses: ok(ref('AuditEvent')) } },
 
   '/notifications': { get: { tags: ['Notifications'], summary: "The caller's notifications (bell panel)", parameters: [q('unread', 'true = unread only'), q('limit', 'Max rows (default 50)')], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('Notification') }, unread: { type: 'integer' } } }) } },
   '/notifications/read-all': { post: { tags: ['Notifications'], summary: 'Mark all read', responses: ok({ type: 'object', properties: { marked: { type: 'integer' } } }) } },
