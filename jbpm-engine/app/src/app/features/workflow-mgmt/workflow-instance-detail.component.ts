@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { JsonPipe, SlicePipe } from '@angular/common';
+import { catchError, finalize, forkJoin, of } from 'rxjs';
 import { WorkflowInstanceApiService } from '../../core/api/workflow-instance-api.service';
 import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
 import { ModalService } from '../../shared/modal.service';
@@ -175,15 +176,21 @@ export class WorkflowInstanceDetailComponent {
 
   load() {
     this.loading.set(true);
-    this.api.aggregate(this.id).subscribe({
-      next: (a) => {
-        this.agg.set(a); this.loading.set(false);
-        this.dataText = JSON.stringify(a.workflowInstance.data, null, 2);
+    forkJoin({
+      agg: this.api.aggregate(this.id),
+      comments: this.api.listComments(this.id).pipe(catchError(() => of([]))),
+      audits: this.api.listAudits(this.id).pipe(catchError(() => of([]))),
+    }).pipe(
+      finalize(() => this.loading.set(false))
+    ).subscribe({
+      next: ({ agg, comments, audits }) => {
+        this.agg.set(agg);
+        this.dataText = JSON.stringify(agg.workflowInstance.data, null, 2);
+        this.comments.set(comments);
+        this.audits.set(audits);
       },
-      error: (e) => { this.loading.set(false); this.toast.error(e?.error?.error?.message || 'Could not load workflow instance'); },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Could not load workflow instance'),
     });
-    this.api.listComments(this.id).subscribe((c) => this.comments.set(c));
-    this.api.listAudits(this.id).subscribe((a) => this.audits.set(a));
   }
 
   saveData() {

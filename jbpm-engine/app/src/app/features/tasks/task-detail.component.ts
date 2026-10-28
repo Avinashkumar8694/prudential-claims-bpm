@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
+import { catchError, finalize, forkJoin, of, switchMap, tap } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { TaskApiService } from '../../core/api/task-api.service';
 import { InstanceApiService } from '../../core/api/instance-api.service';
@@ -333,30 +334,34 @@ export class TaskDetailComponent {
 
   private load() {
     this.loading.set(true);
-    this.api.getTask(this.id()).subscribe({
-      next: (t) => {
-        this.task.set(t); this.loading.set(false);
-        this.editPriority = t.priority ?? null;
-        this.editDueAt = t.dueAt ? t.dueAt.slice(0, 16) : '';
-        this.outputPairs = Object.entries(t.outputs || {}).map(([key, v]) => ({ key, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }));
-        if (t.instanceId) {
-          this.instApi.getInstance(t.instanceId).subscribe({
-            next: (inst) => this.instanceStatus.set(inst?.status || null),
-            error: () => {},
-          });
+    forkJoin({
+      task: this.api.getTask(this.id()),
+      comments: this.api.listComments(this.id()).pipe(catchError(() => of([]))),
+      events: this.api.taskEvents(this.id()).pipe(catchError(() => of([]))),
+      users: this.iamApi.listUsers().pipe(catchError(() => of([]))),
+      groups: this.iamApi.listGroups().pipe(catchError(() => of([]))),
+    }).pipe(
+      switchMap((res) => {
+        this.task.set(res.task);
+        this.editPriority = res.task.priority ?? null;
+        this.editDueAt = res.task.dueAt ? res.task.dueAt.slice(0, 16) : '';
+        this.outputPairs = Object.entries(res.task.outputs || {}).map(([key, v]) => ({ key, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }));
+        this.comments.set(res.comments);
+        this.events.set(res.events);
+        this.users.set(res.users);
+        this.groups.set(res.groups);
+
+        if (res.task.instanceId) {
+          return this.instApi.getInstance(res.task.instanceId).pipe(
+            catchError(() => of(null)),
+            tap((inst) => this.instanceStatus.set(inst?.status || null))
+          );
         }
-      },
-      error: () => { this.task.set(null); this.loading.set(false); },
-    });
-    this.api.listComments(this.id()).subscribe((c) => this.comments.set(c));
-    this.api.taskEvents(this.id()).subscribe((e) => this.events.set(e));
-    this.iamApi.listUsers().subscribe({
-      next: (u) => this.users.set(u || []),
-      error: () => {},
-    });
-    this.iamApi.listGroups().subscribe({
-      next: (g) => this.groups.set(g || []),
-      error: () => {},
+        return of(null);
+      }),
+      finalize(() => this.loading.set(false))
+    ).subscribe({
+      error: () => this.task.set(null),
     });
   }
   private refresh() { this.load(); }

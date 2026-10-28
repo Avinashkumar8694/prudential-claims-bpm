@@ -2,7 +2,7 @@ import { Component, OnDestroy, computed, inject, signal, HostListener } from '@a
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { JsonPipe, SlicePipe } from '@angular/common';
-import { firstValueFrom } from 'rxjs';
+import { catchError, finalize, firstValueFrom, forkJoin, Observable, of, switchMap, tap } from 'rxjs';
 import { InstanceApiService } from '../../core/api/instance-api.service';
 import { DeploymentApiService } from '../../core/api/deployment-api.service';
 import { WorkflowApiService } from '../../core/api/workflow-api.service';
@@ -1204,39 +1204,98 @@ export class InstanceDetailComponent implements OnDestroy {
 
   private load() {
     this.loading.set(true);
-    this.refresh();
+    this.refresh(true);
     this.unsub?.();
-    this.unsub = this.realtime.subscribe(`instance:${this.id()}`, () => this.refresh());
+    this.unsub = this.realtime.subscribe(`instance:${this.id()}`, () => this.refresh(false));
   }
 
-  private refresh() {
+  private refresh(showLoader = false) {
+    if (showLoader) this.loading.set(true);
     this.api.getInstance(this.id()).subscribe({
       next: (i) => {
-        this.inst.set(i); this.loading.set(false);
-        this.deploymentApi.getDeployment(i.deploymentId).subscribe((d) => this.deployments.set({ ...this.deployments(), [d.id]: d }));
+        this.inst.set(i);
+        const fetches: Observable<any>[] = [
+          this.deploymentApi.getDeployment(i.deploymentId).pipe(
+            tap((d) => this.deployments.set({ ...this.deployments(), [d.id]: d })),
+            catchError(() => of(null))
+          ),
+          this.api.relatedInstances(this.id()).pipe(
+            tap((r) => { this.parent.set(r.parent); this.children.set(r.children); }),
+            catchError(() => of(null))
+          ),
+        ];
+
         if (i.caseInstanceId) {
-          this.loadCase(i.caseInstanceId);
+          fetches.push(
+            this.wfInstApi.aggregate(i.caseInstanceId).pipe(
+              tap((agg) => {
+                this.boundCase.set(agg);
+                this.caseDataText = JSON.stringify(agg.workflowInstance.data || {}, null, 2);
+              }),
+              catchError(() => of(null))
+            )
+          );
         } else {
-          this.wfInstApi.list({ piid: this.id() }).subscribe((cases) => {
-            if (cases.length) this.loadCase(cases[0].id);
-          });
+          fetches.push(
+            this.wfInstApi.list({ piid: this.id() }).pipe(
+              switchMap((cases) => {
+                if (cases.length) {
+                  return this.wfInstApi.aggregate(cases[0].id).pipe(
+                    tap((agg) => {
+                      this.boundCase.set(agg);
+                      this.caseDataText = JSON.stringify(agg.workflowInstance.data || {}, null, 2);
+                    }),
+                    catchError(() => of(null))
+                  );
+                }
+                return of(null);
+              }),
+              catchError(() => of(null))
+            )
+          );
         }
+
+        const tabObs = this.getTabDataObservable(this.tab());
+        if (tabObs) fetches.push(tabObs);
+
+        forkJoin(fetches).pipe(
+          finalize(() => { if (showLoader) this.loading.set(false); })
+        ).subscribe();
       },
       error: () => {
         // Fallback: check if :id itself is a case instance id
-        this.wfInstApi.aggregate(this.id()).subscribe({
+        this.wfInstApi.aggregate(this.id()).pipe(
+          finalize(() => { if (showLoader) this.loading.set(false); })
+        ).subscribe({
           next: (agg) => {
             this.boundCase.set(agg);
             this.caseDataText = JSON.stringify(agg.workflowInstance.data || {}, null, 2);
             if (agg.bpmInstance) this.inst.set(agg.bpmInstance);
-            this.loading.set(false);
           },
-          error: () => { this.inst.set(null); this.loading.set(false); },
+          error: () => { this.inst.set(null); },
         });
       },
     });
-    this.api.relatedInstances(this.id()).subscribe((r) => { this.parent.set(r.parent); this.children.set(r.children); });
-    this.ensureTabData(this.tab(), true);
+  }
+
+  private getTabDataObservable(tab: Tab): Observable<any> | null {
+    if (tab === 'diagram') {
+      return this.api.instanceGraph(this.id()).pipe(
+        tap((g) => this.graph.set(g as any)),
+        catchError(() => of(null))
+      );
+    } else if (tab === 'details') {
+      return this.queryApi.instanceTasks(this.id()).pipe(
+        tap((tasks) => this.openTasks.set(tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped'))),
+        catchError(() => of(null))
+      );
+    } else if (tab === 'logs') {
+      return this.opsApi.listErrors({ instanceId: this.id(), acknowledged: false }).pipe(
+        tap((r) => this.errors.set(r.items)),
+        catchError(() => of(null))
+      );
+    }
+    return null;
   }
 
   private loadedTabs = new Set<string>();
