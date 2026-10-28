@@ -357,9 +357,11 @@ export class ExecutionEngine {
     const p = this.pick(dep, processId);
     const startNode = p.nodes.find((n) => n.type === 'start') || p.nodes[0];
     const now = this.ctx.clock();
+    const seed: Record<string, unknown> = {};
+    for (const v of p.vars || []) seed[v.name] = undefined;
     const child: Instance = {
       id: this.ctx.newId(), tenantId: this.ctx.tenantId, deploymentId: dep.id, workflowId: dep.workflowId, processId: p.id,
-      status: 'running', variables: { ...vars },
+      status: 'running', variables: { ...seed, ...vars },
       tokens: [{ id: this.ctx.newId(), nodeId: startNode!.id!, state: 'active', enteredAt: now }],
       history: [], startedAt: now, startedBy: actor, parentInstanceId, parentTokenId,
       ...(independent ? { independent: true } : {}),

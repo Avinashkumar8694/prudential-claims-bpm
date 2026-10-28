@@ -83,11 +83,11 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                      [class.node-end]="n.type === 'end'"
                      [style.left.px]="n.x" [style.top.px]="n.y"
                      [style.width.px]="nodeDims(n.type).w" [style.height.px]="nodeDims(n.type).h"
-                     [title]="typeLabel(n)"
+                     [title]="nodeTooltip(n)"
                      (pointerdown)="startDrag($event, n)" (pointerup)="onNodePointerUp($event, n)"
                      (click)="selectNode($event, n)" (dblclick)="$event.stopPropagation(); openNodeEditor(n)">
-                  @if (hasErr(n.id)) { <span class="nmark err" title="Has errors">!</span> }
-                  @else if (hasWarn(n.id)) { <span class="nmark warn" title="Has warnings">!</span> }
+                  @if (hasErr(n.id)) { <span class="nmark err" [title]="nodeProblemTooltip(n.id)" (click)="$event.stopPropagation(); openNodeProblems(n.id)">!</span> }
+                  @else if (hasWarn(n.id)) { <span class="nmark warn" [title]="nodeProblemTooltip(n.id)" (click)="$event.stopPropagation(); openNodeProblems(n.id)">!</span> }
                   @if (hasIn(n.type)) { <span class="port in" title="Incoming"></span> }
 
                   @if (isCircle(n.type)) {
@@ -466,6 +466,7 @@ export class ProcessCanvasComponent implements OnChanges {
   private toast = inject(ToastService);
   private canvasElRef = viewChild<ElementRef<HTMLElement>>('canvasEl');
   private scrollRef = viewChild<ElementRef<HTMLElement>>('scrollArea');
+  private problemsPanel = viewChild(ProblemsPanelComponent);
 
   @Input({ required: true }) workflowId!: string;
   @Input({ required: true }) processId!: string;
@@ -580,6 +581,28 @@ export class ProcessCanvasComponent implements OnChanges {
     if (n) { this.selNode.set(n); this.selEdge.set(null); return; }
     const e = this.edges().find((x) => x.id === id);
     if (e) { this.selEdge.set(e.id); this.selNode.set(null); }
+  }
+
+  nodeProblemTooltip(id: string): string {
+    const probs = this.problems().filter((p) => p.nodeId === id);
+    if (!probs.length) return '';
+    return probs.map((p) => `[${p.severity.toUpperCase()}] ${p.rule}: ${p.message}`).join('\n');
+  }
+
+  nodeTooltip(n: CNode): string {
+    const base = `${this.typeLabel(n)}${n.name ? ': ' + n.name : ''}`;
+    const probs = this.problems().filter((p) => p.nodeId === n.id);
+    if (!probs.length) return base;
+    const probSummary = probs.map((p) => `• [${p.severity.toUpperCase()}] ${p.message}`).join('\n');
+    return `${base}\n\nIssues:\n${probSummary}`;
+  }
+
+  openNodeProblems(id: string) {
+    this.pickProblem(id);
+    const panel = this.problemsPanel();
+    if (panel) {
+      panel.collapsed.set(false);
+    }
   }
 
   ngOnChanges(changes: SimpleChanges) {

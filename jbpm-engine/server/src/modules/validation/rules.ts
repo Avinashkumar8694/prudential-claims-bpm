@@ -268,7 +268,9 @@ export const RULES: Rule[] = [
       if (outs.length <= 1) continue;
       const hasDefault = outs.some((f) => f.id && f.id === a.default);
       const uncond = outs.filter((f) => !f.when);
-      if (!hasDefault && uncond.length === 0) out.push(P('gateway-branching', 'warning', `Gateway "${label(n)}" has no default flow; instances may reach no branch`, { nodeId: n.id }));
+      // In jBPM / BPMN 2.0: having conditional branches without an explicit default flow is standard
+      // practice when conditions are mutually exhaustive. Only multiple unconditional branches without
+      // a default flow create runtime non-determinism.
       if (!hasDefault && uncond.length > 1) out.push(P('gateway-branching', 'warning', `Gateway "${label(n)}" has multiple unconditional branches`, { nodeId: n.id }));
     }
     return out;
@@ -288,7 +290,9 @@ export const RULES: Rule[] = [
     return out;
   } },
 
-  { id: 'node-name', description: 'Nodes should be named', run: (c) => c.nodes.filter((n) => !n.name || !n.name.trim()).map((n) => P('node-name', 'warning', `${n.type} "${n.id}" has no name`, { nodeId: n.id })) },
+  // In BPMN 2.0 and jBPM, Events (start, end, catch, throw, boundary) and Gateways are graphic shapes
+  // that are standardly unnamed; only activities, tasks, and sub-processes require meaningful names for clarity.
+  { id: 'node-name', description: 'Nodes should be named', run: (c) => c.nodes.filter((n) => n.type !== 'start' && n.type !== 'end' && n.type !== 'gateway' && n.type !== 'catch' && n.type !== 'throw' && n.type !== 'boundary' && (!n.name || !n.name.trim())).map((n) => P('node-name', 'warning', `${n.type} "${n.id}" has no name`, { nodeId: n.id })) },
 
   // Recurses into subprocess/event-subprocess children itself (unlike the other rules above, which
   // only see the top-level process.nodes/flows) so a Java script buried inside an embedded or event
