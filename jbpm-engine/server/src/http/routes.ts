@@ -28,6 +28,7 @@ import { exportKjar, validateJbpmExport } from '../modules/export/service.ts';
 import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { openapiSpec, swaggerHtml } from './openapi.ts';
+import { resolveWorkflowServiceStore } from '../workflow-service/store/index.ts';
 import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
 import { hub } from '../infra/ws-hub.ts';
 import { requirePermission } from './auth-middleware.ts';
@@ -197,8 +198,107 @@ export function buildRoutes(): Router {
 
   // --- instances (runtime) ---
   r.post('/instances', perm('workflow:run'), startLimiter, asyncHandler(async (req, res) => res.status(201).json(await new InstanceService(ctxOf(req), emit).start(req.body, actorOf(req)))));
-  r.get('/instances', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new InstanceService(ctxOf(req)).list(req.query as any) })));
-  r.get('/instances/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).get(req.params.id))));
+  r.get('/instances', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const instService = new InstanceService(ctx);
+    const instances = await instService.list(req.query as any);
+    let caseMap = new Map<string, any>();
+    let orphanCases: any[] = [];
+    try {
+      const wfStore = resolveWorkflowServiceStore(ctx.store);
+      const cases = await wfStore.instances().query((w) => w.tenantId === ctx.tenantId);
+      for (const c of cases) {
+        if (c.piid) {
+          caseMap.set(c.piid, c);
+        } else {
+          orphanCases.push(c);
+        }
+      }
+    } catch {}
+
+    const items: any[] = instances.map((inst) => {
+      const c = caseMap.get(inst.id);
+      return {
+        ...inst,
+        caseInstanceId: c?.id,
+        caseWorkflowName: c?.workflowName,
+        caseStatus: c?.status,
+        caseData: c?.data,
+      };
+    });
+
+    for (const c of orphanCases) {
+      if (!req.query.status || req.query.status === c.status) {
+        if (!req.query.workflowId || req.query.workflowId === c.workflowName) {
+          items.push({
+            id: c.id,
+            tenantId: c.tenantId,
+            workflowId: c.workflowName,
+            deploymentId: c.deploymentId,
+            processId: c.workflowName,
+            status: c.status,
+            variables: {},
+            tokens: [],
+            history: [],
+            startedAt: c.createdAt,
+            startedBy: c.createdBy,
+            error: c.startError ? { message: c.startError } : undefined,
+            caseInstanceId: c.id,
+            caseWorkflowName: c.workflowName,
+            caseStatus: c.status,
+            caseData: c.data,
+          });
+        }
+      }
+    }
+
+    res.json({ items });
+  }));
+
+  r.get('/instances/:id', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const instService = new InstanceService(ctx);
+    try {
+      const inst = await instService.get(req.params.id);
+      try {
+        const wfStore = resolveWorkflowServiceStore(ctx.store);
+        const cases = await wfStore.instances().query((w) => w.tenantId === ctx.tenantId && w.piid === inst.id);
+        if (cases.length) {
+          (inst as any).caseInstanceId = cases[0].id;
+          (inst as any).caseWorkflowName = cases[0].workflowName;
+          (inst as any).caseStatus = cases[0].status;
+          (inst as any).caseData = cases[0].data;
+        }
+      } catch {}
+      return res.json(inst);
+    } catch (e: any) {
+      try {
+        const wfStore = resolveWorkflowServiceStore(ctx.store);
+        const c = await wfStore.instances().get(req.params.id);
+        if (c && c.tenantId === ctx.tenantId) {
+          return res.json({
+            id: c.id,
+            tenantId: c.tenantId,
+            workflowId: c.workflowName,
+            deploymentId: c.deploymentId,
+            processId: c.workflowName,
+            status: c.status,
+            variables: {},
+            tokens: [],
+            history: [],
+            startedAt: c.createdAt,
+            startedBy: c.createdBy,
+            error: c.startError ? { message: c.startError } : undefined,
+            caseInstanceId: c.id,
+            caseWorkflowName: c.workflowName,
+            caseStatus: c.status,
+            caseData: c.data,
+          });
+        }
+      } catch {}
+      throw e;
+    }
+  }));
   r.get('/instances/:id/history', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).history(req.params.id))));
   r.get('/instances/:id/diagram-state', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).diagramState(req.params.id))));
   r.get('/instances/:id/graph', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).graph(req.params.id))));

@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS: Omit<SystemSettings, 'id' | 'tenantId'> = {
   slaWarnThresholdPct: 80,
   sessionTimeoutHours: 8,
   emailEnabled: false,
+  instanceCreationMode: 'both' as const,
   // 0 = unlimited — see SystemSettings' own doc comment (domain.ts).
   maxActiveInstances: 0,
   maxActiveTimers: 0,
@@ -35,6 +36,9 @@ export class SettingsService {
   async update(patch: Partial<SystemSettings>, actor: string): Promise<SystemSettings> {
     if (patch.defaultPageSize !== undefined && !PAGE_SIZES.includes(patch.defaultPageSize)) {
       throw validation(`defaultPageSize must be one of ${PAGE_SIZES.join(', ')}`);
+    }
+    if (patch.instanceCreationMode !== undefined && !['both', 'case-only', 'process-only'].includes(patch.instanceCreationMode)) {
+      throw validation(`instanceCreationMode must be 'both', 'case-only', or 'process-only'`);
     }
     for (const k of ['instanceRetentionDays', 'auditRetentionDays', 'executorIntervalSeconds', 'defaultJobRetries', 'sessionTimeoutHours'] as const) {
       const v = patch[k];

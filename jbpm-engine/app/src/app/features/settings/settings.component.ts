@@ -70,6 +70,14 @@ type SettingsTab = 'account' | 'system';
                 <select [(ngModel)]="s.defaultPageSize"><option [ngValue]="10">10</option><option [ngValue]="20">20</option><option [ngValue]="50">50</option><option [ngValue]="100">100</option></select>
               </div>
               <div class="setting-row">
+                <div class="lbl">Instance creation mode<span class="shint">Control whether users can create process instances, case instances, or both.</span></div>
+                <select [(ngModel)]="s.instanceCreationMode">
+                  <option value="both">Both (Process & Case Instances)</option>
+                  <option value="case-only">Case Instances Only</option>
+                  <option value="process-only">Process Instances Only</option>
+                </select>
+              </div>
+              <div class="setting-row">
                 <div class="lbl">Instance history retention (days)<span class="shint">Completed and aborted instances older than this are eligible for pruning.</span></div>
                 <input type="number" min="1" [(ngModel)]="s.instanceRetentionDays" style="width:90px;" />
               </div>

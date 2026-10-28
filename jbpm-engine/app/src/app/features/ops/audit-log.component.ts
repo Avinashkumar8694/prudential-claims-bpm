@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { OpsApiService } from '../../core/api/ops-api.service';
@@ -89,6 +89,16 @@ import type { AuditEvent } from '../../core/models';
               </tbody>
             </table>
           </div>
+          @if (items().length > 0) {
+            <div class="infinite-status">
+              @if (hasMore()) {
+                <span class="spinner-dot"></span>
+                <span class="muted">Loading more audit events (showing {{ items().length }} of {{ total() }})…</span>
+              } @else {
+                <span class="muted">Showing all {{ total() }} events</span>
+              }
+            </div>
+          }
         }
       </div>
 
@@ -129,6 +139,9 @@ import type { AuditEvent } from '../../core/models';
     }
 
     .listcard { padding: 0; overflow: hidden; }
+    .infinite-status { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-size: 12.5px; border-top: 1px solid var(--border); }
+    .spinner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: pulse 1s infinite alternate; }
+    @keyframes pulse { from { opacity: 0.3; transform: scale(0.8); } to { opacity: 1; transform: scale(1.2); } }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
     th {
@@ -193,7 +206,19 @@ export class AuditLogComponent {
   items = signal<AuditEvent[]>([]);
   total = signal(0);
   loading = signal(true);
+  loadingMore = signal(false);
+  hasMore = computed(() => this.items().length < this.total());
   facets = signal<{ kinds: string[]; actors: string[] } | null>(null);
+
+  @HostListener('window:scroll')
+  onWindowScroll() {
+    const threshold = 200;
+    const pos = window.innerHeight + window.scrollY;
+    const max = document.documentElement.scrollHeight;
+    if (pos >= max - threshold && this.hasMore() && !this.loading() && !this.loadingMore()) {
+      this.loadNextPage();
+    }
+  }
 
   kindOptions = computed(() => {
     const kinds = this.facets()?.kinds || [];
@@ -243,6 +268,26 @@ export class AuditLogComponent {
 
   nextPage() { this.offset.update((o) => o + this.limit); this.reload(); }
   prevPage() { this.offset.update((o) => Math.max(0, o - this.limit)); this.reload(); }
+
+  loadNextPage() {
+    this.loadingMore.set(true);
+    const nextOffset = this.items().length;
+    this.api.listAudit({
+      actor: this.actorFilter || undefined,
+      kind: this.kindFilter || undefined,
+      instanceId: this.instanceIdFilter || undefined,
+      taskId: this.taskIdFilter || undefined,
+      limit: this.limit,
+      offset: nextOffset,
+    }).subscribe({
+      next: (r) => {
+        this.items.update((prev) => [...prev, ...r.items]);
+        this.total.set(r.total);
+        this.loadingMore.set(false);
+      },
+      error: () => this.loadingMore.set(false),
+    });
+  }
 
   entityLabel(e: AuditEvent): string {
     if (e.taskId) return `Task ${this.shortId(e.taskId)}`;

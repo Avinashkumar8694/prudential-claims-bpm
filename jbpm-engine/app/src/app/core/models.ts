@@ -11,6 +11,8 @@ export interface Workflow {
   createdAt: string; updatedAt: string; archived?: boolean;
   /** Which Folder (Projects-page tree) this project is organized under; null/undefined = root/unfiled. */
   folderId?: string | null;
+  /** Instance creation mode: 'both' | 'case-only' | 'process-only' */
+  instanceCreationMode?: 'both' | 'case-only' | 'process-only';
 }
 /** Organizes Workflows into a tree on the Projects page — purely presentational. */
 export interface Folder { id: string; name: string; parentId?: string | null; createdAt: string; updatedAt: string; }
@@ -36,6 +38,10 @@ export interface Instance {
   variables: Record<string, unknown>; tokens: Token[]; history: NodeVisit[];
   error?: { nodeId: string; message: string; at: string };
   parentInstanceId?: string; startedAt: string; startedBy: string; endedAt?: string;
+  caseInstanceId?: string;
+  caseWorkflowName?: string;
+  caseStatus?: string;
+  caseData?: Record<string, unknown>;
 }
 export interface Token { id: string; nodeId: string; state: 'active' | 'waiting'; waitFor?: any; enteredAt: string; }
 export interface NodeVisit { tokenId: string; nodeId: string; type: string; enteredAt: string; exitedAt?: string; outcome?: string; }
@@ -142,6 +148,7 @@ export interface SystemSettings {
   sessionTimeoutHours: number;
   emailEnabled: boolean;
   emailFrom?: string; smtpHost?: string; smtpPort?: number;
+  instanceCreationMode?: 'both' | 'case-only' | 'process-only';
   /** per-tenant resource quotas; 0/undefined = unlimited. */
   maxActiveInstances?: number;
   maxActiveTimers?: number;
@@ -174,6 +181,7 @@ export interface WorkflowInstance {
   id: string; workflowDefinitionId: string; workflowName: string; deploymentId: string;
   data: Record<string, unknown>; status: string; piid: string | null; startError?: string;
   createdAt: string; updatedAt: string;
+  createdBy?: string; updatedBy?: string;
 }
 export interface WorkflowInstanceAggregate {
   workflowInstance: WorkflowInstance; bpmInstance: Instance | null; tasks: Task[];

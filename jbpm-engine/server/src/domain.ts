@@ -15,6 +15,8 @@ export interface Workflow extends Entity, Audited {
   archived?: boolean;
   /** Project-organizing folder (see Folder below); undefined/null means "root", no folder. */
   folderId?: string | null;
+  /** Instance creation mode allowed for this project ('both' | 'case-only' | 'process-only') */
+  instanceCreationMode?: 'both' | 'case-only' | 'process-only';
 }
 
 /** Organizes Workflows into a tree for the Projects page — purely presentational, no effect on
@@ -185,6 +187,8 @@ export interface SystemSettings extends Entity {
   sessionTimeoutHours: number;
   emailEnabled: boolean;
   emailFrom?: string; smtpHost?: string; smtpPort?: number;
+  /** System-wide instance creation mode allowed ('both' | 'case-only' | 'process-only') */
+  instanceCreationMode?: 'both' | 'case-only' | 'process-only';
   /** per-tenant resource quotas — undefined/0 means unlimited (default, so existing tenants are
    *  unaffected until an admin opts in). Enforced at the point of creation, not retroactively. */
   maxActiveInstances?: number;   // top-level (root) instances concurrently running/waiting

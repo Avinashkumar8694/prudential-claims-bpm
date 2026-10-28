@@ -11,6 +11,16 @@ import { IconComponent } from '../../shared/icon.component';
     <h3 class="sec-h">General</h3>
     <div class="setrow"><label>Key</label><input [value]="ctx.wf()?.key" disabled /></div>
     <div class="setrow"><label>Description</label><input [(ngModel)]="ctx.description" (blur)="ctx.saveName()" placeholder="What this project does" /></div>
+    <div class="setrow">
+      <label>Instance creation mode</label>
+      <select [(ngModel)]="ctx.instanceCreationMode" (ngModelChange)="ctx.saveCreationMode()">
+        <option value="">Inherit system default</option>
+        <option value="both">Both (Process & Case Instances)</option>
+        <option value="case-only">Case Instances Only</option>
+        <option value="process-only">Process Instances Only</option>
+      </select>
+      <small>Controls which instance types users can start within this project.</small>
+    </div>
     <div class="setrow"><label>Integration base URL</label><input [(ngModel)]="ctx.baseUrl" placeholder="http://localhost:3000" /><small>Applied per deployment environment for service tasks.</small></div>
     <p class="hint">Per-process cron/scheduled starts and environment overrides are planned (see docs/13).</p>
 
@@ -41,7 +51,7 @@ import { IconComponent } from '../../shared/icon.component';
     .sec-h:not(:first-child) { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--border); }
     .setrow { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; max-width: 520px; }
     .setrow label { font-size: 12px; color: var(--muted); font-weight: 600; }
-    .setrow input { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+    .setrow input, .setrow select { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface); color: inherit; font: inherit; }
     .setrow small { color: var(--muted); font-size: 12px; }
     .hint { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
     .vrow { display: flex; gap: 8px; margin-bottom: 8px; max-width: 520px; }

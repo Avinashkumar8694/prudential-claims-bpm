@@ -78,18 +78,17 @@ export const routes: Routes = [
       },
       {
         path: 'workflow-instances',
-        canActivate: [permissionGuard('workflowInstance:manage')],
-        loadComponent: () => import('./features/workflow-mgmt/workflow-instances-list.component').then((m) => m.WorkflowInstancesListComponent),
+        redirectTo: 'instances',
+        pathMatch: 'full',
       },
       {
         path: 'workflow-instances/:id',
-        canActivate: [permissionGuard('workflowInstance:manage')],
-        loadComponent: () => import('./features/workflow-mgmt/workflow-instance-detail.component').then((m) => m.WorkflowInstanceDetailComponent),
+        loadComponent: () => import('./features/instances/instance-detail.component').then((m) => m.InstanceDetailComponent),
       },
       {
         path: 'workflow-analytics',
-        canActivate: [permissionGuard('query:read')],
-        loadComponent: () => import('./features/workflow-mgmt/workflow-analytics.component').then((m) => m.WorkflowAnalyticsComponent),
+        redirectTo: 'reports',
+        pathMatch: 'full',
       },
     ],
   },

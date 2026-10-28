@@ -124,10 +124,8 @@ export class SideNavComponent {
       base.push({ label: 'Jobs & Timers', icon: 'timer', link: '/jobs' });
     }
     if (this.auth.hasPermission('task:manage')) base.push({ label: 'Tasks', icon: 'tasks', link: '/tasks' });
-    if (this.auth.hasPermission('workflowInstance:manage')) base.push({ label: 'Cases / Workflow Instances', icon: 'inbox', link: '/workflow-instances' });
     if (this.auth.hasPermission('query:read')) {
       base.push({ label: 'Reports & Analytics', icon: 'chart', link: '/reports' });
-      base.push({ label: 'Workflow Analytics', icon: 'chart', link: '/workflow-analytics' });
     }
     return base;
   });

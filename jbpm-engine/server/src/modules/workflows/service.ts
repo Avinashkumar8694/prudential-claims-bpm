@@ -77,13 +77,14 @@ export class WorkflowService {
     return workflow;
   }
 
-  async update(id: string, patch: Partial<Pick<Workflow, 'name' | 'description' | 'permissions' | 'variables' | 'folderId'>>, actor: string): Promise<Workflow> {
+  async update(id: string, patch: Partial<Pick<Workflow, 'name' | 'description' | 'permissions' | 'variables' | 'folderId' | 'instanceCreationMode'>>, actor: string): Promise<Workflow> {
     const w = await this.get(id);
     if (patch.name !== undefined) w.name = patch.name.trim() || w.name;
     if (patch.description !== undefined) w.description = patch.description;
     if (patch.permissions !== undefined) w.permissions = patch.permissions;
     if (patch.variables !== undefined) w.variables = patch.variables;
     if (patch.folderId !== undefined) { await this.assertFolderValid(patch.folderId); w.folderId = patch.folderId; }
+    if (patch.instanceCreationMode !== undefined) w.instanceCreationMode = patch.instanceCreationMode;
     w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
     await this.wf().put(w);
     await this.ctx.audit({ actor, kind: 'workflow.updated', workflowId: id });

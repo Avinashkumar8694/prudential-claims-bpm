@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TitleCasePipe } from '@angular/common';
@@ -159,6 +159,16 @@ const TYPES = ['process', 'task', 'job', 'integration'] as const;
                   </tbody>
                 </table>
               </div>
+              @if (items().length > 0) {
+                <div class="infinite-status">
+                  @if (hasMore()) {
+                    <span class="spinner-dot"></span>
+                    <span class="muted">Loading more errors (showing {{ items().length }} of {{ total() }})…</span>
+                  } @else {
+                    <span class="muted">Showing all {{ total() }} errors</span>
+                  }
+                </div>
+              }
             }
           </div>
 
@@ -219,6 +229,9 @@ const TYPES = ['process', 'task', 'job', 'integration'] as const;
 
     .listcol { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
     .listcard { padding: 0; overflow: hidden; }
+    .infinite-status { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; font-size: 12.5px; border-top: 1px solid var(--border); }
+    .spinner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: pulse 1s infinite alternate; }
+    @keyframes pulse { from { opacity: 0.3; transform: scale(0.8); } to { opacity: 1; transform: scale(1.2); } }
     .table-wrap { overflow-x: auto; }
     .bulkbar {
       display: flex;
@@ -324,10 +337,22 @@ export class ExecutionErrorsComponent {
   items = signal<ExecutionError[]>([]);
   total = signal(0);
   loading = signal(true);
+  loadingMore = signal(false);
+  hasMore = computed(() => this.items().length < this.total());
   selectedIds = signal<Set<string>>(new Set());
   summary = signal<{ total: number; unacknowledged: number; last24h: number } | null>(null);
 
   hasFilters = computed(() => this.typeFilter().size < TYPES.length || this.ack() !== 'no' || !!this.instanceIdFilter || !!this.jobIdFilter || !!this.nodeFilter);
+
+  @HostListener('window:scroll')
+  onWindowScroll() {
+    const threshold = 200;
+    const pos = window.innerHeight + window.scrollY;
+    const max = document.documentElement.scrollHeight;
+    if (pos >= max - threshold && this.hasMore() && !this.loading() && !this.loadingMore()) {
+      this.loadNextPage();
+    }
+  }
 
   constructor() {
     this.reload();
@@ -375,6 +400,27 @@ export class ExecutionErrorsComponent {
 
   nextPage() { this.offset.update((o) => o + this.limit); this.reload(); }
   prevPage() { this.offset.update((o) => Math.max(0, o - this.limit)); this.reload(); }
+
+  loadNextPage() {
+    this.loadingMore.set(true);
+    const nextOffset = this.items().length;
+    this.api.listErrors({
+      type: [...this.typeFilter()].join(','),
+      acknowledged: this.ack() === 'any' ? undefined : this.ack() === 'yes',
+      instanceId: this.instanceIdFilter || undefined,
+      jobId: this.jobIdFilter || undefined,
+      limit: this.limit,
+      offset: nextOffset,
+    }).subscribe({
+      next: (r) => {
+        const filtered = this.nodeFilter ? r.items.filter((e) => (e.nodeName || '').toLowerCase().includes(this.nodeFilter.toLowerCase())) : r.items;
+        this.items.update((prev) => [...prev, ...filtered]);
+        this.total.set(r.total);
+        this.loadingMore.set(false);
+      },
+      error: () => this.loadingMore.set(false),
+    });
+  }
 
   openError(e: ExecutionError) {
     this.router.navigate(['/errors', e.id]);

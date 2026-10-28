@@ -42,12 +42,14 @@ export class ProjectContextService {
   assetKinds = signal<{ key: string; label: string; nameField: string }[]>([]);
   vars = signal<{ name: string; type: string }[]>([]);
   name = ''; description = ''; baseUrl = '';
+  instanceCreationMode: 'both' | 'case-only' | 'process-only' | '' = '';
   exportDenial = signal<JbpmExportDenial | null>(null);
   isJbpmCompatible = signal<boolean>(false);
 
   constructor() {
     this.api.getWorkflow(this.id).subscribe((w) => {
       this.wf.set(w); this.name = w.name; this.description = w.description || '';
+      this.instanceCreationMode = (w.instanceCreationMode as any) || '';
       this.vars.set([...(w.variables || [])]);
     });
     this.loadProcesses();
@@ -76,6 +78,16 @@ export class ProjectContextService {
   }
 
   saveName() { const w = this.wf(); if (w) this.api.updateWorkflow(w.id, { name: this.name, description: this.description }).subscribe((u) => this.wf.set(u)); }
+
+  saveCreationMode() {
+    const w = this.wf();
+    if (w) {
+      this.api.updateWorkflow(w.id, { instanceCreationMode: (this.instanceCreationMode || undefined) as any }).subscribe((u) => {
+        this.wf.set(u);
+        this.toast.success('Instance creation mode updated');
+      });
+    }
+  }
 
   addProcess(name: string) { const n = name.trim(); if (!n) return; this.api.addProcess(this.id, n).subscribe(() => this.loadProcesses()); }
   async renameProcess(p: { id: string; name: string }) {

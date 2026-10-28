@@ -7,7 +7,7 @@ export interface StartInstanceBody {
   workflowId: string; processId?: string; environment?: string; deploymentId?: string;
   variables?: Record<string, unknown>; correlationKey?: string;
 }
-export interface ListInstancesFilter { workflowId?: string; status?: string; deploymentId?: string; correlationKey?: string; }
+export interface ListInstancesFilter { workflowId?: string; status?: string; deploymentId?: string; correlationKey?: string; type?: string; caseId?: string; }
 
 @Injectable({ providedIn: 'root' })
 export class InstanceApiService extends ApiBase {

@@ -1,10 +1,11 @@
 import { Component, OnDestroy, computed, inject, signal, HostListener } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { SlicePipe } from '@angular/common';
+import { JsonPipe, SlicePipe } from '@angular/common';
 import { InstanceApiService } from '../../core/api/instance-api.service';
 import { DeploymentApiService } from '../../core/api/deployment-api.service';
 import { WorkflowApiService } from '../../core/api/workflow-api.service';
+import { WorkflowInstanceApiService } from '../../core/api/workflow-instance-api.service';
 import { QueryApiService } from '../../core/api/query-api.service';
 import { OpsApiService } from '../../core/api/ops-api.service';
 import { SystemApiService } from '../../core/api/system-api.service';
@@ -13,7 +14,7 @@ import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
 import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
 import { IconComponent } from '../../shared/icon.component';
-import type { Catalog, Deployment, ExecutionError, Instance, Task, VariableChange, Workflow } from '../../core/models';
+import type { Catalog, Deployment, ExecutionError, Instance, Task, VariableChange, Workflow, WorkflowInstanceAggregate, WorkflowInstanceAudit, WorkflowInstanceComment } from '../../core/models';
 
 // Wider than the original 150 — most real node names ("Leave Request Submitted", "Notify Employee
 // (Approved)") were truncating to unreadable, indistinguishable fragments ("Leave Reques...",
@@ -21,7 +22,7 @@ import type { Catalog, Deployment, ExecutionError, Instance, Task, VariableChang
 // names, but the [title] tooltip on .gn (see template) is the actual guaranteed fallback for those.
 const NW = 180, NH = 56;
 const COL_W = NW + 100, ROW_H = NH + 46;
-type Tab = 'details' | 'diagram' | 'variables' | 'logs' | 'documents';
+type Tab = 'details' | 'diagram' | 'variables' | 'case' | 'logs' | 'documents';
 
 interface DocRow { variable: string; filename: string; url?: string; mimeType?: string; }
 
@@ -31,7 +32,7 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
 @Component({
   selector: 'app-instance-detail',
   standalone: true,
-  imports: [IconComponent, RouterLink, FormsModule, SlicePipe, BreadcrumbComponent],
+  imports: [IconComponent, RouterLink, FormsModule, SlicePipe, JsonPipe, BreadcrumbComponent],
   template: `
     @if (loading()) {
       <div class="page"><div class="card pad"><div class="skeleton skeleton-line" style="width:40%"></div><div class="skeleton skeleton-card"></div></div></div>
@@ -48,9 +49,15 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
           <a class="btn sm" [routerLink]="['/errors']" [queryParams]="{instanceId: inst()!.id}">View Errors <app-icon name="arrowRight" [size]="12" /></a>
         </div>
 
-        <div class="row" style="margin-bottom:2px;">
+        <div class="row" style="margin-bottom:2px; align-items:center; gap:10px;">
           <h1>{{ procName(inst()!) }} — <span class="mono">#{{ shortId(inst()!.id) }}</span></h1>
           <span class="badge" [style.color]="statusColor(inst()!.status)">{{ inst()!.status }}</span>
+          @if (boundCase(); as bc) {
+            <span class="case-chip-header">
+              <app-icon name="inbox" [size]="12" /> Case: <b>{{ bc.workflowInstance.workflowName }}</b> #{{ shortId(bc.workflowInstance.id) }}
+              <span class="badge" [class.active]="bc.workflowInstance.status !== 'failed'">{{ bc.workflowInstance.status }}</span>
+            </span>
+          }
         </div>
         <p class="muted meta">Started by {{ inst()!.startedBy }} · {{ ago(inst()!.startedAt) }} @if (inst()!.correlationKey) { · Correlation key {{ inst()!.correlationKey }} } · Deployment {{ version(inst()!) }}</p>
 
@@ -316,6 +323,119 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                       }
                     </tbody></table>
                   } @else { <p class="muted pad">No variables.</p> }
+                </div>
+              }
+              @case ('case') {
+                <div class="case-section">
+                  @if (boundCase(); as bc) {
+                    <div class="card pad" style="margin-bottom: 14px;">
+                      <div class="row" style="align-items: center; justify-content: space-between;">
+                        <div>
+                          <h3 style="margin: 0 0 4px; display: flex; align-items: center; gap: 8px;">
+                            <app-icon name="inbox" [size]="16" /> {{ bc.workflowInstance.workflowName }}
+                            <span class="badge" [class.active]="bc.workflowInstance.status !== 'failed'" [class.inactive]="bc.workflowInstance.status === 'failed'">
+                              {{ bc.workflowInstance.status }}
+                            </span>
+                          </h3>
+                          <p class="muted mono sm" style="margin: 0;">Case ID: {{ bc.workflowInstance.id }} · Created {{ ago(bc.workflowInstance.createdAt) }} by {{ bc.workflowInstance.createdBy }}</p>
+                        </div>
+                        <button class="btn sm" (click)="updateCaseStatus()">Update Case Status</button>
+                      </div>
+                    </div>
+
+                    <!-- Case Business Data Card -->
+                    <div class="card pad" style="margin-bottom: 14px;">
+                      <div class="section-title first">Business Data (Case Payload)</div>
+                      <p class="muted sm" style="margin-top:-4px; margin-bottom:8px;">Structured business fields validated against the case workflow definition schema.</p>
+                      <textarea rows="8" [(ngModel)]="caseDataText" style="width:100%; font-family:var(--font-mono); font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;"></textarea>
+                      @if (caseDataError()) { <p class="err sm">{{ caseDataError() }}</p> }
+                      <button class="btn primary sm" (click)="saveCaseData()">Save Business Data</button>
+                    </div>
+
+                    <!-- Case Tasks Card -->
+                    <div class="card pad" style="margin-bottom: 14px;">
+                      <div class="section-title first">Case Tasks (Any Depth)</div>
+                      @if (bc.tasks.length === 0) {
+                        <p class="muted sm">No human tasks registered for this case yet.</p>
+                      } @else {
+                        @for (t of bc.tasks; track t.id) {
+                          <div class="prow" style="flex-direction: column; gap: 4px; border-bottom: 1px solid var(--border); padding: 8px 0;">
+                            <div class="row" style="justify-content: space-between; align-items: center;">
+                              <b>{{ t.name }}</b>
+                              <span class="badge">{{ t.status }}</span>
+                            </div>
+                            <p class="muted sm" style="margin: 0;">Group: {{ t.group || '—' }} · Assignee: {{ t.assignee || '—' }} · Priority: {{ t.priority || 0 }}</p>
+                            @if (t.status !== 'completed' && t.status !== 'skipped') {
+                              <div class="row" style="gap: 6px; margin-top: 4px;">
+                                <button class="btn sm primary" (click)="decideCaseTask(t)">Decision</button>
+                                <button class="btn sm" (click)="delegateCaseTask(t)">Delegate</button>
+                              </div>
+                            }
+                          </div>
+                        }
+                      }
+                    </div>
+
+                    <!-- Case Comments -->
+                    <div class="card pad" style="margin-bottom: 14px;">
+                      <div class="section-title first">Case Comments</div>
+                      <div class="row" style="gap: 8px; margin-bottom: 12px;">
+                        <input [(ngModel)]="newCaseComment" placeholder="Add a comment to this case…" (keyup.enter)="addCaseComment()" style="flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px;" />
+                        <button class="btn sm" (click)="addCaseComment()">Post</button>
+                      </div>
+                      @for (c of caseComments(); track c.id) {
+                        <div class="crow" style="padding: 8px 0; border-top: 1px solid var(--border);">
+                          <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                            <b>{{ c.author }}</b>
+                            <div class="row" style="gap: 6px; align-items: center;">
+                              <span class="muted sm">{{ ago(c.at) }}</span>
+                              <button class="btn ghost sm" (click)="deleteCaseComment(c)"><app-icon name="trash" [size]="12" /></button>
+                            </div>
+                          </div>
+                          <p style="margin: 0; font-size: 13px;">{{ c.body }}</p>
+                        </div>
+                      }
+                      @if (caseComments().length === 0) {
+                        <p class="muted sm">No comments on this case yet.</p>
+                      }
+                    </div>
+
+                    <!-- Case Audit Trail -->
+                    <div class="card pad">
+                      <div class="section-title first">Case Audit Trail</div>
+                      <div class="row" style="gap: 8px; margin-bottom: 12px;">
+                        <input [(ngModel)]="newCaseAuditKind" placeholder="kind, e.g. case.note" style="width: 180px; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px;" />
+                        <input [(ngModel)]="newCaseAuditData" placeholder='data (JSON, optional)' style="flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px;" />
+                        <button class="btn sm" (click)="addCaseAudit()">Add Note</button>
+                      </div>
+                      @for (au of caseAudits(); track au.id) {
+                        <div class="crow" style="padding: 8px 0; border-top: 1px solid var(--border);">
+                          <div class="row" style="justify-content: space-between; align-items: center;">
+                            <strong class="mono sm">{{ au.kind }}</strong>
+                            <div class="row" style="gap: 6px; align-items: center;">
+                              <span class="muted sm">{{ au.actor }} · {{ ago(au.at) }}</span>
+                              <button class="btn ghost sm" (click)="deleteCaseAudit(au)"><app-icon name="trash" [size]="12" /></button>
+                            </div>
+                          </div>
+                          @if (au.data) {
+                            <pre class="mono sm" style="background: var(--surface-2); padding: 6px; border-radius: 6px; margin: 4px 0 0; overflow-x: auto;">{{ au.data | json }}</pre>
+                          }
+                        </div>
+                      }
+                      @if (caseAudits().length === 0) {
+                        <p class="muted sm">No case audit entries yet.</p>
+                      }
+                    </div>
+                  } @else {
+                    <div class="card pad">
+                      <div class="empty-state">
+                        <div class="es-icon"><app-icon name="inbox" [size]="24" /></div>
+                        <h3>Standalone Process Instance</h3>
+                        <p>This process instance was started directly without a bound Case / Workflow Definition.</p>
+                        <p class="muted sm">Case business data, schemas, and case-level comments are available when starting via "New Case".</p>
+                      </div>
+                    </div>
+                  }
                 </div>
               }
               @case ('logs') {
@@ -771,6 +891,9 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
        line instead of overflowing the card, since "processName #shortId" routinely won't fit 200px. */
     .relrow { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; margin-bottom: 8px; }
     .relcard .badge { white-space: normal; word-break: break-word; line-height: 1.4; }
+    .case-chip-header { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: rgba(59,130,246,0.12); color: #2563eb; font-size: 12.5px; border: 1px solid rgba(59,130,246,0.25); }
+    .badge.active { background: var(--green-bg); color: var(--green); }
+    .badge.inactive { background: var(--red-bg); color: var(--red); }
     .empty-state .btn { margin-top: 10px; }
   `],
 })
@@ -778,6 +901,7 @@ export class InstanceDetailComponent implements OnDestroy {
   private api = inject(InstanceApiService);
   private deploymentApi = inject(DeploymentApiService);
   private wfApi = inject(WorkflowApiService);
+  private wfInstApi = inject(WorkflowInstanceApiService);
   private queryApi = inject(QueryApiService);
   private opsApi = inject(OpsApiService);
   private systemApi = inject(SystemApiService);
@@ -853,8 +977,18 @@ export class InstanceDetailComponent implements OnDestroy {
   NW = NW;
   tabDefs: { key: Tab; label: string }[] = [
     { key: 'details', label: 'Details' }, { key: 'diagram', label: 'Diagram' },
-    { key: 'variables', label: 'Variables' }, { key: 'logs', label: 'Logs' }, { key: 'documents', label: 'Documents' },
+    { key: 'variables', label: 'Variables' }, { key: 'case', label: 'Case & Business Data' },
+    { key: 'logs', label: 'Logs' }, { key: 'documents', label: 'Documents' },
   ];
+
+  boundCase = signal<WorkflowInstanceAggregate | null>(null);
+  caseDataText = '';
+  caseDataError = signal('');
+  caseComments = signal<WorkflowInstanceComment[]>([]);
+  caseAudits = signal<WorkflowInstanceAudit[]>([]);
+  newCaseComment = '';
+  newCaseAuditKind = '';
+  newCaseAuditData = '';
 
   editingVar = signal<string | null>(null);
   editValue = '';
@@ -966,13 +1100,142 @@ export class InstanceDetailComponent implements OnDestroy {
       next: (i) => {
         this.inst.set(i); this.loading.set(false);
         this.deploymentApi.getDeployment(i.deploymentId).subscribe((d) => this.deployments.set({ ...this.deployments(), [d.id]: d }));
+        if (i.caseInstanceId) {
+          this.loadCase(i.caseInstanceId);
+        } else {
+          this.wfInstApi.list({ piid: this.id() }).subscribe((cases) => {
+            if (cases.length) this.loadCase(cases[0].id);
+          });
+        }
       },
-      error: () => { this.inst.set(null); this.loading.set(false); },
+      error: () => {
+        // Fallback: check if :id itself is a case instance id
+        this.wfInstApi.aggregate(this.id()).subscribe({
+          next: (agg) => {
+            this.boundCase.set(agg);
+            this.caseDataText = JSON.stringify(agg.workflowInstance.data || {}, null, 2);
+            if (agg.bpmInstance) this.inst.set(agg.bpmInstance);
+            this.loading.set(false);
+          },
+          error: () => { this.inst.set(null); this.loading.set(false); },
+        });
+      },
     });
     this.api.instanceGraph(this.id()).subscribe((g) => this.graph.set(g as any));
     this.api.relatedInstances(this.id()).subscribe((r) => { this.parent.set(r.parent); this.children.set(r.children); });
     this.queryApi.instanceTasks(this.id()).subscribe((tasks) => this.openTasks.set(tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped')));
     this.opsApi.listErrors({ instanceId: this.id(), acknowledged: false }).subscribe((r) => this.errors.set(r.items));
+  }
+
+  loadCase(caseId: string) {
+    this.wfInstApi.aggregate(caseId).subscribe({
+      next: (agg) => {
+        this.boundCase.set(agg);
+        this.caseDataText = JSON.stringify(agg.workflowInstance.data || {}, null, 2);
+      },
+      error: () => {},
+    });
+    this.wfInstApi.listComments(caseId).subscribe((c) => this.caseComments.set(c));
+    this.wfInstApi.listAudits(caseId).subscribe((a) => this.caseAudits.set(a));
+  }
+
+  saveCaseData() {
+    const bc = this.boundCase(); if (!bc) return;
+    let data: Record<string, unknown>;
+    try { data = JSON.parse(this.caseDataText); } catch { this.caseDataError.set('Invalid JSON format'); return; }
+    this.caseDataError.set('');
+    this.wfInstApi.updateData(bc.workflowInstance.id, data).subscribe({
+      next: (updated) => {
+        this.toast.success('Case business data saved');
+        this.boundCase.update((curr) => curr ? { ...curr, workflowInstance: updated } : null);
+      },
+      error: (e) => this.caseDataError.set(e?.error?.error?.message || 'Failed to save data'),
+    });
+  }
+
+  async updateCaseStatus() {
+    const bc = this.boundCase(); if (!bc) return;
+    const next = await this.modal.prompt({ title: 'Update Case Status', message: 'Enter new case status:', initialValue: bc.workflowInstance.status });
+    if (!next || !next.trim()) return;
+    this.wfInstApi.updateStatus(bc.workflowInstance.id, next.trim()).subscribe({
+      next: (updated) => {
+        this.toast.success('Case status updated');
+        this.boundCase.update((curr) => curr ? { ...curr, workflowInstance: updated } : null);
+      },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Update failed'),
+    });
+  }
+
+  addCaseComment() {
+    const bc = this.boundCase(); if (!bc || !this.newCaseComment.trim()) return;
+    this.wfInstApi.addComment(bc.workflowInstance.id, this.newCaseComment.trim()).subscribe({
+      next: (c) => {
+        this.caseComments.update((list) => [c, ...list]);
+        this.newCaseComment = '';
+        this.toast.success('Comment posted');
+      },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Failed to post comment'),
+    });
+  }
+
+  deleteCaseComment(c: WorkflowInstanceComment) {
+    const bc = this.boundCase(); if (!bc) return;
+    this.wfInstApi.deleteComment(bc.workflowInstance.id, c.id).subscribe({
+      next: () => {
+        this.caseComments.update((list) => list.filter((x) => x.id !== c.id));
+        this.toast.success('Comment deleted');
+      },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Failed to delete comment'),
+    });
+  }
+
+  addCaseAudit() {
+    const bc = this.boundCase(); if (!bc || !this.newCaseAuditKind.trim()) return;
+    let data: Record<string, unknown> | undefined;
+    if (this.newCaseAuditData.trim()) {
+      try { data = JSON.parse(this.newCaseAuditData); } catch { this.toast.error('Audit data must be JSON'); return; }
+    }
+    this.wfInstApi.addAudit(bc.workflowInstance.id, this.newCaseAuditKind.trim(), data).subscribe({
+      next: (a) => {
+        this.caseAudits.update((list) => [a, ...list]);
+        this.newCaseAuditKind = ''; this.newCaseAuditData = '';
+        this.toast.success('Audit note recorded');
+      },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Failed to add audit'),
+    });
+  }
+
+  deleteCaseAudit(a: WorkflowInstanceAudit) {
+    const bc = this.boundCase(); if (!bc) return;
+    this.wfInstApi.deleteAudit(bc.workflowInstance.id, a.id).subscribe({
+      next: () => {
+        this.caseAudits.update((list) => list.filter((x) => x.id !== a.id));
+        this.toast.success('Audit deleted');
+      },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Failed to delete audit'),
+    });
+  }
+
+  async decideCaseTask(t: Task) {
+    const bc = this.boundCase(); if (!bc) return;
+    const decision = await this.modal.prompt({ title: `Decision: ${t.name}`, message: 'Enter decision (or JSON outputs):', placeholder: 'approved' });
+    if (!decision) return;
+    let outputs: Record<string, unknown> = { decision };
+    try { outputs = JSON.parse(decision); } catch {}
+    this.wfInstApi.decision(bc.workflowInstance.id, t.id, outputs).subscribe({
+      next: () => { this.toast.success('Decision recorded'); this.load(); },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Decision failed'),
+    });
+  }
+
+  async delegateCaseTask(t: Task) {
+    const bc = this.boundCase(); if (!bc) return;
+    const to = await this.modal.prompt({ title: `Delegate: ${t.name}`, message: 'Delegate task to username:', placeholder: 'worker1' });
+    if (!to || !to.trim()) return;
+    this.wfInstApi.delegate(bc.workflowInstance.id, to.trim(), t.id).subscribe({
+      next: () => { this.toast.success(`Task delegated to ${to.trim()}`); this.load(); },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Delegate failed'),
+    });
   }
 
   setTab(t: Tab) { this.tab.set(t); this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true }); }
