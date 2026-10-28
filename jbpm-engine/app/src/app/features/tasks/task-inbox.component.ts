@@ -3,8 +3,10 @@ import { ActivatedRoute } from '@angular/router';
 import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
+import { firstValueFrom } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 import { TaskApiService } from '../../core/api/task-api.service';
+import { IamApiService } from '../../core/api/iam-api.service';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
 import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
@@ -44,10 +46,17 @@ const SCOPES: { key: Scope; label: string }[] = [
       @if (selectedIds().size) {
         <div class="bulkbar">
           <span>{{ selectedIds().size }} selected</span>
-          <button class="btn sm" (click)="bulkClaim()">Claim</button>
-          <button class="btn sm" (click)="bulkRelease()">Release</button>
-          <button class="btn sm" (click)="bulkReassign()">Reassign</button>
+          <button class="btn sm" [disabled]="!claimableCount()" (click)="bulkClaim()">
+            Claim @if (claimableCount()) { ({{ claimableCount() }}) }
+          </button>
+          <button class="btn sm" [disabled]="!releasableCount()" (click)="bulkRelease()">
+            Release @if (releasableCount()) { ({{ releasableCount() }}) }
+          </button>
+          <button class="btn sm" [disabled]="!reassignableCount()" (click)="bulkReassign()">
+            Reassign @if (reassignableCount()) { ({{ reassignableCount() }}) }
+          </button>
           <span class="spacer"></span>
+          <button class="btn ghost sm" (click)="clearSelection()">Clear selection</button>
         </div>
       }
 
@@ -62,11 +71,37 @@ const SCOPES: { key: Scope; label: string }[] = [
           </div>
         } @else {
           <table>
-            <thead><tr><th></th><th>Task</th><th>PIID</th><th>Group / Owner</th><th>Priority</th><th>Due</th><th>Status</th></tr></thead>
+            <thead>
+              <tr>
+                <th style="width: 38px;">
+                  @if (actionableVisibleCount() > 0) {
+                    <input
+                      type="checkbox"
+                      [checked]="isAllActionableSelected()"
+                      [indeterminate]="isSomeActionableSelected()"
+                      (change)="toggleSelectAll()"
+                      title="Select all actionable tasks"
+                    />
+                  }
+                </th>
+                <th>Task</th>
+                <th>PIID</th>
+                <th>Group / Owner</th>
+                <th>Priority</th>
+                <th>Due</th>
+                <th>Status</th>
+              </tr>
+            </thead>
             <tbody>
               @for (t of visible(); track t.id) {
                 <tr [class.overdue]="isOverdue(t)">
-                  <td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="selectedIds().has(t.id)" (change)="toggleSelect(t.id)" /></td>
+                  <td (click)="$event.stopPropagation()">
+                    @if (isActionable(t)) {
+                      <input type="checkbox" [checked]="selectedIds().has(t.id)" (change)="toggleSelect(t.id)" />
+                    } @else {
+                      <input type="checkbox" disabled [title]="'Task is ' + t.status + ' and cannot be claimed, released, or reassigned'" style="opacity: 0.25; cursor: not-allowed;" />
+                    }
+                  </td>
                   <td><a class="tlink" [routerLink]="['/tasks', t.id]"><b>{{ t.name }}</b></a><div class="muted sm mono">{{ shortId(t.id) }}</div></td>
                   <td><a class="ilink mono" [routerLink]="['/instances', t.instanceId]">{{ shortId(t.instanceId) }}</a></td>
                   <td class="muted">{{ t.group || '—' }} @if (t.assignee) { <div class="sm">→ {{ t.assignee }}</div> }</td>
@@ -123,6 +158,7 @@ const SCOPES: { key: Scope; label: string }[] = [
 })
 export class TaskInboxComponent {
   private api = inject(TaskApiService);
+  private iamApi = inject(IamApiService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
@@ -227,8 +263,55 @@ export class TaskInboxComponent {
     return all.length;
   }
 
+  isActionable(t: Task): boolean {
+    return t.status === 'created' || t.status === 'reserved' || t.status === 'inprogress';
+  }
+
+  actionableVisible = computed(() => this.visible().filter((t) => this.isActionable(t)));
+  actionableVisibleCount = computed(() => this.actionableVisible().length);
+
+  isAllActionableSelected = computed(() => {
+    const act = this.actionableVisible();
+    if (!act.length) return false;
+    const sel = this.selectedIds();
+    return act.every((t) => sel.has(t.id));
+  });
+
+  isSomeActionableSelected = computed(() => {
+    const act = this.actionableVisible();
+    if (!act.length) return false;
+    const sel = this.selectedIds();
+    const count = act.filter((t) => sel.has(t.id)).length;
+    return count > 0 && count < act.length;
+  });
+
+  toggleSelectAll() {
+    const act = this.actionableVisible();
+    if (!act.length) return;
+    const s = new Set(this.selectedIds());
+    if (this.isAllActionableSelected()) {
+      for (const t of act) s.delete(t.id);
+    } else {
+      for (const t of act) s.add(t.id);
+    }
+    this.selectedIds.set(s);
+  }
+
+  clearSelection() {
+    this.selectedIds.set(new Set());
+  }
+
+  claimableCount = computed(() => this.selectedTasks().filter((t) => t.status === 'created').length);
+  releasableCount = computed(() => {
+    const me = this.me();
+    return this.selectedTasks().filter((t) => (t.status === 'reserved' || t.status === 'inprogress') && (!t.assignee || t.assignee === me)).length;
+  });
+  reassignableCount = computed(() => this.selectedTasks().filter((t) => this.isActionable(t)).length);
+
   isOverdue(t: Task) { return !!t.dueAt && t.dueAt < new Date().toISOString() && t.status !== 'completed' && t.status !== 'skipped'; }
   toggleSelect(id: string) {
+    const task = this.tasks().find((t) => t.id === id);
+    if (task && !this.isActionable(task)) return;
     const s = new Set(this.selectedIds());
     if (s.has(id)) s.delete(id); else s.add(id);
     this.selectedIds.set(s);
@@ -260,9 +343,18 @@ export class TaskInboxComponent {
       .then((r) => this.bulkResult('Release', r));
   }
   async bulkReassign() {
-    const to = await this.modal.prompt({ title: 'Reassign', message: 'Delegate the selected tasks to (username):' });
-    if (!to) return;
-    Promise.all(this.selectedTasks().map((t) => new Promise<{ ok: boolean }>((res) => this.api.delegateTask(t.id, to).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
+    const actionable = this.selectedTasks().filter((t) => this.isActionable(t));
+    if (!actionable.length) { this.toast.error('No reassignable tasks selected'); return; }
+    const users = await firstValueFrom(this.iamApi.listUsers()).catch(() => []);
+    const activeUsernames = (users || []).filter((u) => u.active !== false).map((u) => u.username);
+    const to = await this.modal.prompt({
+      title: 'Reassign Tasks',
+      message: `Select a registered user to delegate ${actionable.length} selected task(s) to:`,
+      options: activeUsernames.length ? activeUsernames : undefined,
+      placeholder: 'username',
+    });
+    if (!to || !to.trim()) return;
+    Promise.all(actionable.map((t) => new Promise<{ ok: boolean }>((res) => this.api.delegateTask(t.id, to.trim()).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
       .then((r) => this.bulkResult('Reassign', r));
   }
 
