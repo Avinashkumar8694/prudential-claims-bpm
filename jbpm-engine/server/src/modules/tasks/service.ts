@@ -83,6 +83,8 @@ export class TaskService {
   async release(id: string, user: string): Promise<Task> {
     const t = await this.get(id);
     await this.assertInstanceActionable(t);
+    if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
+    if (t.status !== 'reserved' && t.status !== 'inprogress') throw conflict(`task is ${t.status}, not releasable`);
     t.assignee = undefined; t.status = 'created';
     await this.repo().put(t);
     await this.ctx.audit({ actor: user, kind: 'task.released', instanceId: t.instanceId, taskId: t.id });
@@ -106,7 +108,7 @@ export class TaskService {
   async complete(id: string, outputs: Record<string, unknown>, user: string): Promise<Task> {
     const t = await this.get(id);
     await this.assertOwnable(t, user);
-    if (t.status === 'completed') throw conflict('task already completed');
+    if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
     // Refuse before mutating the task if the instance can't accept it (e.g. suspended/aborted), so a
     // failed resume can't leave the task completed but the instance un-advanced.
     await this.assertInstanceActionable(t);
@@ -268,6 +270,8 @@ export class TaskService {
 
   async addComment(taskId: string, body: string, author: string): Promise<TaskComment> {
     const t = await this.get(taskId);
+    await this.assertInstanceActionable(t);
+    if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task is ${t.status}; comments are closed`);
     if (!body?.trim()) throw validation('comment body is required');
     const c: TaskComment = { id: this.ctx.newId(), tenantId: this.ctx.tenantId, taskId, author, body: body.trim(), at: this.ctx.clock() };
     await this.comments().put(c);
@@ -277,6 +281,8 @@ export class TaskService {
 
   async deleteComment(taskId: string, commentId: string, actor: string): Promise<void> {
     const t = await this.get(taskId);
+    await this.assertInstanceActionable(t);
+    if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task is ${t.status}; cannot delete comments`);
     const c = await this.comments().get(commentId);
     if (!c || c.tenantId !== this.ctx.tenantId || c.taskId !== taskId) throw notFound('Comment');
     if (c.author !== actor && t.businessAdmin !== actor) throw forbidden('only the comment author can delete it');

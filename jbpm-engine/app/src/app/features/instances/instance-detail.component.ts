@@ -9,6 +9,7 @@ import { WorkflowInstanceApiService } from '../../core/api/workflow-instance-api
 import { QueryApiService } from '../../core/api/query-api.service';
 import { OpsApiService } from '../../core/api/ops-api.service';
 import { SystemApiService } from '../../core/api/system-api.service';
+import { AuthService } from '../../core/auth/auth.service';
 import { RealtimeService } from '../../core/realtime.service';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
@@ -391,6 +392,13 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
               @case ('case') {
                 <div class="case-section">
                   @if (boundCase(); as bc) {
+                    @if (isCaseReadOnly()) {
+                      <div class="donebanner" style="margin-bottom: 14px;">
+                        <app-icon name="check" [size]="14" />
+                        <span>This case is <strong>{{ bc.workflowInstance.status }}</strong>@if (inst()?.status) { (process instance is <strong>{{ inst()!.status }}</strong>) } — it is finished and read-only. Business data, task reassignments, and case status cannot be modified.</span>
+                      </div>
+                    }
+
                     <div class="card pad" style="margin-bottom: 14px;">
                       <div class="row" style="align-items: center; justify-content: space-between;">
                         <div>
@@ -402,7 +410,7 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                           </h3>
                           <p class="muted mono sm" style="margin: 0;">Case ID: {{ bc.workflowInstance.id }} · Created {{ ago(bc.workflowInstance.createdAt) }} by {{ bc.workflowInstance.createdBy }}</p>
                         </div>
-                        <button class="btn sm" (click)="updateCaseStatus()">Update Case Status</button>
+                        <button class="btn sm" [disabled]="isCaseReadOnly()" (click)="updateCaseStatus()">Update Case Status</button>
                       </div>
                     </div>
 
@@ -410,9 +418,9 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                     <div class="card pad" style="margin-bottom: 14px;">
                       <div class="section-title first">Business Data (Case Payload)</div>
                       <p class="muted sm" style="margin-top:-4px; margin-bottom:8px;">Structured business fields validated against the case workflow definition schema.</p>
-                      <textarea rows="8" [(ngModel)]="caseDataText" style="width:100%; font-family:var(--font-mono); font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;"></textarea>
+                      <textarea rows="8" [(ngModel)]="caseDataText" [disabled]="isCaseReadOnly()" style="width:100%; font-family:var(--font-mono); font-size:12.5px; border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;"></textarea>
                       @if (caseDataError()) { <p class="err sm">{{ caseDataError() }}</p> }
-                      <button class="btn primary sm" (click)="saveCaseData()">Save Business Data</button>
+                      <button class="btn primary sm" [disabled]="isCaseReadOnly()" (click)="saveCaseData()">Save Business Data</button>
                     </div>
 
                     <!-- Case Tasks Card -->
@@ -428,7 +436,7 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                               <span class="badge">{{ t.status }}</span>
                             </div>
                             <p class="muted sm" style="margin: 0;">Group: {{ t.group || '—' }} · Assignee: {{ t.assignee || '—' }} · Priority: {{ t.priority || 0 }}</p>
-                            @if (t.status !== 'completed' && t.status !== 'skipped') {
+                            @if (t.status !== 'completed' && t.status !== 'skipped' && !isCaseReadOnly()) {
                               <div class="row" style="gap: 6px; margin-top: 4px;">
                                 <button class="btn sm primary" (click)="decideCaseTask(t)">Decision</button>
                                 <button class="btn sm" (click)="delegateCaseTask(t)">Delegate</button>
@@ -442,17 +450,23 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                     <!-- Case Comments -->
                     <div class="card pad" style="margin-bottom: 14px;">
                       <div class="section-title first">Case Comments</div>
-                      <div class="row" style="gap: 8px; margin-bottom: 12px;">
-                        <input [(ngModel)]="newCaseComment" placeholder="Add a comment to this case…" (keyup.enter)="addCaseComment()" style="flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px;" />
-                        <button class="btn sm" (click)="addCaseComment()">Post</button>
-                      </div>
+                      @if (!isCaseReadOnly()) {
+                        <div class="row" style="gap: 8px; margin-bottom: 12px;">
+                          <input [(ngModel)]="newCaseComment" placeholder="Add a comment to this case…" (keyup.enter)="addCaseComment()" style="flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px;" />
+                          <button class="btn sm" [disabled]="!newCaseComment.trim()" (click)="addCaseComment()">Post</button>
+                        </div>
+                      } @else {
+                        <p class="muted sm" style="margin-bottom: 10px;">Comments are closed for finalized cases.</p>
+                      }
                       @for (c of caseComments(); track c.id) {
                         <div class="crow" style="padding: 8px 0; border-top: 1px solid var(--border);">
                           <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 2px;">
                             <b>{{ c.author }}</b>
                             <div class="row" style="gap: 6px; align-items: center;">
                               <span class="muted sm">{{ ago(c.at) }}</span>
-                              <button class="btn ghost sm" (click)="deleteCaseComment(c)"><app-icon name="trash" [size]="12" /></button>
+                              @if (!isCaseReadOnly() && c.author === me()) {
+                                <button class="btn ghost sm" (click)="deleteCaseComment(c)"><app-icon name="trash" [size]="12" /></button>
+                              }
                             </div>
                           </div>
                           <p style="margin: 0; font-size: 13px;">{{ c.body }}</p>
@@ -991,6 +1005,7 @@ export class InstanceDetailComponent implements OnDestroy {
   private queryApi = inject(QueryApiService);
   private opsApi = inject(OpsApiService);
   private systemApi = inject(SystemApiService);
+  private auth = inject(AuthService);
   private realtime = inject(RealtimeService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
@@ -998,6 +1013,7 @@ export class InstanceDetailComponent implements OnDestroy {
   private router = inject(Router);
   private unsub?: () => void;
 
+  me = computed(() => this.auth.user()?.username);
   id = signal(this.route.snapshot.paramMap.get('id')!);
   inst = signal<Instance | null>(null);
   loading = signal(true);
@@ -1085,6 +1101,15 @@ export class InstanceDetailComponent implements OnDestroy {
   // though it isn't terminal — the whole point of a pause is that nothing touches the instance's state
   // until it's resumed, same reasoning, different lifecycle stage.
   isTerminal = computed(() => { const i = this.inst(); return !!i && (i.status === 'completed' || i.status === 'aborted'); });
+  isCaseReadOnly = computed(() => {
+    const i = this.inst();
+    if (i && (i.status === 'completed' || i.status === 'aborted')) return true;
+    const bc = this.boundCase();
+    if (!bc) return false;
+    const s = (bc.workflowInstance.status || '').toLowerCase();
+    const terminal = ['completed', 'closed', 'settled', 'settled_and_closed', 'aborted', 'failed', 'cancelled'];
+    return terminal.includes(s);
+  });
   // System-wide toggle (Settings → System) for jBPM's normally-permissive "edit variables on a live
   // instance directly" behavior — defaults true (matching DEFAULT_SETTINGS server-side) until the real
   // value loads, so there's no edit-button flash-then-disappear on first render.
@@ -1252,6 +1277,7 @@ export class InstanceDetailComponent implements OnDestroy {
   }
 
   saveCaseData() {
+    if (this.isCaseReadOnly()) { this.toast.error('Case is read-only'); return; }
     const bc = this.boundCase(); if (!bc) return;
     let data: Record<string, unknown>;
     try { data = JSON.parse(this.caseDataText); } catch { this.caseDataError.set('Invalid JSON format'); return; }
@@ -1266,6 +1292,7 @@ export class InstanceDetailComponent implements OnDestroy {
   }
 
   async updateCaseStatus() {
+    if (this.isCaseReadOnly()) { this.toast.error('Case is read-only'); return; }
     const bc = this.boundCase(); if (!bc) return;
     const next = await this.modal.prompt({ title: 'Update Case Status', message: 'Enter new case status:', initialValue: bc.workflowInstance.status });
     if (!next || !next.trim()) return;
@@ -1279,6 +1306,7 @@ export class InstanceDetailComponent implements OnDestroy {
   }
 
   addCaseComment() {
+    if (this.isCaseReadOnly()) { this.toast.error('Comments are closed for finalized cases'); return; }
     const bc = this.boundCase(); if (!bc || !this.newCaseComment.trim()) return;
     this.wfInstApi.addComment(bc.workflowInstance.id, this.newCaseComment.trim()).subscribe({
       next: (c) => {
@@ -1548,8 +1576,16 @@ export class InstanceDetailComponent implements OnDestroy {
   fmt(v: unknown): string { if (v === undefined) return '(none)'; return typeof v === 'string' ? v : JSON.stringify(v); }
   resetLogFilters() { this.logNodeFilter = ''; this.logTypeFilter = ''; this.logSearch = ''; }
 
-  startEdit(name: string, raw: unknown) { this.editingVar.set(name); this.editValue = typeof raw === 'object' ? JSON.stringify(raw) : String(raw); }
+  startEdit(name: string, raw: unknown) {
+    if (!this.canEditVars()) return;
+    this.editingVar.set(name);
+    this.editValue = typeof raw === 'object' ? JSON.stringify(raw) : String(raw);
+  }
   saveVar(name: string) {
+    if (!this.canEditVars()) {
+      this.toast.error(`Instance is ${this.inst()?.status}; variables cannot be edited`);
+      return;
+    }
     let value: unknown = this.editValue;
     try { value = JSON.parse(this.editValue); } catch { /* keep as string */ }
     this.api.updateVariables(this.id(), { [name]: value }).subscribe({

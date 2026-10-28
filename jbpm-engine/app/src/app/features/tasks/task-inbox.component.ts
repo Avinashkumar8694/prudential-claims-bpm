@@ -235,7 +235,10 @@ export class TaskInboxComponent {
   }
   private onError(e: any) { this.toast.error(e?.error?.error?.message || 'That action could not be completed'); }
 
-  quickClaim(t: Task) { this.api.claimTask(t.id).subscribe({ next: () => this.reload(), error: (e) => this.onError(e) }); }
+  quickClaim(t: Task) {
+    if (t.status === 'completed' || t.status === 'skipped') return;
+    this.api.claimTask(t.id).subscribe({ next: () => this.reload(), error: (e) => this.onError(e) });
+  }
 
   private bulkResult(label: string, results: { ok: boolean }[]) {
     const ok = results.filter((r) => r.ok).length;
@@ -245,11 +248,15 @@ export class TaskInboxComponent {
   }
   private selectedTasks(): Task[] { const ids = this.selectedIds(); return this.tasks().filter((t) => ids.has(t.id)); }
   bulkClaim() {
-    Promise.all(this.selectedTasks().map((t) => new Promise<{ ok: boolean }>((res) => this.api.claimTask(t.id).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
+    const actionable = this.selectedTasks().filter((t) => t.status === 'created');
+    if (!actionable.length) { this.toast.error('No claimable tasks selected'); return; }
+    Promise.all(actionable.map((t) => new Promise<{ ok: boolean }>((res) => this.api.claimTask(t.id).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
       .then((r) => this.bulkResult('Claim', r));
   }
   bulkRelease() {
-    Promise.all(this.selectedTasks().map((t) => new Promise<{ ok: boolean }>((res) => this.api.releaseTask(t.id).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
+    const actionable = this.selectedTasks().filter((t) => t.status === 'reserved' || t.status === 'inprogress');
+    if (!actionable.length) { this.toast.error('No releasable tasks selected'); return; }
+    Promise.all(actionable.map((t) => new Promise<{ ok: boolean }>((res) => this.api.releaseTask(t.id).subscribe({ next: () => res({ ok: true }), error: () => res({ ok: false }) }))))
       .then((r) => this.bulkResult('Release', r));
   }
   async bulkReassign() {

@@ -142,3 +142,23 @@ test('list() sorts by priority (highest first), then newest-first within the sam
   const items = await new TaskService(ctx).list({ group: 'ops' });
   assert.deepStrictEqual(items.map((t) => t.name), ['High', 'Low', 'None']);
 });
+
+test('security: completed or skipped tasks reject release(), complete(), and addComment()', async () => {
+  const ctx = newCtx();
+  const inst = await run(ctx, { skippable: true });
+  const task = (await ctx.store.repo<Task>(Collections.tasks).query((t) => t.instanceId === inst.id))[0]!;
+  const svc = new TaskService(ctx);
+
+  await svc.claim(task.id, 'carol');
+  await svc.complete(task.id, {}, 'carol');
+
+  // Verify complete() rejects on completed task
+  await assert.rejects(() => svc.complete(task.id, {}, 'carol'), /task already completed/);
+
+  // Verify release() rejects (either instance completed or task completed)
+  await assert.rejects(() => svc.release(task.id, 'carol'), /instance is completed|task already completed/);
+
+  // Verify addComment() rejects (either instance completed or task comments closed)
+  await assert.rejects(() => svc.addComment(task.id, 'hello', 'carol'), /instance is completed|comments are closed/);
+});
+

@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
 import { AuthService } from '../../core/auth/auth.service';
 import { TaskApiService } from '../../core/api/task-api.service';
+import { InstanceApiService } from '../../core/api/instance-api.service';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
 import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
@@ -44,18 +45,27 @@ const TABS: { key: Tab; label: string }[] = [
         </div>
         <p class="muted meta">Instance <a class="lnk" [routerLink]="['/instances', task()!.instanceId]">{{ shortId(task()!.instanceId) }}</a> · Priority {{ task()!.priority ?? '—' }} · Owner {{ task()!.assignee || 'unclaimed' }}</p>
 
+        @if (isReadOnly()) {
+          <div class="donebanner" [class.aborted]="task()!.status === 'skipped' || instanceStatus() === 'aborted' || instanceStatus() === 'failed'" [class.suspended]="instanceStatus() === 'suspended'">
+            <app-icon [name]="task()!.status === 'completed' || instanceStatus() === 'completed' ? 'check' : 'warning'" [size]="14" />
+            <span>This task is <strong>{{ task()!.status }}</strong>@if (instanceStatus() && instanceStatus() !== task()!.status) { (process instance is <strong>{{ instanceStatus() }}</strong>) } — it is finished and read-only. Priority, due date, assignments, and work outputs cannot be modified.</span>
+          </div>
+        }
+
         <nav class="tabs">
           @for (t of tabDefs; track t.key) { <button [class.active]="tab() === t.key" (click)="setTab(t.key)">{{ t.label }}</button> }
         </nav>
 
-        <div class="row actionrow">
-          @if (canClaim()) { <button class="btn sm" (click)="claim()">Claim</button> }
-          @if (canRelease()) { <button class="btn sm" (click)="release()">Release</button> }
-          @if (canStart()) { <button class="btn sm" (click)="start()">Start</button> }
-          @if (canStop()) { <button class="btn sm" (click)="stop()">Stop</button> }
-          @if (canAct()) { <button class="btn primary sm" (click)="complete()">Complete</button> }
-          @if (canSkip()) { <button class="btn sm" (click)="skip()">Skip</button> }
-        </div>
+        @if (!isReadOnly()) {
+          <div class="row actionrow">
+            @if (canClaim()) { <button class="btn sm" (click)="claim()">Claim</button> }
+            @if (canRelease()) { <button class="btn sm" (click)="release()">Release</button> }
+            @if (canStart()) { <button class="btn sm" (click)="start()">Start</button> }
+            @if (canStop()) { <button class="btn sm" (click)="stop()">Stop</button> }
+            @if (canAct()) { <button class="btn primary sm" (click)="complete()">Complete</button> }
+            @if (canSkip()) { <button class="btn sm" (click)="skip()">Skip</button> }
+          </div>
+        }
 
         @switch (tab()) {
           @case ('work') {
@@ -73,7 +83,7 @@ const TABS: { key: Tab; label: string }[] = [
                   <button class="btn sm" (click)="save()">Save</button>
                   <button class="btn primary sm" (click)="complete()">Complete</button>
                 </div>
-              } @else if (task()!.status === 'completed' || task()!.status === 'skipped') {
+              } @else if (task()!.status === 'completed' || task()!.status === 'skipped' || isReadOnly()) {
                 <div class="section-title">Outputs</div>
                 @if (outputRows().length) {
                   <table class="kv"><tbody>@for (kv of outputRows(); track kv[0]) { <tr><td class="k">{{ kv[0] }}</td><td class="v mono">{{ kv[1] }}</td></tr> }</tbody></table>
@@ -104,10 +114,17 @@ const TABS: { key: Tab; label: string }[] = [
               <p class="muted sm" style="margin-bottom:14px;">{{ task()!.assignee ? task()!.assignee : 'Unclaimed — first potential owner to claim becomes the actual owner.' }}</p>
 
               <div class="section-title">Delegate to a user</div>
-              <div class="row">
-                <input placeholder="username" [(ngModel)]="delegateTo" style="flex:1;" />
-                <button class="btn sm" [disabled]="!delegateTo.trim()" (click)="delegate()">Delegate</button>
-              </div>
+              @if (isReadOnly()) {
+                <div class="readonly-note">
+                  <app-icon name="warning" [size]="13" />
+                  <span>Task is {{ task()!.status }} — delegation and reassignment are disabled.</span>
+                </div>
+              } @else {
+                <div class="row">
+                  <input placeholder="username" [(ngModel)]="delegateTo" [disabled]="isReadOnly()" style="flex:1;" />
+                  <button class="btn sm" [disabled]="isReadOnly() || !delegateTo.trim()" (click)="delegate()">Delegate</button>
+                </div>
+              }
             </div>
           }
           @case ('comments') {
@@ -119,38 +136,52 @@ const TABS: { key: Tab; label: string }[] = [
                       <div class="avatar">{{ c.author.slice(0,1).toUpperCase() }}</div>
                       <div class="cbody">
                         <div class="ctext">{{ c.body }}</div>
-                        <div class="muted sm">{{ c.author }} · {{ ago(c.at) }} @if (c.author === me()) { · <button class="lnkbtn" (click)="deleteComment(c)">delete</button> }</div>
+                        <div class="muted sm">{{ c.author }} · {{ ago(c.at) }} @if (!isReadOnly() && c.author === me()) { · <button class="lnkbtn" (click)="deleteComment(c)">delete</button> }</div>
                       </div>
                     </div>
                   }
                 </div>
               } @else { <p class="muted sm" style="margin-bottom:12px;">No comments yet.</p> }
-              <div class="row">
-                <input placeholder="Add a comment…" [(ngModel)]="newComment" (keyup.enter)="postComment()" style="flex:1;" />
-                <button class="btn sm" [disabled]="!newComment.trim()" (click)="postComment()">Post</button>
-              </div>
+              @if (isReadOnly()) {
+                <div class="readonly-note" style="margin-top: 8px;">
+                  <app-icon name="warning" [size]="13" />
+                  <span>Comments are closed for finished tasks.</span>
+                </div>
+              } @else {
+                <div class="row">
+                  <input placeholder="Add a comment…" [(ngModel)]="newComment" [disabled]="isReadOnly()" (keyup.enter)="postComment()" style="flex:1;" />
+                  <button class="btn sm" [disabled]="isReadOnly() || !newComment.trim()" (click)="postComment()">Post</button>
+                </div>
+              }
             </div>
           }
           @case ('admin') {
             <div class="card pad wrap">
               <div class="row" style="margin-bottom:14px;"><span class="badge purple">Business-admin actions</span></div>
 
+              @if (isReadOnly()) {
+                <div class="readonly-note">
+                  <app-icon name="warning" [size]="13" />
+                  <span>Task is {{ task()!.status }} — administrative fields and forward/reminder actions are locked.</span>
+                </div>
+              }
+
               <div class="section-title first">Priority & due date</div>
               <div class="grid2">
-                <div class="field"><label>Priority</label><input type="number" min="0" max="10" [(ngModel)]="editPriority" /></div>
-                <div class="field"><label>Due date</label><input type="datetime-local" [(ngModel)]="editDueAt" /></div>
+                <div class="field"><label>Priority</label><input type="number" min="0" max="10" [(ngModel)]="editPriority" [disabled]="isReadOnly()" /></div>
+                <div class="field"><label>Due date</label><input type="datetime-local" [(ngModel)]="editDueAt" [disabled]="isReadOnly()" /></div>
               </div>
-              <button class="btn sm" (click)="saveAdmin()">Update</button>
+              <button class="btn sm" [disabled]="isReadOnly()" (click)="saveAdmin()">Update</button>
 
               <div class="section-title">Forward to a user or group</div>
               <div class="row" style="margin-bottom:16px;">
-                <input placeholder="username" [(ngModel)]="forwardUser" style="flex:1;" />
-                <input placeholder="or group" [(ngModel)]="forwardGroup" style="flex:1;" />
-                <button class="btn sm" [disabled]="!forwardUser.trim() && !forwardGroup.trim()" (click)="forward()">Forward</button>
+                <input placeholder="username" [(ngModel)]="forwardUser" [disabled]="isReadOnly()" style="flex:1;" />
+                <input placeholder="or group" [(ngModel)]="forwardGroup" [disabled]="isReadOnly()" style="flex:1;" />
+                <button class="btn sm" [disabled]="isReadOnly() || (!forwardUser.trim() && !forwardGroup.trim())" (click)="forward()">Forward</button>
               </div>
 
               <div class="section-title">Reminders</div>
-              <div class="row"><span class="muted sm">Send a reminder to the actual owner</span><span class="spacer"></span><button class="btn sm" [disabled]="!task()!.assignee" (click)="remind()">Send now</button></div>
+              <div class="row"><span class="muted sm">Send a reminder to the actual owner</span><span class="spacer"></span><button class="btn sm" [disabled]="isReadOnly() || !task()!.assignee" (click)="remind()">Send now</button></div>
             </div>
           }
           @case ('logs') {
@@ -201,10 +232,16 @@ const TABS: { key: Tab; label: string }[] = [
     .lrow { padding: 6px 8px; border-radius: 6px; display: flex; gap: 12px; } .lrow:nth-child(even) { background: var(--surface-2); }
     .lts { width: 150px; flex-shrink: 0; }
     .empty-state .btn { margin-top: 10px; }
+    .donebanner { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 8px; background: rgba(34, 197, 94, 0.12); color: var(--green); font-size: 13px; font-weight: 600; margin: 10px 0 14px; border: 1px solid var(--green); }
+    .donebanner.aborted { background: rgba(239, 68, 68, 0.12); color: var(--red); border-color: var(--red); }
+    .donebanner.suspended { background: rgba(245, 158, 11, 0.12); color: var(--amber); border-color: var(--amber); }
+    .readonly-note { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+    input:disabled, textarea:disabled, button:disabled { opacity: 0.55; cursor: not-allowed; }
   `],
 })
 export class TaskDetailComponent {
   private api = inject(TaskApiService);
+  private instApi = inject(InstanceApiService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
@@ -213,6 +250,7 @@ export class TaskDetailComponent {
 
   id = signal(this.route.snapshot.paramMap.get('id')!);
   task = signal<Task | null>(null);
+  instanceStatus = signal<string | null>(null);
   loading = signal(true);
   tab = signal<Tab>((this.route.snapshot.queryParamMap.get('tab') as Tab) || 'work');
   tabDefs = TABS;
@@ -228,6 +266,15 @@ export class TaskDetailComponent {
 
   me = computed(() => this.auth.user()?.username);
 
+  isReadOnly = computed(() => {
+    const t = this.task();
+    if (!t) return true;
+    if (t.status === 'completed' || t.status === 'skipped') return true;
+    const is = this.instanceStatus();
+    if (is === 'completed' || is === 'aborted' || is === 'failed' || is === 'suspended') return true;
+    return false;
+  });
+
   inputRows = computed(() => Object.entries(this.task()?.inputs || {}).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)] as [string, string]));
   outputRows = computed(() => Object.entries(this.task()?.outputs || {}).map(([k, v]) => [k, typeof v === 'object' ? JSON.stringify(v) : String(v)] as [string, string]));
 
@@ -241,6 +288,12 @@ export class TaskDetailComponent {
         this.editPriority = t.priority ?? null;
         this.editDueAt = t.dueAt ? t.dueAt.slice(0, 16) : '';
         this.outputPairs = Object.entries(t.outputs || {}).map(([key, v]) => ({ key, value: typeof v === 'object' ? JSON.stringify(v) : String(v) }));
+        if (t.instanceId) {
+          this.instApi.getInstance(t.instanceId).subscribe({
+            next: (inst) => this.instanceStatus.set(inst?.status || null),
+            error: () => {},
+          });
+        }
       },
       error: () => { this.task.set(null); this.loading.set(false); },
     });
@@ -253,20 +306,21 @@ export class TaskDetailComponent {
   setTab(t: Tab) { this.tab.set(t); this.router.navigate([], { queryParams: { tab: t }, queryParamsHandling: 'merge', replaceUrl: true }); }
 
   isOverdue() { const t = this.task(); return !!t?.dueAt && t.dueAt < new Date().toISOString() && t.status !== 'completed' && t.status !== 'skipped'; }
-  canClaim() { return this.task()?.status === 'created'; }
-  canRelease() { const t = this.task(); return !!t && (t.status === 'reserved' || t.status === 'inprogress') && t.assignee === this.me(); }
-  canStart() { const t = this.task(); return !!t && (t.status === 'created' || (t.status === 'reserved' && t.assignee === this.me())); }
-  canStop() { const t = this.task(); return !!t && t.status === 'inprogress' && t.assignee === this.me(); }
-  canAct() { const t = this.task(); return !!t && (t.status === 'reserved' || t.status === 'inprogress') && t.assignee === this.me(); }
+  canClaim() { return !this.isReadOnly() && this.task()?.status === 'created'; }
+  canRelease() { const t = this.task(); return !this.isReadOnly() && !!t && (t.status === 'reserved' || t.status === 'inprogress') && t.assignee === this.me(); }
+  canStart() { const t = this.task(); return !this.isReadOnly() && !!t && (t.status === 'created' || (t.status === 'reserved' && t.assignee === this.me())); }
+  canStop() { const t = this.task(); return !this.isReadOnly() && !!t && t.status === 'inprogress' && t.assignee === this.me(); }
+  canAct() { const t = this.task(); return !this.isReadOnly() && !!t && (t.status === 'reserved' || t.status === 'inprogress') && t.assignee === this.me(); }
   canSkip() { return this.canAct(); }
 
-  claim() { this.api.claimTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
-  release() { this.api.releaseTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
-  start() { this.api.startTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
-  stop() { this.api.stopTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
-  skip() { this.api.skipTask(this.id()).subscribe({ next: () => { this.toast.success('Task skipped'); this.refresh(); }, error: (e) => this.onError(e) }); }
-  save() { this.api.saveTask(this.id(), pairsToRecord(this.outputPairs)).subscribe({ next: () => { this.toast.success('Saved'); this.refresh(); }, error: (e) => this.onError(e) }); }
+  claim() { if (this.isReadOnly()) return; this.api.claimTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
+  release() { if (this.isReadOnly()) return; this.api.releaseTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
+  start() { if (this.isReadOnly()) return; this.api.startTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
+  stop() { if (this.isReadOnly()) return; this.api.stopTask(this.id()).subscribe({ next: () => this.refresh(), error: (e) => this.onError(e) }); }
+  skip() { if (this.isReadOnly()) return; this.api.skipTask(this.id()).subscribe({ next: () => { this.toast.success('Task skipped'); this.refresh(); }, error: (e) => this.onError(e) }); }
+  save() { if (this.isReadOnly()) return; this.api.saveTask(this.id(), pairsToRecord(this.outputPairs)).subscribe({ next: () => { this.toast.success('Saved'); this.refresh(); }, error: (e) => this.onError(e) }); }
   complete() {
+    if (this.isReadOnly()) return;
     this.api.completeTask(this.id(), pairsToRecord(this.outputPairs)).subscribe({
       next: () => { this.toast.success('Task completed'); this.refresh(); },
       error: (e) => this.onError(e),
@@ -274,24 +328,28 @@ export class TaskDetailComponent {
   }
 
   delegate() {
+    if (this.isReadOnly()) return;
     this.api.delegateTask(this.id(), this.delegateTo.trim()).subscribe({
       next: () => { this.toast.success(`Delegated to ${this.delegateTo.trim()}`); this.delegateTo = ''; this.refresh(); },
       error: (e) => this.onError(e),
     });
   }
   forward() {
+    if (this.isReadOnly()) return;
     this.api.forwardTask(this.id(), { user: this.forwardUser.trim() || undefined, group: this.forwardGroup.trim() || undefined }).subscribe({
       next: () => { this.toast.success('Forwarded'); this.forwardUser = ''; this.forwardGroup = ''; this.refresh(); },
       error: (e) => this.onError(e),
     });
   }
   remind() {
+    if (this.isReadOnly()) return;
     this.api.remindTask(this.id()).subscribe({
       next: (r) => this.toast.success(`Reminder sent to ${r.notified}`),
       error: (e) => this.onError(e),
     });
   }
   saveAdmin() {
+    if (this.isReadOnly()) return;
     this.api.updateTask(this.id(), { priority: this.editPriority ?? undefined, dueAt: this.editDueAt ? new Date(this.editDueAt).toISOString() : null }).subscribe({
       next: () => { this.toast.success('Task updated'); this.refresh(); },
       error: (e) => this.onError(e),
@@ -299,6 +357,7 @@ export class TaskDetailComponent {
   }
 
   postComment() {
+    if (this.isReadOnly()) return;
     const body = this.newComment.trim(); if (!body) return;
     this.api.addComment(this.id(), body).subscribe({
       next: () => {
@@ -310,6 +369,7 @@ export class TaskDetailComponent {
     });
   }
   async deleteComment(c: TaskComment) {
+    if (this.isReadOnly()) return;
     const ok = await this.modal.confirm({ title: 'Delete comment', message: 'Delete this comment?', danger: true, confirmLabel: 'Delete' });
     if (!ok) return;
     this.api.deleteComment(this.id(), c.id).subscribe({

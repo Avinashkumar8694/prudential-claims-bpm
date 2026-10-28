@@ -107,12 +107,27 @@ export class WorkflowInstanceService {
     return row;
   }
 
+  private async assertCaseActionable(w: WorkflowInstance): Promise<void> {
+    const s = (w.status || '').toLowerCase();
+    const terminal = ['completed', 'closed', 'settled', 'settled_and_closed', 'aborted', 'failed', 'cancelled'];
+    if (terminal.includes(s)) {
+      throw conflict(`case is ${w.status}; it is closed and read-only`);
+    }
+    if (w.piid) {
+      const bpm = await this.bpmInstances.get(w.piid).catch(() => null);
+      if (bpm && (bpm.status === 'completed' || bpm.status === 'aborted')) {
+        throw conflict(`underlying process instance is ${bpm.status}; case is read-only`);
+      }
+    }
+  }
+
   /** Workflow-level status — an open, business-defined vocabulary (e.g. "Pending Review",
    *  "Escalated") tracked independently of the underlying BPM `Instance.status`, which stays whatever
    *  the engine says regardless of what a case's business status is set to. */
   async updateStatus(id: string, status: string, actor: string): Promise<WorkflowInstance> {
     if (!status?.trim()) throw validation('status is required');
     const w = await this.get(id);
+    await this.assertCaseActionable(w);
     const next = { ...w, status: status.trim(), updatedAt: this.ctx.clock(), updatedBy: actor };
     await this.repo().put(next);
     await this.addAudit(id, actor, 'workflowInstance.statusChanged', { from: w.status, to: next.status });
@@ -123,6 +138,7 @@ export class WorkflowInstanceService {
    *  validation is enabled, applied as-is otherwise. */
   async updateData(id: string, data: Record<string, unknown>, actor: string): Promise<WorkflowInstance> {
     const w = await this.get(id);
+    await this.assertCaseActionable(w);
     const def = await this.definitions.get(w.workflowDefinitionId);
     this.definitions.validateData(def, data);
     const next = { ...w, data, updatedAt: this.ctx.clock(), updatedBy: actor };
@@ -204,7 +220,8 @@ export class WorkflowInstanceService {
     return (await this.store.comments().query((c) => c.tenantId === this.ctx.tenantId && c.workflowInstanceId === id)).sort((a, b) => a.at.localeCompare(b.at));
   }
   async addComment(id: string, body: string, author: string): Promise<WorkflowInstanceComment> {
-    await this.get(id);
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
     if (!body?.trim()) throw validation('comment body is required');
     const c: WorkflowInstanceComment = { id: this.ctx.newId(), tenantId: this.ctx.tenantId, workflowInstanceId: id, author, body: body.trim(), at: this.ctx.clock() };
     await this.store.comments().put(c);
@@ -212,7 +229,8 @@ export class WorkflowInstanceService {
     return c;
   }
   async deleteComment(id: string, commentId: string, actor: string): Promise<void> {
-    await this.get(id);
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
     const c = await this.store.comments().get(commentId);
     if (!c || c.tenantId !== this.ctx.tenantId || c.workflowInstanceId !== id) throw notFound('Comment');
     if (c.author !== actor) throw validation('only the comment author can delete it');
