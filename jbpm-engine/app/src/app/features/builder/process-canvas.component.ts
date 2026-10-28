@@ -57,8 +57,8 @@ const COL_W = NW + 100, ROW_H = NH + 46;
         <!-- CANVAS -->
         <main #canvasEl class="canvas" (dragover)="$event.preventDefault()" (drop)="onDrop($event)">
           <div #scrollArea class="scrollArea" [class.panning]="panMode()" (click)="bgClick()" (pointerdown)="onCanvasPointerDown($event)">
-            <div class="zoomlayer" [style.zoom]="zoom()">
-              <svg class="edges">
+            <div class="zoomlayer" [style.zoom]="zoom()" [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()">
+              <svg class="edges" [attr.width]="canvasWidth()" [attr.height]="canvasHeight()" [style.width.px]="canvasWidth()" [style.height.px]="canvasHeight()">
                 <defs>
                   <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                     <path d="M0,0 L10,5 L0,10 z" fill="#9aa3b2" />
@@ -253,7 +253,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     .scrollArea.panning { cursor: grab; }
     .scrollArea.panning:active { cursor: grabbing; }
     .zoomlayer { position: relative; min-width: 100%; min-height: 100%; }
-    .edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+    .edges { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
     .edge { fill: none; stroke: var(--border-strong); stroke-width: 2; pointer-events: stroke; cursor: pointer; }
     .edge:hover { stroke: var(--muted); } .edge.sel { stroke: var(--primary); stroke-width: 2.5; }
     .edge.ghost { stroke: var(--primary); stroke-dasharray: 5 4; opacity: .7; }
@@ -414,7 +414,6 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     /* Branch markers on multi-output edges */
     .branchbadge { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: var(--text); color: var(--surface); font-size: 11px; font-weight: 700; display: grid; place-items: center; box-shadow: var(--shadow-card); z-index: 3; cursor: pointer; }
     .branchpill { position: absolute; transform: translate(-6px, -30px); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 12px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); box-shadow: var(--shadow-card); z-index: 3; cursor: pointer; white-space: nowrap; }
-    .branchpill { position: absolute; transform: translate(-6px, -30px); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 999px; padding: 3px 12px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); box-shadow: var(--shadow-card); z-index: 3; cursor: pointer; white-space: nowrap; }
 
     .empty { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; color: var(--muted); max-width: 340px; }
     .empty-ic { width: 56px; height: 56px; margin: 0 auto 10px; border-radius: 16px; background: var(--surface); border: 1px dashed var(--border-strong); display: grid; place-items: center; font-size: 26px; color: var(--border-strong); }
@@ -571,6 +570,56 @@ export class ProcessCanvasComponent implements OnChanges {
   });
   siblingCount(e: CEdge) { return this.edges().filter((x) => x.from === e.from).length; }
 
+  /**
+   * Dynamic canvas dimension signals:
+   * Explicitly sizes `.zoomlayer` and `<svg class="edges">` to enclose all nodes, branch badges,
+   * loopback routing gutters, and labels, PLUS a generous workspace padding (900px horizontal, 600px vertical).
+   *
+   * Without explicit width/height, `.zoomlayer` collapses to the viewport width, and browsers hard-stop
+   * scrolling right at the outermost node border (or clip nodes under CSS `zoom`), preventing users from
+   * seeing subsequent flows, inspecting end-events, or having room to add new nodes to expand the flow.
+   */
+  canvasWidth = computed(() => {
+    let maxX = 2400;
+    for (const n of this.nodes()) {
+      const d = this.nodeDims(n.type);
+      const right = n.x + d.w;
+      if (right > maxX) maxX = right;
+    }
+    for (const b of this.labeledBranches()) {
+      if (b.x + 160 > maxX) maxX = b.x + 160;
+    }
+    for (const e of this.edges()) {
+      const fromNode = this.nodeById(e.from);
+      const toNode = this.nodeById(e.to);
+      if (fromNode && toNode && toNode.x < fromNode.x) {
+        const outX = fromNode.x + this.nodeDims(fromNode.type).w + 20;
+        if (outX > maxX) maxX = outX;
+      }
+    }
+    return maxX + 900;
+  });
+
+  canvasHeight = computed(() => {
+    let maxY = 1400;
+    for (const n of this.nodes()) {
+      const d = this.nodeDims(n.type);
+      const bottom = n.y + d.h;
+      if (bottom > maxY) maxY = bottom;
+    }
+    for (const e of this.edges()) {
+      const fromNode = this.nodeById(e.from);
+      const toNode = this.nodeById(e.to);
+      if (fromNode && toNode && toNode.x < fromNode.x) {
+        const fromBottom = fromNode.y + this.nodeDims(fromNode.type).h;
+        const toBottom = toNode.y + this.nodeDims(toNode.type).h;
+        const bypassY = Math.max(fromBottom, toBottom) + 50;
+        if (bypassY > maxY) maxY = bypassY;
+      }
+    }
+    return maxY + 600;
+  });
+
   hasErr(id: string) { return this.errIds().has(id); }
   hasWarn(id: string) { return this.warnIds().has(id); }
   private runValidate() {
@@ -723,12 +772,36 @@ export class ProcessCanvasComponent implements OnChanges {
     const el = this.scrollRef()?.nativeElement; if (!el) return;
     this.pointer = this.toLocal(ev.clientX, ev.clientY);
     if (this.linkFrom()) this.linkMoved = true;
-    if (!this.drag) return;
-    const n = this.nodes().find((x) => x.id === this.drag!.id); if (!n) return;
-    n.x = Math.max(10, Math.round(this.pointer.x - this.drag.offX));
-    n.y = Math.max(10, Math.round(this.pointer.y - this.drag.offY));
-    this.drag.moved = true;
-    this.nodes.set([...this.nodes()]);
+    if (this.drag) {
+      const n = this.nodes().find((x) => x.id === this.drag!.id);
+      if (n) {
+        n.x = Math.max(10, Math.round(this.pointer.x - this.drag.offX));
+        n.y = Math.max(10, Math.round(this.pointer.y - this.drag.offY));
+        this.drag.moved = true;
+        this.nodes.set([...this.nodes()]);
+      }
+    }
+
+    // Edge auto-scroll: if dragging a node or a connection line near viewport edges,
+    // smoothly scroll the viewport so the user can easily drag across long diagrams.
+    if (this.drag || this.linkFrom()) {
+      const rect = el.getBoundingClientRect();
+      const margin = 50;
+      const step = 16;
+      if (ev.clientX > rect.right - margin) el.scrollLeft += step;
+      else if (ev.clientX < rect.left + margin) el.scrollLeft -= step;
+      if (ev.clientY > rect.bottom - margin) el.scrollTop += step;
+      else if (ev.clientY < rect.top + margin) el.scrollTop -= step;
+    }
+  }
+
+  @HostListener('wheel', ['$event'])
+  onWheel(ev: WheelEvent) {
+    if (ev.ctrlKey || ev.metaKey) {
+      ev.preventDefault();
+      if (ev.deltaY < 0) this.zoomIn();
+      else if (ev.deltaY > 0) this.zoomOut();
+    }
   }
   @HostListener('document:pointerup')
   onUp() {
@@ -757,10 +830,12 @@ export class ProcessCanvasComponent implements OnChanges {
   openEdgeEditor(e: CEdge) { this.selEdge.set(e.id); this.selNode.set(null); this.editingEdge.set(e); }
   closeEdgeEditor() { this.editingEdge.set(null); }
 
-  // ---- pan tool: drag the background to scroll (toggled via the zoom control's hand button) ----
+  // ---- pan tool: drag the background to scroll (toggled via the zoom control's hand button or middle-click) ----
   onCanvasPointerDown(ev: PointerEvent) {
-    if (!this.panMode()) return;
+    const isMiddle = ev.button === 1;
+    if (!this.panMode() && !isMiddle) return;
     if ((ev.target as HTMLElement).closest('.node, .addbtn, .branchpill, .branchbadge')) return;
+    if (isMiddle) ev.preventDefault();
     const el = this.scrollRef()!.nativeElement;
     const startX = ev.clientX, startY = ev.clientY, startLeft = el.scrollLeft, startTop = el.scrollTop;
     const move = (e: PointerEvent) => { el.scrollLeft = startLeft - (e.clientX - startX); el.scrollTop = startTop - (e.clientY - startY); };
