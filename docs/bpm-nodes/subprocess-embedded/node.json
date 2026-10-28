@@ -1,0 +1,56 @@
+{
+  "id": "_sub",
+  "type": "subProcess",
+  "subtype": "embedded",
+  "bpmnElement": "subProcess",
+  "name": "Embedded",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "nodes": [
+    {
+      "id": "_ss",
+      "type": "startEvent",
+      "eventType": "none",
+      "outgoing": [
+        "sf1"
+      ]
+    },
+    {
+      "id": "_sc",
+      "type": "scriptTask",
+      "name": "Do",
+      "script": "\u2026",
+      "incoming": [
+        "sf1"
+      ],
+      "outgoing": [
+        "sf2"
+      ]
+    },
+    {
+      "id": "_se",
+      "type": "endEvent",
+      "eventType": "none",
+      "incoming": [
+        "sf2"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "sf1",
+      "sourceRef": "_ss",
+      "targetRef": "_sc"
+    },
+    {
+      "id": "sf2",
+      "sourceRef": "_sc",
+      "targetRef": "_se"
+    }
+  ],
+  "bpmn": "<bpmn2:subProcess id=\"_sub\" name=\"Embedded\"> start -> scriptTask -> end </bpmn2:subProcess>"
+}

@@ -1,0 +1,31 @@
+{
+  "id": "_sub",
+  "name": "Validate & enrich",
+  "type": "subprocess",
+  "nodes": [
+    {
+      "id": "s_s",
+      "type": "start"
+    },
+    {
+      "id": "s_check",
+      "type": "script",
+      "lang": "java",
+      "code": "kcontext.setVariable(\"valid\", true);"
+    },
+    {
+      "id": "s_e",
+      "type": "end"
+    }
+  ],
+  "flows": [
+    {
+      "from": "s_s",
+      "to": "s_check"
+    },
+    {
+      "from": "s_check",
+      "to": "s_e"
+    }
+  ]
+}

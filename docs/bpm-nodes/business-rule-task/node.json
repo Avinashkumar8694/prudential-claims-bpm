@@ -1,0 +1,15 @@
+{
+  "id": "_br",
+  "type": "businessRuleTask",
+  "bpmnElement": "businessRuleTask",
+  "name": "Rules",
+  "ruleFlowGroup": "grp",
+  "implementation": "##unspecified",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_out"
+  ],
+  "bpmn": "<bpmn2:businessRuleTask id=\"_br\" drools:ruleFlowGroup=\"grp\" implementation=\"##unspecified\" name=\"Rules\">\u2026</bpmn2:businessRuleTask>"
+}

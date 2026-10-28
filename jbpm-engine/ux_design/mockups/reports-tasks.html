@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Reports — Tasks — Mockup</title>
+<link rel="stylesheet" href="shared.css" />
+</head>
+<body>
+<div class="mockup-label">NEW — Reports · Tasks tab (audit P0 §1)</div>
+<div class="shell">
+  <nav class="sidenav">
+    <div class="brand"><span class="logo">jB</span> jBPM Engine</div>
+    <div class="navgroup">
+      <a class="navitem" href="home-dashboard.html"><span class="ic">⌂</span> Home</a>
+      <a class="navitem" href="projects-list.html"><span class="ic">▤</span> Projects</a>
+      <a class="navitem" href="deployments.html"><span class="ic">⇪</span> Deployments</a>
+      <a class="navitem" href="instances-list.html"><span class="ic">◷</span> Instances</a>
+      <a class="navitem" href="execution-errors.html"><span class="ic">⚠</span> Execution Errors</a>
+      <a class="navitem" href="jobs-timers.html"><span class="ic">⏱</span> Jobs &amp; Timers</a>
+      <a class="navitem" href="task-inbox.html"><span class="ic">☑</span> Tasks</a>
+      <a class="navitem active" href="reports-analytics.html"><span class="ic">📊</span> Reports &amp; Analytics</a>
+    </div>
+    <div class="navgroup">
+      <div class="glabel">Governance</div>
+      <a class="navitem" href="admin-iam.html"><span class="ic">⚙</span> Admin</a>
+      <a class="navitem" href="settings-account.html"><span class="ic">☾</span> Settings</a>
+    </div>
+    <button class="navfoot" aria-label="Account menu for avinash" aria-haspopup="menu">
+      <div class="avatar">AG</div>
+      <div style="font-size:12.5px; text-align:left;">
+        <div style="font-weight:600;">avinash</div>
+        <div class="muted" style="font-size:11px;">admin, builder</div>
+      </div>
+      <span class="muted" style="margin-left:auto;">⌃</span>
+    </button>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumbs"><b>Reports &amp; Analytics</b> <span>›</span> Tasks</div>
+      <div class="spacer"></div>
+      <button class="btn sm">⬇ Export CSV</button>
+      <a class="bell" href="notifications-panel.html" aria-label="Notifications, 5 unread">🔔<span class="dot"></span></a>
+    </div>
+
+    <div class="content">
+      <h1>Reports &amp; Analytics</h1>
+      <p class="muted" style="margin:4px 0 16px;">Throughput, duration and workload across every deployed process.</p>
+      <div class="tabs">
+        <a class="tab" href="reports-analytics.html">Processes</a>
+        <a class="tab active" href="reports-tasks.html">Tasks</a>
+      </div>
+      <div class="filterbar">
+        <span class="chip on">Process: all ▾</span>
+        <span class="chip">Assignee: all ▾</span>
+        <span class="chip">Last 30 days ▾</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap:16px; margin-bottom:16px;">
+        <div class="card" style="padding:18px;">
+          <h3 style="margin-bottom:2px;">Workload by assignee</h3>
+          <p class="muted" style="font-size:11.5px; margin-bottom:12px;">open tasks right now · answers "is anyone swamped?"</p>
+          <div style="display:flex; flex-direction:column; gap:10px;">
+            <div><div class="row" style="font-size:12.5px; margin-bottom:3px;"><span>maria</span><div class="spacer"></div><span class="badge failed">14 open</span></div><div class="progress"><span style="width:100%; background:var(--red);"></span></div></div>
+            <div><div class="row" style="font-size:12.5px; margin-bottom:3px;"><span>avinash</span><div class="spacer"></div><span class="badge waiting">6 open</span></div><div class="progress"><span style="width:43%; background:var(--amber);"></span></div></div>
+            <div><div class="row" style="font-size:12.5px; margin-bottom:3px;"><span>jordan</span><div class="spacer"></div><span class="badge active">2 open</span></div><div class="progress"><span style="width:14%; background:var(--green);"></span></div></div>
+            <div><div class="row" style="font-size:12.5px; margin-bottom:3px;"><span>sam</span><div class="spacer"></div><span class="badge inactive">0 open</span></div><div class="progress"><span style="width:0%;"></span></div></div>
+            <div><div class="row" style="font-size:12.5px; margin-bottom:3px;"><span class="muted">unclaimed (group queue)</span><div class="spacer"></div><span class="badge">11 open</span></div><div class="progress"><span style="width:78%; background:var(--muted);"></span></div></div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:18px; display:flex; gap:18px; align-items:center;">
+          <div class="donut" style="background: conic-gradient(var(--blue) 0 34%, var(--amber) 34% 63%, var(--green) 63% 90%, var(--red) 90% 100%);">
+            <div class="hole">34</div>
+          </div>
+          <div class="legend">
+            <div class="li"><span class="sw" style="background:var(--blue);"></span> InProgress · 34%</div>
+            <div class="li"><span class="sw" style="background:var(--amber);"></span> Ready · 29%</div>
+            <div class="li"><span class="sw" style="background:var(--green);"></span> Reserved · 27%</div>
+            <div class="li"><span class="sw" style="background:var(--red);"></span> Error · 10%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Task</th><th>Count</th><th>Avg duration</th><th>Min</th><th>Max</th><th>SLA met</th></tr></thead>
+          <tbody>
+            <tr><td>Review claim</td><td>412</td><td>38m</td><td>2m</td><td>6h</td><td><span class="badge active">94%</span></td></tr>
+            <tr><td>Verify documents</td><td>388</td><td>1h 12m</td><td>4m</td><td>1d</td><td><span class="badge active">88%</span></td></tr>
+            <tr><td>Approve payout</td><td>201</td><td>3h 04m</td><td>11m</td><td>2d</td><td><span class="badge waiting">71%</span></td></tr>
+            <tr><td>Triage fraud flag</td><td>64</td><td>22m</td><td>1m</td><td>3h</td><td><span class="badge active">97%</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

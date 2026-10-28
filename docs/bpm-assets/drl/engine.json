@@ -1,0 +1,40 @@
+{
+  "rulesets": [
+    {
+      "group": "claim-triage",
+      "rules": [
+        {
+          "name": "Flag high value claims",
+          "when": [
+            { "fact": "Claim", "as": "claim", "where": { "amount": { "gt": 100000 } } }
+          ],
+          "then": [
+            { "set": "claim", "fields": { "priority": "HIGH" } }
+          ]
+        },
+
+        {
+          "name": "Auto-approve small new claims when no fraud alert is open",
+          "when": [
+            { "fact": "Claim", "as": "claim", "where": { "amount": { "lte": 5000 }, "status": "NEW" } },
+            { "fact": "FraudAlert", "exists": false, "where": { "open": true } }
+          ],
+          "then": [
+            { "set": "claim", "fields": { "status": "APPROVED" } }
+          ]
+        }
+      ]
+    }
+  ],
+
+  "types": [
+    { "name": "Claim", "fields": [
+      { "name": "amount", "type": "double" },
+      { "name": "status", "type": "string" },
+      { "name": "priority", "type": "string" }
+    ] },
+    { "name": "FraudAlert", "fields": [ { "name": "open", "type": "boolean" } ] }
+  ],
+
+  "$note": "The WHOLE thing you write — nodejs-native, no package/FQN/DRL syntax. Read each `when` entry as a sentence: rule 1 = 'match a Claim (call it `claim`) whose amount > 100000'. `as` names the match so `then` can act on it: `as:\"claim\"` in when -> `set:\"claim\"` in then. Rule 2 shows a NEGATIVE match: `\"exists\": false` = 'there is NO FraudAlert that is open'. `where` is `{ field: value }` (equals) or `{ field: { op: value } }` (op = gt/gte/lt/lte/ne/in/contains/matches). `types` are the fact schemas; `fact` names one and the `where`/`set` field names are its fields. fromEngineProject synthesizes the .drl (imports, ruleflow-group, modify(), packages). See scenarios.md §0; model.json is the jBPM-side DrlModel this produces."
+}

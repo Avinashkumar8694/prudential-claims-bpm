@@ -1,0 +1,25 @@
+{
+  "types": [
+    {
+      "name": "Claim",
+      "fields": [
+        { "name": "amount", "type": "double" },
+        { "name": "status", "type": "string" },
+        { "name": "urgent", "type": "boolean" }
+      ]
+    }
+  ],
+  "forms": [
+    {
+      "name": "ClaimReview",
+      "type": "Claim",
+      "fields": [
+        { "bind": "amount", "label": "Claim amount", "readOnly": true },
+        { "bind": "status", "label": "Status", "required": true },
+        { "bind": "urgent" }
+      ]
+    }
+  ],
+
+  "$note": "The WHOLE thing you write (an EngineProject fragment). `Claim` is defined ONCE in `types`; the form references it via `type` (-> model.className FQN) and its `fields` bind to Claim's fields. You write only `bind` (+ optional label); the input `widget` is DERIVED from each field's type (amount:double -> DoubleBox, status:string -> TextBox, urgent:boolean -> CheckBox) — override per field with `widget`. No form JSON, no widget codes, no className. fromEngineProject generates the Business Central form definition (.frm JSON) at src/main/resources/forms/<name>.frm; a userTask node with form:'ClaimReview' binds to it. See scenarios.md §0; model.json shows the jBPM-side .frm this produces. (SDK verifies the JSON is valid, not that Business Central will load it.)"
+}

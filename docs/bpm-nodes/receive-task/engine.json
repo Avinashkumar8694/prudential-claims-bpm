@@ -1,0 +1,7 @@
+{
+  "id": "_await",
+  "name": "Await acknowledgement",
+  "type": "receive",
+  "message": "Ack",
+  "implementation": "##WebService"
+}

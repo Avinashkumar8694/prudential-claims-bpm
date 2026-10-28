@@ -505,20 +505,23 @@ app.post('/api/v1/claims/validate-bank', (req, res) => {
 });
 
 // 8. Contestability check (MRX)
+// US 10.03 MRX Pull + US 10.04 MRX Non-Disclosure Check (case-level, once, AD-2/AD-29).
+// Compares MRX/MIB/pharmacy records against the SINGLE purchase health question only
+// (not cause of death). Non-disclosure / disclosure-related / indeterminable →
+// mrxDiscrepancy=true (STP-blocking, → examiner). NONDISCLOSURE keyword forces a hit.
 app.post('/api/v1/claims/mrx-check', (req, res) => {
   const { caseId } = req.body;
-  const isContest = caseId && caseId.includes('CONTEST');
+  const key = (caseId || '').toUpperCase();
+  const nonDisclosure = /CONTEST|NONDISCLOSURE|MRX/.test(key);
   res.json({
     success: true,
-    alerts: isContest ? ['SUICIDE_CONTESTABLE_WINDOW'] : [],
-    mrxCheckResult: isContest ? {
-      medicalRecordsMatch: true,
-      preExistingExclusionsChecked: true,
-      isSuicide: true,
-      isContestable: true
-    } : {
-      medicalRecordsMatch: true,
-      preExistingExclusionsChecked: true
+    mrxDiscrepancy: nonDisclosure,                 // US 10.04 → CLAIM_FLAG_REGISTRY.MRx_Discrepancy
+    alerts: nonDisclosure ? ['NON_DISCLOSURE_SUSPECTED'] : [],
+    mrxCheckResult: {
+      recordsRetrieved: true,                      // US 10.03 (async pull complete)
+      comparedAgainst: 'SINGLE_PURCHASE_HEALTH_QUESTION',
+      nonDisclosureSuspected: nonDisclosure,
+      indeterminable: false
     }
   });
 });
@@ -585,18 +588,22 @@ app.post('/api/v1/claims/tax/apply', (req, res) => {
 });
 
 // 12. Calculate Benefit
+// US 10.33 Calculate Benefit Amount (STP-eligible only, AD-7). Benefit = policy FACE
+// AMOUNT per claim; SS GI has NO loans / NO cash value. DCI / post-mortem interest and
+// any withholding are PAYMENT-LANE (out of scope here) — no interest math in this node.
 app.post('/api/v1/claims/calculate', (req, res) => {
-  const { caseId } = req.body;
-  const isMisstate = caseId && caseId.includes('MISSTATE');
-  const outstandingLoans = isMisstate ? 30000.00 : 0.00;
+  const { caseId, faceAmount } = req.body;
+  const face = Number(faceAmount) || 50000.00;   // SS GI aggregate cap per insured is $50k
   res.json({
     success: true,
-    payoutAmount: 250000.00,
+    caseId: caseId || null,
+    payoutAmount: face,
     benefitCalculation: {
-      baseFaceAmount: 250000.00,
-      accruedInterest: 1250.00,
-      outstandingLoans: outstandingLoans,
-      netPayout: 251250.00 - outstandingLoans
+      baseFaceAmount: face,
+      outstandingLoans: 0.00,          // AD-7: no loans
+      cashValue: 0.00,                 // AD-7: no cash value
+      netBenefit: face,
+      interestNote: 'DCI / post-mortem interest applied in the Payment lane, not here'
     }
   });
 });
@@ -693,9 +700,13 @@ app.post('/api/v1/claims/nigo/send', (req, res) => {
 
 // 19. Set Claim Status to Pending Requirements
 app.post('/api/v1/claims/status', (req, res) => {
+  // Generic case/claim status update. Echoes the requested status (used by the
+  // verification flow for FOR_VERIFICATION / ON_HOLD); defaults to PENDING_REQUIREMENTS
+  // for the NIGO pending-requirements caller that sends no explicit status.
+  const { status } = req.body;
   res.json({
     success: true,
-    status: "PENDING_REQUIREMENTS"
+    status: status || "PENDING_REQUIREMENTS"
   });
 });
 
@@ -742,6 +753,254 @@ app.post('/api/v1/claims/nigo/death-verification', (req, res) => {
     verificationStatus: isVerifyFail ? "FAILED" : "VERIFIED"
   });
 });
+
+// --- MAIN CLAIM PROCESSING: extra endpoints for the rewritten flow ---
+
+// US 10.02 Check Contestability (case level, ANY policy → drives one insured-level MRX,
+// AD-2/AD-29/#35). A policy is contestable if DOD − issue date <= 730 days (2 yrs) OR a
+// reinstatement occurred within 2 years prior to death. Case = ANY policy contestable.
+// At launch every policy is < 2 yrs old, so this defaults to contestable=true when dates
+// are not supplied (or a NONCONTEST keyword can force false for testing).
+app.post('/api/v1/claims/check-contestability', (req, res) => {
+  const { caseId, dateOfDeath, policies } = req.body;
+  const key = (caseId || '').toUpperCase();
+  const DAY = 86400000;
+
+  function policyContestable(p) {
+    if (!p || !dateOfDeath || !p.issueDate) return null; // unknown → fall through to default
+    const dod = new Date(dateOfDeath).getTime();
+    const issue = new Date(p.issueDate).getTime();
+    if (isFinite(dod) && isFinite(issue) && (dod - issue) <= 730 * DAY) return true;
+    if (p.reinstatementDate) {
+      const ri = new Date(p.reinstatementDate).getTime();
+      if (isFinite(ri) && isFinite(dod) && (dod - ri) <= 730 * DAY) return true;
+    }
+    return false;
+  }
+
+  let contestable;
+  if (Array.isArray(policies) && policies.length && dateOfDeath) {
+    const results = policies.map(policyContestable);
+    contestable = results.some(r => r === true);           // ANY policy contestable
+  } else if (/NONCONTEST|NOTCONTEST/.test(key)) {
+    contestable = false;
+  } else {
+    contestable = true;   // launch default: policies < 2yrs → always contestable → MRX runs
+  }
+  res.json({ success: true, caseId: caseId || null, contestable });
+});
+
+// (no endpoint) "Assign case to examiner" / "Assign TI Case to Reviewer" are now
+// human tasks (user tasks assigned to the ClaimsExaminer / Reviewer group) — the case
+// lands on the group worklist directly; there is no assignment REST call.
+
+
+// --- PROCESS 3: CLAIM VERIFICATION (Track B) ENDPOINTS ---
+// Consumed by pru-claim-verification.bpmn. The verifier reviews an inbound
+// notification in the workbench and decides Promote / Hold / Close.
+
+// V1. (no dedicated endpoint) The "Update Case Status to For Verification" step reuses
+// the shared POST /api/v1/claims/status (used by NIGO too) with status=FOR_VERIFICATION.
+// V2. (no dedicated endpoint) No explicit "Assign to Verifier" step — the Claims Verifier
+// human task is group-assigned and auto-lands on the worklist (Alpha pull/auto-push).
+// Hold: handled internally — the gateway's Hold branch loops straight back to the task.
+
+// V3. Promote: set Notification Status = Verified_Promoted, generate the Case ID.
+// NOTE: no claim id here — a case has multiple claims; the claim ids are generated
+// per-case downstream by the main process (POST /api/v1/claims/get-claim-ids).
+app.post('/api/v1/claims/verification/promote', (req, res) => {
+  const { notificationId, claimType } = req.body;
+  const now = new Date();
+  const ymd = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const seq = Math.floor(10000 + Math.random() * 90000);
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    notificationStatus: 'VERIFIED_PROMOTED',
+    caseId: `CASE-${ymd}-${seq}`,
+    cid: seq, // numeric case-level correlation id (fits a Java Integer); threaded into every downstream REST payload
+    claimType: claimType || 'DEATH',
+    caseStatus: 'CLAIM_SUBMITTED'
+  });
+});
+
+// V4. Send email confirmation to Claimant/Bene + claim form to known benes
+app.post('/api/v1/claims/verification/send-confirmation', (req, res) => {
+  const { caseId, claimId, applicablePolicies } = req.body;
+  res.json({
+    success: true,
+    caseId: caseId || null,
+    claimId: claimId || null,
+    confirmationSentAt: new Date().toISOString(),
+    claimFormsSent: (applicablePolicies || ['POL12345']).length
+  });
+});
+
+// V5. (no endpoint) Hold is handled internally — the gateway's Hold branch loops
+// straight back to the Claims Verifier task; there is no Hold node or endpoint.
+
+// V6. Close: set Notification Status = Not_Verified_Closed
+app.post('/api/v1/claims/verification/close', (req, res) => {
+  const { notificationId } = req.body;
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    notificationStatus: 'NOT_VERIFIED_CLOSED',
+    closedAt: new Date().toISOString()
+  });
+});
+
+// V7. Generate and send Closure Notification
+app.post('/api/v1/claims/verification/closure-notice', (req, res) => {
+  const { notificationId } = req.body;
+  res.json({
+    success: true,
+    notificationId: notificationId || null,
+    noticeSentAt: new Date().toISOString()
+  });
+});
+
+
+// --- PROCESS 4: CLAIM EVALUATION ENDPOINTS ---
+// evaluate-claim is called once (case-level) by pru-claim-run-evaluation's "claim evaluation"
+// node (invoked from pru-claims-examination). get-claim-ids is retained for reference /
+// direct reuse but is no longer on the active path (evaluate-claim resolves claims by caseId).
+
+// E1. Get Claim IDs — returns the array of claim ids for the case (one per claim). [reference]
+app.post('/api/v1/claims/get-claim-ids', (req, res) => {
+  const { caseId, applicablePolicies } = req.body;
+  const policies = (applicablePolicies && applicablePolicies.length) ? applicablePolicies : ['POL12345'];
+  const yr = new Date().getFullYear();
+  // one claim id per applicable policy; caseId containing MULTI forces a 3-claim fan-out
+  const list = (caseId && caseId.includes('MULTI'))
+    ? ['POLA', 'POLB', 'POLC']
+    : policies;
+  const claimIds = list.map((p, i) => `CLM-${yr}-${String(1000 + i)}-${String(p).replace(/[^A-Za-z0-9]/g, '')}`);
+  console.log(`\x1b[36m[GetClaimIds]\x1b[0m case=${caseId} -> ${claimIds.length} claim(s): ${claimIds.join(', ')}`);
+  res.json({ success: true, caseId: caseId || null, claimIds });
+});
+
+// E2. Evaluate Claim — per-claim evaluation (US 10.05–10.30). Runs the full flag
+// battery (US 10.06–10.29), each flag true = exception (AD-28). CLAIM_STP_ELIGIBLE
+// = true iff NO blocking flag is set (US 10.30). Every flag is STP-blocking EXCEPT
+// Suicide_Exclusion (10.10, AD-31 open — treated non-blocking here). Scenario is
+// driven by keywords in caseId/claimId, consistent with the rest of the mock.
+// Evaluate a SINGLE claim and return its result object (US 10.06-10.30 death / US 11.x TI).
+function evaluateOneClaim(caseId, claimId, claimType, mrxDiscrepancy) {
+  const key = `${caseId || ''} ${claimId || ''}`.toUpperCase();
+  const has = (re) => re.test(key);
+
+  // ---- TI per-claim evaluation (US 11.01-11.06). TI is ALWAYS non-STP (AD-32):
+  // no STP path, no MRX/records pull; flags enrich the case for the Reviewer.
+  if ((claimType || '').toUpperCase() === 'TI') {
+    const tiFlags = {
+      Contestable: has(/CONTEST/),                                  // 11.02 (measured to claim date)
+      Life_Expectancy_Not_Confirmed: has(/LEUNCONF|LIFEEXP|LENOTCONF/), // 11.03 (<=6mo, CA <=12mo)
+      Owner_Incapacity_Indicated: has(/INCAP|POA|GUARDIAN/),        // 11.04
+      Payout_Account_Changed: has(/ACCTCHANGE|ACCOUNTCHANGE/),      // 11.05
+      // 11.06 shared flags (TI applicability)
+      Requirements_Pending: has(/NIGO|REQPENDING/),                 // TI: no 30-day hold -> reviewer (AD-34)
+      Document_Invalid: has(/DOCINVALID|NEEDSREVIEW/),
+      Policy_NotInForce: has(/LAPSE|NOTINFORCE/),
+      Prior_Claim: has(/PRIORCLAIM|PRIOR/),
+      Policy_Alert: has(/POLICYALERT|ALERT/),
+      Age_Gender_Misstatement: has(/MISSTATE/)
+    };
+    const raised = Object.keys(tiFlags).filter(f => tiFlags[f]);
+    console.log(`\x1b[36m[EvaluateClaim:TI]\x1b[0m claim=${claimId} -> Reviewer (non-STP) flags=[${raised.join(',')}]`);
+    return {
+      claimId: claimId || null,
+      claimType: 'TI',
+      claimStpEligible: false,     // AD-32: TI is never STP
+      requiresExaminer: false,     // TI routes to the Reviewer, not the examiner outcome gateway
+      reviewerRequired: true,      // mandatory medical-expert review (US 11.08)
+      pendingRequirements: tiFlags.Requirements_Pending,
+      blockingFlags: raised,
+      claimFlags: tiFlags
+    };
+  }
+
+  // US 10.06–10.29 flag battery (true = exception)
+  const flags = {
+    Death_Unverified: has(/UNVERIF|DEATHUNVERIF/),                 // 10.06
+    Manner_Unverified: has(/MANNERUNVERIF/),                       // 10.07
+    Homicide_Hold: has(/HOMICIDE/),                                // 10.08
+    Suicide_ADB_State: has(/SUICIDEADB/),                          // 10.09
+    Suicide_Exclusion: has(/SUICIDE(?!ADB)/),                      // 10.10 (open blocking)
+    Foreign_Death: has(/FOREIGNDEATH|FOREIGN(?!PAYEE)/),           // 10.11
+    MRx_Discrepancy: (mrxDiscrepancy === true) || has(/CONTEST|MRX|NONDISCLOSURE/), // 10.12 (carried from case-level 10.04)
+    Requirements_Pending: has(/NIGO|PARTIAL|PENDINGREQ|REQPENDING/), // 10.13
+    Document_Invalid: has(/DOCINVALID|NEEDSREVIEW/),               // 10.14
+    Policy_NotInForce: has(/LAPSE|POLICYFAIL|NOTINFORCE/),         // 10.15
+    Prior_Claim: has(/PRIORCLAIM|PRIOR/),                          // 10.16
+    Assignment: has(/ASSIGNMENT|ASSIGN(?!EXAM)/),                  // 10.17
+    Policy_Alert: has(/POLICYALERT|ALERT/),                        // 10.18
+    Bene_Change: has(/BENECHANGE/),                                // 10.19
+    Minor_Bene: has(/MINOR/),                                      // 10.20
+    Bene_Deceased: has(/BENEDECEASED|BENEDEC/),                    // 10.21
+    Bene_Incompetent: has(/INCOMPETENT|INCOMP/),                   // 10.22
+    Foreign_Payee: has(/FOREIGNPAYEE/),                            // 10.23
+    Divorce_Review: has(/DIVORCE/),                                // 10.24
+    FL_OK_Spouse: has(/FLOK|FL_OK/),                               // 10.25
+    Bene_Mismatch: has(/MISMATCH|SANCTION|NOMATCH/),               // 10.26
+    Age_Gender_Misstatement: has(/MISSTATE/),                      // 10.27
+    Claimant_NotBene: has(/NOTBENE|CLAIMANTNOTBENE/),              // 10.28
+    Accident_ADB_Investigation: has(/ACCIDENTADB|ACCIDENT|\bADB\b/) // 10.29
+  };
+
+  // Non-contactable pending party forces examiner (US 10.32 contactability rule)
+  const nonContactable = has(/NOCONTACT|NO_CONTACT/);
+
+  // Suicide_Exclusion (10.10) blocking status is OPEN (AD-31) — treat as non-blocking.
+  const NON_BLOCKING = new Set(['Suicide_Exclusion']);
+  const blocking = Object.keys(flags).filter(f => flags[f] && !NON_BLOCKING.has(f));
+  const claimStpEligible = blocking.length === 0;                  // US 10.30
+
+  // Outcome contribution: Requirements_Pending can route to the pending loop ONLY if
+  // it is the sole blocking condition AND the pending party is contactable; anything
+  // else → examiner (US 10.32).
+  const onlyPendingBlocks = blocking.length > 0 && blocking.every(f => f === 'Requirements_Pending');
+  const pendingRequirements = flags.Requirements_Pending && onlyPendingBlocks && !nonContactable;
+  const requiresExaminer = !claimStpEligible && !pendingRequirements;
+
+  console.log(`\x1b[36m[EvaluateClaim]\x1b[0m claim=${claimId} stp=${claimStpEligible} pending=${pendingRequirements} examiner=${requiresExaminer} blocking=[${blocking.join(',')}]`);
+  return {
+    claimId: claimId || null,
+    claimType: claimType || 'DEATH',
+    claimStpEligible,            // US 10.30
+    requiresExaminer,            // → Outcome: Refer to Examiner
+    pendingRequirements,         // → Outcome: Pending Requirement (contactable, docs-only)
+    blockingFlags: blocking,
+    claimFlags: flags            // full US 10.06–10.29 set (true = exception)
+  };
+}
+
+// Derive the claim ids for a case (same convention as /claims/get-claim-ids):
+// a caseId containing MULTI yields 3 claims, otherwise a single claim.
+function claimIdsForCase(caseId) {
+  const yr = new Date().getFullYear();
+  const list = (caseId && caseId.includes('MULTI')) ? ['POLA', 'POLB', 'POLC'] : ['POL12345'];
+  return list.map((p, i) => `CLM-${yr}-${String(1000 + i)}-${String(p).replace(/[^A-Za-z0-9]/g, '')}`);
+}
+
+app.post('/api/v1/claims/evaluate-claim', (req, res) => {
+  const { caseId, claimId, claimType, mrxDiscrepancy } = req.body;
+
+  // Direct single-claim call (back-compat for a per-claim invocation, e.g. pru-claim-per-claim-eval).
+  if (claimId) {
+    const one = evaluateOneClaim(caseId, claimId, claimType, mrxDiscrepancy);
+    return res.json({ success: true, ...one });
+  }
+
+  // Case-level call from pru-claim-run-evaluation ("claim evaluation"): the request carries
+  // NO claim ids -- keyed only by caseId (+ claimType/cid/piid). The API resolves the case's
+  // claims itself (here derived from caseId) and returns the per-claim results as claimResults[].
+  const ids = claimIdsForCase(caseId);
+  const claimResults = ids.map(id => evaluateOneClaim(caseId, id, claimType, mrxDiscrepancy));
+  console.log(`\x1b[36m[EvaluateClaim:case]\x1b[0m case=${caseId} type=${claimType || 'DEATH'} claims=${claimResults.length}`);
+  res.json({ success: true, caseId: caseId || null, claimType: claimType || 'DEATH', claimResults });
+});
+
 
 // 25. Business Central Git Clone - Live Proxy
 app.post('/business-central/rest/spaces/:spaceName/git/clone', (req, res) => {
@@ -806,6 +1065,67 @@ app.put('/kie-server/services/rest/server/containers/:containerId/tasks/:taskId/
     taskId: req.params.taskId
   });
 });
+
+// ==========================================
+// Policy System Mock Endpoints
+// ==========================================
+const policyRouter = express.Router();
+
+// 1. Email & Notifications
+policyRouter.post('/policy-issue/email/send', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Policy issue email sent' }));
+policyRouter.post('/termination/email', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Termination email sent' }));
+policyRouter.post('/reinstatement/email/send', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Reinstatement email sent' }));
+policyRouter.post('/broker/record/change/email/send', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Broker record change email sent' }));
+policyRouter.post('/enrollment/file/content/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Content issue notification sent' }));
+policyRouter.post('/enrollment/file/format/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'File format issue notification sent' }));
+policyRouter.post('/enrollment/file/validation/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Validation success notification sent' }));
+policyRouter.post('/takeover/file/notification', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Takeover notification sent' }));
+policyRouter.post('/policy/certificate/send-email', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Certificate email sent' }));
+policyRouter.post('/policy/id-card/send-email', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'ID card email sent' }));
+policyRouter.post('/policy/certificate/send-communication', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Communication sent' }));
+policyRouter.post('/certificate/available/notify', (req, res) => res.json({ status: 'SUCCESS', sent: true, message: 'Certificate available notified' }));
+policyRouter.post('/communications/retry', (req, res) => res.json({ status: 'SUCCESS', retried: true, message: 'Communications retry queued' }));
+
+// 2. Documents & Certificates
+policyRouter.post('/policy/certificate/create', (req, res) => res.json({ status: 'SUCCESS', certificateId: 'CERT-' + Date.now(), isError: false, message: 'Certificate created' }));
+policyRouter.post('/policy/certificate/physical/delivery', (req, res) => res.json({ status: 'SUCCESS', isError: false, deliveryError: false, tracking: 'TRK-CERT-1234' }));
+policyRouter.get('/policy/certificates/status', (req, res) => res.json({ status: 'READY', generated: true }));
+policyRouter.post('/policy/id-card/create', (req, res) => res.json({ status: 'SUCCESS', idCardId: 'IDC-' + Date.now(), isError: false, message: 'ID card created' }));
+policyRouter.post('/policy/id-card/physical/delivery', (req, res) => res.json({ status: 'SUCCESS', isError: false, deliveryError: false, tracking: 'TRK-IDC-1234' }));
+policyRouter.post('/policy/document/create', (req, res) => res.json({ status: 'SUCCESS', documentId: 'DOC-' + Date.now(), isError: false, generateDocumentDecision: 'Approve' }));
+policyRouter.post('/policy/physical-mail/eligibility', (req, res) => res.json({ status: 'SUCCESS', isPhysicalDelivery: false, isError: false, eligible: true }));
+policyRouter.post('/policy/physical/delivery', (req, res) => res.json({ status: 'SUCCESS', isError: false, deliveryError: false, tracking: 'TRK-DOC-1234' }));
+policyRouter.post('/policy/shipments', (req, res) => res.json({ status: 'SUCCESS', shipmentId: 'SHP-' + Date.now() }));
+
+// 3. Underwriting & Policy Checks
+policyRouter.post('/policy/issuance/complex-coverage-check', (req, res) => res.json({ status: 'SUCCESS', isComplex: false, complexCoverage: false, passed: true }));
+policyRouter.post('/policy/issuance/premium-check', (req, res) => res.json({ status: 'SUCCESS', premiumValid: true, amount: 1500.0, currency: 'USD' }));
+policyRouter.post('/policy/issuance/siu-check', (req, res) => res.json({ status: 'SUCCESS', siuClear: true, flagged: false, siu_flagged: false }));
+policyRouter.post('/policy/create-policy', (req, res) => res.json({ status: 'SUCCESS', policyNumber: 'POL-' + Date.now(), issueDate: new Date().toISOString() }));
+policyRouter.post('/policy/termination', (req, res) => res.json({ status: 'SUCCESS', isError: false, message: 'Policy terminated' }));
+policyRouter.post('/jet-issue/decision', (req, res) => res.json({ status: 'APPROVED', decision: 'APPROVED', complexCoverage: false }));
+policyRouter.post('/ofac/screening/run', (req, res) => res.json({ status: 'CLEAR', match: false, decision: 'CLEARED', ofac_status: 'CLEAR' }));
+policyRouter.post('/ofac/case/decision', (req, res) => res.json({ status: 'SUCCESS', decision: 'CLEARED' }));
+policyRouter.post('/ofac/escalation/notify', (req, res) => res.json({ status: 'SUCCESS', notified: true }));
+
+// 4. Case Management & Timeline
+policyRouter.post('/case-service/case/instance/signal/save', (req, res) => res.json({ status: 'SUCCESS', signalSaved: true }));
+policyRouter.post('/case/instance/update-status', (req, res) => res.json({ status: 'SUCCESS', caseStatus: 'UPDATED', caseId: req.body?.case_id }));
+policyRouter.patch('/case/instance/patch/data', (req, res) => res.json({ status: 'SUCCESS', patched: true }));
+policyRouter.post('/case/instance/abort', (req, res) => res.json({ status: 'SUCCESS', aborted: true }));
+policyRouter.post('/case/escalation/assign', (req, res) => res.json({ status: 'SUCCESS', assigned: true }));
+policyRouter.post('/policy/timeline/open', (req, res) => res.json({ status: 'SUCCESS', timelineId: 'TL-' + Date.now() }));
+policyRouter.post('/policy/timeline/close', (req, res) => res.json({ status: 'SUCCESS', closed: true }));
+policyRouter.post('/policy/timeline/workflow-step', (req, res) => res.json({ status: 'SUCCESS', stepRecorded: true }));
+policyRouter.post('/update/cid-pid', (req, res) => res.json({ status: 'SUCCESS', pid: 'PID-' + Date.now(), cid: req.body?.cid || 'CID-101' }));
+policyRouter.post('/quote-api/group/takeover/update', (req, res) => res.json({ status: 'SUCCESS', isError: false, message: 'Takeover updated' }));
+policyRouter.post('/error-retry/register', (req, res) => res.json({ status: 'SUCCESS', retryId: 'ERR-' + Date.now() }));
+
+// Mount policyRouter at multiple paths for root, /policy-api, /quote-api, /broker-ms-api
+app.use(policyRouter);
+app.use('/policy-api', policyRouter);
+app.use('/quote-api', policyRouter);
+app.use('/broker-ms-api', policyRouter);
 
 // Start the server
 app.listen(PORT, () => {

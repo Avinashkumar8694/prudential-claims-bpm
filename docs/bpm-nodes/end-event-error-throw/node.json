@@ -1,0 +1,35 @@
+{
+  "id": "_END_ERROR_TERMINATE",
+  "type": "endEvent",
+  "subtype": "errorThrow",
+  "bpmnElement": "endEvent",
+  "name": "Throw Terminate Error",
+  "position": {
+    "x": 949,
+    "y": 300,
+    "width": 56,
+    "height": 56
+  },
+  "incoming": [
+    "_F_REST_TO_THROW_ERR"
+  ],
+  "outgoing": [],
+  "properties": {
+    "errorRef": "TERMINATE_CASE",
+    "droolsErefname": "TERMINATE_CASE",
+    "elementname": "Throw Terminate Error"
+  },
+  "definitionsScope": {
+    "errors": [
+      {
+        "id": "TERMINATE_CASE",
+        "errorCode": "TERMINATE_CASE"
+      }
+    ]
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "scripts": {},
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:endEvent id=\"_END_ERROR_TERMINATE\" name=\"Throw Terminate Error\"><bpmn2:incoming>_F_REST_TO_THROW_ERR</bpmn2:incoming><bpmn2:errorEventDefinition id=\"_id4\" drools:erefname=\"TERMINATE_CASE\" errorRef=\"TERMINATE_CASE\"/></bpmn2:endEvent>"
+}

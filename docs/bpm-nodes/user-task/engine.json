@@ -1,0 +1,8 @@
+{
+  "id": "_review",
+  "name": "Review claim",
+  "type": "userTask",
+  "group": "Verifier",
+  "form": "review",
+  "skippable": false
+}

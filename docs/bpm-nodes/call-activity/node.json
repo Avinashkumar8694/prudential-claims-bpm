@@ -1,0 +1,64 @@
+{
+  "id": "_V_ASSIGN",
+  "type": "callActivity",
+  "subtype": "reusable",
+  "bpmnElement": "callActivity",
+  "name": "Assign Case to Verifier",
+  "calledElement": "prudential-claims-submission.pru-rest-executor",
+  "position": {
+    "x": 620,
+    "y": 370,
+    "width": 120,
+    "height": 60
+  },
+  "incoming": [
+    "_f3"
+  ],
+  "outgoing": [
+    "_f4"
+  ],
+  "properties": {
+    "independent": true,
+    "waitForCompletion": true,
+    "elementname": "Assign Case to Verifier"
+  },
+  "scripts": {
+    "onEntry": "ObjectNode json=...; json.put(\"piid\",...); json.putPOJO(\"caseId\", var(caseId)); json.put(\"queue\",\"VERIFICATION\"); setVar(reqPayload,json)",
+    "onExit": "root=readTree(resPayload); setVar(verifierId, root.path(\"verifierId\").asText())"
+  },
+  "dataInputs": [
+    {
+      "name": "ContentData",
+      "from": "variable",
+      "value": "reqPayload"
+    },
+    {
+      "name": "ContentType",
+      "from": "constant",
+      "value": "application/json"
+    },
+    {
+      "name": "HandleResponseErrors",
+      "from": "constant",
+      "value": "true"
+    },
+    {
+      "name": "Method",
+      "from": "constant",
+      "value": "POST"
+    },
+    {
+      "name": "Url",
+      "from": "expression",
+      "value": "#{baseUrl}/v1/claims/verification/assign"
+    }
+  ],
+  "dataOutputs": [
+    {
+      "name": "Result",
+      "to": "resPayload"
+    }
+  ],
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:callActivity id=\"_V_ASSIGN\" drools:independent=\"true\" drools:waitForCompletion=\"true\" name=\"Assign Case to Verifier\" calledElement=\"prudential-claims-submission.pru-rest-executor\"> ...onEntry/onExit + ioSpec + associations... </bpmn2:callActivity>"
+}

@@ -1,0 +1,13 @@
+{
+  "lanes": [
+    {
+      "id": "lane1",
+      "name": "Ops",
+      "flowNodeRefs": [
+        "_pg",
+        "_br"
+      ]
+    }
+  ],
+  "bpmn": "<bpmn2:laneSet id=\"_ls\"><bpmn2:lane id=\"lane1\" name=\"Ops\"><bpmn2:flowNodeRef>_pg</bpmn2:flowNodeRef><bpmn2:flowNodeRef>_br</bpmn2:flowNodeRef></bpmn2:lane></bpmn2:laneSet>"
+}

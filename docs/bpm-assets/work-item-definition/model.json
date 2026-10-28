@@ -1,0 +1,21 @@
+{
+  "kind": "workItemDefinition",
+  "model": {
+    "definitions": [
+      {
+        "name": "Rest",
+        "displayName": "REST",
+        "category": "Communication",
+        "icon": "defaultresticon.png",
+        "defaultHandler": "mvel: new org.jbpm.process.workitem.rest.RESTWorkItemHandler(classLoader)",
+        "parameters": {
+          "Url": "StringDataType",
+          "Method": "StringDataType"
+        },
+        "results": {
+          "Result": "ObjectDataType"
+        }
+      }
+    ]
+  }
+}

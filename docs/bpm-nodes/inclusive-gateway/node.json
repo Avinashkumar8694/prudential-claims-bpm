@@ -1,0 +1,16 @@
+{
+  "id": "_g",
+  "type": "inclusiveGateway",
+  "bpmnElement": "inclusiveGateway",
+  "name": "Inclusive Gateway (OR)",
+  "gatewayDirection": "Diverging",
+  "incoming": [
+    "_in"
+  ],
+  "outgoing": [
+    "_a",
+    "_b"
+  ],
+  "default": "_a",
+  "bpmn": "<bpmn2:inclusiveGateway id=\"_g\" name=\"Inclusive Gateway (OR)\" gatewayDirection=\"Diverging\"><bpmn2:incoming>_in</bpmn2:incoming><bpmn2:outgoing>_a</bpmn2:outgoing><bpmn2:outgoing>_b</bpmn2:outgoing></bpmn2:inclusiveGateway>"
+}

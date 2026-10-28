@@ -1,0 +1,35 @@
+{
+  "id": "_START",
+  "type": "startEvent",
+  "subtype": "signal",
+  "bpmnElement": "startEvent",
+  "name": "System Claim Process",
+  "position": {
+    "x": 80,
+    "y": 380,
+    "width": 40,
+    "height": 40
+  },
+  "incoming": [],
+  "outgoing": [
+    "_f1"
+  ],
+  "properties": {
+    "signalRef": "_sig_StartSystemClaim",
+    "signalName": "StartSystemClaim",
+    "elementname": "System Claim Process"
+  },
+  "definitionsScope": {
+    "signals": [
+      {
+        "id": "_sig_StartSystemClaim",
+        "name": "StartSystemClaim"
+      }
+    ]
+  },
+  "dataInputs": [],
+  "dataOutputs": [],
+  "scripts": {},
+  "boundaryEvents": [],
+  "bpmn": "<bpmn2:startEvent id=\"_START\" name=\"System Claim Process\"><bpmn2:outgoing>_f1</bpmn2:outgoing><bpmn2:signalEventDefinition id=\"_id1\" signalRef=\"_sig_StartSystemClaim\"/></bpmn2:startEvent>"
+}

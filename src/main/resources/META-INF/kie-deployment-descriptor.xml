@@ -20,7 +20,7 @@
     <environment-entries>
         <environment-entry>
             <resolver>mvel</resolver>
-            <identifier>"https://soar.neutrinos-apps.com/claims-ms"</identifier>
+            <identifier>"https://soar.neutrinos-apps.com/claims-ms/v1"</identifier>
             <parameters/>
             <name>INTEGRATION_LAYER_URL</name>
         </environment-entry>

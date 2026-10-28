@@ -1,0 +1,24 @@
+{
+  "name": "ClaimDecisions",
+  "decisions": [
+    {
+      "name": "Eligibility",
+      "hitPolicy": "UNIQUE",
+      "inputs": [
+        { "name": "amount", "type": "number" },
+        { "name": "region", "type": "string" }
+      ],
+      "outputs": [
+        { "name": "approved", "type": "boolean" },
+        { "name": "tier", "type": "string" }
+      ],
+      "rules": [
+        { "when": { "amount": { "gt": 100000 }, "region": "US" }, "then": { "approved": true,  "tier": "HIGH" } },
+        { "when": { "amount": { "between": [1, 100000] } },       "then": { "approved": true,  "tier": "STANDARD" } },
+        { "when": { "amount": { "lt": 1 } },                       "then": { "approved": false, "tier": "NONE" } }
+      ]
+    }
+  ],
+
+  "$note": "The WHOLE thing you write — a decision TABLE read like a spreadsheet. `inputs`/`outputs` are the columns (name + simple type); each `rule` is a row: `when` = input cells keyed by input name, `then` = output cells keyed by output name. No FEEL, no DMN XML, no namespaces. A missing input in `when` = 'any'. decisionToDmn / fromEngineProject synthesize the DMN 1.2 file: FEEL cell text, typeRefs, inputData/decisionTable, hitPolicy, namespace. A `rule` node with dmn:{model:'ClaimDecisions',decision:'Eligibility'} fires it. See scenarios.md §0; model.json shows the jBPM-side DMN XML tree this produces (the escape hatch)."
+}
