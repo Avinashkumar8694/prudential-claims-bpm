@@ -9,6 +9,8 @@ export const def: NodeDef = {
     { key: 'dmn.namespace', label: 'DMN namespace', widget: 'text' },
     { key: 'dmn.model', label: 'DMN model name', widget: 'assetRef', assetKind: 'decisions' },
     { key: 'dmn.decision', label: 'Decision name', widget: 'text' },
+  ] }, { title: 'Guided Decision Table (alternative)', fields: [
+    { key: 'guidedTable', label: 'Guided table name', widget: 'assetRef', assetKind: 'guidedTables', help: 'Evaluate a guided decision table asset' },
   ] }, { title: 'Decision tree / scorecard (alternative)', fields: [
     { key: 'decisionTree', label: 'Decision tree name', widget: 'assetRef', assetKind: 'decisionTrees', help: 'Evaluate a guided decision tree asset' },
     { key: 'scorecard', label: 'Scorecard name', widget: 'assetRef', assetKind: 'scorecards', help: 'Evaluate a scorecard asset (writes its target score)' },
