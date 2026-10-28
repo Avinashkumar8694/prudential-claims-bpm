@@ -4,11 +4,24 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fromEngineProject, writeProject, type EngineProject } from '../../sdk/index.ts';
+import { validateJbpmExport } from './validate-jbpm-export.ts';
+import { jbpmExportDenied } from '../../infra/errors.ts';
 
 const BINARY = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.zip', '.jar', '.xls', '.xlsx']);
 
 /** Build the kjar as a { relativePath -> content } map (text files; binaries as base64). */
 export function exportKjar(engine: EngineProject): { files: Record<string, string> } {
+  // Validate that the project contains only constructs, languages, and features supported by jBPM
+  const check = validateJbpmExport(engine);
+  if (!check.valid) {
+    const summary = check.issues.slice(0, 5).map((i) => `• [${i.kind.toUpperCase()}] ${i.message}`).join('\n');
+    const more = check.issues.length > 5 ? `\n...and ${check.issues.length - 5} more issue(s)` : '';
+    throw jbpmExportDenied(
+      `Export to jBPM denied: project contains ${check.issues.length} construct(s) unsupported by real jBPM.\n${summary}${more}`,
+      { issues: check.issues }
+    );
+  }
+
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kjar-'));
   try {
     const project = fromEngineProject(engine);

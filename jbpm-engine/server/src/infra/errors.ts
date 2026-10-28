@@ -5,12 +5,12 @@ import { logger } from './logger.ts';
 export type ErrorCode =
   | 'AUTH_REQUIRED' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION_FAILED' | 'CONFLICT'
   | 'VERSION_FROZEN' | 'DEPLOY_BLOCKED' | 'INSTANCE_NOT_RESUMABLE' | 'SCRIPT_TIMEOUT' | 'INTERNAL'
-  | 'QUOTA_EXCEEDED' | 'RATE_LIMITED';
+  | 'QUOTA_EXCEEDED' | 'RATE_LIMITED' | 'JBPM_EXPORT_DENIED';
 
 const STATUS: Record<ErrorCode, number> = {
   AUTH_REQUIRED: 401, FORBIDDEN: 403, NOT_FOUND: 404, VALIDATION_FAILED: 422, CONFLICT: 409,
   VERSION_FROZEN: 409, DEPLOY_BLOCKED: 409, INSTANCE_NOT_RESUMABLE: 409, SCRIPT_TIMEOUT: 500, INTERNAL: 500,
-  QUOTA_EXCEEDED: 429, RATE_LIMITED: 429,
+  QUOTA_EXCEEDED: 429, RATE_LIMITED: 429, JBPM_EXPORT_DENIED: 422,
 };
 
 export class ApiError extends Error {
@@ -27,6 +27,7 @@ export const forbidden = (message: string, details?: unknown) => new ApiError('F
 export const authRequired = (message = 'authentication required') => new ApiError('AUTH_REQUIRED', message);
 export const quotaExceeded = (message: string, details?: unknown) => new ApiError('QUOTA_EXCEEDED', message, details);
 export const rateLimited = (message = 'too many requests') => new ApiError('RATE_LIMITED', message);
+export const jbpmExportDenied = (message: string, details?: unknown) => new ApiError('JBPM_EXPORT_DENIED', message, details);
 
 // wrap an async route so thrown errors reach the error middleware
 export const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>) =>
