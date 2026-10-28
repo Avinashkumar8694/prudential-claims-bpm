@@ -51,16 +51,22 @@ export class TaskService {
     return t;
   }
 
-  async list(filter: { assignee?: string; group?: string; status?: string; overdue?: boolean }): Promise<Task[]> {
+  async list(filter: { assignee?: string; group?: string; status?: string; overdue?: boolean; search?: string; limit?: number; offset?: number }): Promise<Task[]> {
     const now = this.ctx.clock();
-    return (await this.repo().query((t) =>
+    const q = (filter.search || '').trim().toLowerCase();
+    const all = (await this.repo().query((t) =>
       t.tenantId === this.ctx.tenantId &&
       (!filter.assignee || t.assignee === filter.assignee) &&
       (!filter.group || t.group === filter.group) &&
       (!filter.status || t.status === filter.status) &&
-      (!filter.overdue || (!!t.dueAt && t.dueAt < now && t.status !== 'completed' && t.status !== 'skipped'))))
+      (!filter.overdue || (!!t.dueAt && t.dueAt < now && t.status !== 'completed' && t.status !== 'skipped')) &&
+      (!q || t.name.toLowerCase().includes(q) || t.id.toLowerCase().includes(q) || (t.assignee || '').toLowerCase().includes(q) || (t.group || '').toLowerCase().includes(q))))
       // higher priority first (undefined = lowest), then newest first within the same priority
       .sort((a, b) => (b.priority ?? -Infinity) - (a.priority ?? -Infinity) || b.createdAt.localeCompare(a.createdAt));
+
+    const offset = filter.offset != null ? Number(filter.offset) : 0;
+    const limit = filter.limit != null ? Number(filter.limit) : all.length;
+    return all.slice(offset, offset + limit);
   }
 
   async claim(id: string, user: string): Promise<Task> {

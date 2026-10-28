@@ -23,6 +23,7 @@ import { IconComponent } from '../../shared/icon.component';
         </div>
         <span class="spacer"></span>
         <div class="header-actions">
+          <input class="search-input" placeholder="Search deployments..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" style="padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12.5px; width:180px; background:var(--surface);" />
           <select class="proj-filter" [ngModel]="projectFilter()" (ngModelChange)="setProjectFilter($event)">
             <option value="">All projects</option>
             @for (w of workflows(); track w.id) { <option [value]="w.id">{{ w.name }}</option> }
@@ -389,6 +390,7 @@ export class DeploymentsComponent {
   workflows = signal<Workflow[]>([]);
   deployments = signal<Deployment[]>([]);
   loading = signal(true);
+  searchTerm = signal('');
   projectFilter = signal<string>(this.route.snapshot.queryParamMap.get('workflowId') || '');
 
   // Import Modal State
@@ -402,8 +404,16 @@ export class DeploymentsComponent {
   projectName(id: string) { return this.wfNames().get(id) || id; }
 
   grouped = computed(() => {
+    const q = this.searchTerm().trim().toLowerCase();
     const byEnv = new Map<string, Deployment[]>();
     for (const d of this.deployments()) {
+      if (q) {
+        const pName = this.projectName(d.workflowId).toLowerCase();
+        const matchId = d.id.toLowerCase().includes(q);
+        const matchEnv = d.environment.toLowerCase().includes(q);
+        const matchVer = (d.versionLabel || '').toLowerCase().includes(q);
+        if (!pName.includes(q) && !matchId && !matchEnv && !matchVer) continue;
+      }
       (byEnv.get(d.environment) || byEnv.set(d.environment, []).get(d.environment)!).push(d);
     }
     return [...byEnv.entries()].map(([env, items]) => ({ env, items }));

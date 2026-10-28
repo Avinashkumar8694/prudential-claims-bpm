@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
@@ -189,7 +189,7 @@ function downloadFile(content: string, filename: string, mimeType: string) {
             </div>
 
             @if (filteredExecutions().length) {
-              <div class="table-wrap">
+              <div class="table-wrap" (scroll)="onExecScroll($event)">
                 <table class="report-table">
                   <thead>
                     <tr>
@@ -266,7 +266,7 @@ function downloadFile(content: string, filename: string, mimeType: string) {
             </div>
 
             @if (filteredSlaTasks().length) {
-              <div class="table-wrap">
+              <div class="table-wrap" (scroll)="onSlaScroll($event)">
                 <table class="report-table">
                   <thead>
                     <tr>
@@ -354,7 +354,7 @@ function downloadFile(content: string, filename: string, mimeType: string) {
             </div>
 
             @if (filteredCases().length) {
-              <div class="table-wrap">
+              <div class="table-wrap" (scroll)="onCaseScroll($event)">
                 <table class="report-table">
                   <thead>
                     <tr>
@@ -430,7 +430,7 @@ function downloadFile(content: string, filename: string, mimeType: string) {
             </div>
 
             @if (filteredAudits().length) {
-              <div class="table-wrap">
+              <div class="table-wrap" (scroll)="onAuditScroll($event)">
                 <table class="report-table">
                   <thead>
                     <tr>
@@ -926,29 +926,67 @@ export class ReportsComponent implements OnInit {
     });
   });
 
-  // ---- Paging Helpers ----
+  // Auto-pagination display counts
+  displayedExecutionsCount = signal(25);
+  displayedSlaCount = signal(25);
+  displayedCasesCount = signal(25);
+  displayedAuditsCount = signal(25);
+
+  @HostListener('window:scroll') onWindowScroll() {
+    const threshold = 250;
+    const pos = window.innerHeight + window.scrollY;
+    const max = document.documentElement.scrollHeight;
+    if (pos >= max - threshold) {
+      if (this.tab() === 'executions') this.displayedExecutionsCount.update((c) => Math.min(c + 25, this.filteredExecutions().length));
+      else if (this.tab() === 'sla') this.displayedSlaCount.update((c) => Math.min(c + 25, this.filteredSlaTasks().length));
+      else if (this.tab() === 'cases') this.displayedCasesCount.update((c) => Math.min(c + 25, this.filteredCases().length));
+      else if (this.tab() === 'audit') this.displayedAuditsCount.update((c) => Math.min(c + 25, this.filteredAudits().length));
+    }
+  }
+
+  onExecScroll(e: Event) {
+    const el = e.target as HTMLElement;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
+      this.displayedExecutionsCount.update((c) => Math.min(c + 25, this.filteredExecutions().length));
+    }
+  }
+
+  onSlaScroll(e: Event) {
+    const el = e.target as HTMLElement;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
+      this.displayedSlaCount.update((c) => Math.min(c + 25, this.filteredSlaTasks().length));
+    }
+  }
+
+  onCaseScroll(e: Event) {
+    const el = e.target as HTMLElement;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
+      this.displayedCasesCount.update((c) => Math.min(c + 25, this.filteredCases().length));
+    }
+  }
+
+  onAuditScroll(e: Event) {
+    const el = e.target as HTMLElement;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 150) {
+      this.displayedAuditsCount.update((c) => Math.min(c + 25, this.filteredAudits().length));
+    }
+  }
+
+  // ---- Paging Helpers (supports both auto-infinite scroll & page slicing) ----
   pagedExecutions = computed(() => {
-    const list = this.filteredExecutions();
-    const start = (this.page() - 1) * this.pageSize;
-    return list.slice(start, start + this.pageSize);
+    return this.filteredExecutions().slice(0, this.displayedExecutionsCount());
   });
 
   pagedSlaTasks = computed(() => {
-    const list = this.filteredSlaTasks();
-    const start = (this.slaPage() - 1) * this.pageSize;
-    return list.slice(start, start + this.pageSize);
+    return this.filteredSlaTasks().slice(0, this.displayedSlaCount());
   });
 
   pagedCases = computed(() => {
-    const list = this.filteredCases();
-    const start = (this.casePage() - 1) * this.pageSize;
-    return list.slice(start, start + this.pageSize);
+    return this.filteredCases().slice(0, this.displayedCasesCount());
   });
 
   pagedAudits = computed(() => {
-    const list = this.filteredAudits();
-    const start = (this.auditPage() - 1) * this.pageSize;
-    return list.slice(start, start + this.pageSize);
+    return this.filteredAudits().slice(0, this.displayedAuditsCount());
   });
 
   maxPages(count: number): number { return Math.max(1, Math.ceil(count / this.pageSize)); }

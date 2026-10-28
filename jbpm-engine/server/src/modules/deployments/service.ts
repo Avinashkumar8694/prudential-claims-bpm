@@ -26,13 +26,19 @@ export class DeploymentService {
 
   /** Cross-project listing (mirrors InstanceService.list) — powers the top-level Deployments page,
    *  which browses across every project rather than requiring one to be picked first. */
-  async list(filter: { workflowId?: string; environment?: string; status?: string }): Promise<Deployment[]> {
-    return (await this.dp().query((d) =>
+  async list(filter: { workflowId?: string; environment?: string; status?: string; search?: string; limit?: number; offset?: number }): Promise<Deployment[]> {
+    const q = (filter.search || '').trim().toLowerCase();
+    const all = (await this.dp().query((d) =>
       d.tenantId === this.ctx.tenantId &&
       (!filter.workflowId || d.workflowId === filter.workflowId) &&
       (!filter.environment || d.environment === filter.environment) &&
-      (!filter.status || d.status === filter.status)))
+      (!filter.status || d.status === filter.status) &&
+      (!q || d.id.toLowerCase().includes(q) || d.workflowId.toLowerCase().includes(q) || d.environment.toLowerCase().includes(q) || (d.versionLabel || '').toLowerCase().includes(q))))
       .sort((a, b) => b.deployedAt.localeCompare(a.deployedAt));
+
+    const offset = filter.offset != null ? Number(filter.offset) : 0;
+    const limit = filter.limit != null ? Number(filter.limit) : all.length;
+    return all.slice(offset, offset + limit);
   }
 
   /** Snapshot a published version into an inactive deployment. */

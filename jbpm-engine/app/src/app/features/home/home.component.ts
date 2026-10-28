@@ -1349,7 +1349,7 @@ export class HomeComponent {
 
     if (t === 'overview') {
       if (this.canView()) {
-        this.instApi.listInstances({}).subscribe((list) => {
+        this.instApi.listInstances({ limit: 6 }).subscribe((list) => {
           this.recent.set([...list].sort((a, b) => (a.startedAt < b.startedAt ? 1 : -1)).slice(0, 6));
         });
       }
@@ -1442,10 +1442,16 @@ export class HomeComponent {
     this.loading.set(true);
     const params = this.filterParams();
 
-    // Summary is always needed for top KPI cards
-    this.q.analyticsSummary(params).subscribe({
-      next: (summary) => {
+    // Parallel aggregate fetch for top KPI cards & overview charts
+    forkJoin({
+      summary: this.q.analyticsSummary(params),
+      procs: this.q.analyticsProcesses(params),
+      tasks: this.q.analyticsTasks(params),
+    }).subscribe({
+      next: ({ summary, procs, tasks }) => {
         this.summary.set(summary);
+        this.procs.set(procs);
+        this.tasks.set(tasks);
         this.loading.set(false);
       },
       error: () => this.loading.set(false),

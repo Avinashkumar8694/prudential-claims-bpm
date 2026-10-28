@@ -80,14 +80,28 @@ export class InstanceService {
     return i;
   }
 
-  async list(filter: { workflowId?: string; status?: string; deploymentId?: string; correlationKey?: string }): Promise<Instance[]> {
-    return (await this.repo().query((i) =>
+  async list(filter: { workflowId?: string; status?: string; deploymentId?: string; correlationKey?: string; search?: string; limit?: number; offset?: number; full?: boolean }): Promise<Instance[]> {
+    const q = (filter.search || '').trim().toLowerCase();
+    const all = (await this.repo().query((i) =>
       i.tenantId === this.ctx.tenantId &&
       (!filter.workflowId || i.workflowId === filter.workflowId) &&
       (!filter.status || i.status === filter.status) &&
       (!filter.deploymentId || i.deploymentId === filter.deploymentId) &&
-      (!filter.correlationKey || i.correlationKey === filter.correlationKey)))
+      (!filter.correlationKey || i.correlationKey === filter.correlationKey) &&
+      (!q || i.id.toLowerCase().includes(q) || (i.processId || '').toLowerCase().includes(q) || (i.startedBy || '').toLowerCase().includes(q) || (i.correlationKey || '').toLowerCase().includes(q))))
       .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+
+    const offset = filter.offset != null ? Number(filter.offset) : 0;
+    const limit = filter.limit != null ? Number(filter.limit) : all.length;
+    const paged = all.slice(offset, offset + limit);
+
+    if (filter.full) return paged;
+    // Strip heavy runtime execution history and token structures for list queries
+    return paged.map((i) => ({
+      ...i,
+      history: [],
+      tokens: [],
+    }));
   }
 
   async diagramState(id: string) {

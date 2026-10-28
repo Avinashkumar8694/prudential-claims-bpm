@@ -65,13 +65,13 @@ const SAVED_KEY = 'instances.savedFilters';
             </label>
           }
           <label class="ck errs">
-            <input type="checkbox" [checked]="errorsOnly()" (change)="errorsOnly.set(!errorsOnly()); displayedCount.set(25)" />
+            <input type="checkbox" [checked]="errorsOnly()" (change)="errorsOnly.set(!errorsOnly()); reload()" />
             Has errors only
           </label>
 
           <div class="section-title">Filter by</div>
-          <input class="rail-in" placeholder="PIID / Case ID / Key" [ngModel]="q()" (ngModelChange)="q.set($event); displayedCount.set(25)" aria-label="Filter by id, case id or key" />
-          <input class="rail-in" placeholder="Initiator" [ngModel]="qBy()" (ngModelChange)="qBy.set($event); displayedCount.set(25)" aria-label="Filter by initiator" />
+          <input class="rail-in" placeholder="PIID / Case ID / Key" [ngModel]="q()" (ngModelChange)="onSearchInput($event)" aria-label="Filter by id, case id or key" />
+          <input class="rail-in" placeholder="Initiator" [ngModel]="qBy()" (ngModelChange)="onInitiatorInput($event)" aria-label="Filter by initiator" />
 
           <div class="section-title">Project</div>
           <select class="rail-in" [ngModel]="projectFilter()" (ngModelChange)="setProjectFilter($event)" aria-label="Filter by project">
@@ -176,13 +176,15 @@ const SAVED_KEY = 'instances.savedFilters';
             </table>
 
             <!-- Infinite scroll sentinel / loading bar -->
-            @if (filtered().length > 0) {
+            @if (instances().length > 0) {
               <div class="infinite-bar">
-                @if (hasMore()) {
+                @if (loadingMore()) {
                   <span class="spinner-dot"></span>
-                  <span class="muted">Loading more instances (showing {{ paged().length }} of {{ filtered().length }})…</span>
+                  <span class="muted">Loading more instances (showing {{ instances().length }} of {{ totalCount() }})…</span>
+                } @else if (hasMore()) {
+                  <button class="btn ghost sm" (click)="loadMore()">Load more (showing {{ instances().length }} of {{ totalCount() }})</button>
                 } @else {
-                  <span class="muted">Showing all {{ filtered().length }} instances</span>
+                  <span class="muted">Showing all {{ instances().length }} of {{ totalCount() }} instances</span>
                 }
               </div>
             }
@@ -344,6 +346,10 @@ export class InstancesComponent {
   canCreateCase = computed(() => this.creationMode() === 'both' || this.creationMode() === 'case-only');
 
   instances = signal<Instance[]>([]);
+  totalCount = signal(0);
+  loading = signal(true);
+  loadingMore = signal(false);
+  hasMore = signal(false);
   deployments = signal<Record<string, Deployment>>({});
   statuses = STATUSES;
   stateSet = signal<Set<string>>(new Set(STATUSES));
@@ -351,8 +357,6 @@ export class InstancesComponent {
   q = signal(''); qBy = signal('');
   errorsOnly = signal(false);
   sortDesc = signal(true);
-  displayedCount = signal(25);
-  loadingMore = signal(false);
   selectedIds = signal<Set<string>>(new Set());
   menuFor = signal<string | null>(null);
   menuPos = signal<{ top: number; left: number }>({ top: 0, left: 0 });
@@ -363,29 +367,62 @@ export class InstancesComponent {
   startCaseError = signal('');
   startingCaseLoading = signal(false);
 
+  private searchTimer: ReturnType<typeof setTimeout> | undefined;
+
   @HostListener('document:click') closeMenu() { this.menuFor.set(null); }
   @HostListener('window:scroll') onWindowScroll() {
-    const threshold = 200;
+    const threshold = 250;
     const pos = window.innerHeight + window.scrollY;
     const max = document.documentElement.scrollHeight;
-    if (pos >= max - threshold && this.hasMore() && !this.loadingMore()) {
+    if (pos >= max - threshold && this.hasMore() && !this.loading() && !this.loadingMore()) {
       this.loadMore();
     }
   }
 
   onTableScroll(e: Event) {
     const el = e.target as HTMLElement;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight < 150 && this.hasMore() && !this.loadingMore()) {
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 200 && this.hasMore() && !this.loading() && !this.loadingMore()) {
       this.loadMore();
     }
   }
 
+  onSearchInput(val: string) {
+    this.q.set(val);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.reload(), 300);
+  }
+
+  onInitiatorInput(val: string) {
+    this.qBy.set(val);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.reload(), 300);
+  }
+
   loadMore() {
+    if (this.loadingMore() || !this.hasMore()) return;
     this.loadingMore.set(true);
-    setTimeout(() => {
-      this.displayedCount.update((c) => Math.min(c + 25, this.filtered().length));
-      this.loadingMore.set(false);
-    }, 100);
+    const workflowId = this.projectFilter() || undefined;
+    const q = this.q().trim();
+    const type = this.typeFilter();
+    const status = this.stateSet().size === STATUSES.length ? undefined : [...this.stateSet()].join(',');
+    const offset = this.instances().length;
+
+    this.api.listInstancesPaged({
+      workflowId,
+      q,
+      type: type !== 'all' ? type : undefined,
+      status,
+      limit: 25,
+      offset,
+    }).subscribe({
+      next: (res) => {
+        this.instances.update((current) => [...current, ...res.items]);
+        this.totalCount.set(res.total);
+        this.hasMore.set(res.hasMore);
+        this.loadingMore.set(false);
+      },
+      error: () => this.loadingMore.set(false),
+    });
   }
 
   openMenu(ev: Event, id: string) {
@@ -434,8 +471,7 @@ export class InstancesComponent {
     return out;
   });
 
-  hasMore = computed(() => this.displayedCount() < this.filtered().length);
-  paged = computed(() => this.filtered().slice(0, this.displayedCount()));
+  paged = computed(() => this.filtered());
 
   constructor() {
     this.systemApi.getSystemSettings().subscribe({ next: (s) => this.systemSettings.set(s), error: () => {} });
@@ -447,36 +483,55 @@ export class InstancesComponent {
   }
 
   reload() {
+    this.loading.set(true);
     const workflowId = this.projectFilter() || undefined;
-    this.api.listInstances({ workflowId }).subscribe((is) => this.instances.set(is));
+    const q = this.q().trim();
+    const type = this.typeFilter();
+    const status = this.stateSet().size === STATUSES.length ? undefined : [...this.stateSet()].join(',');
+
+    this.api.listInstancesPaged({
+      workflowId,
+      q,
+      type: type !== 'all' ? type : undefined,
+      status,
+      limit: 25,
+      offset: 0,
+    }).subscribe({
+      next: (res) => {
+        this.instances.set(res.items);
+        this.totalCount.set(res.total);
+        this.hasMore.set(res.hasMore);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
+
     this.deploymentApi.listDeploymentsGlobal({ workflowId }).subscribe((ds) => this.deployments.set(Object.fromEntries(ds.map((d) => [d.id, d]))));
     this.wfDefApi.list().subscribe((defs) => this.workflowDefinitions.set(defs));
-    this.displayedCount.set(25);
   }
 
   setProjectFilter(id: string) {
     this.projectFilter.set(id);
-    this.displayedCount.set(25);
     this.reload();
   }
 
   setTypeFilter(type: 'all' | 'cases' | 'process') {
     this.typeFilter.set(type);
-    this.displayedCount.set(25);
+    this.reload();
   }
 
   toggleState(st: string) {
     const next = new Set(this.stateSet());
     next.has(st) ? next.delete(st) : next.add(st);
     this.stateSet.set(next);
-    this.displayedCount.set(25);
+    this.reload();
   }
 
   resetFilters() {
     this.stateSet.set(new Set(STATUSES));
     this.typeFilter.set('all');
     this.q.set(''); this.qBy.set(''); this.errorsOnly.set(false);
-    this.displayedCount.set(25);
+    this.reload();
   }
 
   toggleSelect(id: string) {
@@ -579,7 +634,6 @@ export class InstancesComponent {
     if (sf.typeFilter) this.typeFilter.set(sf.typeFilter as any);
     this.errorsOnly.set(sf.errorsOnly);
     this.q.set(sf.q); this.qBy.set(sf.qBy); this.projectFilter.set(sf.projectFilter);
-    this.displayedCount.set(25);
     this.reload();
   }
   deleteSaved(name: string) {

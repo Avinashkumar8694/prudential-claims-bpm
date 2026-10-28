@@ -168,7 +168,14 @@ export function buildRoutes(): Router {
   // --- deployments ---
   // cross-project listing (Deployments is a top-level page, same shape as GET /instances) —
   // workflows/:id/deployments below stays as the per-project convenience alias.
-  r.get('/deployments', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new DeploymentService(ctxOf(req)).list(req.query as any) })));
+  r.get('/deployments', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const depService = new DeploymentService(ctxOf(req));
+    const all = await depService.list({ ...req.query as any, limit: undefined, offset: undefined });
+    const offset = req.query.offset ? Math.max(0, Number(req.query.offset)) : 0;
+    const limit = req.query.limit ? Math.max(1, Number(req.query.limit)) : undefined;
+    const paged = limit != null ? all.slice(offset, offset + limit) : all;
+    res.json({ items: paged, total: all.length, hasMore: limit != null ? offset + limit < all.length : false, offset, limit: limit ?? all.length });
+  }));
   r.get('/workflows/:id/deployments', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new DeploymentService(ctxOf(req)).listByWorkflow(req.params.id) })));
   r.get('/deployments/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).get(req.params.id))));
   r.post('/deployments/:id/tags', perm('workflow:deploy'), asyncHandler(async (req, res) => res.json(await new DeploymentService(ctxOf(req)).setTags(req.params.id, req.body, actorOf(req)))));
@@ -202,7 +209,19 @@ export function buildRoutes(): Router {
   r.get('/instances', perm('workflow:view'), asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);
     const instService = new InstanceService(ctx);
-    const instances = await instService.list(req.query as any);
+    const qStr = ((req.query.q || req.query.search || '') as string).trim().toLowerCase();
+    const typeFilter = ((req.query.type || 'all') as string).toLowerCase();
+    const isFull = req.query.full === 'true';
+
+    // Fetch instances without pagination first so unified search and case-joining can be performed accurately
+    const instances = await instService.list({
+      workflowId: req.query.workflowId as string,
+      status: req.query.status as string,
+      deploymentId: req.query.deploymentId as string,
+      correlationKey: req.query.correlationKey as string,
+      full: isFull,
+    });
+
     let caseMap = new Map<string, any>();
     let orphanCases: any[] = [];
     try {
@@ -217,21 +236,25 @@ export function buildRoutes(): Router {
       }
     } catch {}
 
-    const items: any[] = instances.map((inst) => {
+    const allItems: any[] = [];
+
+    for (const inst of instances) {
       const c = caseMap.get(inst.id);
-      return {
+      allItems.push({
         ...inst,
+        history: isFull ? inst.history : [],
+        tokens: isFull ? inst.tokens : [],
         caseInstanceId: c?.id,
         caseWorkflowName: c?.workflowName,
         caseStatus: c?.status,
-        caseData: c?.data,
-      };
-    });
+        caseData: isFull ? c?.data : undefined,
+      });
+    }
 
     for (const c of orphanCases) {
       if (!req.query.status || req.query.status === c.status) {
         if (!req.query.workflowId || req.query.workflowId === c.workflowName) {
-          items.push({
+          allItems.push({
             id: c.id,
             tenantId: c.tenantId,
             workflowId: c.workflowName,
@@ -247,13 +270,51 @@ export function buildRoutes(): Router {
             caseInstanceId: c.id,
             caseWorkflowName: c.workflowName,
             caseStatus: c.status,
-            caseData: c.data,
+            caseData: isFull ? c.data : undefined,
           });
         }
       }
     }
 
-    res.json({ items });
+    // Sort descending by startedAt
+    allItems.sort((a, b) => ((b.startedAt || '') > (a.startedAt || '') ? 1 : -1));
+
+    const statusParam = req.query.status as string;
+    const statusSet = statusParam ? new Set(statusParam.split(',').map((s) => s.trim()).filter(Boolean)) : null;
+
+    // Apply type filter, status filter and search query filter
+    const filtered = allItems.filter((i) => {
+      if (statusSet && !statusSet.has(i.status)) return false;
+      if (typeFilter === 'cases' && !i.caseInstanceId) return false;
+      if (typeFilter === 'process' && !!i.caseInstanceId) return false;
+      if (qStr) {
+        const matchId = (i.id || '').toLowerCase().includes(qStr);
+        const matchProc = (i.processId || '').toLowerCase().includes(qStr);
+        const matchWf = (i.workflowId || '').toLowerCase().includes(qStr);
+        const matchCaseId = (i.caseInstanceId || '').toLowerCase().includes(qStr);
+        const matchCaseWf = (i.caseWorkflowName || '').toLowerCase().includes(qStr);
+        const matchBy = (i.startedBy || '').toLowerCase().includes(qStr);
+        const matchKey = (i.correlationKey || '').toLowerCase().includes(qStr);
+        if (!matchId && !matchProc && !matchWf && !matchCaseId && !matchCaseWf && !matchBy && !matchKey) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const offset = req.query.offset ? Math.max(0, Number(req.query.offset)) : 0;
+    const limit = req.query.limit ? Math.max(1, Number(req.query.limit)) : undefined;
+    const total = filtered.length;
+    const paged = limit != null ? filtered.slice(offset, offset + limit) : filtered;
+    const hasMore = limit != null ? offset + limit < total : false;
+
+    res.json({
+      items: paged,
+      total,
+      hasMore,
+      offset,
+      limit: limit ?? total,
+    });
   }));
 
   r.get('/instances/:id', perm('workflow:view'), asyncHandler(async (req, res) => {
@@ -314,7 +375,14 @@ export function buildRoutes(): Router {
 
   // --- tasks (task-level group/assignee/excludedOwners/businessAdmin checks happen inside TaskService
   // itself — see modules/tasks/service.ts — on top of the role-level task:manage gate here) ---
-  r.get('/tasks', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).list({ ...req.query as any, overdue: req.query.overdue === 'true' }) })));
+  r.get('/tasks', perm('task:manage'), asyncHandler(async (req, res) => {
+    const taskService = new TaskService(ctxOf(req));
+    const all = await taskService.list({ ...req.query as any, overdue: req.query.overdue === 'true', limit: undefined, offset: undefined });
+    const offset = req.query.offset ? Math.max(0, Number(req.query.offset)) : 0;
+    const limit = req.query.limit ? Math.max(1, Number(req.query.limit)) : undefined;
+    const paged = limit != null ? all.slice(offset, offset + limit) : all;
+    res.json({ items: paged, total: all.length, hasMore: limit != null ? offset + limit < all.length : false, offset, limit: limit ?? all.length });
+  }));
   r.get('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).get(req.params.id))));
   r.post('/tasks/:id/claim', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).claim(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/release', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).release(req.params.id, actorOf(req)))));

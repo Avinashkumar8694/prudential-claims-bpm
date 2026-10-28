@@ -1,6 +1,6 @@
 import { RouterLink } from '@angular/router';
 import { ActivatedRoute } from '@angular/router';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe } from '@angular/common';
 import { AuthService } from '../../core/auth/auth.service';
@@ -36,9 +36,9 @@ const SCOPES: { key: Scope; label: string }[] = [
           <button class="fchip" [class.on]="scope() === s.key" (click)="setScope(s.key)">{{ s.label }} <span class="ct">{{ countFor(s.key) }}</span></button>
         }
         <span class="spacer"></span>
-        <select [(ngModel)]="statusFilter"><option value="">Status: any</option><option value="created">Ready</option><option value="reserved">Reserved</option><option value="inprogress">In Progress</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select>
-        <label class="ovchk"><input type="checkbox" [(ngModel)]="overdueOnly" /> Overdue only</label>
-        <input placeholder="Search name / id" [(ngModel)]="search" style="width:160px;" />
+        <select [(ngModel)]="statusFilter" (ngModelChange)="reload()"><option value="">Status: any</option><option value="created">Ready</option><option value="reserved">Reserved</option><option value="inprogress">In Progress</option><option value="completed">Completed</option><option value="skipped">Skipped</option></select>
+        <label class="ovchk"><input type="checkbox" [(ngModel)]="overdueOnly" (ngModelChange)="reload()" /> Overdue only</label>
+        <input placeholder="Search name / id" [ngModel]="search" (ngModelChange)="onSearchChange($event)" style="width:160px;" />
       </div>
 
       @if (selectedIds().size) {
@@ -80,6 +80,19 @@ const SCOPES: { key: Scope; label: string }[] = [
               }
             </tbody>
           </table>
+
+          @if (visible().length > 0) {
+            <div class="infinite-bar">
+              @if (loadingMore()) {
+                <span class="spinner-dot"></span>
+                <span class="muted">Loading more tasks (showing {{ visible().length }} of {{ totalCount() }})…</span>
+              } @else if (hasMore()) {
+                <button class="btn ghost sm" (click)="loadMore()">Load more (showing {{ visible().length }} of {{ totalCount() }})</button>
+              } @else {
+                <span class="muted">Showing all {{ visible().length }} of {{ totalCount() }} tasks</span>
+              }
+            </div>
+          }
         }
       </div>
     </div>
@@ -103,6 +116,9 @@ const SCOPES: { key: Scope; label: string }[] = [
     .mono { font-family: var(--font-mono); font-size: 12px; }
     .sm { font-size: 12px; }
     .pad { padding: 16px; }
+    .infinite-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; font-size: 12.5px; border-top: 1px solid var(--border); background: var(--surface); }
+    .spinner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: pulse 1s infinite alternate; }
+    @keyframes pulse { from { opacity: 0.3; transform: scale(0.8); } to { opacity: 1; transform: scale(1.2); } }
   `],
 })
 export class TaskInboxComponent {
@@ -115,12 +131,31 @@ export class TaskInboxComponent {
   scopes = SCOPES;
   scope = signal<Scope>('mine');
   tasks = signal<Task[]>([]);
+  totalCount = signal(0);
   loading = signal(true);
+  loadingMore = signal(false);
+  hasMore = signal(false);
   statusFilter = '';
   overdueOnly = false;
   search = '';
   selectedIds = signal<Set<string>>(new Set());
   private instanceIdFilter = this.route.snapshot.queryParamMap.get('instanceId') || '';
+  private searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+  @HostListener('window:scroll') onWindowScroll() {
+    const threshold = 250;
+    const pos = window.innerHeight + window.scrollY;
+    const max = document.documentElement.scrollHeight;
+    if (pos >= max - threshold && this.hasMore() && !this.loading() && !this.loadingMore()) {
+      this.loadMore();
+    }
+  }
+
+  onSearchChange(val: string) {
+    this.search = val;
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.reload(), 300);
+  }
 
   private me = computed(() => this.auth.user()?.username);
   private myGroups = computed(() => this.auth.user()?.groups || []);
@@ -147,7 +182,42 @@ export class TaskInboxComponent {
   constructor() { this.reload(); }
   reload() {
     this.loading.set(true);
-    this.api.listTasks().subscribe({ next: (ts) => { this.tasks.set(ts); this.loading.set(false); }, error: () => this.loading.set(false) });
+    this.api.listTasksPaged({
+      status: this.statusFilter || undefined,
+      overdue: this.overdueOnly || undefined,
+      search: this.search.trim() || undefined,
+      limit: 25,
+      offset: 0,
+    }).subscribe({
+      next: (res) => {
+        this.tasks.set(res.items);
+        this.totalCount.set(res.total);
+        this.hasMore.set(res.hasMore);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
+  }
+
+  loadMore() {
+    if (this.loadingMore() || !this.hasMore()) return;
+    this.loadingMore.set(true);
+    const offset = this.tasks().length;
+    this.api.listTasksPaged({
+      status: this.statusFilter || undefined,
+      overdue: this.overdueOnly || undefined,
+      search: this.search.trim() || undefined,
+      limit: 25,
+      offset,
+    }).subscribe({
+      next: (res) => {
+        this.tasks.update((current) => [...current, ...res.items]);
+        this.totalCount.set(res.total);
+        this.hasMore.set(res.hasMore);
+        this.loadingMore.set(false);
+      },
+      error: () => this.loadingMore.set(false),
+    });
   }
   setScope(s: Scope) { this.scope.set(s); this.selectedIds.set(new Set()); }
   countFor(s: Scope) {

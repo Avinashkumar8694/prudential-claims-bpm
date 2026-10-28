@@ -37,6 +37,7 @@ interface ModalState {
           <p class="muted">Stable, business-named handles mapped to project process definitions and deployments — start cases against these without breaking client applications when new versions ship.</p>
         </div>
         <span class="spacer"></span>
+        <input class="search-input" placeholder="Search definitions..." [ngModel]="searchTerm()" (ngModelChange)="searchTerm.set($event)" style="padding:6px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); font-size:12.5px; width:200px; background:var(--surface);" />
         <button class="btn primary" (click)="openCreate()">
           <app-icon name="plus" [size]="13" /> Create Workflow Definition
         </button>
@@ -66,7 +67,7 @@ interface ModalState {
               </tr>
             </thead>
             <tbody>
-              @for (d of definitions(); track d.id) {
+              @for (d of filteredDefinitions(); track d.id) {
                 <tr>
                   <td class="mono bold">{{ d.name }}</td>
                   <td>
@@ -291,6 +292,7 @@ export class WorkflowManagementComponent {
   definitions = signal<WorkflowDefinition[]>([]);
   deployments = signal<Deployment[]>([]);
   workflows = signal<Workflow[]>([]);
+  searchTerm = signal('');
 
   projectProcesses = signal<{ id: string; name: string; nodes: number; flows: number }[]>([]);
   loadingProcesses = signal(false);
@@ -301,6 +303,17 @@ export class WorkflowManagementComponent {
 
   depsById = computed(() => new Map(this.deployments().map((d) => [d.id, d])));
   wfNames = computed(() => new Map(this.workflows().map((w) => [w.id, w.name])));
+
+  filteredDefinitions = computed(() => {
+    const q = this.searchTerm().trim().toLowerCase();
+    if (!q) return this.definitions();
+    return this.definitions().filter((d) => {
+      const matchName = d.name.toLowerCase().includes(q);
+      const matchProc = (d.processId || '').toLowerCase().includes(q);
+      const proj = this.projectName(this.depOf(d)?.workflowId).toLowerCase();
+      return matchName || matchProc || proj.includes(q);
+    });
+  });
 
   constructor() { this.reload(); }
 

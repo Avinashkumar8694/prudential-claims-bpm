@@ -2,6 +2,7 @@ import { Component, inject } from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { filter, map } from 'rxjs/operators';
+import { AuthService } from './core/auth/auth.service';
 import { SideNavComponent } from './shell/side-nav.component';
 import { NotificationsBellComponent } from './shell/notifications-bell.component';
 import { ToastComponent } from './shared/toast.component';
@@ -13,7 +14,7 @@ import { ThemeService } from './core/theme.service';
   standalone: true,
   imports: [RouterOutlet, SideNavComponent, NotificationsBellComponent, ToastComponent, ModalComponent],
   template: `
-    @if (isAuthPage()) {
+    @if (isAuthPage() || !auth.isAuthenticated()) {
       <router-outlet></router-outlet>
     } @else {
       <div class="layout">
@@ -45,6 +46,7 @@ import { ThemeService } from './core/theme.service';
   `],
 })
 export class AppComponent {
+  auth = inject(AuthService);
   private router = inject(Router);
   // injected only to force ThemeService to construct at boot (its effect stamps data-theme on <html>
   // immediately) — otherwise it wouldn't initialize until something else injects it, e.g. side-nav,
