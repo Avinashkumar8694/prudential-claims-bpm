@@ -10,6 +10,13 @@ import { notFound } from '../../infra/errors.ts';
 import type { WorkflowServiceStore } from '../store/types.ts';
 
 const durationMs = (from?: string, to?: string) => (from && to ? Math.max(0, Date.parse(to) - Date.parse(from)) : undefined);
+function parseBound(val?: string, endOfDay = false): string | undefined {
+  if (!val) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    return endOfDay ? `${val}T23:59:59.999Z` : `${val}T00:00:00.000Z`;
+  }
+  return val;
+}
 
 export interface OwnershipSegment { holder: string; from: string; to: string; durationMs: number; }
 export interface OwnershipTimeline { taskId: string; segments: OwnershipSegment[]; totalMs: number; }
@@ -24,9 +31,12 @@ export class WorkflowAnalyticsService {
     this.queries = new QueryService(ctx);
   }
 
-  async summary(opts?: { since?: string }) {
+  async summary(opts?: { since?: string; from?: string; to?: string }) {
     let cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId);
-    if (opts?.since) cases = cases.filter((c) => c.createdAt >= opts.since!);
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) cases = cases.filter((c) => c.createdAt >= fromBound);
+    if (toBound) cases = cases.filter((c) => c.createdAt <= toBound);
     const byStatus: Record<string, number> = {};
     const byWorkflowName: Record<string, number> = {};
     const terminalStatuses = new Set(['completed', 'closed', 'resolved', 'rejected', 'cancelled']);
@@ -52,9 +62,12 @@ export class WorkflowAnalyticsService {
    *  `startedAt`/`endedAt` — well-defined regardless of whatever free-form business `status` string a
    *  case is in — rather than the case's own `status`, which has no fixed "this means done" value.
    *  TAT by user reuses the existing task-level analytics unchanged. */
-  async tat(opts?: { since?: string }) {
+  async tat(opts?: { since?: string; from?: string; to?: string }) {
     let cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId && !!w.piid);
-    if (opts?.since) cases = cases.filter((c) => c.createdAt >= opts.since!);
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) cases = cases.filter((c) => c.createdAt >= fromBound);
+    if (toBound) cases = cases.filter((c) => c.createdAt <= toBound);
     const byName = new Map<string, number[]>();
     for (const c of cases) {
       const bpm = await this.bpmInstances.get(c.piid!).catch(() => null);

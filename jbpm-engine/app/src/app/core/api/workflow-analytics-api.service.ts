@@ -14,10 +14,10 @@ export interface WorkflowInstanceSummary {
 
 @Injectable({ providedIn: 'root' })
 export class WorkflowAnalyticsApiService extends ApiBase {
-  summary(params?: { since?: string }): Observable<WorkflowInstanceSummary> {
+  summary(params?: { since?: string; from?: string; to?: string }): Observable<WorkflowInstanceSummary> {
     return this.http.get<WorkflowInstanceSummary>(`${this.base}/workflow-analytics/summary`, { params: this.cleanParams(params) });
   }
-  tat(params?: { since?: string }): Observable<WorkflowTat> {
+  tat(params?: { since?: string; from?: string; to?: string }): Observable<WorkflowTat> {
     return this.http.get<WorkflowTat>(`${this.base}/workflow-analytics/tat`, { params: this.cleanParams(params) });
   }
   ownershipTimeline(workflowInstanceId: string, taskId: string): Observable<OwnershipTimeline> {

@@ -12,13 +12,13 @@ export class QueryApiService extends ApiBase {
   processDefinitions(): Observable<ProcessDef[]> { return this.items(this.http.get<ApiList<ProcessDef>>(`${this.base}/query/process-definitions`)); }
   instanceTasks(instanceId: string): Observable<Task[]> { return this.items(this.http.get<ApiList<Task>>(`${this.base}/query/instances/${instanceId}/tasks`)); }
   processSignals(processId: string): Observable<{ processId: string; listensFor: string[]; throws: string[] }> { return this.http.get<any>(`${this.base}/query/process-definitions/${processId}/signals`); }
-  analyticsSummary(params?: { days?: number; since?: string; processId?: string }): Observable<Summary> {
+  analyticsSummary(params?: { days?: number; since?: string; from?: string; to?: string; processId?: string }): Observable<Summary> {
     return this.http.get<Summary>(`${this.base}/query/analytics/summary`, { params: this.cleanParams(params) });
   }
-  analyticsTasks(params?: { days?: number; since?: string; processId?: string }): Observable<TaskAnalytics> {
+  analyticsTasks(params?: { days?: number; since?: string; from?: string; to?: string; processId?: string }): Observable<TaskAnalytics> {
     return this.http.get<TaskAnalytics>(`${this.base}/query/analytics/tasks`, { params: this.cleanParams(params) });
   }
-  analyticsProcesses(params?: { days?: number; since?: string; processId?: string }): Observable<ProcessAnalytics> {
+  analyticsProcesses(params?: { days?: number; since?: string; from?: string; to?: string; processId?: string }): Observable<ProcessAnalytics> {
     return this.http.get<ProcessAnalytics>(`${this.base}/query/analytics/processes`, { params: this.cleanParams(params) });
   }
 }

@@ -24,7 +24,7 @@ import type {
 } from '../../core/models';
 
 type ReportsTab = 'processes' | 'tasks' | 'cases' | 'queries';
-type TimeWindow = 'all' | '1d' | '7d' | '30d' | '90d';
+type TimeWindow = 'all' | '1d' | '7d' | '30d' | '90d' | 'custom';
 
 interface StatusRow {
   key: string;
@@ -89,17 +89,36 @@ const TASK_STATUSES = [
         </button>
       </header>
 
-      <!-- Global Filter Bar -->
+      <!-- Global Filter Bar: Presets, Date Range Filter & Process Scope -->
       <div class="filter-bar card">
         <div class="filter-group">
           <span class="f-label">Time Window:</span>
           <div class="pills">
             <button class="pill" [class.active]="timeWindow() === 'all'" (click)="setTimeWindow('all')">All Time</button>
             <button class="pill" [class.active]="timeWindow() === '1d'" (click)="setTimeWindow('1d')">Today (24h)</button>
-            <button class="pill" [class.active]="timeWindow() === '7d'" (click)="setTimeWindow('7d')">Last 7 Days</button>
-            <button class="pill" [class.active]="timeWindow() === '30d'" (click)="setTimeWindow('30d')">Last 30 Days</button>
-            <button class="pill" [class.active]="timeWindow() === '90d'" (click)="setTimeWindow('90d')">Last 90 Days</button>
+            <button class="pill" [class.active]="timeWindow() === '7d'" (click)="setTimeWindow('7d')">Last 7D</button>
+            <button class="pill" [class.active]="timeWindow() === '30d'" (click)="setTimeWindow('30d')">Last 30D</button>
+            <button class="pill" [class.active]="timeWindow() === '90d'" (click)="setTimeWindow('90d')">Last 90D</button>
+            <button class="pill" [class.active]="timeWindow() === 'custom'" (click)="timeWindow.set('custom')">Custom</button>
           </div>
+        </div>
+
+        <div class="filter-group date-range-group">
+          <span class="f-label"><app-icon name="calendar" [size]="13" /> Date Range:</span>
+          <div class="date-inputs">
+            <input type="date" [ngModel]="customFrom()" (ngModelChange)="onFromChange($event)" placeholder="YYYY-MM-DD" title="Start Date" />
+            <span class="to-sep">→</span>
+            <input type="date" [ngModel]="customTo()" (ngModelChange)="onToChange($event)" placeholder="YYYY-MM-DD" title="End Date" />
+            <button class="btn sm primary" (click)="applyCustomDateRange()" [disabled]="!customFrom() && !customTo()">Apply</button>
+            @if (customFrom() || customTo()) {
+              <button class="btn sm ghost" (click)="clearCustomDateRange()" title="Reset to All Time">✕</button>
+            }
+          </div>
+          @if (isDateFiltered()) {
+            <span class="range-badge" title="Active filtered range">
+              <app-icon name="calendar" [size]="11" /> {{ dateRangeLabel() }}
+            </span>
+          }
         </div>
 
         <div class="filter-group right">
@@ -693,12 +712,17 @@ const TASK_STATUSES = [
     .spacer { flex: 1; }
 
     /* Filter Bar */
-    .filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 16px; flex-wrap: wrap; background: var(--surface); }
-    .filter-group { display: flex; align-items: center; gap: 10px; }
-    .f-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
-    .pills { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 14px; flex-wrap: wrap; background: var(--surface); }
+    .filter-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .f-label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; display: inline-flex; align-items: center; gap: 4px; }
+    .pills { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: var(--radius-sm); border: 1px solid var(--border); flex-wrap: wrap; }
     .pill { border: none; background: transparent; padding: 5px 10px; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all .15s ease; }
     .pill.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .date-range-group { display: flex; align-items: center; gap: 6px; }
+    .date-inputs { display: inline-flex; align-items: center; gap: 6px; }
+    .date-inputs input[type="date"] { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--surface); color: inherit; font-family: inherit; }
+    .to-sep { font-size: 12px; color: var(--muted); }
+    .range-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; background: var(--primary-50); color: var(--primary); padding: 3px 8px; border-radius: var(--radius-pill); border: 1px solid rgba(99,102,241,0.2); }
     .filter-group select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12.5px; background: var(--surface); color: inherit; }
 
     .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 2px; }
@@ -821,6 +845,8 @@ export class ReportsComponent {
 
   tab = signal<ReportsTab>('processes');
   timeWindow = signal<TimeWindow>('all');
+  customFrom = signal<string>('');
+  customTo = signal<string>('');
   selectedProcess = '';
   loading = signal(true);
   error = signal<string | null>(null);
@@ -868,18 +894,51 @@ export class ReportsComponent {
   private filterParams = computed(() => {
     const tw = this.timeWindow();
     let since: string | undefined;
+    let from: string | undefined;
+    let to: string | undefined;
     let days: number | undefined;
     const now = Date.now();
-    if (tw === '1d') { since = new Date(now - 86400000).toISOString(); days = 1; }
-    else if (tw === '7d') { since = new Date(now - 7 * 86400000).toISOString(); days = 7; }
-    else if (tw === '30d') { since = new Date(now - 30 * 86400000).toISOString(); days = 30; }
-    else if (tw === '90d') { since = new Date(now - 90 * 86400000).toISOString(); days = 90; }
+
+    if (tw === 'custom' || (this.customFrom() && this.customTo())) {
+      from = this.customFrom().trim() || undefined;
+      to = this.customTo().trim() || undefined;
+    } else if (tw === '1d') {
+      since = new Date(now - 86400000).toISOString();
+      days = 1;
+    } else if (tw === '7d') {
+      since = new Date(now - 7 * 86400000).toISOString();
+      days = 7;
+    } else if (tw === '30d') {
+      since = new Date(now - 30 * 86400000).toISOString();
+      days = 30;
+    } else if (tw === '90d') {
+      since = new Date(now - 90 * 86400000).toISOString();
+      days = 90;
+    }
 
     return {
       since,
+      from,
+      to,
       days,
       processId: this.selectedProcess.trim() || undefined,
     };
+  });
+
+  isDateFiltered = computed(() => {
+    return this.timeWindow() !== 'all' || !!this.customFrom() || !!this.customTo();
+  });
+
+  dateRangeLabel = computed(() => {
+    if (this.customFrom() && this.customTo()) return `${this.customFrom()} to ${this.customTo()}`;
+    if (this.customFrom()) return `Since ${this.customFrom()}`;
+    if (this.customTo()) return `Until ${this.customTo()}`;
+    const tw = this.timeWindow();
+    if (tw === '1d') return 'Past 24 hours';
+    if (tw === '7d') return 'Past 7 days';
+    if (tw === '30d') return 'Past 30 days';
+    if (tw === '90d') return 'Past 90 days';
+    return 'All time';
   });
 
   availableProcesses = computed(() => {
@@ -908,6 +967,52 @@ export class ReportsComponent {
 
   setTimeWindow(w: TimeWindow) {
     this.timeWindow.set(w);
+    const now = new Date();
+    const toStr = (d: Date) => d.toISOString().slice(0, 10);
+    if (w === '1d') {
+      this.customFrom.set(toStr(new Date(now.getTime() - 86400000)));
+      this.customTo.set(toStr(now));
+    } else if (w === '7d') {
+      this.customFrom.set(toStr(new Date(now.getTime() - 7 * 86400000)));
+      this.customTo.set(toStr(now));
+    } else if (w === '30d') {
+      this.customFrom.set(toStr(new Date(now.getTime() - 30 * 86400000)));
+      this.customTo.set(toStr(now));
+    } else if (w === '90d') {
+      this.customFrom.set(toStr(new Date(now.getTime() - 90 * 86400000)));
+      this.customTo.set(toStr(now));
+    } else if (w === 'all') {
+      this.customFrom.set('');
+      this.customTo.set('');
+    }
+    this.load();
+  }
+
+  onFromChange(val: string) {
+    this.customFrom.set(val);
+    this.timeWindow.set('custom');
+  }
+
+  onToChange(val: string) {
+    this.customTo.set(val);
+    this.timeWindow.set('custom');
+  }
+
+  applyCustomDateRange() {
+    const from = this.customFrom();
+    const to = this.customTo();
+    if (from && to && from > to) {
+      this.toast.error('Start date cannot be after end date.');
+      return;
+    }
+    this.timeWindow.set('custom');
+    this.load();
+  }
+
+  clearCustomDateRange() {
+    this.customFrom.set('');
+    this.customTo.set('');
+    this.timeWindow.set('all');
     this.load();
   }
 
@@ -940,7 +1045,11 @@ export class ReportsComponent {
   }
 
   loadCaseAnalytics() {
-    const params = { since: this.filterParams().since };
+    const params = {
+      since: this.filterParams().since,
+      from: this.filterParams().from,
+      to: this.filterParams().to,
+    };
     this.analyticsApi.summary(params).subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
     this.analyticsApi.tat(params).subscribe({ next: (t) => this.tat.set(t), error: () => {} });
     this.analyticsApi.listSavedQueries().subscribe({ next: (q: SavedQuery[]) => this.savedQueries.set(q), error: () => {} });

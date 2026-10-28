@@ -13,6 +13,14 @@ function stats(values: number[]): DurStats {
   return { count: values.length, avgMs: Math.round(sum / values.length), minMs: Math.min(...values), maxMs: Math.max(...values) };
 }
 
+function parseBound(val?: string, endOfDay = false): string | undefined {
+  if (!val) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+    return endOfDay ? `${val}T23:59:59.999Z` : `${val}T00:00:00.000Z`;
+  }
+  return val;
+}
+
 export class QueryService {
   constructor(private ctx: AppContext) {}
   private I() { return this.ctx.store.repo<Instance>(Collections.instances); }
@@ -122,9 +130,12 @@ export class QueryService {
 
   // ---- analytics / TAT ----
   /** Task turn-around-time grouped by task name, plus a per-assignee completed breakdown and SLA stats. */
-  async taskAnalytics(opts?: { since?: string; processId?: string }) {
+  async taskAnalytics(opts?: { since?: string; from?: string; to?: string; processId?: string }) {
     let tasks = await this.allTasks();
-    if (opts?.since) tasks = tasks.filter((t) => t.createdAt >= opts.since!);
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) tasks = tasks.filter((t) => t.createdAt >= fromBound);
+    if (toBound) tasks = tasks.filter((t) => t.createdAt <= toBound);
     if (opts?.processId) {
       const insts = await this.allInstances();
       const pInstIds = new Set(insts.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId).map((i) => i.id));
@@ -174,9 +185,12 @@ export class QueryService {
     };
   }
   /** Process-instance turn-around-time grouped by process definition, plus a status mix, daily throughput and failure rate. */
-  async processAnalytics(opts?: { since?: string; processId?: string; days?: number }) {
+  async processAnalytics(opts?: { since?: string; from?: string; to?: string; processId?: string; days?: number }) {
     let instances = await this.allInstances();
-    if (opts?.since) instances = instances.filter((i) => i.startedAt >= opts.since!);
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) instances = instances.filter((i) => i.startedAt >= fromBound);
+    if (toBound) instances = instances.filter((i) => i.startedAt <= toBound);
     if (opts?.processId) instances = instances.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId);
 
     const byProc = new Map<string, number[]>();
@@ -189,14 +203,33 @@ export class QueryService {
       (byProc.get(key) || byProc.set(key, []).get(key)!).push(ms);
     }
 
-    // Daily throughput: generate buckets for the past N days (default 14 days or custom)
-    const numDays = opts?.days ? Math.min(Math.max(Number(opts.days), 3), 90) : 14;
+    // Daily throughput: generate buckets based on explicit from/to dates or past N days
     const dailyMap = new Map<string, { started: number; completed: number; failed: number }>();
+    let startDate: Date;
+    let endDate: Date;
     const now = new Date();
-    for (let d = numDays - 1; d >= 0; d--) {
-      const dt = new Date(now.getTime() - d * 86400000);
-      const key = dt.toISOString().slice(0, 10);
+
+    if (fromBound && toBound) {
+      startDate = new Date(fromBound);
+      endDate = new Date(toBound);
+    } else if (fromBound) {
+      startDate = new Date(fromBound);
+      endDate = now;
+    } else {
+      const numDays = opts?.days ? Math.min(Math.max(Number(opts.days), 3), 90) : 14;
+      endDate = now;
+      startDate = new Date(now.getTime() - (numDays - 1) * 86400000);
+    }
+
+    if (Number.isNaN(startDate.getTime())) startDate = new Date(now.getTime() - 13 * 86400000);
+    if (Number.isNaN(endDate.getTime()) || endDate < startDate) endDate = now;
+
+    const diffDays = Math.min(Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1), 90);
+    const cursor = new Date(startDate);
+    for (let d = 0; d < diffDays; d++) {
+      const key = cursor.toISOString().slice(0, 10);
       dailyMap.set(key, { started: 0, completed: 0, failed: 0 });
+      cursor.setDate(cursor.getDate() + 1);
     }
 
     for (const i of instances) {
@@ -224,12 +257,18 @@ export class QueryService {
     };
   }
   /** Dashboard counts across instances, tasks, deployments and jobs. */
-  async summary(opts?: { since?: string; processId?: string }) {
+  async summary(opts?: { since?: string; from?: string; to?: string; processId?: string }) {
     let instances = await this.allInstances();
     let tasks = await this.allTasks();
-    if (opts?.since) {
-      instances = instances.filter((i) => i.startedAt >= opts.since!);
-      tasks = tasks.filter((t) => t.createdAt >= opts.since!);
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) {
+      instances = instances.filter((i) => i.startedAt >= fromBound);
+      tasks = tasks.filter((t) => t.createdAt >= fromBound);
+    }
+    if (toBound) {
+      instances = instances.filter((i) => i.startedAt <= toBound);
+      tasks = tasks.filter((t) => t.createdAt <= toBound);
     }
     if (opts?.processId) {
       instances = instances.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId);
