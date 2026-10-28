@@ -28,6 +28,7 @@ import { exportKjar, validateJbpmExport } from '../modules/export/service.ts';
 import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { openapiSpec, swaggerHtml } from './openapi.ts';
+import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
 import { hub } from '../infra/ws-hub.ts';
 import { requirePermission } from './auth-middleware.ts';
 import { rateLimit } from './rate-limit.ts';
@@ -288,6 +289,9 @@ export function buildRoutes(): Router {
   r.post('/roles', perm('admin:iam'), asyncHandler(async (req, res) => res.status(201).json(await iam(req).createRole(req.body, actorOf(req)))));
   r.patch('/roles/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await iam(req).updateRole(req.params.id, req.body?.permissions || [], actorOf(req)))));
   r.delete('/roles/:id', perm('admin:iam'), asyncHandler(async (req, res) => { await iam(req).deleteRole(req.params.id, actorOf(req)); res.status(204).end(); }));
+
+  // --- Workflow Instance Management (Case Management) ---
+  r.use(buildWorkflowInstanceRoutes());
 
   return r;
 }

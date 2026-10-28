@@ -156,3 +156,38 @@ export interface DurStats { count: number; avgMs: number; minMs: number; maxMs: 
 export interface Summary { instances: { total: number; byStatus: Record<string, number> }; tasks: { total: number; byStatus: Record<string, number> }; deployments: { total: number; active: number }; jobs: { scheduled: number; fired: number }; }
 export interface TaskAnalytics { byTask: (DurStats & { name: string })[]; byAssignee: (DurStats & { user: string })[]; openByStatus: Record<string, number>; }
 export interface ProcessAnalytics { byProcess: (DurStats & { processId: string })[]; byStatus: Record<string, number>; }
+
+// ---- Workflow Instance Management (Case Management) ----
+export interface WorkflowDefinition {
+  id: string; name: string; deploymentId: string;
+  dataSchema: Record<string, unknown>; schemaValidationEnabled: boolean;
+  createdAt: string; updatedAt: string;
+}
+export interface WorkflowInstance {
+  id: string; workflowDefinitionId: string; workflowName: string; deploymentId: string;
+  data: Record<string, unknown>; status: string; piid: string | null; startError?: string;
+  createdAt: string; updatedAt: string;
+}
+export interface WorkflowInstanceAggregate {
+  workflowInstance: WorkflowInstance; bpmInstance: Instance | null; tasks: Task[];
+  signals: { processId: string; listensFor: string[]; throws: string[] } | null;
+  commentCount: number; auditCount: number;
+}
+export interface WorkflowInstanceAudit { id: string; workflowInstanceId: string; actor: string; kind: string; data?: Record<string, unknown>; at: string; }
+export interface WorkflowInstanceComment { id: string; workflowInstanceId: string; author: string; body: string; at: string; }
+export interface OwnershipSegment { holder: string; from: string; to: string; durationMs: number; }
+export interface OwnershipTimeline { taskId: string; segments: OwnershipSegment[]; totalMs: number; }
+export interface TasksAndProcesses { instances: Instance[]; tasks: Task[]; }
+export interface WorkflowTat {
+  byWorkflowName: (DurStats & { workflowName: string })[];
+  byUser: (DurStats & { user: string })[];
+}
+export type QueryableEntity = 'workflowInstance' | 'workflowInstanceAudit' | 'workflowInstanceComment' | 'instance' | 'task';
+export type QueryOp = 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte' | 'in' | 'contains';
+export interface QueryFilter { field: string; op: QueryOp; value: unknown; }
+export interface QueryDefinition {
+  entity: QueryableEntity; filters?: QueryFilter[]; groupBy?: string; metric?: 'count' | 'avgDurationMs';
+  durationFrom?: string; durationTo?: string; sort?: { field: string; dir: 'asc' | 'desc' }; limit?: number;
+}
+export interface QueryRunResult { rows?: Record<string, unknown>[]; groups?: { key: string; count: number; avgDurationMs?: number }[]; }
+export interface SavedQuery { id: string; ownerId?: string; name: string; definition: QueryDefinition; createdAt: string; createdBy: string; }

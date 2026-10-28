@@ -63,6 +63,27 @@ export const routes: Routes = [
         loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent) },
+      // Workflow Instance Management (Case Management)
+      {
+        path: 'workflow-management',
+        canActivate: [permissionGuard('workflowInstance:admin')],
+        loadComponent: () => import('./features/workflow-mgmt/workflow-management.component').then((m) => m.WorkflowManagementComponent),
+      },
+      {
+        path: 'workflow-instances',
+        canActivate: [permissionGuard('workflowInstance:manage')],
+        loadComponent: () => import('./features/workflow-mgmt/workflow-instances-list.component').then((m) => m.WorkflowInstancesListComponent),
+      },
+      {
+        path: 'workflow-instances/:id',
+        canActivate: [permissionGuard('workflowInstance:manage')],
+        loadComponent: () => import('./features/workflow-mgmt/workflow-instance-detail.component').then((m) => m.WorkflowInstanceDetailComponent),
+      },
+      {
+        path: 'workflow-analytics',
+        canActivate: [permissionGuard('query:read')],
+        loadComponent: () => import('./features/workflow-mgmt/workflow-analytics.component').then((m) => m.WorkflowAnalyticsComponent),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

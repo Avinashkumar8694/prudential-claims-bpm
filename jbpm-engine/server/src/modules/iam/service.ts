@@ -15,9 +15,9 @@ const sanitize = (u: User): PublicUser => { const { passwordHash: _drop, ...rest
 export const DEFAULT_ROLES: Record<string, string[]> = {
   admin: ['*'],
   author: ['workflow:view', 'workflow:edit'],
-  release: ['workflow:view', 'workflow:deploy'],
-  operator: ['workflow:view', 'workflow:run', 'query:read'],
-  worker: ['task:manage'],
+  release: ['workflow:view', 'workflow:deploy', 'workflowInstance:admin'],
+  operator: ['workflow:view', 'workflow:run', 'query:read', 'workflowInstance:manage', 'analytics:query'],
+  worker: ['task:manage', 'workflowInstance:manage'],
   viewer: ['workflow:view', 'query:read'],
 };
 

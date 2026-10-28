@@ -169,6 +169,27 @@ export class InstanceService {
     return { instance: inst, parent, children };
   }
 
+  /** Every descendant of `rootId` at ANY depth (call activities, embedded/event sub-processes,
+   *  multi-instance children, recursively) — the root itself plus every instance reachable by
+   *  following `parentInstanceId` down. Read-only; includes terminal instances by default so
+   *  callers get the full historical case tree. */
+  async descendants(rootId: string, opts: { includeTerminal?: boolean } = {}): Promise<Instance[]> {
+    const includeTerminal = opts.includeTerminal ?? true;
+    const root = await this.get(rootId);
+    const out: Instance[] = [root];
+    const walk = async (parentId: string): Promise<void> => {
+      const children = await this.repo().query((c) =>
+        c.tenantId === this.ctx.tenantId && c.parentInstanceId === parentId &&
+        (includeTerminal || c.status === 'running' || c.status === 'waiting' || c.status === 'suspended'));
+      for (const child of children) {
+        out.push(child);
+        await walk(child.id);
+      }
+    };
+    await walk(rootId);
+    return out;
+  }
+
   /** Suspend pauses the WHOLE subtree: the instance and every active descendant (call activities /
    *  sub-processes). A paused tree does no work — tasks/signals/timers on it are refused until resume.
    *  Only a running/waiting instance can be suspended — there's nothing to pause on a terminal instance,
