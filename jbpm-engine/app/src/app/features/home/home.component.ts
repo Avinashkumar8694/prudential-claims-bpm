@@ -221,6 +221,16 @@ const TASK_STATUSES = [
                   <p class="chartsub">Daily instance starts vs. completions over the selected period</p>
                 </div>
                 <div class="spacer"></div>
+                <!-- View Mode Filter -->
+                <div class="view-mode-toggle" title="Filter days shown on timeline">
+                  <button type="button" class="vm-btn" [class.active]="throughputViewMode() === 'all'" (click)="throughputViewMode.set('all')">
+                    All Days ({{ dailyThroughput().length }})
+                  </button>
+                  <button type="button" class="vm-btn" [class.active]="throughputViewMode() === 'active'" (click)="throughputViewMode.set('active')">
+                    Active Days ({{ throughputTotals().activeDays }})
+                  </button>
+                </div>
+                <!-- Legend -->
                 <div class="chart-legend-inline">
                   <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
                   <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
@@ -228,23 +238,144 @@ const TASK_STATUSES = [
                 </div>
               </div>
 
-              <div class="throughput-chart">
-                @for (d of dailyThroughput(); track d.date) {
-                  <div class="tp-col" [title]="throughputTooltip(d)">
-                    <div class="tp-bars">
-                      @if (d.started > 0) {
-                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
-                      }
-                      @if (d.completed > 0) {
-                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
-                      }
-                      @if (d.failed > 0) {
-                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
-                      }
-                    </div>
-                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+              <!-- High-density Throughput Summary Metric Strip -->
+              <div class="tp-summary-strip">
+                <div class="tp-stat">
+                  <span class="tp-stat-val" style="color: var(--blue);">{{ throughputTotals().started }}</span>
+                  <span class="tp-stat-lbl">Total Started</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val" style="color: var(--green);">{{ throughputTotals().completed }}</span>
+                  <span class="tp-stat-lbl">Completed</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val" [class.red]="throughputTotals().failed > 0">{{ throughputTotals().failed }}</span>
+                  <span class="tp-stat-lbl">Failed</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val">{{ throughputTotals().totalVolume }}</span>
+                  <span class="tp-stat-lbl">Total Volume</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val" [style.color]="throughputTotals().successRate >= 90 ? 'var(--green)' : throughputTotals().successRate >= 75 ? 'var(--amber)' : 'var(--red)'">
+                    {{ throughputTotals().successRate }}%
+                  </span>
+                  <span class="tp-stat-lbl">Success Rate</span>
+                </div>
+                @if (throughputTotals().peakDay) {
+                  <div class="tp-stat-sep"></div>
+                  <div class="tp-stat">
+                    <span class="tp-stat-val">{{ throughputTotals().peakVal }}</span>
+                    <span class="tp-stat-lbl">Peak ({{ formatDayLabel(throughputTotals().peakDay) }})</span>
                   </div>
                 }
+              </div>
+
+              <div class="tp-chart-container">
+                <!-- Y-Axis Numeric Scale -->
+                <div class="tp-y-axis">
+                  @for (tick of throughputYScale().ticks; track $index) {
+                    <span class="tp-y-tick">{{ tick }}</span>
+                  }
+                </div>
+
+                <!-- Plot Area with horizontal gridlines and bar columns -->
+                <div class="tp-plot-area">
+                  <div class="tp-gridlines">
+                    @for (tick of throughputYScale().ticks; track $index) {
+                      <div class="tp-gridline" [style.top.%]="$index * 25"></div>
+                    }
+                  </div>
+
+                  <div class="tp-columns" [class.active-view]="throughputViewMode() === 'active'">
+                    @for (d of displayedThroughput(); track d.date) {
+                      <div class="tp-col"
+                           [class.active-day]="(d.started + d.completed + d.failed) > 0"
+                           [class.is-hovered]="hoveredDay()?.date === d.date"
+                           (mouseenter)="onHoverDay(d, $event)"
+                           (mouseleave)="onLeaveDay()">
+                        <!-- Day Total Count Badge -->
+                        <div class="tp-col-header">
+                          @if ((d.started + d.completed + d.failed) > 0) {
+                            <span class="col-count-badge" title="Total instances on this date">
+                              {{ d.started + d.completed + d.failed }}
+                            </span>
+                          } @else {
+                            <span class="col-count-empty">·</span>
+                          }
+                        </div>
+
+                        <!-- Bar cluster with value labels -->
+                        <div class="tp-bars">
+                          <div class="tp-bar-wrapper">
+                            @if (d.started > 0) {
+                              <span class="tp-bar-val blue">{{ d.started }}</span>
+                              <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                            } @else {
+                              <div class="tp-bar-zero"></div>
+                            }
+                          </div>
+                          <div class="tp-bar-wrapper">
+                            @if (d.completed > 0) {
+                              <span class="tp-bar-val green">{{ d.completed }}</span>
+                              <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                            } @else {
+                              <div class="tp-bar-zero"></div>
+                            }
+                          </div>
+                          <div class="tp-bar-wrapper">
+                            @if (d.failed > 0) {
+                              <span class="tp-bar-val red">{{ d.failed }}</span>
+                              <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+                            } @else {
+                              <div class="tp-bar-zero"></div>
+                            }
+                          </div>
+                        </div>
+
+                        <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Floating Tooltip on Hover -->
+                  @if (hoveredDay()) {
+                    <div class="tp-floating-tooltip" [style.left.px]="tooltipX()" [style.top.px]="tooltipY()">
+                      <div class="tp-tt-head">
+                        <span class="tp-tt-date">{{ formatFullDate(hoveredDay()!.date) }}</span>
+                        <span class="tp-tt-total-pill">{{ hoveredDay()!.started + hoveredDay()!.completed + hoveredDay()!.failed }} Total</span>
+                      </div>
+                      <div class="tp-tt-body">
+                        <div class="tp-tt-row">
+                          <span class="dot-sw" style="background: var(--blue);"></span>
+                          <span class="tp-tt-name">Started Instances:</span>
+                          <span class="tp-tt-num blue">{{ hoveredDay()!.started }}</span>
+                        </div>
+                        <div class="tp-tt-row">
+                          <span class="dot-sw" style="background: var(--green);"></span>
+                          <span class="tp-tt-name">Completed:</span>
+                          <span class="tp-tt-num green">{{ hoveredDay()!.completed }}</span>
+                        </div>
+                        <div class="tp-tt-row">
+                          <span class="dot-sw" style="background: var(--red);"></span>
+                          <span class="tp-tt-name">Failed / Errors:</span>
+                          <span class="tp-tt-num red">{{ hoveredDay()!.failed }}</span>
+                        </div>
+                        @if (hoveredDay()!.completed + hoveredDay()!.failed > 0) {
+                          <div class="tp-tt-divider"></div>
+                          <div class="tp-tt-row small muted">
+                            <span>Success Rate:</span>
+                            <span class="tp-tt-num">{{ calcDaySuccessRate(hoveredDay()!) }}%</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
               </div>
             </section>
           }
@@ -364,32 +495,164 @@ const TASK_STATUSES = [
               <div class="row charthead">
                 <div>
                   <h3>Process Volume &amp; Daily Throughput</h3>
-                  <p class="chartsub">Instance completions and starts over time</p>
+                  <p class="chartsub">Instance completions, starts, and execution outcomes over time</p>
                 </div>
                 <div class="spacer"></div>
+                <!-- View Mode Filter -->
+                <div class="view-mode-toggle" title="Filter days shown on timeline">
+                  <button type="button" class="vm-btn" [class.active]="throughputViewMode() === 'all'" (click)="throughputViewMode.set('all')">
+                    All Days ({{ dailyThroughput().length }})
+                  </button>
+                  <button type="button" class="vm-btn" [class.active]="throughputViewMode() === 'active'" (click)="throughputViewMode.set('active')">
+                    Active Days ({{ throughputTotals().activeDays }})
+                  </button>
+                </div>
+                <!-- Legend -->
                 <div class="chart-legend-inline">
                   <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
                   <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
                   <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
                 </div>
               </div>
-              <div class="throughput-chart">
-                @for (d of dailyThroughput(); track d.date) {
-                  <div class="tp-col" [title]="throughputTooltip(d)">
-                    <div class="tp-bars">
-                      @if (d.started > 0) {
-                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
-                      }
-                      @if (d.completed > 0) {
-                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
-                      }
-                      @if (d.failed > 0) {
-                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
-                      }
-                    </div>
-                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+
+              <!-- High-density Throughput Summary Metric Strip -->
+              <div class="tp-summary-strip">
+                <div class="tp-stat">
+                  <span class="tp-stat-val" style="color: var(--blue);">{{ throughputTotals().started }}</span>
+                  <span class="tp-stat-lbl">Total Started</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val" style="color: var(--green);">{{ throughputTotals().completed }}</span>
+                  <span class="tp-stat-lbl">Completed</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val" [class.red]="throughputTotals().failed > 0">{{ throughputTotals().failed }}</span>
+                  <span class="tp-stat-lbl">Failed</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val">{{ throughputTotals().totalVolume }}</span>
+                  <span class="tp-stat-lbl">Total Volume</span>
+                </div>
+                <div class="tp-stat-sep"></div>
+                <div class="tp-stat">
+                  <span class="tp-stat-val" [style.color]="throughputTotals().successRate >= 90 ? 'var(--green)' : throughputTotals().successRate >= 75 ? 'var(--amber)' : 'var(--red)'">
+                    {{ throughputTotals().successRate }}%
+                  </span>
+                  <span class="tp-stat-lbl">Success Rate</span>
+                </div>
+                @if (throughputTotals().peakDay) {
+                  <div class="tp-stat-sep"></div>
+                  <div class="tp-stat">
+                    <span class="tp-stat-val">{{ throughputTotals().peakVal }}</span>
+                    <span class="tp-stat-lbl">Peak ({{ formatDayLabel(throughputTotals().peakDay) }})</span>
                   </div>
                 }
+              </div>
+
+              <div class="tp-chart-container">
+                <!-- Y-Axis Numeric Scale -->
+                <div class="tp-y-axis">
+                  @for (tick of throughputYScale().ticks; track $index) {
+                    <span class="tp-y-tick">{{ tick }}</span>
+                  }
+                </div>
+
+                <!-- Plot Area with horizontal gridlines and bar columns -->
+                <div class="tp-plot-area">
+                  <div class="tp-gridlines">
+                    @for (tick of throughputYScale().ticks; track $index) {
+                      <div class="tp-gridline" [style.top.%]="$index * 25"></div>
+                    }
+                  </div>
+
+                  <div class="tp-columns" [class.active-view]="throughputViewMode() === 'active'">
+                    @for (d of displayedThroughput(); track d.date) {
+                      <div class="tp-col"
+                           [class.active-day]="(d.started + d.completed + d.failed) > 0"
+                           [class.is-hovered]="hoveredDay()?.date === d.date"
+                           (mouseenter)="onHoverDay(d, $event)"
+                           (mouseleave)="onLeaveDay()">
+                        <!-- Day Total Count Badge -->
+                        <div class="tp-col-header">
+                          @if ((d.started + d.completed + d.failed) > 0) {
+                            <span class="col-count-badge" title="Total instances on this date">
+                              {{ d.started + d.completed + d.failed }}
+                            </span>
+                          } @else {
+                            <span class="col-count-empty">·</span>
+                          }
+                        </div>
+
+                        <!-- Bar cluster with value labels -->
+                        <div class="tp-bars">
+                          <div class="tp-bar-wrapper">
+                            @if (d.started > 0) {
+                              <span class="tp-bar-val blue">{{ d.started }}</span>
+                              <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                            } @else {
+                              <div class="tp-bar-zero"></div>
+                            }
+                          </div>
+                          <div class="tp-bar-wrapper">
+                            @if (d.completed > 0) {
+                              <span class="tp-bar-val green">{{ d.completed }}</span>
+                              <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                            } @else {
+                              <div class="tp-bar-zero"></div>
+                            }
+                          </div>
+                          <div class="tp-bar-wrapper">
+                            @if (d.failed > 0) {
+                              <span class="tp-bar-val red">{{ d.failed }}</span>
+                              <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+                            } @else {
+                              <div class="tp-bar-zero"></div>
+                            }
+                          </div>
+                        </div>
+
+                        <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+                      </div>
+                    }
+                  </div>
+
+                  <!-- Floating Tooltip on Hover -->
+                  @if (hoveredDay()) {
+                    <div class="tp-floating-tooltip" [style.left.px]="tooltipX()" [style.top.px]="tooltipY()">
+                      <div class="tp-tt-head">
+                        <span class="tp-tt-date">{{ formatFullDate(hoveredDay()!.date) }}</span>
+                        <span class="tp-tt-total-pill">{{ hoveredDay()!.started + hoveredDay()!.completed + hoveredDay()!.failed }} Total</span>
+                      </div>
+                      <div class="tp-tt-body">
+                        <div class="tp-tt-row">
+                          <span class="dot-sw" style="background: var(--blue);"></span>
+                          <span class="tp-tt-name">Started Instances:</span>
+                          <span class="tp-tt-num blue">{{ hoveredDay()!.started }}</span>
+                        </div>
+                        <div class="tp-tt-row">
+                          <span class="dot-sw" style="background: var(--green);"></span>
+                          <span class="tp-tt-name">Completed:</span>
+                          <span class="tp-tt-num green">{{ hoveredDay()!.completed }}</span>
+                        </div>
+                        <div class="tp-tt-row">
+                          <span class="dot-sw" style="background: var(--red);"></span>
+                          <span class="tp-tt-name">Failed / Errors:</span>
+                          <span class="tp-tt-num red">{{ hoveredDay()!.failed }}</span>
+                        </div>
+                        @if (hoveredDay()!.completed + hoveredDay()!.failed > 0) {
+                          <div class="tp-tt-divider"></div>
+                          <div class="tp-tt-row small muted">
+                            <span>Success Rate:</span>
+                            <span class="tp-tt-num">{{ calcDaySuccessRate(hoveredDay()!) }}%</span>
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
               </div>
             </section>
           }
@@ -995,19 +1258,72 @@ const TASK_STATUSES = [
     .sla-val { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
     .sla-sub { font-size: 11.5px; color: var(--muted); }
 
-    /* Throughput Timeline Chart */
+    /* Throughput Timeline Chart & Detailed Metrics */
     .full-width { grid-column: 1 / -1; }
-    .throughput-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding: 16px 8px 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
-    .tp-col { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; cursor: pointer; }
-    .tp-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; width: 100%; justify-content: center; }
-    .tp-bar { width: 8px; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s ease; }
-    .tp-bar.blue { background: var(--blue); }
-    .tp-bar.green { background: var(--green); }
-    .tp-bar.red { background: var(--red); }
-    .tp-label { font-size: 10px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
     .chart-legend-inline { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-secondary); }
     .leg-item { display: inline-flex; align-items: center; gap: 5px; }
     .dot-sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+    /* View mode button group */
+    .view-mode-toggle { display: inline-flex; align-items: center; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 2px; gap: 2px; }
+    .vm-btn { border: none; background: transparent; font-size: 11px; font-weight: 500; color: var(--text-secondary); padding: 3px 10px; border-radius: 4px; cursor: pointer; transition: all .15s ease; }
+    .vm-btn:hover { color: var(--text-primary); }
+    .vm-btn.active { background: var(--surface); color: var(--text-primary); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
+
+    /* High-density summary strip */
+    .tp-summary-strip { display: flex; align-items: center; gap: 18px; padding: 10px 16px; margin: 6px 0 14px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; flex-wrap: wrap; }
+    .tp-stat { display: flex; flex-direction: column; gap: 2px; }
+    .tp-stat-val { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--text-primary); }
+    .tp-stat-val.red { color: var(--red); }
+    .tp-stat-lbl { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    .tp-stat-sep { width: 1px; height: 22px; background: var(--border); }
+
+    /* Chart Container with Y-Axis and Plot Area */
+    .tp-chart-container { display: flex; position: relative; height: 235px; padding: 4px 12px 6px 0; border-bottom: 1px solid var(--border); }
+    .tp-y-axis { display: flex; flex-direction: column; justify-content: space-between; width: 44px; height: 160px; margin-top: 28px; padding-right: 8px; text-align: right; flex-shrink: 0; user-select: none; }
+    .tp-y-tick { font-size: 10.5px; font-weight: 600; color: var(--muted); line-height: 1; font-variant-numeric: tabular-nums; }
+    .tp-plot-area { position: relative; flex: 1; height: 100%; display: flex; flex-direction: column; overflow-x: auto; }
+    .tp-gridlines { position: absolute; top: 28px; left: 0; right: 0; height: 160px; pointer-events: none; }
+    .tp-gridline { position: absolute; left: 0; right: 0; border-bottom: 1px dashed var(--border); opacity: .7; }
+
+    /* Columns and Bars */
+    .tp-columns { position: relative; display: flex; align-items: flex-end; gap: 8px; height: 100%; width: 100%; z-index: 2; }
+    .tp-col { flex: 1; min-width: 32px; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; cursor: pointer; border-radius: 6px; padding: 0 4px; transition: background-color .15s ease; }
+    .tp-col:hover, .tp-col.is-hovered { background: rgba(59, 130, 246, 0.08); }
+    .tp-col-header { height: 28px; display: flex; align-items: center; justify-content: center; }
+    .col-count-badge { font-size: 10px; font-weight: 700; color: var(--text-primary); background: var(--surface-3); padding: 1px 6px; border-radius: 10px; letter-spacing: -.02em; white-space: nowrap; }
+    .col-count-empty { color: var(--border); font-size: 14px; line-height: 1; }
+
+    .tp-bars { display: flex; align-items: flex-end; gap: 3px; height: 160px; width: 100%; justify-content: center; }
+    .tp-bar-wrapper { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; flex: 1; max-width: 22px; }
+    .tp-bar-val { font-size: 9px; font-weight: 700; margin-bottom: 2px; white-space: nowrap; font-variant-numeric: tabular-nums; opacity: 0; transition: opacity .15s ease; }
+    .tp-col:hover .tp-bar-val, .tp-col.is-hovered .tp-bar-val, .tp-columns.active-view .tp-bar-val { opacity: 1; }
+    .tp-bar-val.blue { color: var(--blue); }
+    .tp-bar-val.green { color: var(--green); }
+    .tp-bar-val.red { color: var(--red); }
+
+    .tp-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .25s cubic-bezier(0.4, 0, 0.2, 1); }
+    .tp-bar.blue { background: var(--blue); }
+    .tp-bar.green { background: var(--green); }
+    .tp-bar.red { background: var(--red); }
+    .tp-bar-zero { width: 100%; height: 2px; background: var(--border); opacity: .35; border-radius: 1px; }
+    .tp-label { font-size: 10.5px; color: var(--muted); margin-top: 6px; height: 18px; white-space: nowrap; font-weight: 500; }
+    .tp-col:hover .tp-label, .tp-col.is-hovered .tp-label { color: var(--text-primary); font-weight: 700; }
+
+    /* Interactive Floating Tooltip */
+    .tp-floating-tooltip { position: absolute; top: 6px; transform: translateX(-50%); z-index: 30; pointer-events: none; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1); border-radius: 8px; padding: 10px 14px; min-width: 210px; font-size: 12px; animation: tpFadeIn .12s ease-out; }
+    @keyframes tpFadeIn { from { opacity: 0; transform: translate(-50%, -4px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    .tp-tt-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid var(--border); }
+    .tp-tt-date { font-weight: 700; font-size: 12px; color: var(--text-primary); }
+    .tp-tt-total-pill { font-size: 10px; font-weight: 700; background: var(--surface-3); color: var(--text-primary); padding: 1px 7px; border-radius: 10px; }
+    .tp-tt-body { display: flex; flex-direction: column; gap: 4px; }
+    .tp-tt-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+    .tp-tt-name { color: var(--text-secondary); flex: 1; }
+    .tp-tt-num { font-weight: 700; font-variant-numeric: tabular-nums; }
+    .tp-tt-num.blue { color: var(--blue); }
+    .tp-tt-num.green { color: var(--green); }
+    .tp-tt-num.red { color: var(--red); }
+    .tp-tt-divider { height: 1px; background: var(--border); margin: 3px 0; }
 
     /* Charts */
     .chartgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -1171,6 +1487,12 @@ export class HomeComponent {
   startCaseError = signal('');
   startingCaseLoading = signal(false);
 
+  // Throughput timeline chart state
+  throughputViewMode = signal<'all' | 'active'>('all');
+  hoveredDay = signal<{ date: string; started: number; completed: number; failed: number } | null>(null);
+  tooltipX = signal<number>(0);
+  tooltipY = signal<number>(0);
+
   canView = computed(() => this.auth.hasPermission('workflow:view'));
   canTasks = computed(() => this.auth.hasPermission('task:manage'));
   canBuild = computed(() => this.auth.hasPermission('workflow:edit'));
@@ -1264,16 +1586,83 @@ export class HomeComponent {
   instTotal = computed(() => this.instStatusRows().reduce((a, r) => a + r.count, 0));
   instDonut = computed(() => this.donutGradient(this.instStatusRows()));
   dailyThroughput = computed(() => this.procs()?.dailyThroughput ?? []);
-  maxThroughputVal = computed(() => {
+
+  displayedThroughput = computed(() => {
     const list = this.dailyThroughput();
-    let max = 1;
-    for (const d of list) {
-      if (d.started > max) max = d.started;
-      if (d.completed > max) max = d.completed;
-      if (d.failed > max) max = d.failed;
+    if (this.throughputViewMode() === 'active') {
+      const active = list.filter((d) => (d.started + d.completed + d.failed) > 0);
+      return active.length > 0 ? active : list;
     }
-    return max;
+    return list;
   });
+
+  throughputTotals = computed(() => {
+    const list = this.dailyThroughput();
+    let started = 0;
+    let completed = 0;
+    let failed = 0;
+    let peakDay = '';
+    let peakVal = 0;
+    let activeDays = 0;
+
+    for (const d of list) {
+      started += d.started;
+      completed += d.completed;
+      failed += d.failed;
+      const dayTotal = d.started + d.completed + d.failed;
+      if (dayTotal > 0) activeDays++;
+      if (dayTotal > peakVal) {
+        peakVal = dayTotal;
+        peakDay = d.date;
+      }
+    }
+
+    const terminal = completed + failed;
+    const successRate = terminal > 0 ? Math.round((completed / terminal) * 100) : (started > 0 ? 100 : 0);
+    const avgDaily = activeDays > 0 ? Math.round((started + completed + failed) / activeDays) : 0;
+
+    return {
+      started,
+      completed,
+      failed,
+      totalVolume: started + completed + failed,
+      peakDay,
+      peakVal,
+      activeDays,
+      totalDays: list.length,
+      successRate,
+      avgDaily,
+    };
+  });
+
+  throughputYScale = computed(() => {
+    const list = this.displayedThroughput();
+    let rawMax = 1;
+    for (const d of list) {
+      if (d.started > rawMax) rawMax = d.started;
+      if (d.completed > rawMax) rawMax = d.completed;
+      if (d.failed > rawMax) rawMax = d.failed;
+    }
+
+    const targetSteps = 4;
+    const roughStep = Math.max(1, rawMax / targetSteps);
+    const mag = Math.pow(10, Math.floor(Math.log10(roughStep)));
+    const rem = roughStep / mag;
+    let niceMultiplier = 1;
+    if (rem > 5) niceMultiplier = 10;
+    else if (rem > 2.5) niceMultiplier = 5;
+    else if (rem > 2) niceMultiplier = 2.5;
+    else if (rem > 1) niceMultiplier = 2;
+
+    const step = Math.max(1, Math.round(niceMultiplier * mag));
+    let ceiling = step * targetSteps;
+    while (ceiling < rawMax) ceiling += step;
+
+    const ticks = [ceiling, Math.round(ceiling * 0.75), Math.round(ceiling * 0.5), Math.round(ceiling * 0.25), 0];
+    return { ceiling, step, ticks };
+  });
+
+  maxThroughputVal = computed(() => this.throughputYScale().ceiling);
 
   byProcess = computed(() => [...(this.procs()?.byProcess ?? [])].sort((a, b) => b.count - a.count));
   filteredProcesses = computed(() => {
@@ -1491,14 +1880,52 @@ export class HomeComponent {
     return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
   }
 
+  formatFullDate(d: string): string {
+    try {
+      const parts = d.split('-').map(Number);
+      if (parts.length === 3) {
+        const dt = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2], 12, 0, 0));
+        return dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      }
+      return d;
+    } catch {
+      return d;
+    }
+  }
+
+  calcDaySuccessRate(d: { started: number; completed: number; failed: number }): number {
+    const terminal = d.completed + d.failed;
+    return terminal > 0 ? Math.round((d.completed / terminal) * 100) : (d.started > 0 ? 100 : 0);
+  }
+
   throughputTooltip(d: { date: string; started: number; completed: number; failed: number }): string {
     return `${d.date}: ${d.started} started, ${d.completed} completed, ${d.failed} failed`;
   }
 
   pctOfThroughput(val: number): number {
     if (!val || val <= 0) return 0;
-    const max = this.maxThroughputVal();
-    return max > 0 ? Math.max(4, Math.min(100, (val / max) * 100)) : 0;
+    const ceil = this.throughputYScale().ceiling;
+    if (ceil <= 0) return 0;
+    const pct = (val / ceil) * 100;
+    return Math.min(100, Math.max(2, Math.round(pct * 10) / 10));
+  }
+
+  onHoverDay(d: { date: string; started: number; completed: number; failed: number }, event: MouseEvent) {
+    this.hoveredDay.set(d);
+    const target = event.currentTarget as HTMLElement;
+    const plotArea = target?.closest('.tp-plot-area') as HTMLElement;
+    if (target && plotArea) {
+      const colRect = target.getBoundingClientRect();
+      const plotRect = plotArea.getBoundingClientRect();
+      const rawX = (colRect.left + colRect.width / 2) - plotRect.left;
+      const clampedX = Math.max(110, Math.min(plotRect.width - 110, rawX));
+      this.tooltipX.set(clampedX);
+      this.tooltipY.set(6);
+    }
+  }
+
+  onLeaveDay() {
+    this.hoveredDay.set(null);
   }
 
   statusEntries(byStatus: Record<string, number>): [string, number][] {
