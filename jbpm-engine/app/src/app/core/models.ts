@@ -168,8 +168,20 @@ export interface UserRow { user: string; groups: string[]; startedInstances: num
 export interface ProcessDef { processId: string; name: string; version?: string; environment: string; nodes: number; instances: { total: number; active: number }; deploymentId?: string; workflowId?: string; }
 export interface DurStats { count: number; avgMs: number; minMs: number; maxMs: number; }
 export interface Summary { instances: { total: number; byStatus: Record<string, number> }; tasks: { total: number; byStatus: Record<string, number> }; deployments: { total: number; active: number }; jobs: { scheduled: number; fired: number }; }
-export interface TaskAnalytics { byTask: (DurStats & { name: string })[]; byAssignee: (DurStats & { user: string })[]; openByStatus: Record<string, number>; }
-export interface ProcessAnalytics { byProcess: (DurStats & { processId: string })[]; byStatus: Record<string, number>; }
+export interface TaskAnalytics {
+  byTask: (DurStats & { name: string })[];
+  byAssignee: (DurStats & { user: string })[];
+  openByStatus: Record<string, number>;
+  sla?: { totalWithDue: number; onTime: number; overdue: number; complianceRate: number };
+  byGroup?: { group: string; count: number }[];
+}
+export interface ProcessAnalytics {
+  byProcess: (DurStats & { processId: string })[];
+  byStatus: Record<string, number>;
+  dailyThroughput?: { date: string; started: number; completed: number; failed: number }[];
+  failureRate?: number;
+  total?: number;
+}
 
 // ---- Workflow Instance Management (Case Management) ----
 export interface WorkflowDefinition {

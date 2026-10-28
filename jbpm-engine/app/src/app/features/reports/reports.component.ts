@@ -4,15 +4,36 @@ import { FormsModule } from '@angular/forms';
 import { DecimalPipe, JsonPipe } from '@angular/common';
 import { forkJoin } from 'rxjs';
 import { QueryApiService } from '../../core/api/query-api.service';
+import { WorkflowApiService } from '../../core/api/workflow-api.service';
 import { WorkflowAnalyticsApiService, type WorkflowInstanceSummary } from '../../core/api/workflow-analytics-api.service';
 import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
 import { IconComponent } from '../../shared/icon.component';
 import { ToastService } from '../../shared/toast.service';
-import type { ProcessAnalytics, QueryDefinition, QueryFilter, QueryOp, QueryRunResult, QueryableEntity, SavedQuery, Summary, TaskAnalytics, WorkflowTat } from '../../core/models';
+import type {
+  ProcessAnalytics,
+  QueryDefinition,
+  QueryFilter,
+  QueryOp,
+  QueryRunResult,
+  QueryableEntity,
+  SavedQuery,
+  Summary,
+  TaskAnalytics,
+  Workflow,
+  WorkflowTat,
+} from '../../core/models';
 
 type ReportsTab = 'processes' | 'tasks' | 'cases' | 'queries';
+type TimeWindow = 'all' | '1d' | '7d' | '30d' | '90d';
 
-interface StatusRow { key: string; label: string; color: string; count: number; pctOfMax: number; share: number; }
+interface StatusRow {
+  key: string;
+  label: string;
+  color: string;
+  count: number;
+  pctOfMax: number;
+  share: number;
+}
 
 const ENTITIES: QueryableEntity[] = ['workflowInstance', 'workflowInstanceAudit', 'workflowInstanceComment', 'instance', 'task'];
 const OPS: QueryOp[] = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'contains'];
@@ -38,6 +59,7 @@ const INSTANCE_STATUSES = [
   { key: 'failed', label: 'Failed', color: 'var(--red)' },
   { key: 'aborted', label: 'Aborted', color: 'var(--muted)' },
 ];
+
 const TASK_STATUSES = [
   { key: 'created', label: 'Created', color: 'var(--amber)' },
   { key: 'reserved', label: 'Reserved', color: 'var(--purple)' },
@@ -61,16 +83,49 @@ const TASK_STATUSES = [
           <p class="sub">Unified operational intelligence: process throughput, human task turnaround, case metrics, and ad-hoc queries.</p>
         </div>
         <div class="spacer"></div>
+        <button class="btn sm" (click)="load()"><app-icon name="refresh" [size]="14" /> Refresh</button>
         <button class="btn sm" (click)="exportCsv()" [disabled]="loading() || !!error()">
           <app-icon name="download" [size]="14" /> Export CSV
         </button>
       </header>
 
+      <!-- Global Filter Bar -->
+      <div class="filter-bar card">
+        <div class="filter-group">
+          <span class="f-label">Time Window:</span>
+          <div class="pills">
+            <button class="pill" [class.active]="timeWindow() === 'all'" (click)="setTimeWindow('all')">All Time</button>
+            <button class="pill" [class.active]="timeWindow() === '1d'" (click)="setTimeWindow('1d')">Today (24h)</button>
+            <button class="pill" [class.active]="timeWindow() === '7d'" (click)="setTimeWindow('7d')">Last 7 Days</button>
+            <button class="pill" [class.active]="timeWindow() === '30d'" (click)="setTimeWindow('30d')">Last 30 Days</button>
+            <button class="pill" [class.active]="timeWindow() === '90d'" (click)="setTimeWindow('90d')">Last 90 Days</button>
+          </div>
+        </div>
+
+        <div class="filter-group right">
+          <span class="f-label">Process Scope:</span>
+          <select [(ngModel)]="selectedProcess" (change)="onProcessChange()">
+            <option value="">All Process Definitions</option>
+            @for (p of availableProcesses(); track p) {
+              <option [value]="p">{{ p }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
       <nav class="tabs" role="tablist">
-        <button role="tab" [attr.aria-selected]="tab() === 'processes'" [class.active]="tab() === 'processes'" (click)="setTab('processes')">Processes</button>
-        <button role="tab" [attr.aria-selected]="tab() === 'tasks'" [class.active]="tab() === 'tasks'" (click)="setTab('tasks')">Tasks</button>
-        <button role="tab" [attr.aria-selected]="tab() === 'cases'" [class.active]="tab() === 'cases'" (click)="setTab('cases')">Cases &amp; Workflows</button>
-        <button role="tab" [attr.aria-selected]="tab() === 'queries'" [class.active]="tab() === 'queries'" (click)="setTab('queries')">Ad-Hoc Query Engine</button>
+        <button role="tab" [attr.aria-selected]="tab() === 'processes'" [class.active]="tab() === 'processes'" (click)="setTab('processes')">
+          <app-icon name="instances" [size]="14" /> Processes
+        </button>
+        <button role="tab" [attr.aria-selected]="tab() === 'tasks'" [class.active]="tab() === 'tasks'" (click)="setTab('tasks')">
+          <app-icon name="tasks" [size]="14" /> Tasks &amp; SLAs
+        </button>
+        <button role="tab" [attr.aria-selected]="tab() === 'cases'" [class.active]="tab() === 'cases'" (click)="setTab('cases')">
+          <app-icon name="inbox" [size]="14" /> Cases &amp; Workflows
+        </button>
+        <button role="tab" [attr.aria-selected]="tab() === 'queries'" [class.active]="tab() === 'queries'" (click)="setTab('queries')">
+          <app-icon name="search" [size]="14" /> Ad-Hoc Query Engine
+        </button>
       </nav>
 
       @if (loading()) {
@@ -97,6 +152,37 @@ const TASK_STATUSES = [
           }
         </div>
 
+        @if (dailyThroughput().length > 0) {
+          <section class="card chart full-width" style="margin-bottom: 16px;">
+            <div class="row charthead">
+              <div>
+                <h3>Execution Volume &amp; Daily Throughput</h3>
+                <p class="chartsub">Instance completions and starts over time</p>
+              </div>
+              <div class="spacer"></div>
+              <div class="chart-legend-inline">
+                <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
+                <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
+                <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
+              </div>
+            </div>
+            <div class="throughput-chart">
+              @for (d of dailyThroughput(); track d.date) {
+                <div class="tp-col" [title]="throughputTooltip(d)">
+                  <div class="tp-bars">
+                    <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                    <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                    @if (d.failed > 0) {
+                      <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+                    }
+                  </div>
+                  <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
         <div class="chartgrid">
           <section class="card chart">
             <div class="row charthead">
@@ -104,7 +190,7 @@ const TASK_STATUSES = [
               <div class="spacer"></div>
               <span class="muted small tnum">{{ instTotal() }} total</span>
             </div>
-            <p class="chartsub">every instance ever started, grouped by its current state</p>
+            <p class="chartsub">every instance recorded in this time scope</p>
             @if (instTotal() > 0) {
               <div class="barlist">
                 @for (r of instStatusRows(); track r.key) {
@@ -120,7 +206,7 @@ const TASK_STATUSES = [
                 }
               </div>
             } @else {
-              <p class="nodata">No instances yet — start one from a deployment to populate analytics.</p>
+              <p class="nodata">No instances yet.</p>
             }
           </section>
 
@@ -145,15 +231,15 @@ const TASK_STATUSES = [
 
         <section class="card tablecard">
           <div class="row cardhead">
-            <h3>Duration by process</h3>
+            <h3>Duration by process definition</h3>
             <div class="spacer"></div>
-            <span class="muted small">completed instances only</span>
+            <input class="search-input" [(ngModel)]="procSearch" placeholder="Search processes…" />
           </div>
-          @if (byProcess().length) {
+          @if (filteredProcesses().length) {
             <table>
               <thead><tr><th>Process</th><th class="num">Count</th><th class="num">Avg duration</th><th class="num">Min</th><th class="num">Max</th></tr></thead>
               <tbody>
-                @for (p of byProcess(); track p.processId) {
+                @for (p of filteredProcesses(); track p.processId) {
                   <tr>
                     <td><b>{{ p.processId }}</b></td>
                     <td class="num tnum">{{ p.count }}</td>
@@ -170,19 +256,33 @@ const TASK_STATUSES = [
               </tbody>
             </table>
           } @else {
-            <p class="nodata pad">No completed instances yet.</p>
+            <p class="nodata pad">No completed instances match the current filters.</p>
           }
         </section>
 
       } @else if (tab() === 'tasks') {
         <!-- ============================== Tasks tab ============================== -->
-        <div class="kpis">
-          @for (k of taskKpis(); track k.label) {
-            <div class="card kpi">
-              <div class="kv tnum" [style.color]="k.color || null">{{ k.value }}</div>
-              <div class="kl">{{ k.label }}</div>
-            </div>
-          }
+        <div class="sla-grid">
+          <div class="card sla-card">
+            <span class="sla-title">SLA Compliance Rate</span>
+            <span class="sla-val" [style.color]="slaColor()">{{ slaRate() }}%</span>
+            <span class="sla-sub">{{ tasks()?.sla?.onTime ?? 0 }} of {{ tasks()?.sla?.totalWithDue ?? 0 }} tasks met SLA</span>
+          </div>
+          <div class="card sla-card">
+            <span class="sla-title">Overdue Tasks</span>
+            <span class="sla-val" [class.red]="(tasks()?.sla?.overdue ?? 0) > 0">{{ tasks()?.sla?.overdue ?? 0 }}</span>
+            <span class="sla-sub">Open tasks past due deadline</span>
+          </div>
+          <div class="card sla-card">
+            <span class="sla-title">Total Open Queue</span>
+            <span class="sla-val amber">{{ openTotal() }}</span>
+            <span class="sla-sub">Tasks currently waiting on humans</span>
+          </div>
+          <div class="card sla-card">
+            <span class="sla-title">Active Queues</span>
+            <span class="sla-val" style="color: var(--purple);">{{ taskGroups().length }}</span>
+            <span class="sla-sub">Distinct candidate group queues</span>
+          </div>
         </div>
 
         <div class="chartgrid">
@@ -231,6 +331,24 @@ const TASK_STATUSES = [
           </section>
         </div>
 
+        @if (taskGroups().length > 0) {
+          <section class="card pad" style="margin-bottom: 16px;">
+            <div class="row charthead">
+              <h3>Open Workload by Group Queue</h3>
+              <div class="spacer"></div>
+              <span class="muted small">Team responsibility queues</span>
+            </div>
+            <div class="group-chips">
+              @for (g of taskGroups(); track g.group) {
+                <div class="group-chip">
+                  <span class="g-name"><app-icon name="user" [size]="12" /> {{ g.group }}</span>
+                  <span class="g-count">{{ g.count }}</span>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
         <div class="two-col">
           <section class="card tablecard">
             <div class="row cardhead"><h3>Open tasks by assignee</h3></div>
@@ -260,13 +378,13 @@ const TASK_STATUSES = [
             <div class="row cardhead">
               <h3>Duration by user task</h3>
               <div class="spacer"></div>
-              <span class="muted small">completed tasks only</span>
+              <input class="search-input sm" [(ngModel)]="taskSearch" placeholder="Filter tasks…" />
             </div>
-            @if (byTask().length) {
+            @if (filteredTasks().length) {
               <table>
                 <thead><tr><th>Task</th><th class="num">Count</th><th class="num">Avg completion</th></tr></thead>
                 <tbody>
-                  @for (t of byTask(); track t.name) {
+                  @for (t of filteredTasks(); track t.name) {
                     <tr>
                       <td><b>{{ t.name }}</b></td>
                       <td class="num tnum">{{ t.count }}</td>
@@ -281,7 +399,7 @@ const TASK_STATUSES = [
                 </tbody>
               </table>
             } @else {
-              <p class="nodata pad">No completed human tasks yet.</p>
+              <p class="nodata pad">No completed human tasks match the search.</p>
             }
           </section>
         </div>
@@ -289,150 +407,339 @@ const TASK_STATUSES = [
       } @else if (tab() === 'cases') {
         <!-- ============================== Cases tab ============================== -->
         <div class="grid" style="margin-bottom: 20px;">
-          <div class="card">
-            <h3>Cases by status</h3>
+          <div class="card pad">
+            <div class="row charthead">
+              <h3>Cases by status</h3>
+              <div class="spacer"></div>
+              <span class="muted small">{{ caseSummary()?.total ?? 0 }} total</span>
+            </div>
+            <p class="big">{{ caseSummary()?.total ?? 0 }}</p>
             @if (caseSummary(); as s) {
-              <p class="big">{{ s.total }}</p>
-              @for (kv of statusEntries(s.byStatus); track kv[0]) {
-                <div class="kvrow"><span>{{ kv[0] }}</span><span class="tnum font-bold">{{ kv[1] }}</span></div>
+              <div class="barlist" style="margin-top: 12px;">
+                @for (kv of statusEntries(s.byStatus); track kv[0]) {
+                  <div class="barrow">
+                    <div class="row lab">
+                      <span>{{ kv[0] }}</span>
+                      <div class="spacer"></div>
+                      <span class="tnum font-bold">{{ kv[1] }}</span>
+                    </div>
+                    <div class="track"><span [style.width.%]="caseStatusPct(kv[1])" style="background: var(--blue);"></span></div>
+                  </div>
+                }
+              </div>
+              @if (s.withoutPiid) {
+                <p class="muted sm" style="margin-top: 12px;"><app-icon name="warning" [size]="12" /> {{ s.withoutPiid }} cases initiated without BPM execution binding</p>
               }
-              @if (s.withoutPiid) { <p class="muted sm" style="margin-top:8px;">{{ s.withoutPiid }} initiated without BPM instance</p> }
-            } @else { <p class="muted">Loading case summary…</p> }
+            } @else {
+              <p class="muted">Loading case summary…</p>
+            }
           </div>
-          <div class="card">
-            <h3>TAT by Workflow Definition (Case Level)</h3>
-            @if (tat(); as t) {
-              @for (r of t.byWorkflowName; track r.workflowName) {
-                <div class="kvrow">
-                  <span>{{ r.workflowName }}</span>
-                  <span class="tnum">{{ ms(r.avgMs) }} avg ({{ r.count }})</span>
+
+          <div class="card pad">
+            <div class="row charthead">
+              <h3>Case Lifecycle Ratio</h3>
+            </div>
+            <div class="lifecycle-stats" style="margin-top: 16px;">
+              <div class="lc-item">
+                <span class="lc-val" style="color: var(--blue);">{{ caseSummary()?.activeCases ?? 0 }}</span>
+                <span class="lc-lbl">In-Flight / Active</span>
+              </div>
+              <div class="lc-item">
+                <span class="lc-val" style="color: var(--green);">{{ caseSummary()?.closedCases ?? 0 }}</span>
+                <span class="lc-lbl">Resolved / Closed</span>
+              </div>
+            </div>
+            <div class="track" style="margin-top: 14px; height: 10px;">
+              <span [style.width.%]="activeCaseRatio()" style="background: var(--blue); border-radius: 4px;"></span>
+            </div>
+            <p class="muted sm" style="margin-top: 8px;">{{ activeCaseRatio() }}% of total cases are currently active</p>
+          </div>
+
+          <div class="card pad">
+            <div class="row charthead">
+              <h3>Cases by Workflow Definition</h3>
+            </div>
+            <div class="barlist" style="margin-top: 12px;">
+              @for (kv of statusEntries(caseSummary()?.byWorkflowName || {}); track kv[0]) {
+                <div class="barrow">
+                  <div class="row lab">
+                    <span class="font-bold">{{ kv[0] }}</span>
+                    <div class="spacer"></div>
+                    <span class="tnum">{{ kv[1] }}</span>
+                  </div>
+                  <div class="track"><span [style.width.%]="caseWorkflowPct(kv[1])" style="background: var(--purple);"></span></div>
                 </div>
               }
-              @if (!t.byWorkflowName.length) { <p class="muted sm">No completed cases yet.</p> }
-            } @else { <p class="muted">Loading TAT…</p> }
-          </div>
-          <div class="card">
-            <h3>TAT by User (Task Execution)</h3>
-            @if (tat(); as t) {
-              @for (r of t.byUser; track r.user) {
-                <div class="kvrow">
-                  <span>{{ r.user }}</span>
-                  <span class="tnum">{{ ms(r.avgMs) }} avg ({{ r.count }})</span>
-                </div>
+              @if (!statusEntries(caseSummary()?.byWorkflowName || {}).length) {
+                <p class="nodata">No cases recorded yet.</p>
               }
-              @if (!t.byUser.length) { <p class="muted sm">No completed tasks yet.</p> }
-            } @else { <p class="muted">Loading TAT…</p> }
+            </div>
           </div>
+        </div>
+
+        <div class="two-col">
+          <section class="card tablecard">
+            <div class="row cardhead">
+              <h3>Turnaround Time (TAT) by Workflow Definition</h3>
+              <div class="spacer"></div>
+              <input class="search-input sm" [(ngModel)]="caseSearch" placeholder="Filter workflows…" />
+            </div>
+            @if (filteredTatWorkflows().length) {
+              <table>
+                <thead><tr><th>Workflow Definition</th><th class="num">Completed</th><th class="num">Avg TAT</th><th class="num">Max</th></tr></thead>
+                <tbody>
+                  @for (r of filteredTatWorkflows(); track r.workflowName) {
+                    <tr>
+                      <td><b>{{ r.workflowName }}</b></td>
+                      <td class="num tnum">{{ r.count }}</td>
+                      <td class="num">
+                        <span class="avgcell">
+                          <span class="avgbar"><span [style.width.%]="pctOf(r.avgMs, maxCaseAvg())"></span></span>
+                          <span class="tnum">{{ ms(r.avgMs) }}</span>
+                        </span>
+                      </td>
+                      <td class="num tnum muted">{{ ms(r.maxMs) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <p class="nodata pad">No completed cases recorded yet.</p>
+            }
+          </section>
+
+          <section class="card tablecard">
+            <div class="row cardhead">
+              <h3>Human Execution TAT by User</h3>
+              <div class="spacer"></div>
+              <span class="muted small">Assigned user turnaround speed</span>
+            </div>
+            @if (tat()?.byUser?.length) {
+              <table>
+                <thead><tr><th>User / Assignee</th><th class="num">Tasks</th><th class="num">Avg Speed</th></tr></thead>
+                <tbody>
+                  @for (u of tat()?.byUser || []; track u.user) {
+                    <tr>
+                      <td><b>{{ u.user || '(unassigned)' }}</b></td>
+                      <td class="num tnum">{{ u.count }}</td>
+                      <td class="num"><span class="tnum font-bold">{{ ms(u.avgMs) }}</span></td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <p class="nodata pad">No completed user tasks recorded yet.</p>
+            }
+          </section>
         </div>
 
       } @else if (tab() === 'queries') {
         <!-- ============================== Queries tab ============================== -->
-        <h2 class="section-h">Custom Ad-Hoc Query</h2>
-        <div class="card pad" style="margin-bottom: 20px;">
-          <div class="row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
-            <label class="fld"><span>Entity</span>
-              <select [(ngModel)]="entity">@for (e of entities; track e) { <option [value]="e">{{ e }}</option> }</select>
-            </label>
-            <label class="fld"><span>Group by (optional)</span>
-              <input [(ngModel)]="groupBy" placeholder="e.g. status, data.amount" />
-            </label>
-            <label class="fld"><span>Metric</span>
-              <select [(ngModel)]="metric">
-                <option value="">(none — list rows)</option>
-                <option value="count">count</option>
-                <option value="avgDurationMs">avgDurationMs</option>
-              </select>
-            </label>
-            @if (metric === 'avgDurationMs') {
-              <label class="fld"><span>Duration from field</span><input [(ngModel)]="durationFrom" placeholder="createdAt" /></label>
-              <label class="fld"><span>Duration to field</span><input [(ngModel)]="durationTo" placeholder="updatedAt" /></label>
-            }
-          </div>
-
-          <div class="section-title">Filters</div>
-          @for (f of filters; track f) {
-            <div class="fieldrow">
-              <input class="fkey" [(ngModel)]="f.field" placeholder="field, e.g. data.amount" />
-              <select [(ngModel)]="f.op">@for (o of ops; track o) { <option [value]="o">{{ o }}</option> }</select>
-              <input [(ngModel)]="f.value" placeholder="value" />
-              <button class="btn sm danger" (click)="removeFilter(f)"><app-icon name="trash" [size]="12" /></button>
+        <div class="query-builder-wrap">
+          <div class="row charthead" style="margin-bottom: 12px;">
+            <div>
+              <h2>Custom Ad-Hoc Query Engine</h2>
+              <p class="chartsub">Cross-entity tenant-isolated query builder for process data, tasks, and cases.</p>
             </div>
-          }
-          <div style="margin-bottom: 14px;">
-            <button class="btn sm" (click)="addFilter()"><app-icon name="plus" [size]="12" /> Add filter</button>
+            <div class="spacer"></div>
+            <div class="presets">
+              <span class="muted sm">Presets:</span>
+              <button class="btn sm" (click)="loadPreset('overdueTasks')">Overdue Tasks</button>
+              <button class="btn sm" (click)="loadPreset('activeCases')">Active Cases</button>
+              <button class="btn sm" (click)="loadPreset('failedInst')">Failed Instances</button>
+            </div>
           </div>
 
-          <div class="row actionrow">
-            <button class="btn primary sm" (click)="runQuery()"><app-icon name="play" [size]="12" /> Run Query</button>
-            <input class="save-name" [(ngModel)]="saveName" placeholder="Save as…" style="max-width: 200px;" />
-            <label class="reqlbl"><input type="checkbox" [(ngModel)]="saveShared" /> Shared</label>
-            <button class="btn sm" (click)="saveQuery()">Save Query</button>
-          </div>
-          @if (queryError()) { <p class="err">{{ queryError() }}</p> }
-
-          @if (queryResult(); as r) {
-            <div style="margin-top: 16px;">
-              <div class="section-title">Query Results</div>
-              @if (r.groups) {
-                <table class="restbl"><thead><tr><th>Key</th><th>Count</th>@if (metric==='avgDurationMs') { <th>Avg ms</th> }</tr></thead>
-                  <tbody>@for (g of r.groups; track g.key) { <tr><td>{{ g.key }}</td><td>{{ g.count }}</td>@if (metric==='avgDurationMs') { <td>{{ g.avgDurationMs }}</td> }</tr> }</tbody>
-                </table>
-              } @else {
-                <pre class="mono sm restext">{{ r.rows | json }}</pre>
+          <div class="card pad" style="margin-bottom: 20px;">
+            <div class="row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+              <label class="fld"><span>Entity</span>
+                <select [(ngModel)]="entity">@for (e of entities; track e) { <option [value]="e">{{ e }}</option> }</select>
+              </label>
+              <label class="fld"><span>Group by (optional)</span>
+                <input [(ngModel)]="groupBy" placeholder="e.g. status, data.amount" />
+              </label>
+              <label class="fld"><span>Metric</span>
+                <select [(ngModel)]="metric">
+                  <option value="">(none — list rows)</option>
+                  <option value="count">count</option>
+                  <option value="avgDurationMs">avgDurationMs</option>
+                </select>
+              </label>
+              @if (metric === 'avgDurationMs') {
+                <label class="fld"><span>Duration from field</span><input [(ngModel)]="durationFrom" placeholder="createdAt" /></label>
+                <label class="fld"><span>Duration to field</span><input [(ngModel)]="durationTo" placeholder="updatedAt" /></label>
               }
             </div>
-          }
-        </div>
 
-        <h2 class="section-h">Saved Queries</h2>
-        <div class="card pad">
-          @if (savedQueries().length === 0) {
-            <p class="muted sm">No saved queries yet. Configure a query above and save it to access it anytime.</p>
-          } @else {
-            @for (sq of savedQueries(); track sq.id) {
-              <div class="sqrow">
-                <div>
-                  <strong>{{ sq.name }}</strong>
-                  <span class="muted sm"> · {{ sq.definition.entity }} · by {{ sq.createdBy }}</span>
-                </div>
-                <div class="row" style="gap: 6px;">
-                  <button class="btn sm" (click)="loadSavedQuery(sq)">Load</button>
-                  <button class="btn sm danger" (click)="deleteSavedQuery(sq)"><app-icon name="trash" [size]="12" /></button>
-                </div>
+            <div class="section-title">Filters</div>
+            @for (f of filters; track f) {
+              <div class="fieldrow">
+                <input class="fkey" [(ngModel)]="f.field" placeholder="field, e.g. status or data.amount" />
+                <select [(ngModel)]="f.op">@for (o of ops; track o) { <option [value]="o">{{ o }}</option> }</select>
+                <input [(ngModel)]="f.value" placeholder="value" />
+                <button class="btn sm danger" (click)="removeFilter(f)"><app-icon name="trash" [size]="12" /></button>
               </div>
             }
-          }
+            <div style="margin-bottom: 14px;">
+              <button class="btn sm" (click)="addFilter()"><app-icon name="plus" [size]="12" /> Add filter</button>
+            </div>
+
+            <div class="row actionrow">
+              <button class="btn primary sm" (click)="runQuery()" [disabled]="runningQuery()">
+                <app-icon name="play" [size]="12" /> {{ runningQuery() ? 'Running...' : 'Run Query' }}
+              </button>
+              <input class="save-name" [(ngModel)]="saveName" placeholder="Save as…" style="max-width: 200px;" />
+              <label class="reqlbl"><input type="checkbox" [(ngModel)]="saveShared" /> Shared</label>
+              <button class="btn sm" (click)="saveQuery()">Save Query</button>
+            </div>
+            @if (queryError()) { <p class="err">{{ queryError() }}</p> }
+
+            @if (queryResult(); as r) {
+              <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+                <div class="row" style="margin-bottom: 10px;">
+                  <div class="section-title" style="margin: 0;">Query Results</div>
+                  <span class="spacer"></span>
+                  @if (r.rows) {
+                    <div class="btn-group sm">
+                      <button class="btn sm" [class.primary]="queryViewMode() === 'table'" (click)="queryViewMode.set('table')">Table</button>
+                      <button class="btn sm" [class.primary]="queryViewMode() === 'json'" (click)="queryViewMode.set('json')">JSON</button>
+                    </div>
+                  }
+                  <button class="btn sm" (click)="exportQueryResults()">
+                    <app-icon name="download" [size]="12" /> Export Results
+                  </button>
+                </div>
+
+                @if (r.groups) {
+                  <table class="restbl">
+                    <thead><tr><th>Key</th><th class="num">Count</th>@if (metric==='avgDurationMs') { <th class="num">Avg ms</th> }</tr></thead>
+                    <tbody>
+                      @for (g of r.groups; track g.key) {
+                        <tr>
+                          <td><b>{{ g.key }}</b></td>
+                          <td class="num tnum font-bold">{{ g.count }}</td>
+                          @if (metric==='avgDurationMs') { <td class="num tnum">{{ g.avgDurationMs }} ms</td> }
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @else if (r.rows) {
+                  @if (queryViewMode() === 'table') {
+                    <div class="query-table-wrap">
+                      <table class="restbl">
+                        <thead>
+                          <tr>
+                            @for (col of queryColumns(); track col) {
+                              <th>{{ col }}</th>
+                            }
+                          </tr>
+                        </thead>
+                        <tbody>
+                          @for (row of r.rows; track row['id'] || $index) {
+                            <tr>
+                              @for (col of queryColumns(); track col) {
+                                <td>
+                                  @if (col === 'id') {
+                                    <span class="mono tnum font-bold">{{ formatColVal(row[col]) }}</span>
+                                  } @else if (col === 'status') {
+                                    <span class="badge">{{ formatColVal(row[col]) }}</span>
+                                  } @else {
+                                    <span>{{ formatColVal(row[col]) }}</span>
+                                  }
+                                </td>
+                              }
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    </div>
+                    <p class="muted sm" style="margin-top: 8px;">Showing {{ r.rows.length }} result rows</p>
+                  } @else {
+                    <pre class="mono sm restext">{{ r.rows | json }}</pre>
+                  }
+                }
+              </div>
+            }
+          </div>
+
+          <h2 class="section-h">Saved Queries</h2>
+          <div class="card pad">
+            @if (savedQueries().length === 0) {
+              <p class="muted sm">No saved queries yet. Configure a query above and save it to access it anytime.</p>
+            } @else {
+              @for (sq of savedQueries(); track sq.id) {
+                <div class="sqrow">
+                  <div>
+                    <strong>{{ sq.name }}</strong>
+                    <span class="muted sm"> · {{ sq.definition.entity }} · by {{ sq.createdBy }}</span>
+                  </div>
+                  <div class="row" style="gap: 6px;">
+                    <button class="btn sm" (click)="loadSavedQuery(sq)">Load</button>
+                    <button class="btn sm danger" (click)="deleteSavedQuery(sq)"><app-icon name="trash" [size]="12" /></button>
+                  </div>
+                </div>
+              }
+            }
+          </div>
         </div>
       }
     </div>
   `,
   styles: [`
-    .page { padding: 20px 24px; max-width: 1200px; }
-    .crumbwrap { margin-bottom: 10px; }
-    .pagehead { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
-    h1 { font-size: 20px; margin: 0; }
-    .sub { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+    .page { padding: 24px 32px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; margin: 0 auto; }
+    .pagehead { display: flex; align-items: flex-start; gap: 16px; }
+    h1 { font-size: var(--text-2xl); letter-spacing: -.02em; margin: 0 0 4px; }
+    .sub { margin: 0; color: var(--text-secondary); font-size: 13.5px; }
     .spacer { flex: 1; }
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
-    .tabs button { border: none; background: transparent; padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+
+    /* Filter Bar */
+    .filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 16px; flex-wrap: wrap; background: var(--surface); }
+    .filter-group { display: flex; align-items: center; gap: 10px; }
+    .f-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .pills { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .pill { border: none; background: transparent; padding: 5px 10px; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all .15s ease; }
+    .pill.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .filter-group select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12.5px; background: var(--surface); color: inherit; }
+
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 2px; }
+    .tabs button { border: none; background: transparent; padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 6px; }
     .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
 
     /* KPIs */
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 18px; }
-    .kpi { padding: 14px 16px; }
-    .kv { font-size: 24px; font-weight: 700; line-height: 1.1; margin-bottom: 4px; }
-    .kl { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-    .tnum { font-variant-numeric: tabular-nums; }
-    .font-bold { font-weight: 700; }
-    .kpi-skel { height: 76px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+    .kpi { position: relative; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+    .kpi::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad-brand); }
+    .kv { font-size: 24px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .kl { font-size: var(--text-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+
+    /* SLAs */
+    .sla-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .sla-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+    .sla-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    .sla-val { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .sla-sub { font-size: 11.5px; color: var(--muted); }
+
+    /* Throughput Timeline Chart */
+    .full-width { grid-column: 1 / -1; }
+    .throughput-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding: 16px 8px 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .tp-col { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; cursor: pointer; }
+    .tp-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; width: 100%; justify-content: center; }
+    .tp-bar { width: 8px; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s ease; }
+    .tp-bar.blue { background: var(--blue); }
+    .tp-bar.green { background: var(--green); }
+    .tp-bar.red { background: var(--red); }
+    .tp-label { font-size: 10px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
+    .chart-legend-inline { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-secondary); }
+    .leg-item { display: inline-flex; align-items: center; gap: 5px; }
+    .dot-sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
     /* Charts */
-    .chartgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
-    @media (max-width: 860px) { .chartgrid { grid-template-columns: 1fr; } }
-    .chart { padding: 16px; }
+    .chartgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    @media (max-width: 900px) { .chartgrid { grid-template-columns: 1fr; } }
+    .chart { padding: 18px; }
     .charthead { display: flex; align-items: center; margin-bottom: 2px; }
     .charthead h3 { font-size: 14px; margin: 0; }
-    .chartsub { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+    .chartsub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
     .barlist { display: flex; flex-direction: column; gap: 10px; }
     .lab { font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -448,12 +755,14 @@ const TASK_STATUSES = [
     .legend .li { display: flex; align-items: center; gap: 7px; }
     .sw { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
 
-    /* Duration tables */
-    .tablecard { overflow: hidden; margin-bottom: 18px; }
+    /* Tables */
+    .tablecard { overflow: hidden; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+    @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
     .cardhead { padding: 14px 16px 10px; display: flex; align-items: center; }
     .cardhead h3 { font-size: 14px; margin: 0; }
+    .search-input { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--surface); color: inherit; width: 180px; }
+    .search-input.sm { width: 130px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 9px 14px; font-size: 12.5px; border-bottom: 1px solid var(--border); }
     th.num, td.num { text-align: right; }
@@ -463,15 +772,24 @@ const TASK_STATUSES = [
     .pad { padding: 16px; }
     .small { font-size: 11.5px; }
 
+    /* Groups */
+    .group-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .group-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+    .g-name { font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+    .g-count { font-weight: 700; background: var(--primary-50); color: var(--primary); padding: 2px 6px; border-radius: 10px; font-size: 11px; }
+
     /* Case metrics */
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-    .grid .card { padding: 16px; }
     .big { font-size: 32px; font-weight: 700; margin: 4px 0 12px; }
-    .kvrow { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .lifecycle-stats { display: flex; gap: 24px; }
+    .lc-item { display: flex; flex-direction: column; gap: 2px; }
+    .lc-val { font-size: 24px; font-weight: 700; }
+    .lc-lbl { font-size: 11.5px; color: var(--muted); }
 
     /* Query builder */
     .section-h { font-size: 15px; margin: 20px 0 10px; }
     .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin: 12px 0 6px; }
+    .presets { display: flex; align-items: center; gap: 6px; }
     .fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
     .fld input, .fld select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; background: var(--surface); color: inherit; }
     .fieldrow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
@@ -480,27 +798,44 @@ const TASK_STATUSES = [
     .actionrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
     .reqlbl { font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; }
     .restbl { width: 100%; margin-top: 8px; }
+    .query-table-wrap { max-height: 380px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; }
     .restext { background: var(--surface-2); padding: 12px; border-radius: 8px; max-height: 280px; overflow: auto; font-family: var(--font-mono); font-size: 12px; }
+    .btn-group { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .btn-group .btn { border-radius: 0; border: none; }
     .sqrow { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
     .sqrow:last-child { border-bottom: none; }
     .err { color: var(--red); font-size: 12px; margin-top: 6px; }
     .btn.danger { color: var(--red); }
+    .font-bold { font-weight: 700; }
+    .tnum { font-variant-numeric: tabular-nums; }
+    .mono { font-family: var(--font-mono); font-size: 12px; }
   `],
 })
 export class ReportsComponent {
   private api = inject(QueryApiService);
+  private wfApi = inject(WorkflowApiService);
   private analyticsApi = inject(WorkflowAnalyticsApiService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private toast = inject(ToastService);
 
   tab = signal<ReportsTab>('processes');
+  timeWindow = signal<TimeWindow>('all');
+  selectedProcess = '';
   loading = signal(true);
   error = signal<string | null>(null);
+  runningQuery = signal(false);
+
+  // Search filter terms
+  procSearch = '';
+  taskSearch = '';
+  caseSearch = '';
+  queryViewMode = signal<'table' | 'json'>('table');
 
   summary = signal<Summary | null>(null);
   procs = signal<ProcessAnalytics | null>(null);
   tasks = signal<TaskAnalytics | null>(null);
+  workflows = signal<Workflow[]>([]);
 
   // Cases analytics
   caseSummary = signal<WorkflowInstanceSummary | null>(null);
@@ -523,11 +858,35 @@ export class ReportsComponent {
 
   tabLabel = computed(() => {
     switch (this.tab()) {
-      case 'tasks': return 'Tasks';
+      case 'tasks': return 'Tasks & SLAs';
       case 'cases': return 'Cases & Workflows';
       case 'queries': return 'Ad-Hoc Queries';
       default: return 'Processes';
     }
+  });
+
+  private filterParams = computed(() => {
+    const tw = this.timeWindow();
+    let since: string | undefined;
+    let days: number | undefined;
+    const now = Date.now();
+    if (tw === '1d') { since = new Date(now - 86400000).toISOString(); days = 1; }
+    else if (tw === '7d') { since = new Date(now - 7 * 86400000).toISOString(); days = 7; }
+    else if (tw === '30d') { since = new Date(now - 30 * 86400000).toISOString(); days = 30; }
+    else if (tw === '90d') { since = new Date(now - 90 * 86400000).toISOString(); days = 90; }
+
+    return {
+      since,
+      days,
+      processId: this.selectedProcess.trim() || undefined,
+    };
+  });
+
+  availableProcesses = computed(() => {
+    const set = new Set<string>();
+    for (const w of this.workflows()) if (w.id) set.add(w.id);
+    for (const p of this.procs()?.byProcess || []) if (p.processId) set.add(p.processId);
+    return [...set].sort();
   });
 
   constructor() {
@@ -543,13 +902,28 @@ export class ReportsComponent {
     this.loadCaseAnalytics();
   }
 
+  setTab(t: ReportsTab) {
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge' });
+  }
+
+  setTimeWindow(w: TimeWindow) {
+    this.timeWindow.set(w);
+    this.load();
+  }
+
+  onProcessChange() {
+    this.load();
+  }
+
   load() {
     this.loading.set(true);
     this.error.set(null);
+    const params = this.filterParams();
+
     forkJoin({
-      summary: this.api.analyticsSummary(),
-      procs: this.api.analyticsProcesses(),
-      tasks: this.api.analyticsTasks(),
+      summary: this.api.analyticsSummary(params),
+      procs: this.api.analyticsProcesses(params),
+      tasks: this.api.analyticsTasks(params),
     }).subscribe({
       next: ({ summary, procs, tasks }) => {
         this.summary.set(summary); this.procs.set(procs); this.tasks.set(tasks);
@@ -560,51 +934,77 @@ export class ReportsComponent {
         this.loading.set(false);
       },
     });
+
+    this.wfApi.listWorkflows().subscribe({ next: (ws) => this.workflows.set(ws), error: () => {} });
+    this.loadCaseAnalytics();
   }
 
   loadCaseAnalytics() {
-    this.analyticsApi.summary().subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
-    this.analyticsApi.tat().subscribe({ next: (t) => this.tat.set(t), error: () => {} });
+    const params = { since: this.filterParams().since };
+    this.analyticsApi.summary(params).subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
+    this.analyticsApi.tat(params).subscribe({ next: (t) => this.tat.set(t), error: () => {} });
     this.analyticsApi.listSavedQueries().subscribe({ next: (q: SavedQuery[]) => this.savedQueries.set(q), error: () => {} });
-  }
-
-  setTab(t: ReportsTab) {
-    this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge' });
   }
 
   // ---- Processes Tab ----
   kpis = computed(() => {
     const s = this.summary();
+    const p = this.procs();
     if (!s) return [];
     return [
       { label: 'Total instances', value: s.instances.total, color: '' },
       { label: 'Running', value: s.instances.byStatus['running'] ?? 0, color: 'var(--blue)' },
       { label: 'Completed', value: s.instances.byStatus['completed'] ?? 0, color: 'var(--green)' },
       { label: 'Failed', value: s.instances.byStatus['failed'] ?? 0, color: 'var(--red)' },
+      { label: 'Failure rate', value: `${p?.failureRate ?? 0}%`, color: (p?.failureRate ?? 0) > 0 ? 'var(--red)' : 'var(--green)' },
       { label: 'Active deployments', value: s.deployments.active, color: 'var(--purple)' },
-      { label: 'Scheduled jobs', value: s.jobs.scheduled, color: 'var(--amber)' },
     ];
   });
+
+  dailyThroughput = computed(() => this.procs()?.dailyThroughput ?? []);
+  maxThroughputVal = computed(() => {
+    const list = this.dailyThroughput();
+    let max = 1;
+    for (const d of list) {
+      if (d.started > max) max = d.started;
+      if (d.completed > max) max = d.completed;
+      if (d.failed > max) max = d.failed;
+    }
+    return max;
+  });
+
+  formatDayLabel(d: string): string {
+    const parts = d.split('-');
+    return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
+  }
+
+  throughputTooltip(d: { date: string; started: number; completed: number; failed: number }): string {
+    return `${d.date}: ${d.started} started, ${d.completed} completed, ${d.failed} failed`;
+  }
+
+  pctOfThroughput(val: number): number {
+    const max = this.maxThroughputVal();
+    return max > 0 ? Math.max(3, Math.min(100, (val / max) * 100)) : 0;
+  }
 
   instStatusRows = computed<StatusRow[]>(() => this.statusRows(this.procs()?.byStatus, INSTANCE_STATUSES));
   instTotal = computed(() => this.instStatusRows().reduce((a, r) => a + r.count, 0));
   instDonut = computed(() => this.donutGradient(this.instStatusRows()));
   byProcess = computed(() => [...(this.procs()?.byProcess ?? [])].sort((a, b) => b.count - a.count));
+  filteredProcesses = computed(() => {
+    const q = this.procSearch.trim().toLowerCase();
+    if (!q) return this.byProcess();
+    return this.byProcess().filter((p) => p.processId.toLowerCase().includes(q));
+  });
   maxProcAvg = computed(() => Math.max(...this.byProcess().map((p) => p.avgMs), 1));
 
   // ---- Tasks Tab ----
-  taskKpis = computed(() => {
-    const s = this.summary();
-    if (!s) return [];
-    return [
-      { label: 'Total tasks', value: s.tasks.total, color: '' },
-      { label: 'In Progress', value: s.tasks.byStatus['inprogress'] ?? 0, color: 'var(--blue)' },
-      { label: 'Reserved / Claimed', value: s.tasks.byStatus['reserved'] ?? 0, color: 'var(--purple)' },
-      { label: 'Created / Queue', value: s.tasks.byStatus['created'] ?? 0, color: 'var(--amber)' },
-      { label: 'Error', value: s.tasks.byStatus['error'] ?? 0, color: 'var(--red)' },
-      { label: 'Active Process Trees', value: s.instances.byStatus['running'] ?? 0, color: '' },
-    ];
+  slaRate = computed(() => this.tasks()?.sla?.complianceRate ?? 100);
+  slaColor = computed(() => {
+    const rate = this.slaRate();
+    return rate >= 95 ? 'var(--green)' : rate >= 80 ? 'var(--amber)' : 'var(--red)';
   });
+  taskGroups = computed(() => this.tasks()?.byGroup ?? []);
 
   taskStatusRows = computed<StatusRow[]>(() => this.statusRows(this.tasks()?.openByStatus, TASK_STATUSES));
   openTotal = computed(() => this.taskStatusRows().reduce((a, r) => a + r.count, 0));
@@ -612,14 +1012,55 @@ export class ReportsComponent {
   byAssignee = computed(() => [...(this.tasks()?.byAssignee ?? [])].sort((a, b) => b.count - a.count));
   maxAssigneeCount = computed(() => Math.max(...this.byAssignee().map((w) => w.count), 1));
   byTask = computed(() => [...(this.tasks()?.byTask ?? [])].sort((a, b) => b.count - a.count));
+  filteredTasks = computed(() => {
+    const q = this.taskSearch.trim().toLowerCase();
+    if (!q) return this.byTask();
+    return this.byTask().filter((t) => t.name.toLowerCase().includes(q));
+  });
   maxTaskAvg = computed(() => Math.max(...this.byTask().map((t) => t.avgMs), 1));
 
   // ---- Cases Tab Helpers ----
   statusEntries(byStatus: Record<string, number>): [string, number][] {
     return Object.entries(byStatus || {});
   }
+  caseStatusPct(count: number): number {
+    const total = this.caseSummary()?.total ?? 0;
+    return total > 0 ? (count / total) * 100 : 0;
+  }
+  caseWorkflowPct(count: number): number {
+    const total = this.caseSummary()?.total ?? 0;
+    return total > 0 ? (count / total) * 100 : 0;
+  }
+  activeCaseRatio(): number {
+    const total = this.caseSummary()?.total ?? 0;
+    const active = this.caseSummary()?.activeCases ?? 0;
+    return total > 0 ? Math.round((active / total) * 100) : 0;
+  }
+  filteredTatWorkflows = computed(() => {
+    const list = this.tat()?.byWorkflowName || [];
+    const q = this.caseSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((w) => w.workflowName.toLowerCase().includes(q));
+  });
+  maxCaseAvg = computed(() => Math.max(...(this.tat()?.byWorkflowName || []).map((w) => w.avgMs), 1));
 
   // ---- Custom Queries ----
+  queryColumns = computed(() => {
+    const rows = this.queryResult()?.rows;
+    if (!rows || rows.length === 0) return [];
+    const keySet = new Set<string>();
+    const priority = ['id', 'workflowName', 'name', 'status', 'createdAt', 'assignee', 'group'];
+    for (const p of priority) {
+      if (rows.some((r) => r[p] !== undefined)) keySet.add(p);
+    }
+    for (const r of rows.slice(0, 5)) {
+      for (const k of Object.keys(r)) {
+        if (!k.startsWith('_') && keySet.size < 8) keySet.add(k);
+      }
+    }
+    return [...keySet];
+  });
+
   addFilter() { this.filters.push({ field: '', op: 'eq', value: '' }); }
   removeFilter(f: QueryFilter) { this.filters = this.filters.filter((x) => x !== f); }
 
@@ -640,9 +1081,16 @@ export class ReportsComponent {
 
   runQuery() {
     this.queryError.set('');
+    this.runningQuery.set(true);
     this.analyticsApi.runQuery(this.buildDef()).subscribe({
-      next: (res) => this.queryResult.set(res),
-      error: (e) => this.queryError.set(e?.error?.error?.message || 'Query failed'),
+      next: (res) => {
+        this.queryResult.set(res);
+        this.runningQuery.set(false);
+      },
+      error: (e) => {
+        this.runningQuery.set(false);
+        this.queryError.set(e?.error?.error?.message || 'Query failed');
+      },
     });
   }
 
@@ -676,6 +1124,32 @@ export class ReportsComponent {
       },
       error: (e: any) => this.toast.error(e?.error?.error?.message || 'Delete failed'),
     });
+  }
+
+  loadPreset(preset: 'overdueTasks' | 'activeCases' | 'failedInst') {
+    if (preset === 'overdueTasks') {
+      this.entity = 'task';
+      this.groupBy = 'group';
+      this.metric = 'count';
+      this.filters = [{ field: 'status', op: 'ne', value: 'completed' }];
+    } else if (preset === 'activeCases') {
+      this.entity = 'workflowInstance';
+      this.groupBy = 'workflowName';
+      this.metric = 'count';
+      this.filters = [{ field: 'status', op: 'ne', value: 'closed' }];
+    } else if (preset === 'failedInst') {
+      this.entity = 'instance';
+      this.groupBy = 'processId';
+      this.metric = 'count';
+      this.filters = [{ field: 'status', op: 'eq', value: 'failed' }];
+    }
+    this.runQuery();
+  }
+
+  formatColVal(val: unknown): string {
+    if (val === undefined || val === null) return '—';
+    if (typeof val === 'object') return JSON.stringify(val);
+    return String(val);
   }
 
   // ---- General Helpers ----
@@ -718,20 +1192,44 @@ export class ReportsComponent {
     return `conic-gradient(${stops.join(', ')})`;
   }
 
+  exportQueryResults() {
+    const res = this.queryResult();
+    if (!res) return;
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    let header: string[]; let rows: unknown[][];
+    if (res.groups) {
+      header = ['Key', 'Count', ...(this.metric === 'avgDurationMs' ? ['Avg Duration (ms)'] : [])];
+      rows = res.groups.map((g) => [g.key, g.count, ...(this.metric === 'avgDurationMs' ? [g.avgDurationMs ?? ''] : [])]);
+    } else if (res.rows && res.rows.length > 0) {
+      header = this.queryColumns();
+      rows = res.rows.map((r) => header.map((col) => this.formatColVal(r[col])));
+    } else {
+      return;
+    }
+    const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `query-${this.entity}-results.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   exportCsv() {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     let header: string[]; let rows: unknown[][]; let name: string;
     if (this.tab() === 'processes') {
-      header = ['Process', 'Count', 'Avg (ms)', 'Min (ms)', 'Max (ms)'];
+      header = ['Process Definition', 'Executions', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
       rows = this.byProcess().map((p) => [p.processId, p.count, p.avgMs, p.minMs, p.maxMs]);
       name = 'reports-processes.csv';
     } else if (this.tab() === 'tasks') {
-      header = ['Task', 'Count', 'Avg (ms)', 'Min (ms)', 'Max (ms)'];
+      header = ['Task Name', 'Completed Count', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
       rows = this.byTask().map((t) => [t.name, t.count, t.avgMs, t.minMs, t.maxMs]);
       name = 'reports-tasks.csv';
+    } else if (this.tab() === 'queries') {
+      this.exportQueryResults();
+      return;
     } else {
-      header = ['Workflow', 'Count', 'Avg (ms)'];
-      rows = (this.tat()?.byWorkflowName || []).map((w) => [w.workflowName, w.count, w.avgMs]);
+      header = ['Workflow Definition', 'Completed Cases', 'Avg TAT (ms)', 'Min (ms)', 'Max (ms)'];
+      rows = (this.tat()?.byWorkflowName || []).map((w) => [w.workflowName, w.count, w.avgMs, w.minMs, w.maxMs]);
       name = 'reports-cases.csv';
     }
     const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');

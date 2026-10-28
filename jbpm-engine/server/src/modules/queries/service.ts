@@ -121,43 +121,123 @@ export class QueryService {
   }
 
   // ---- analytics / TAT ----
-  /** Task turn-around-time grouped by task name, plus a per-assignee completed breakdown. */
-  async taskAnalytics() {
-    const tasks = await this.allTasks();
+  /** Task turn-around-time grouped by task name, plus a per-assignee completed breakdown and SLA stats. */
+  async taskAnalytics(opts?: { since?: string; processId?: string }) {
+    let tasks = await this.allTasks();
+    if (opts?.since) tasks = tasks.filter((t) => t.createdAt >= opts.since!);
+    if (opts?.processId) {
+      const insts = await this.allInstances();
+      const pInstIds = new Set(insts.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId).map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
     const byName = new Map<string, number[]>();
     const byAssignee = new Map<string, number[]>();
+    const groupMap = new Map<string, number>();
+
+    let totalWithDue = 0;
+    let onTime = 0;
+    let overdue = 0;
+    const now = Date.now();
+
     for (const t of tasks) {
+      if (t.status !== 'completed' && t.group) {
+        groupMap.set(t.group, (groupMap.get(t.group) || 0) + 1);
+      }
+      if (t.dueAt) {
+        totalWithDue++;
+        const dueTime = Date.parse(t.dueAt);
+        if (t.status === 'completed') {
+          const compTime = t.completedAt ? Date.parse(t.completedAt) : now;
+          if (compTime <= dueTime) onTime++;
+          else overdue++;
+        } else {
+          if (now > dueTime) overdue++;
+          else onTime++;
+        }
+      }
+
       const ms = durationMs(t.createdAt, t.completedAt);
       if (ms == null || t.status !== 'completed') continue;
       (byName.get(t.name) || byName.set(t.name, []).get(t.name)!).push(ms);
       const who = t.completedBy || t.assignee;
       if (who) (byAssignee.get(who) || byAssignee.set(who, []).get(who)!).push(ms);
     }
+
+    const complianceRate = totalWithDue > 0 ? Math.round((onTime / totalWithDue) * 100) : 100;
+
     return {
       byTask: [...byName].map(([name, v]) => ({ name, ...stats(v) })),
       byAssignee: [...byAssignee].map(([user, v]) => ({ user, ...stats(v) })),
       openByStatus: this.countBy(tasks, (t) => t.status),
+      sla: { totalWithDue, onTime, overdue, complianceRate },
+      byGroup: [...groupMap].map(([group, count]) => ({ group, count })),
     };
   }
-  /** Process-instance turn-around-time grouped by process definition, plus a status mix. */
-  async processAnalytics() {
-    const instances = await this.allInstances();
+  /** Process-instance turn-around-time grouped by process definition, plus a status mix, daily throughput and failure rate. */
+  async processAnalytics(opts?: { since?: string; processId?: string; days?: number }) {
+    let instances = await this.allInstances();
+    if (opts?.since) instances = instances.filter((i) => i.startedAt >= opts.since!);
+    if (opts?.processId) instances = instances.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId);
+
     const byProc = new Map<string, number[]>();
+    let failedCount = 0;
     for (const i of instances) {
+      if (i.status === 'failed') failedCount++;
       const ms = durationMs(i.startedAt, i.endedAt);
       if (ms == null) continue;
       const key = i.processId || i.workflowId;
       (byProc.get(key) || byProc.set(key, []).get(key)!).push(ms);
     }
+
+    // Daily throughput: generate buckets for the past N days (default 14 days or custom)
+    const numDays = opts?.days ? Math.min(Math.max(Number(opts.days), 3), 90) : 14;
+    const dailyMap = new Map<string, { started: number; completed: number; failed: number }>();
+    const now = new Date();
+    for (let d = numDays - 1; d >= 0; d--) {
+      const dt = new Date(now.getTime() - d * 86400000);
+      const key = dt.toISOString().slice(0, 10);
+      dailyMap.set(key, { started: 0, completed: 0, failed: 0 });
+    }
+
+    for (const i of instances) {
+      const startKey = i.startedAt?.slice(0, 10);
+      if (startKey && dailyMap.has(startKey)) {
+        dailyMap.get(startKey)!.started++;
+      }
+      const endKey = i.endedAt?.slice(0, 10) || startKey;
+      if (endKey && dailyMap.has(endKey)) {
+        if (i.status === 'completed') dailyMap.get(endKey)!.completed++;
+        else if (i.status === 'failed') dailyMap.get(endKey)!.failed++;
+      }
+    }
+
+    const dailyThroughput = [...dailyMap].map(([date, counts]) => ({ date, ...counts }));
+    const total = instances.length;
+    const failureRate = total > 0 ? Number(((failedCount / total) * 100).toFixed(1)) : 0;
+
     return {
       byProcess: [...byProc].map(([processId, v]) => ({ processId, ...stats(v) })),
       byStatus: this.countBy(instances, (i) => i.status),
+      dailyThroughput,
+      failureRate,
+      total,
     };
   }
   /** Dashboard counts across instances, tasks, deployments and jobs. */
-  async summary() {
-    const [instances, tasks, deployments, jobs] = [await this.allInstances(), await this.allTasks(),
-      await this.D().query((d) => d.tenantId === this.ctx.tenantId), await this.J().query((j) => j.tenantId === this.ctx.tenantId)];
+  async summary(opts?: { since?: string; processId?: string }) {
+    let instances = await this.allInstances();
+    let tasks = await this.allTasks();
+    if (opts?.since) {
+      instances = instances.filter((i) => i.startedAt >= opts.since!);
+      tasks = tasks.filter((t) => t.createdAt >= opts.since!);
+    }
+    if (opts?.processId) {
+      instances = instances.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId);
+      const instIds = new Set(instances.map((i) => i.id));
+      tasks = tasks.filter((t) => instIds.has(t.instanceId));
+    }
+    const deployments = await this.D().query((d) => d.tenantId === this.ctx.tenantId);
+    const jobs = await this.J().query((j) => j.tenantId === this.ctx.tenantId);
     return {
       instances: { total: instances.length, byStatus: this.countBy(instances, (i) => i.status) },
       tasks: { total: tasks.length, byStatus: this.countBy(tasks, (t) => t.status) },

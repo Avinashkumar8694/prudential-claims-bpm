@@ -79,9 +79,9 @@ export function buildWorkflowInstanceRoutes(): Router {
 
   // ---- analytics ----
   r.get('/workflow-analytics/summary', perm('query:read'), asyncHandler(async (req, res) =>
-    res.json(await analytics(req).summary())));
+    res.json(await analytics(req).summary(req.query as any))));
   r.get('/workflow-analytics/tat', perm('query:read'), asyncHandler(async (req, res) =>
-    res.json(await analytics(req).tat())));
+    res.json(await analytics(req).tat(req.query as any))));
   r.get('/workflow-instances/:id/tasks/:taskId/ownership-timeline', perm('query:read'), asyncHandler(async (req, res) =>
     res.json(await analytics(req).ownershipTimeline(req.params.taskId))));
   r.get('/analytics/tasks-and-processes/:piid', perm('query:read'), asyncHandler(async (req, res) =>

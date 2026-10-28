@@ -24,19 +24,37 @@ export class WorkflowAnalyticsService {
     this.queries = new QueryService(ctx);
   }
 
-  async summary() {
-    const cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId);
+  async summary(opts?: { since?: string }) {
+    let cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId);
+    if (opts?.since) cases = cases.filter((c) => c.createdAt >= opts.since!);
     const byStatus: Record<string, number> = {};
-    for (const c of cases) byStatus[c.status] = (byStatus[c.status] || 0) + 1;
-    return { total: cases.length, byStatus, withoutPiid: cases.filter((c) => !c.piid).length };
+    const byWorkflowName: Record<string, number> = {};
+    const terminalStatuses = new Set(['completed', 'closed', 'resolved', 'rejected', 'cancelled']);
+    let activeCases = 0;
+    let closedCases = 0;
+    for (const c of cases) {
+      byStatus[c.status] = (byStatus[c.status] || 0) + 1;
+      byWorkflowName[c.workflowName] = (byWorkflowName[c.workflowName] || 0) + 1;
+      if (terminalStatuses.has((c.status || '').toLowerCase())) closedCases++;
+      else activeCases++;
+    }
+    return {
+      total: cases.length,
+      byStatus,
+      byWorkflowName,
+      activeCases,
+      closedCases,
+      withoutPiid: cases.filter((c) => !c.piid).length,
+    };
   }
 
   /** TAT by case type (workflow definition name) uses the underlying BPM instance's own
    *  `startedAt`/`endedAt` — well-defined regardless of whatever free-form business `status` string a
    *  case is in — rather than the case's own `status`, which has no fixed "this means done" value.
    *  TAT by user reuses the existing task-level analytics unchanged. */
-  async tat() {
-    const cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId && !!w.piid);
+  async tat(opts?: { since?: string }) {
+    let cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId && !!w.piid);
+    if (opts?.since) cases = cases.filter((c) => c.createdAt >= opts.since!);
     const byName = new Map<string, number[]>();
     for (const c of cases) {
       const bpm = await this.bpmInstances.get(c.piid!).catch(() => null);
@@ -46,7 +64,7 @@ export class WorkflowAnalyticsService {
     }
     const stats = (v: number[]) => ({ count: v.length, avgMs: v.length ? Math.round(v.reduce((a, x) => a + x, 0) / v.length) : 0, minMs: v.length ? Math.min(...v) : 0, maxMs: v.length ? Math.max(...v) : 0 });
     const byWorkflowName = [...byName].map(([workflowName, v]) => ({ workflowName, ...stats(v) }));
-    const taskAnalytics = await this.queries.taskAnalytics();
+    const taskAnalytics = await this.queries.taskAnalytics(opts);
     return { byWorkflowName, byUser: taskAnalytics.byAssignee };
   }
 

@@ -12,11 +12,35 @@ import { WorkflowAnalyticsApiService, type WorkflowInstanceSummary } from '../..
 import { AuthService } from '../../core/auth/auth.service';
 import { ToastService } from '../../shared/toast.service';
 import { IconComponent } from '../../shared/icon.component';
-import type { Instance, ProcessAnalytics, QueryDefinition, QueryFilter, QueryOp, QueryRunResult, QueryableEntity, SavedQuery, Summary, Task, TaskAnalytics, Workflow, WorkflowDefinition, WorkflowTat } from '../../core/models';
+import type {
+  DurStats,
+  Instance,
+  ProcessAnalytics,
+  QueryDefinition,
+  QueryFilter,
+  QueryOp,
+  QueryRunResult,
+  QueryableEntity,
+  SavedQuery,
+  Summary,
+  Task,
+  TaskAnalytics,
+  Workflow,
+  WorkflowDefinition,
+  WorkflowTat,
+} from '../../core/models';
 
 type HomeTab = 'overview' | 'processes' | 'tasks' | 'cases' | 'queries';
+type TimeWindow = 'all' | '1d' | '7d' | '30d' | '90d';
 
-interface StatusRow { key: string; label: string; color: string; count: number; pctOfMax: number; share: number; }
+interface StatusRow {
+  key: string;
+  label: string;
+  color: string;
+  count: number;
+  pctOfMax: number;
+  share: number;
+}
 
 const ENTITIES: QueryableEntity[] = ['workflowInstance', 'workflowInstanceAudit', 'workflowInstanceComment', 'instance', 'task'];
 const OPS: QueryOp[] = ['eq', 'ne', 'gt', 'gte', 'lt', 'lte', 'in', 'contains'];
@@ -42,6 +66,7 @@ const INSTANCE_STATUSES = [
   { key: 'failed', label: 'Failed', color: 'var(--red)' },
   { key: 'aborted', label: 'Aborted', color: 'var(--muted)' },
 ];
+
 const TASK_STATUSES = [
   { key: 'created', label: 'Created', color: 'var(--amber)' },
   { key: 'reserved', label: 'Reserved', color: 'var(--purple)' },
@@ -55,6 +80,7 @@ const TASK_STATUSES = [
   imports: [FormsModule, RouterLink, SlicePipe, DecimalPipe, JsonPipe, IconComponent],
   template: `
     <div class="page">
+      <!-- Header -->
       <header class="head">
         <div>
           <h1>{{ greeting() }}, {{ auth.user()?.username }}</h1>
@@ -71,13 +97,47 @@ const TASK_STATUSES = [
         }
       </header>
 
+      <!-- Global Filter Bar: Time Window & Process Scope -->
+      <div class="filter-bar card">
+        <div class="filter-group">
+          <span class="f-label">Time Window:</span>
+          <div class="pills">
+            <button class="pill" [class.active]="timeWindow() === 'all'" (click)="setTimeWindow('all')">All Time</button>
+            <button class="pill" [class.active]="timeWindow() === '1d'" (click)="setTimeWindow('1d')">Today (24h)</button>
+            <button class="pill" [class.active]="timeWindow() === '7d'" (click)="setTimeWindow('7d')">Last 7 Days</button>
+            <button class="pill" [class.active]="timeWindow() === '30d'" (click)="setTimeWindow('30d')">Last 30 Days</button>
+            <button class="pill" [class.active]="timeWindow() === '90d'" (click)="setTimeWindow('90d')">Last 90 Days</button>
+          </div>
+        </div>
+
+        <div class="filter-group right">
+          <span class="f-label">Process Scope:</span>
+          <select [(ngModel)]="selectedProcess" (change)="onProcessChange()">
+            <option value="">All Process Definitions</option>
+            @for (p of availableProcesses(); track p) {
+              <option [value]="p">{{ p }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
       <!-- Navigation Tabs -->
       <nav class="tabs" role="tablist">
-        <button role="tab" [class.active]="tab() === 'overview'" (click)="setTab('overview')">Overview</button>
-        <button role="tab" [class.active]="tab() === 'processes'" (click)="setTab('processes')">Processes</button>
-        <button role="tab" [class.active]="tab() === 'tasks'" (click)="setTab('tasks')">Tasks</button>
-        <button role="tab" [class.active]="tab() === 'cases'" (click)="setTab('cases')">Cases &amp; Workflows</button>
-        <button role="tab" [class.active]="tab() === 'queries'" (click)="setTab('queries')">Ad-Hoc Query Engine</button>
+        <button role="tab" [class.active]="tab() === 'overview'" (click)="setTab('overview')">
+          <app-icon name="home" [size]="14" /> Overview
+        </button>
+        <button role="tab" [class.active]="tab() === 'processes'" (click)="setTab('processes')">
+          <app-icon name="instances" [size]="14" /> Processes
+        </button>
+        <button role="tab" [class.active]="tab() === 'tasks'" (click)="setTab('tasks')">
+          <app-icon name="tasks" [size]="14" /> Tasks &amp; SLAs
+        </button>
+        <button role="tab" [class.active]="tab() === 'cases'" (click)="setTab('cases')">
+          <app-icon name="inbox" [size]="14" /> Cases &amp; Workflows
+        </button>
+        <button role="tab" [class.active]="tab() === 'queries'" (click)="setTab('queries')">
+          <app-icon name="search" [size]="14" /> Ad-Hoc Query Engine
+        </button>
       </nav>
 
       @if (loading()) {
@@ -86,14 +146,14 @@ const TASK_STATUSES = [
         </div>
         <div class="chartgrid"><div class="skeleton skeleton-card tall"></div><div class="skeleton skeleton-card tall"></div></div>
       } @else {
-        <!-- Global Executive KPIs (Always visible for quick reference) -->
+        <!-- Global Executive KPIs -->
         <div class="kpis">
           @if (canView()) {
-            <a class="card kpi" routerLink="/instances">
+            <a class="card kpi" routerLink="/instances" [queryParams]="{status: 'running'}">
               <span class="n" style="color: var(--blue);">{{ activeInstances() }}</span>
               <span class="l">Active Instances</span>
             </a>
-            <a class="card kpi" routerLink="/instances">
+            <a class="card kpi" routerLink="/instances" [queryParams]="{status: 'completed'}">
               <span class="n" style="color: var(--green);">{{ completedInstances() }}</span>
               <span class="l">Completed Instances</span>
             </a>
@@ -101,12 +161,20 @@ const TASK_STATUSES = [
               <span class="n" [class.red]="failedInstances() > 0">{{ failedInstances() }}</span>
               <span class="l">Failed / Errors</span>
             </a>
+            <div class="card kpi">
+              <span class="n" [style.color]="failureRateColor()">{{ failureRate() }}%</span>
+              <span class="l">Failure Rate</span>
+            </div>
           }
           @if (canTasks()) {
             <a class="card kpi" routerLink="/tasks">
               <span class="n amber">{{ openTasks() }}</span>
               <span class="l">Open Tasks</span>
             </a>
+            <div class="card kpi">
+              <span class="n" [style.color]="slaColor()">{{ slaRate() }}%</span>
+              <span class="l">SLA Compliance</span>
+            </div>
           }
           @if (canView()) {
             <a class="card kpi" routerLink="/deployments">
@@ -122,6 +190,39 @@ const TASK_STATUSES = [
 
         <!-- ==================== TAB 1: OVERVIEW ==================== -->
         @if (tab() === 'overview') {
+          <!-- Throughput timeline trend chart -->
+          @if (dailyThroughput().length > 0) {
+            <section class="card chart full-width">
+              <div class="row charthead">
+                <div>
+                  <h3>Execution Throughput Over Time</h3>
+                  <p class="chartsub">Daily instance starts vs. completions over the selected period</p>
+                </div>
+                <div class="spacer"></div>
+                <div class="chart-legend-inline">
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
+                </div>
+              </div>
+
+              <div class="throughput-chart">
+                @for (d of dailyThroughput(); track d.date) {
+                  <div class="tp-col" [title]="throughputTooltip(d)">
+                    <div class="tp-bars">
+                      <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                      <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      @if (d.failed > 0) {
+                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+                      }
+                    </div>
+                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
           <div class="chartgrid">
             <section class="card chart">
               <div class="row charthead">
@@ -129,7 +230,7 @@ const TASK_STATUSES = [
                 <div class="spacer"></div>
                 <span class="muted small tnum">{{ instTotal() }} total</span>
               </div>
-              <p class="chartsub">Overall distribution across all running, waiting, and completed executions</p>
+              <p class="chartsub">Distribution across all running, waiting, and completed executions</p>
               @if (instTotal() > 0) {
                 <div class="barlist">
                   @for (r of instStatusRows(); track r.key) {
@@ -145,7 +246,7 @@ const TASK_STATUSES = [
                   }
                 </div>
               } @else {
-                <p class="nodata">No instances yet — start one from a deployment to populate analytics.</p>
+                <p class="nodata">No instances found for this filter scope.</p>
               }
             </section>
 
@@ -232,6 +333,37 @@ const TASK_STATUSES = [
 
         <!-- ==================== TAB 2: PROCESSES ==================== -->
         @if (tab() === 'processes') {
+          @if (dailyThroughput().length > 0) {
+            <section class="card chart full-width" style="margin-bottom: 16px;">
+              <div class="row charthead">
+                <div>
+                  <h3>Process Volume &amp; Daily Throughput</h3>
+                  <p class="chartsub">Instance completions and starts over time</p>
+                </div>
+                <div class="spacer"></div>
+                <div class="chart-legend-inline">
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
+                </div>
+              </div>
+              <div class="throughput-chart">
+                @for (d of dailyThroughput(); track d.date) {
+                  <div class="tp-col" [title]="throughputTooltip(d)">
+                    <div class="tp-bars">
+                      <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                      <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      @if (d.failed > 0) {
+                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+                      }
+                    </div>
+                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
           <div class="chartgrid">
             <section class="card chart">
               <div class="row charthead">
@@ -282,15 +414,26 @@ const TASK_STATUSES = [
             <div class="row cardhead">
               <h3>Duration by Process Definition</h3>
               <div class="spacer"></div>
-              <span class="muted small">Completed instances only</span>
+              <input class="search-input" [(ngModel)]="procSearch" placeholder="Search processes…" />
             </div>
-            @if (byProcess().length) {
+            @if (filteredProcesses().length) {
               <table>
-                <thead><tr><th>Process ID</th><th class="num">Executions</th><th class="num">Avg Duration</th><th class="num">Min</th><th class="num">Max</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Process Definition</th>
+                    <th class="num">Executions</th>
+                    <th class="num">Avg Turnaround</th>
+                    <th class="num">Min</th>
+                    <th class="num">Max</th>
+                    <th class="num">Action</th>
+                  </tr>
+                </thead>
                 <tbody>
-                  @for (p of byProcess(); track p.processId) {
+                  @for (p of filteredProcesses(); track p.processId) {
                     <tr>
-                      <td><b>{{ p.processId }}</b></td>
+                      <td>
+                        <span class="font-bold">{{ p.processId }}</span>
+                      </td>
                       <td class="num tnum">{{ p.count }}</td>
                       <td class="num">
                         <span class="avgcell">
@@ -300,18 +443,47 @@ const TASK_STATUSES = [
                       </td>
                       <td class="num tnum muted">{{ ms(p.minMs) }}</td>
                       <td class="num tnum muted">{{ ms(p.maxMs) }}</td>
+                      <td class="num">
+                        <a class="btn sm" [routerLink]="['/instances']" [queryParams]="{processId: p.processId}">
+                          View Instances →
+                        </a>
+                      </td>
                     </tr>
                   }
                 </tbody>
               </table>
             } @else {
-              <p class="nodata pad">No completed instances recorded yet.</p>
+              <p class="nodata pad">No completed instances match the current filters.</p>
             }
           </section>
         }
 
-        <!-- ==================== TAB 3: TASKS ==================== -->
+        <!-- ==================== TAB 3: TASKS & SLAS ==================== -->
         @if (tab() === 'tasks') {
+          <!-- SLA Metrics Row -->
+          <div class="sla-grid">
+            <div class="card sla-card">
+              <span class="sla-title">SLA Compliance Rate</span>
+              <span class="sla-val" [style.color]="slaColor()">{{ slaRate() }}%</span>
+              <span class="sla-sub">{{ tasks()?.sla?.onTime ?? 0 }} of {{ tasks()?.sla?.totalWithDue ?? 0 }} tasks met SLA</span>
+            </div>
+            <div class="card sla-card">
+              <span class="sla-title">Overdue Tasks</span>
+              <span class="sla-val" [class.red]="(tasks()?.sla?.overdue ?? 0) > 0">{{ tasks()?.sla?.overdue ?? 0 }}</span>
+              <span class="sla-sub">Open tasks past due deadline</span>
+            </div>
+            <div class="card sla-card">
+              <span class="sla-title">Total Open Queue</span>
+              <span class="sla-val amber">{{ openTotal() }}</span>
+              <span class="sla-sub">Tasks currently waiting on humans</span>
+            </div>
+            <div class="card sla-card">
+              <span class="sla-title">Active Queues</span>
+              <span class="sla-val" style="color: var(--purple);">{{ taskGroups().length }}</span>
+              <span class="sla-sub">Distinct candidate group queues</span>
+            </div>
+          </div>
+
           <div class="chartgrid">
             <section class="card chart">
               <div class="row charthead">
@@ -358,6 +530,25 @@ const TASK_STATUSES = [
             </section>
           </div>
 
+          <!-- Group Queues Breakdown -->
+          @if (taskGroups().length > 0) {
+            <section class="card pad" style="margin-bottom: 16px;">
+              <div class="row charthead">
+                <h3>Open Workload by Group Queue</h3>
+                <div class="spacer"></div>
+                <span class="muted small">Team responsibility queues</span>
+              </div>
+              <div class="group-chips">
+                @for (g of taskGroups(); track g.group) {
+                  <div class="group-chip">
+                    <span class="g-name"><app-icon name="user" [size]="12" /> {{ g.group }}</span>
+                    <span class="g-count">{{ g.count }}</span>
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
           <div class="two-col">
             <section class="card tablecard">
               <div class="row cardhead"><h3>Open Tasks by Assignee</h3></div>
@@ -387,13 +578,13 @@ const TASK_STATUSES = [
               <div class="row cardhead">
                 <h3>Duration by User Task</h3>
                 <div class="spacer"></div>
-                <span class="muted small">Completed tasks only</span>
+                <input class="search-input sm" [(ngModel)]="taskSearch" placeholder="Filter tasks…" />
               </div>
-              @if (byTask().length) {
+              @if (filteredTasks().length) {
                 <table>
                   <thead><tr><th>Task Name</th><th class="num">Completed</th><th class="num">Avg Turnaround</th></tr></thead>
                   <tbody>
-                    @for (t of byTask(); track t.name) {
+                    @for (t of filteredTasks(); track t.name) {
                       <tr>
                         <td><b>{{ t.name }}</b></td>
                         <td class="num tnum">{{ t.count }}</td>
@@ -408,7 +599,7 @@ const TASK_STATUSES = [
                   </tbody>
                 </table>
               } @else {
-                <p class="nodata pad">No completed human tasks yet.</p>
+                <p class="nodata pad">No completed human tasks match the search.</p>
               }
             </section>
           </div>
@@ -418,119 +609,281 @@ const TASK_STATUSES = [
         @if (tab() === 'cases') {
           <div class="grid" style="margin-bottom: 20px;">
             <div class="card pad">
-              <h3>Cases by Status</h3>
+              <div class="row charthead">
+                <h3>Cases by Status</h3>
+                <div class="spacer"></div>
+                <span class="muted small">{{ caseSummary()?.total ?? 0 }} total</span>
+              </div>
+              <p class="big">{{ caseSummary()?.total ?? 0 }}</p>
               @if (caseSummary(); as s) {
-                <p class="big">{{ s.total }}</p>
-                @for (kv of statusEntries(s.byStatus); track kv[0]) {
-                  <div class="kvrow"><span>{{ kv[0] }}</span><span class="tnum font-bold">{{ kv[1] }}</span></div>
+                <div class="barlist" style="margin-top: 12px;">
+                  @for (kv of statusEntries(s.byStatus); track kv[0]) {
+                    <div class="barrow">
+                      <div class="row lab">
+                        <span>{{ kv[0] }}</span>
+                        <div class="spacer"></div>
+                        <span class="tnum font-bold">{{ kv[1] }}</span>
+                      </div>
+                      <div class="track"><span [style.width.%]="caseStatusPct(kv[1])" style="background: var(--blue);"></span></div>
+                    </div>
+                  }
+                </div>
+                @if (s.withoutPiid) {
+                  <p class="muted sm" style="margin-top: 12px;"><app-icon name="warning" [size]="12" /> {{ s.withoutPiid }} cases initiated without BPM execution binding</p>
                 }
-                @if (s.withoutPiid) { <p class="muted sm" style="margin-top:8px;">{{ s.withoutPiid }} initiated without BPM instance</p> }
-              } @else { <p class="muted">Loading case summary…</p> }
+              } @else {
+                <p class="muted">Loading case summary…</p>
+              }
             </div>
+
             <div class="card pad">
-              <h3>TAT by Workflow Definition (Case Level)</h3>
-              @if (tat(); as t) {
-                @for (r of t.byWorkflowName; track r.workflowName) {
-                  <div class="kvrow">
-                    <span>{{ r.workflowName }}</span>
-                    <span class="tnum">{{ ms(r.avgMs) }} avg ({{ r.count }})</span>
+              <div class="row charthead">
+                <h3>Case Lifecycle Ratio</h3>
+              </div>
+              <div class="lifecycle-stats" style="margin-top: 16px;">
+                <div class="lc-item">
+                  <span class="lc-val" style="color: var(--blue);">{{ caseSummary()?.activeCases ?? 0 }}</span>
+                  <span class="lc-lbl">In-Flight / Active</span>
+                </div>
+                <div class="lc-item">
+                  <span class="lc-val" style="color: var(--green);">{{ caseSummary()?.closedCases ?? 0 }}</span>
+                  <span class="lc-lbl">Resolved / Closed</span>
+                </div>
+              </div>
+              <div class="track" style="margin-top: 14px; height: 10px;">
+                <span [style.width.%]="activeCaseRatio()" style="background: var(--blue); border-radius: 4px;"></span>
+              </div>
+              <p class="muted sm" style="margin-top: 8px;">{{ activeCaseRatio() }}% of total cases are currently active</p>
+            </div>
+
+            <div class="card pad">
+              <div class="row charthead">
+                <h3>Cases by Workflow Definition</h3>
+              </div>
+              <div class="barlist" style="margin-top: 12px;">
+                @for (kv of statusEntries(caseSummary()?.byWorkflowName || {}); track kv[0]) {
+                  <div class="barrow">
+                    <div class="row lab">
+                      <span class="font-bold">{{ kv[0] }}</span>
+                      <div class="spacer"></div>
+                      <span class="tnum">{{ kv[1] }}</span>
+                    </div>
+                    <div class="track"><span [style.width.%]="caseWorkflowPct(kv[1])" style="background: var(--purple);"></span></div>
                   </div>
                 }
-                @if (!t.byWorkflowName.length) { <p class="muted sm">No completed cases yet.</p> }
-              } @else { <p class="muted">Loading TAT…</p> }
-            </div>
-            <div class="card pad">
-              <h3>TAT by User (Task Execution)</h3>
-              @if (tat(); as t) {
-                @for (r of t.byUser; track r.user) {
-                  <div class="kvrow">
-                    <span>{{ r.user }}</span>
-                    <span class="tnum">{{ ms(r.avgMs) }} avg ({{ r.count }})</span>
-                  </div>
+                @if (!statusEntries(caseSummary()?.byWorkflowName || {}).length) {
+                  <p class="nodata">No cases recorded yet.</p>
                 }
-                @if (!t.byUser.length) { <p class="muted sm">No completed tasks yet.</p> }
-              } @else { <p class="muted">Loading TAT…</p> }
+              </div>
             </div>
+          </div>
+
+          <div class="two-col">
+            <section class="card tablecard">
+              <div class="row cardhead">
+                <h3>Turnaround Time (TAT) by Workflow Definition</h3>
+                <div class="spacer"></div>
+                <input class="search-input sm" [(ngModel)]="caseSearch" placeholder="Filter workflows…" />
+              </div>
+              @if (filteredTatWorkflows().length) {
+                <table>
+                  <thead><tr><th>Workflow Definition</th><th class="num">Completed</th><th class="num">Avg TAT</th><th class="num">Max</th></tr></thead>
+                  <tbody>
+                    @for (r of filteredTatWorkflows(); track r.workflowName) {
+                      <tr>
+                        <td><b>{{ r.workflowName }}</b></td>
+                        <td class="num tnum">{{ r.count }}</td>
+                        <td class="num">
+                          <span class="avgcell">
+                            <span class="avgbar"><span [style.width.%]="pctOf(r.avgMs, maxCaseAvg())"></span></span>
+                            <span class="tnum">{{ ms(r.avgMs) }}</span>
+                          </span>
+                        </td>
+                        <td class="num tnum muted">{{ ms(r.maxMs) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <p class="nodata pad">No completed cases recorded yet.</p>
+              }
+            </section>
+
+            <section class="card tablecard">
+              <div class="row cardhead">
+                <h3>Human Execution TAT by User</h3>
+                <div class="spacer"></div>
+                <span class="muted small">Assigned user turnaround speed</span>
+              </div>
+              @if (tat()?.byUser?.length) {
+                <table>
+                  <thead><tr><th>User / Assignee</th><th class="num">Tasks</th><th class="num">Avg Speed</th></tr></thead>
+                  <tbody>
+                    @for (u of tat()?.byUser || []; track u.user) {
+                      <tr>
+                        <td><b>{{ u.user || '(unassigned)' }}</b></td>
+                        <td class="num tnum">{{ u.count }}</td>
+                        <td class="num"><span class="tnum font-bold">{{ ms(u.avgMs) }}</span></td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <p class="nodata pad">No completed user tasks recorded yet.</p>
+              }
+            </section>
           </div>
         }
 
         <!-- ==================== TAB 5: AD-HOC QUERIES ==================== -->
         @if (tab() === 'queries') {
-          <h2 class="section-h">Custom Ad-Hoc Query Engine</h2>
-          <div class="card pad" style="margin-bottom: 20px;">
-            <div class="row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
-              <label class="fld"><span>Entity</span>
-                <select [(ngModel)]="entity">@for (e of entities; track e) { <option [value]="e">{{ e }}</option> }</select>
-              </label>
-              <label class="fld"><span>Group by (optional)</span>
-                <input [(ngModel)]="groupBy" placeholder="e.g. status, data.amount" />
-              </label>
-              <label class="fld"><span>Metric</span>
-                <select [(ngModel)]="metric">
-                  <option value="">(none — list rows)</option>
-                  <option value="count">count</option>
-                  <option value="avgDurationMs">avgDurationMs</option>
-                </select>
-              </label>
-              @if (metric === 'avgDurationMs') {
-                <label class="fld"><span>Duration from field</span><input [(ngModel)]="durationFrom" placeholder="createdAt" /></label>
-                <label class="fld"><span>Duration to field</span><input [(ngModel)]="durationTo" placeholder="updatedAt" /></label>
-              }
-            </div>
-
-            <div class="section-title">Filters</div>
-            @for (f of filters; track f) {
-              <div class="fieldrow">
-                <input class="fkey" [(ngModel)]="f.field" placeholder="field, e.g. data.amount" />
-                <select [(ngModel)]="f.op">@for (o of ops; track o) { <option [value]="o">{{ o }}</option> }</select>
-                <input [(ngModel)]="f.value" placeholder="value" />
-                <button class="btn sm danger" (click)="removeFilter(f)"><app-icon name="trash" [size]="12" /></button>
+          <div class="query-builder-wrap">
+            <div class="row charthead" style="margin-bottom: 12px;">
+              <div>
+                <h2>Enterprise Ad-Hoc Query Engine</h2>
+                <p class="chartsub">Query process executions, human tasks, cases, audit trails, and comments with tenant isolation.</p>
               </div>
-            }
-            <div style="margin-bottom: 14px;">
-              <button class="btn sm" (click)="addFilter()"><app-icon name="plus" [size]="12" /> Add filter</button>
+              <div class="spacer"></div>
+              <div class="presets">
+                <span class="muted sm">Quick Presets:</span>
+                <button class="btn sm" (click)="loadPreset('overdueTasks')">Overdue Tasks</button>
+                <button class="btn sm" (click)="loadPreset('activeCases')">Active Cases</button>
+                <button class="btn sm" (click)="loadPreset('failedInst')">Failed Instances</button>
+              </div>
             </div>
 
-            <div class="row actionrow">
-              <button class="btn primary sm" (click)="runQuery()"><app-icon name="play" [size]="12" /> Run Query</button>
-              <input class="save-name" [(ngModel)]="saveName" placeholder="Save as…" style="max-width: 200px;" />
-              <label class="reqlbl"><input type="checkbox" [(ngModel)]="saveShared" /> Shared</label>
-              <button class="btn sm" (click)="saveQuery()">Save Query</button>
-            </div>
-            @if (queryError()) { <p class="err">{{ queryError() }}</p> }
-
-            @if (queryResult(); as r) {
-              <div style="margin-top: 16px;">
-                <div class="section-title">Query Results</div>
-                @if (r.groups) {
-                  <table class="restbl"><thead><tr><th>Key</th><th>Count</th>@if (metric==='avgDurationMs') { <th>Avg ms</th> }</tr></thead>
-                    <tbody>@for (g of r.groups; track g.key) { <tr><td>{{ g.key }}</td><td>{{ g.count }}</td>@if (metric==='avgDurationMs') { <td>{{ g.avgDurationMs }}</td> }</tr> }</tbody>
-                  </table>
-                } @else {
-                  <pre class="mono sm restext">{{ r.rows | json }}</pre>
+            <div class="card pad" style="margin-bottom: 20px;">
+              <div class="row" style="flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+                <label class="fld"><span>Entity</span>
+                  <select [(ngModel)]="entity">@for (e of entities; track e) { <option [value]="e">{{ e }}</option> }</select>
+                </label>
+                <label class="fld"><span>Group by (optional)</span>
+                  <input [(ngModel)]="groupBy" placeholder="e.g. status, data.amount" />
+                </label>
+                <label class="fld"><span>Metric</span>
+                  <select [(ngModel)]="metric">
+                    <option value="">(none — list rows)</option>
+                    <option value="count">count</option>
+                    <option value="avgDurationMs">avgDurationMs</option>
+                  </select>
+                </label>
+                @if (metric === 'avgDurationMs') {
+                  <label class="fld"><span>Duration from field</span><input [(ngModel)]="durationFrom" placeholder="createdAt" /></label>
+                  <label class="fld"><span>Duration to field</span><input [(ngModel)]="durationTo" placeholder="updatedAt" /></label>
                 }
               </div>
-            }
-          </div>
 
-          <h2 class="section-h">Saved Queries</h2>
-          <div class="card pad">
-            @if (savedQueries().length === 0) {
-              <p class="muted sm">No saved queries yet. Configure a query above and save it to access it anytime.</p>
-            } @else {
-              @for (sq of savedQueries(); track sq.id) {
-                <div class="sqrow">
-                  <div>
-                    <strong>{{ sq.name }}</strong>
-                    <span class="muted sm"> · {{ sq.definition.entity }} · by {{ sq.createdBy }}</span>
-                  </div>
-                  <div class="row" style="gap: 6px;">
-                    <button class="btn sm" (click)="loadSavedQuery(sq)">Load</button>
-                    <button class="btn sm danger" (click)="deleteSavedQuery(sq)"><app-icon name="trash" [size]="12" /></button>
-                  </div>
+              <div class="section-title">Filters</div>
+              @for (f of filters; track f) {
+                <div class="fieldrow">
+                  <input class="fkey" [(ngModel)]="f.field" placeholder="field, e.g. status or data.amount" />
+                  <select [(ngModel)]="f.op">@for (o of ops; track o) { <option [value]="o">{{ o }}</option> }</select>
+                  <input [(ngModel)]="f.value" placeholder="value" />
+                  <button class="btn sm danger" (click)="removeFilter(f)"><app-icon name="trash" [size]="12" /></button>
                 </div>
               }
-            }
+              <div style="margin-bottom: 14px;">
+                <button class="btn sm" (click)="addFilter()"><app-icon name="plus" [size]="12" /> Add filter</button>
+              </div>
+
+              <div class="row actionrow">
+                <button class="btn primary sm" (click)="runQuery()" [disabled]="runningQuery()">
+                  <app-icon name="play" [size]="12" /> {{ runningQuery() ? 'Running...' : 'Run Query' }}
+                </button>
+                <input class="save-name" [(ngModel)]="saveName" placeholder="Save as…" style="max-width: 200px;" />
+                <label class="reqlbl"><input type="checkbox" [(ngModel)]="saveShared" /> Shared</label>
+                <button class="btn sm" (click)="saveQuery()">Save Query</button>
+              </div>
+              @if (queryError()) { <p class="err">{{ queryError() }}</p> }
+
+              <!-- Query Results -->
+              @if (queryResult(); as r) {
+                <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;">
+                  <div class="row" style="margin-bottom: 10px;">
+                    <div class="section-title" style="margin: 0;">Query Results</div>
+                    <span class="spacer"></span>
+                    @if (r.rows) {
+                      <div class="btn-group sm">
+                        <button class="btn sm" [class.primary]="queryViewMode() === 'table'" (click)="queryViewMode.set('table')">Table</button>
+                        <button class="btn sm" [class.primary]="queryViewMode() === 'json'" (click)="queryViewMode.set('json')">JSON</button>
+                      </div>
+                    }
+                    <button class="btn sm" (click)="exportQueryResults()">
+                      <app-icon name="download" [size]="12" /> Export Results
+                    </button>
+                  </div>
+
+                  @if (r.groups) {
+                    <table class="restbl">
+                      <thead><tr><th>Key</th><th class="num">Count</th>@if (metric==='avgDurationMs') { <th class="num">Avg ms</th> }</tr></thead>
+                      <tbody>
+                        @for (g of r.groups; track g.key) {
+                          <tr>
+                            <td><b>{{ g.key }}</b></td>
+                            <td class="num tnum font-bold">{{ g.count }}</td>
+                            @if (metric==='avgDurationMs') { <td class="num tnum">{{ g.avgDurationMs }} ms</td> }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  } @else if (r.rows) {
+                    @if (queryViewMode() === 'table') {
+                      <div class="query-table-wrap">
+                        <table class="restbl">
+                          <thead>
+                            <tr>
+                              @for (col of queryColumns(); track col) {
+                                <th>{{ col }}</th>
+                              }
+                            </tr>
+                          </thead>
+                          <tbody>
+                            @for (row of r.rows; track row['id'] || $index) {
+                              <tr>
+                                @for (col of queryColumns(); track col) {
+                                  <td>
+                                    @if (col === 'id') {
+                                      <span class="mono tnum font-bold">{{ formatColVal(row[col]) }}</span>
+                                    } @else if (col === 'status') {
+                                      <span class="badge" [style.color]="statusColor(formatColVal(row[col]))">{{ formatColVal(row[col]) }}</span>
+                                    } @else {
+                                      <span>{{ formatColVal(row[col]) }}</span>
+                                    }
+                                  </td>
+                                }
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                      <p class="muted sm" style="margin-top: 8px;">Showing {{ r.rows.length }} result rows</p>
+                    } @else {
+                      <pre class="mono sm restext">{{ r.rows | json }}</pre>
+                    }
+                  }
+                </div>
+              }
+            </div>
+
+            <h2 class="section-h">Saved Queries</h2>
+            <div class="card pad">
+              @if (savedQueries().length === 0) {
+                <p class="muted sm">No saved queries yet. Configure a query above and save it to access it anytime.</p>
+              } @else {
+                @for (sq of savedQueries(); track sq.id) {
+                  <div class="sqrow">
+                    <div>
+                      <strong>{{ sq.name }}</strong>
+                      <span class="muted sm"> · {{ sq.definition.entity }} · by {{ sq.createdBy }}</span>
+                    </div>
+                    <div class="row" style="gap: 6px;">
+                      <button class="btn sm" (click)="loadSavedQuery(sq)">Load</button>
+                      <button class="btn sm danger" (click)="deleteSavedQuery(sq)"><app-icon name="trash" [size]="12" /></button>
+                    </div>
+                  </div>
+                }
+              }
+            </div>
           </div>
         }
       }
@@ -573,23 +926,53 @@ const TASK_STATUSES = [
     </div>
   `,
   styles: [`
-    .page { padding: 24px 32px 32px; display: flex; flex-direction: column; gap: 18px; max-width: 1400px; margin: 0 auto; }
+    .page { padding: 24px 32px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; margin: 0 auto; }
     .head { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
     h1 { font-size: var(--text-2xl); letter-spacing: -.02em; margin: 0 0 4px; }
     .sub { margin: 0; color: var(--text-secondary); font-size: 13.5px; }
     .spacer { flex: 1; }
 
-    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 4px; }
-    .tabs button { border: none; background: transparent; padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
+    /* Filter Bar */
+    .filter-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; gap: 16px; flex-wrap: wrap; background: var(--surface); }
+    .filter-group { display: flex; align-items: center; gap: 10px; }
+    .f-label { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .pills { display: flex; gap: 4px; background: var(--surface-2); padding: 3px; border-radius: var(--radius-sm); border: 1px solid var(--border); }
+    .pill { border: none; background: transparent; padding: 5px 10px; font-size: 12px; font-weight: 500; color: var(--text-secondary); border-radius: 4px; cursor: pointer; transition: all .15s ease; }
+    .pill.active { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .filter-group select { border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12.5px; background: var(--surface); color: inherit; }
+
+    .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-top: 2px; }
+    .tabs button { border: none; background: transparent; padding: 10px 14px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; display: inline-flex; align-items: center; gap: 6px; }
     .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
 
     /* KPIs */
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
-    .kpi { position: relative; overflow: hidden; padding: 16px 18px; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+    .kpi { position: relative; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; }
     .kpi::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad-brand); }
-    .kpi .n { font-size: 26px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .kpi .n { font-size: 24px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
     .kpi .n.amber { color: var(--amber); } .kpi .n.red { color: var(--red); }
     .kpi .l { font-size: var(--text-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+
+    /* SLAs */
+    .sla-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 14px; }
+    .sla-card { padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+    .sla-title { font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+    .sla-val { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .sla-sub { font-size: 11.5px; color: var(--muted); }
+
+    /* Throughput Timeline Chart */
+    .full-width { grid-column: 1 / -1; }
+    .throughput-chart { display: flex; align-items: flex-end; gap: 8px; height: 160px; padding: 16px 8px 8px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+    .tp-col { flex: 1; min-width: 28px; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; cursor: pointer; }
+    .tp-bars { display: flex; align-items: flex-end; gap: 2px; height: 120px; width: 100%; justify-content: center; }
+    .tp-bar { width: 8px; border-radius: 3px 3px 0 0; min-height: 2px; transition: height .2s ease; }
+    .tp-bar.blue { background: var(--blue); }
+    .tp-bar.green { background: var(--green); }
+    .tp-bar.red { background: var(--red); }
+    .tp-label { font-size: 10px; color: var(--muted); margin-top: 6px; white-space: nowrap; }
+    .chart-legend-inline { display: flex; align-items: center; gap: 14px; font-size: 12px; color: var(--text-secondary); }
+    .leg-item { display: inline-flex; align-items: center; gap: 5px; }
+    .dot-sw { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
     /* Charts */
     .chartgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -597,7 +980,7 @@ const TASK_STATUSES = [
     .chart { padding: 18px; }
     .charthead { display: flex; align-items: center; margin-bottom: 2px; }
     .charthead h3 { font-size: 14px; margin: 0; }
-    .chartsub { font-size: 12px; color: var(--muted); margin: 0 0 14px; }
+    .chartsub { font-size: 12px; color: var(--muted); margin: 0 0 12px; }
     .barlist { display: flex; flex-direction: column; gap: 10px; }
     .lab { font-size: 12.5px; margin-bottom: 3px; display: flex; align-items: center; gap: 6px; }
     .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
@@ -629,12 +1012,14 @@ const TASK_STATUSES = [
     .case-chip-sm { display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 10px; background: rgba(59,130,246,0.12); color: #2563eb; font-size: 11px; font-family: var(--font-mono); font-weight: 600; }
     .empty-state.sm { padding: 26px 12px; text-align: center; }
 
-    /* Duration tables */
+    /* Tables */
     .tablecard { overflow: hidden; }
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
     .cardhead { padding: 14px 16px 10px; display: flex; align-items: center; }
     .cardhead h3 { font-size: 14px; margin: 0; }
+    .search-input { border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 12px; background: var(--surface); color: inherit; width: 180px; }
+    .search-input.sm { width: 130px; }
     table { width: 100%; border-collapse: collapse; }
     th, td { text-align: left; padding: 9px 14px; font-size: 12.5px; border-bottom: 1px solid var(--border); }
     th.num, td.num { text-align: right; }
@@ -644,14 +1029,24 @@ const TASK_STATUSES = [
     .pad { padding: 16px; }
     .small { font-size: 11.5px; }
 
+    /* Groups */
+    .group-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .group-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+    .g-name { font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+    .g-count { font-weight: 700; background: var(--primary-50); color: var(--primary); padding: 2px 6px; border-radius: 10px; font-size: 11px; }
+
     /* Case metrics */
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
     .big { font-size: 32px; font-weight: 700; margin: 4px 0 12px; }
-    .kvrow { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+    .lifecycle-stats { display: flex; gap: 24px; }
+    .lc-item { display: flex; flex-direction: column; gap: 2px; }
+    .lc-val { font-size: 24px; font-weight: 700; }
+    .lc-lbl { font-size: 11.5px; color: var(--muted); }
 
     /* Query builder */
     .section-h { font-size: 15px; margin: 20px 0 10px; }
     .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin: 12px 0 6px; }
+    .presets { display: flex; align-items: center; gap: 6px; }
     .fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
     .fld input, .fld select { border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; background: var(--surface); color: inherit; }
     .fieldrow { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
@@ -660,7 +1055,10 @@ const TASK_STATUSES = [
     .actionrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
     .reqlbl { font-size: 12.5px; display: inline-flex; align-items: center; gap: 4px; }
     .restbl { width: 100%; margin-top: 8px; }
+    .query-table-wrap { max-height: 380px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; margin-top: 8px; }
     .restext { background: var(--surface-2); padding: 12px; border-radius: 8px; max-height: 280px; overflow: auto; font-family: var(--font-mono); font-size: 12px; }
+    .btn-group { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+    .btn-group .btn { border-radius: 0; border: none; }
     .sqrow { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
     .sqrow:last-child { border-bottom: none; }
     .err { color: var(--red); font-size: 12px; margin-top: 6px; }
@@ -694,7 +1092,17 @@ export class HomeComponent {
   private router = inject(Router);
 
   tab = signal<HomeTab>('overview');
+  timeWindow = signal<TimeWindow>('all');
+  selectedProcess = '';
   loading = signal(true);
+  runningQuery = signal(false);
+
+  // Search filter terms
+  procSearch = '';
+  taskSearch = '';
+  caseSearch = '';
+  queryViewMode = signal<'table' | 'json'>('table');
+
   summary = signal<Summary | null>(null);
   procs = signal<ProcessAnalytics | null>(null);
   tasks = signal<TaskAnalytics | null>(null);
@@ -730,22 +1138,78 @@ export class HomeComponent {
   canTasks = computed(() => this.auth.hasPermission('task:manage'));
   canBuild = computed(() => this.auth.hasPermission('workflow:edit'));
 
+  // Filter parameter helpers
+  private filterParams = computed(() => {
+    const tw = this.timeWindow();
+    let since: string | undefined;
+    let days: number | undefined;
+    const now = Date.now();
+    if (tw === '1d') { since = new Date(now - 86400000).toISOString(); days = 1; }
+    else if (tw === '7d') { since = new Date(now - 7 * 86400000).toISOString(); days = 7; }
+    else if (tw === '30d') { since = new Date(now - 30 * 86400000).toISOString(); days = 30; }
+    else if (tw === '90d') { since = new Date(now - 90 * 86400000).toISOString(); days = 90; }
+
+    return {
+      since,
+      days,
+      processId: this.selectedProcess.trim() || undefined,
+    };
+  });
+
+  availableProcesses = computed(() => {
+    const set = new Set<string>();
+    for (const w of this.workflows()) if (w.id) set.add(w.id);
+    for (const p of this.procs()?.byProcess || []) if (p.processId) set.add(p.processId);
+    return [...set].sort();
+  });
+
   activeInstances = computed(() => {
     const s = this.summary()?.instances.byStatus ?? {};
     return (s['running'] ?? 0) + (s['waiting'] ?? 0);
   });
   completedInstances = computed(() => this.summary()?.instances.byStatus?.['completed'] ?? 0);
   failedInstances = computed(() => this.summary()?.instances.byStatus?.['failed'] ?? 0);
+  failureRate = computed(() => this.procs()?.failureRate ?? 0);
+  failureRateColor = computed(() => {
+    const r = this.failureRate();
+    return r > 5 ? 'var(--red)' : r > 0 ? 'var(--amber)' : 'var(--green)';
+  });
+
   openTasks = computed(() => {
     const s = this.summary()?.tasks.byStatus ?? {};
     return Object.entries(s).filter(([k]) => k !== 'completed' && k !== 'skipped')
       .reduce((a, [, v]) => a + v, 0);
   });
 
+  slaRate = computed(() => this.tasks()?.sla?.complianceRate ?? 100);
+  slaColor = computed(() => {
+    const rate = this.slaRate();
+    return rate >= 95 ? 'var(--green)' : rate >= 80 ? 'var(--amber)' : 'var(--red)';
+  });
+
+  taskGroups = computed(() => this.tasks()?.byGroup ?? []);
+
   instStatusRows = computed<StatusRow[]>(() => this.statusRows(this.procs()?.byStatus, INSTANCE_STATUSES));
   instTotal = computed(() => this.instStatusRows().reduce((a, r) => a + r.count, 0));
   instDonut = computed(() => this.donutGradient(this.instStatusRows()));
+  dailyThroughput = computed(() => this.procs()?.dailyThroughput ?? []);
+  maxThroughputVal = computed(() => {
+    const list = this.dailyThroughput();
+    let max = 1;
+    for (const d of list) {
+      if (d.started > max) max = d.started;
+      if (d.completed > max) max = d.completed;
+      if (d.failed > max) max = d.failed;
+    }
+    return max;
+  });
+
   byProcess = computed(() => [...(this.procs()?.byProcess ?? [])].sort((a, b) => b.count - a.count));
+  filteredProcesses = computed(() => {
+    const q = this.procSearch.trim().toLowerCase();
+    if (!q) return this.byProcess();
+    return this.byProcess().filter((p) => p.processId.toLowerCase().includes(q));
+  });
   maxProcAvg = computed(() => Math.max(...this.byProcess().map((p) => p.avgMs), 1));
 
   taskStatusRows = computed<StatusRow[]>(() => this.statusRows(this.tasks()?.openByStatus, TASK_STATUSES));
@@ -754,7 +1218,37 @@ export class HomeComponent {
   byAssignee = computed(() => [...(this.tasks()?.byAssignee ?? [])].sort((a, b) => b.count - a.count));
   maxAssigneeCount = computed(() => Math.max(...this.byAssignee().map((w) => w.count), 1));
   byTask = computed(() => [...(this.tasks()?.byTask ?? [])].sort((a, b) => b.count - a.count));
+  filteredTasks = computed(() => {
+    const q = this.taskSearch.trim().toLowerCase();
+    if (!q) return this.byTask();
+    return this.byTask().filter((t) => t.name.toLowerCase().includes(q));
+  });
   maxTaskAvg = computed(() => Math.max(...this.byTask().map((t) => t.avgMs), 1));
+
+  filteredTatWorkflows = computed(() => {
+    const list = this.tat()?.byWorkflowName || [];
+    const q = this.caseSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((w) => w.workflowName.toLowerCase().includes(q));
+  });
+  maxCaseAvg = computed(() => Math.max(...(this.tat()?.byWorkflowName || []).map((w) => w.avgMs), 1));
+
+  queryColumns = computed(() => {
+    const rows = this.queryResult()?.rows;
+    if (!rows || rows.length === 0) return [];
+    const keySet = new Set<string>();
+    // Prioritize standard identifier & status fields
+    const priority = ['id', 'workflowName', 'name', 'status', 'createdAt', 'assignee', 'group'];
+    for (const p of priority) {
+      if (rows.some((r) => r[p] !== undefined)) keySet.add(p);
+    }
+    for (const r of rows.slice(0, 5)) {
+      for (const k of Object.keys(r)) {
+        if (!k.startsWith('_') && keySet.size < 8) keySet.add(k);
+      }
+    }
+    return [...keySet];
+  });
 
   constructor() {
     this.route.queryParamMap.subscribe((m) => {
@@ -774,14 +1268,24 @@ export class HomeComponent {
     this.router.navigate([], { relativeTo: this.route, queryParams: { tab: t }, queryParamsHandling: 'merge' });
   }
 
+  setTimeWindow(w: TimeWindow) {
+    this.timeWindow.set(w);
+    this.load();
+  }
+
+  onProcessChange() {
+    this.load();
+  }
+
   load() {
     this.loading.set(true);
     const user = this.auth.user()?.username;
+    const params = this.filterParams();
 
     forkJoin({
-      summary: this.q.analyticsSummary(),
-      procs: this.q.analyticsProcesses(),
-      tasks: this.q.analyticsTasks(),
+      summary: this.q.analyticsSummary(params),
+      procs: this.q.analyticsProcesses(params),
+      tasks: this.q.analyticsTasks(params),
     }).subscribe({
       next: ({ summary, procs, tasks }) => {
         this.summary.set(summary);
@@ -805,11 +1309,14 @@ export class HomeComponent {
         this.myTasks.set(ts.filter((x) => x.status !== 'completed' && x.status !== 'skipped').slice(0, 6));
       });
     }
+
+    this.loadCaseAndQueries();
   }
 
   loadCaseAndQueries() {
-    this.analyticsApi.summary().subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
-    this.analyticsApi.tat().subscribe({ next: (t) => this.tat.set(t), error: () => {} });
+    const params = { since: this.filterParams().since };
+    this.analyticsApi.summary(params).subscribe({ next: (s) => this.caseSummary.set(s), error: () => {} });
+    this.analyticsApi.tat(params).subscribe({ next: (t) => this.tat.set(t), error: () => {} });
     this.analyticsApi.listSavedQueries().subscribe({ next: (qs: SavedQuery[]) => this.savedQueries.set(qs), error: () => {} });
   }
 
@@ -821,9 +1328,13 @@ export class HomeComponent {
   shortId(id: string) { return id.length > 10 ? '…' + id.slice(-7) : id; }
 
   statusColor(s: string) {
-    return s === 'failed' ? 'var(--red)' : s === 'completed' ? 'var(--green)'
-      : s === 'aborted' ? 'var(--muted)' : s === 'suspended' ? 'var(--purple)'
-      : s === 'waiting' ? 'var(--amber)' : 'var(--blue)';
+    const low = (s || '').toLowerCase();
+    return low === 'failed' || low === 'error' ? 'var(--red)'
+      : low === 'completed' || low === 'resolved' || low === 'closed' || low === 'approved' ? 'var(--green)'
+      : low === 'aborted' || low === 'cancelled' ? 'var(--muted)'
+      : low === 'suspended' ? 'var(--purple)'
+      : low === 'waiting' || low === 'created' || low === 'reserved' ? 'var(--amber)'
+      : 'var(--blue)';
   }
   isOverdue(t: Task) { return !!t.dueAt && Date.parse(t.dueAt) < Date.now(); }
   dueLabel(t: Task) {
@@ -834,8 +1345,38 @@ export class HomeComponent {
     return ms < 0 ? `${rel} overdue` : `due in ${rel}`;
   }
 
+  formatDayLabel(d: string): string {
+    const parts = d.split('-');
+    return parts.length === 3 ? `${parts[1]}/${parts[2]}` : d;
+  }
+
+  throughputTooltip(d: { date: string; started: number; completed: number; failed: number }): string {
+    return `${d.date}: ${d.started} started, ${d.completed} completed, ${d.failed} failed`;
+  }
+
+  pctOfThroughput(val: number): number {
+    const max = this.maxThroughputVal();
+    return max > 0 ? Math.max(3, Math.min(100, (val / max) * 100)) : 0;
+  }
+
   statusEntries(byStatus: Record<string, number>): [string, number][] {
     return Object.entries(byStatus || {});
+  }
+
+  caseStatusPct(count: number): number {
+    const total = this.caseSummary()?.total ?? 0;
+    return total > 0 ? (count / total) * 100 : 0;
+  }
+
+  caseWorkflowPct(count: number): number {
+    const total = this.caseSummary()?.total ?? 0;
+    return total > 0 ? (count / total) * 100 : 0;
+  }
+
+  activeCaseRatio(): number {
+    const total = this.caseSummary()?.total ?? 0;
+    const active = this.caseSummary()?.activeCases ?? 0;
+    return total > 0 ? Math.round((active / total) * 100) : 0;
   }
 
   // ---- Query builder ----
@@ -859,9 +1400,16 @@ export class HomeComponent {
 
   runQuery() {
     this.queryError.set('');
+    this.runningQuery.set(true);
     this.analyticsApi.runQuery(this.buildDef()).subscribe({
-      next: (res) => this.queryResult.set(res),
-      error: (e) => this.queryError.set(e?.error?.error?.message || 'Query failed'),
+      next: (res) => {
+        this.queryResult.set(res);
+        this.runningQuery.set(false);
+      },
+      error: (e) => {
+        this.runningQuery.set(false);
+        this.queryError.set(e?.error?.error?.message || 'Query failed');
+      },
     });
   }
 
@@ -895,6 +1443,32 @@ export class HomeComponent {
       },
       error: (e: any) => this.toast.error(e?.error?.error?.message || 'Delete failed'),
     });
+  }
+
+  loadPreset(preset: 'overdueTasks' | 'activeCases' | 'failedInst') {
+    if (preset === 'overdueTasks') {
+      this.entity = 'task';
+      this.groupBy = 'group';
+      this.metric = 'count';
+      this.filters = [{ field: 'status', op: 'ne', value: 'completed' }];
+    } else if (preset === 'activeCases') {
+      this.entity = 'workflowInstance';
+      this.groupBy = 'workflowName';
+      this.metric = 'count';
+      this.filters = [{ field: 'status', op: 'ne', value: 'closed' }];
+    } else if (preset === 'failedInst') {
+      this.entity = 'instance';
+      this.groupBy = 'processId';
+      this.metric = 'count';
+      this.filters = [{ field: 'status', op: 'eq', value: 'failed' }];
+    }
+    this.runQuery();
+  }
+
+  formatColVal(val: unknown): string {
+    if (val === undefined || val === null) return '—';
+    if (typeof val === 'object') return JSON.stringify(val);
+    return String(val);
   }
 
   // ---- Start Case Modal ----
@@ -969,19 +1543,43 @@ export class HomeComponent {
     return `conic-gradient(${stops.join(', ')})`;
   }
 
+  exportQueryResults() {
+    const res = this.queryResult();
+    if (!res) return;
+    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    let header: string[]; let rows: unknown[][];
+    if (res.groups) {
+      header = ['Key', 'Count', ...(this.metric === 'avgDurationMs' ? ['Avg Duration (ms)'] : [])];
+      rows = res.groups.map((g) => [g.key, g.count, ...(this.metric === 'avgDurationMs' ? [g.avgDurationMs ?? ''] : [])]);
+    } else if (res.rows && res.rows.length > 0) {
+      header = this.queryColumns();
+      rows = res.rows.map((r) => header.map((col) => this.formatColVal(r[col])));
+    } else {
+      return;
+    }
+    const csv = [header, ...rows].map((r) => r.map(esc).join(',')).join('\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = `query-${this.entity}-results.csv`; a.click();
+    URL.revokeObjectURL(url);
+  }
+
   exportCsv() {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     let header: string[]; let rows: unknown[][]; let name: string;
     if (this.tab() === 'tasks') {
-      header = ['Task', 'Count', 'Avg (ms)'];
-      rows = this.byTask().map((t) => [t.name, t.count, t.avgMs]);
+      header = ['Task Name', 'Completed Count', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
+      rows = this.byTask().map((t) => [t.name, t.count, t.avgMs, t.minMs, t.maxMs]);
       name = 'tasks-analytics.csv';
     } else if (this.tab() === 'cases') {
-      header = ['Workflow', 'Count', 'Avg (ms)'];
-      rows = (this.tat()?.byWorkflowName || []).map((w) => [w.workflowName, w.count, w.avgMs]);
+      header = ['Workflow Definition', 'Completed Cases', 'Avg TAT (ms)', 'Min (ms)', 'Max (ms)'];
+      rows = (this.tat()?.byWorkflowName || []).map((w) => [w.workflowName, w.count, w.avgMs, w.minMs, w.maxMs]);
       name = 'cases-analytics.csv';
+    } else if (this.tab() === 'queries') {
+      this.exportQueryResults();
+      return;
     } else {
-      header = ['Process', 'Count', 'Avg (ms)', 'Min (ms)', 'Max (ms)'];
+      header = ['Process Definition', 'Executions', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
       rows = this.byProcess().map((p) => [p.processId, p.count, p.avgMs, p.minMs, p.maxMs]);
       name = 'processes-analytics.csv';
     }
