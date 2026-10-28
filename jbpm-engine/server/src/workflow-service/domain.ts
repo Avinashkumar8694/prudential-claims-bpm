@@ -16,6 +16,7 @@ export interface WorkflowDefinition extends WfEntity {
   id: string; tenantId: string;
   name: string;                      // unique per tenant; the "workflow_name" used at case-create time
   deploymentId: string;
+  processId?: string;                // specific process definition within the deployed project
   /** JSON Schema (draft-07-ish; validated with ajv) describing the shape of a case's `data`. */
   dataSchema: Record<string, unknown>;
   schemaValidationEnabled: boolean;

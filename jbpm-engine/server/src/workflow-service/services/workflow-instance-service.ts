@@ -86,7 +86,15 @@ export class WorkflowInstanceService {
     await this.addAudit(row.id, actor, 'workflowInstance.created', { workflowName: def.name });
 
     try {
-      const bpm = await this.bpmInstances.start({ workflowId: dep.workflowId, deploymentId: def.deploymentId, variables: input.variables || {} }, actor);
+      const bpm = await this.bpmInstances.start(
+        {
+          workflowId: dep.workflowId,
+          deploymentId: def.deploymentId,
+          processId: def.processId,
+          variables: { ...(input.variables || {}), _caseInstanceId: row.id },
+        },
+        actor
+      );
       row = { ...row, piid: bpm.id, status: bpm.status === 'failed' ? 'failed' : 'active', updatedAt: this.ctx.clock(), updatedBy: actor };
       if (bpm.status === 'failed') row.startError = bpm.error?.message;
       await this.repo().put(row);

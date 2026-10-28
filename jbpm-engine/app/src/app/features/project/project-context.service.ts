@@ -189,15 +189,36 @@ export class ProjectContextService {
       });
     });
   }
-  deploy() {
+  deployProject(
+    opts: { environment: string; versionLabel?: string; activate: boolean } = { environment: 'prod', activate: true },
+    onDone?: (dep: any) => void
+  ) {
     const w = this.wf(); if (!w) return;
-    this.api.listVersions(w.defaultBranchId).subscribe((vs) => {
-      const head = vs.filter((v) => v.state === 'draft').at(-1) || vs.at(-1);
-      if (!head) return;
-      this.api.publish(head.id, 'ui').subscribe({
-        next: (p: any) => this.deploymentApi.deploy(p.published.id, { environment: 'prod', activate: true }).subscribe(() => this.toast.success(`Deployed project v${p.published.number} to prod (active).`)),
-        error: (e) => this.toast.error('Cannot deploy: ' + (e?.error?.error?.message || 'validation failed') + '\n' + ((e?.error?.error?.details || []).map((d: any) => '• ' + d.message).join('\n'))),
-      });
+    this.api.listVersions(w.defaultBranchId).subscribe({
+      next: (vs) => {
+        const head = vs.filter((v) => v.state === 'draft').at(-1) || vs.at(-1);
+        if (!head) { this.toast.error('No project version available to deploy.'); return; }
+
+        const proceedWithDeployment = (versionId: string, versionNumber: number | string) => {
+          this.deploymentApi.deploy(versionId, { environment: opts.environment, activate: opts.activate }).subscribe({
+            next: (dep) => {
+              this.toast.success(`Deployed project "${w.name}" v${versionNumber} to ${opts.environment}.`);
+              if (onDone) onDone(dep);
+            },
+            error: (e) => this.toast.error('Deploy failed: ' + (e?.error?.error?.message || 'unknown error')),
+          });
+        };
+
+        if (head.state === 'draft') {
+          this.api.publish(head.id, opts.versionLabel?.trim() || undefined).subscribe({
+            next: (p: any) => proceedWithDeployment(p.published.id, p.published.number),
+            error: (e) => this.toast.error('Cannot build/publish snapshot: ' + (e?.error?.error?.message || 'validation failed') + '\n' + ((e?.error?.error?.details || []).map((d: any) => '• ' + d.message).join('\n'))),
+          });
+        } else {
+          proceedWithDeployment(head.id, head.number);
+        }
+      },
+      error: () => this.toast.error('Failed to load project versions'),
     });
   }
 }

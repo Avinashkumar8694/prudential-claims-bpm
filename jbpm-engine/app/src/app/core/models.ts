@@ -186,7 +186,7 @@ export interface ProcessAnalytics {
 
 // ---- Workflow Instance Management (Case Management) ----
 export interface WorkflowDefinition {
-  id: string; name: string; deploymentId: string;
+  id: string; name: string; deploymentId: string; processId?: string;
   dataSchema: Record<string, unknown>; schemaValidationEnabled: boolean;
   createdAt: string; updatedAt: string;
 }

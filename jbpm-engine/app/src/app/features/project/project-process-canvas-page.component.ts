@@ -33,8 +33,6 @@ import { IconComponent } from '../../shared/icon.component';
           @else { <app-icon name="check" [size]="14" /> Validate }
         </button>
         <button class="btn" (click)="build()"><app-icon name="build" [size]="14" /> Build</button>
-        <button class="btn primary" (click)="deploy()" [disabled]="(canvas()?.errorCount() ?? 0) > 0"
-                [title]="(canvas()?.errorCount() ?? 0) > 0 ? 'Fix validation errors before deploying' : 'Publish + deploy to prod'"><app-icon name="deployments" [size]="14" /> Deploy</button>
       </div>
       <div class="canvas-body">
         @if (pid(); as p) { <app-process-canvas [workflowId]="ctx.id" [processId]="p" [assets]="ctx.assets()" [focusNodeId]="nodeId()" (saved)="ctx.refreshCompatibility()" /> }
@@ -66,5 +64,4 @@ export class ProjectProcessCanvasPageComponent {
 
   saveLabel() { return ({ saved: 'Saved', saving: 'Saving…', dirty: 'Unsaved' } as const)[this.canvas()?.saveState() ?? 'saved']; }
   build() { this.canvas()?.saveNow(); setTimeout(() => this.ctx.build(), 300); }
-  deploy() { this.canvas()?.saveNow(); setTimeout(() => this.ctx.deploy(), 300); }
 }
