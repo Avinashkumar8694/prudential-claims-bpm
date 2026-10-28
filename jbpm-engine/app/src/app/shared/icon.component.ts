@@ -44,6 +44,7 @@ const PATHS = {
   chevronLeft:'M15 18l-6-6 6-6',
   chevronRight:'M9 18l6-6-6-6',
   chevronDown:'M6 9l6 6 6-6',
+  arrowLeft:  'M19 12H5M12 19l-7-7 7-7',
   arrowRight: 'M5 12h14M12 5l7 7-7 7',
   cornerDownRight: 'M15 10l5 5-5 5M4 4v7a4 4 0 0 0 4 4h12',
   // ── status ────────────────────────────────────────────────────────────────
