@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal, OnInit } from '@angular/core';
+import { Component, computed, inject, signal, OnInit, HostListener } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { SlicePipe, JsonPipe } from '@angular/common';
@@ -156,7 +156,7 @@ type DeploymentTab = 'diagram' | 'definitions' | 'config';
                 </div>
               </div>
 
-              <div class="dwrap">
+              <div class="dwrap" (click)="selectedNode.set(null)">
                 <div class="zoomlayer" [style.zoom]="zoom()" [style.height.px]="dh()" [style.width.px]="dw()">
                   <svg class="edges" [attr.width]="dw()" [attr.height]="dh()" [style.width.px]="dw()" [style.height.px]="dh()">
                     <defs>
@@ -181,7 +181,7 @@ type DeploymentTab = 'diagram' | 'definitions' | 'config';
                          [style.left.px]="n.x" [style.top.px]="n.y"
                          [style.width.px]="nodeDims(n.type).w" [style.height.px]="nodeDims(n.type).h"
                          [title]="n.name || n.id"
-                         (click)="selectedNode.set(n)">
+                         (click)="$event.stopPropagation(); selectedNode.set(n)">
 
                       @if (isCircle(n.type)) {
                         <div class="circle-inner" [style.background]="n.type==='start' ? '#f0fdf4' : n.type==='end' ? '#fef2f2' : '#f5f3ff'">
@@ -207,6 +207,69 @@ type DeploymentTab = 'diagram' | 'definitions' | 'config';
                   @for (b of labeledBranches(); track b.edge.id || $index) {
                     <div class="branchpill" [style.left.px]="b.x" [style.top.px]="b.y" [title]="b.text">{{ b.text }}</div>
                   }
+
+                  <!-- CONTEXTUAL NODE INSPECTOR POPOVER ANCHORED AT CLICKED NODE -->
+                  @if (selectedNode(); as sn) {
+                    @if (popoverPos(); as pos) {
+                      <div class="node-inspector-popover"
+                           [style.left.px]="pos.x"
+                           [style.top.px]="pos.y"
+                           [class.pos-above]="pos.placement === 'above'"
+                           [class.pos-below]="pos.placement === 'below'"
+                           (click)="$event.stopPropagation()">
+                        <div class="popover-arrow" [style.left.px]="pos.arrowLeft"></div>
+                        <div class="ni-header">
+                          <span class="ni-title">
+                            <span class="ni-chip" [style.background]="visual(sn.type).color"><app-icon [name]="visual(sn.type).icon" [size]="12" /></span>
+                            <b>{{ sn.name || sn.id }}</b>
+                          </span>
+                          <button class="ni-close" (click)="selectedNode.set(null)" aria-label="Close">×</button>
+                        </div>
+                        <div class="ni-body">
+                          <div class="ni-row"><span class="k">Type:</span> <span class="v mono">{{ sn.type }}</span></div>
+                          <div class="ni-row"><span class="k">Node ID:</span> <span class="v mono">{{ sn.id }}</span></div>
+                          @if (sn.type === 'call') {
+                            <div class="ni-call-box">
+                              <div class="ni-call-label">Sub-process Reference:</div>
+                              <div class="ni-call-target mono">{{ sn.calledProcessId || sn.processId || sn.calledElement || '—' }}</div>
+                              @if (findProcess(sn.calledProcessId || sn.processId || sn.calledElement); as cp) {
+                                <button class="btn sm primary ni-jump" (click)="selectedProcessId.set(cp.id); selectedNode.set(null)">
+                                  <app-icon name="cornerDownRight" [size]="12" /> Switch to Sub-process
+                                </button>
+                              }
+                            </div>
+                          }
+                          @if (sn.ruleflowGroup) {
+                            <div class="ni-row"><span class="k">Ruleflow Group:</span> <span class="v mono">{{ sn.ruleflowGroup }}</span></div>
+                          }
+                          @if (sn.dmn) {
+                            <div class="ni-row"><span class="k">DMN Model:</span> <span class="v mono">{{ sn.dmn.model || sn.dmn }}</span></div>
+                          }
+                          @if (sn.guidedTable) {
+                            <div class="ni-row"><span class="k">Guided Table:</span> <span class="v mono">{{ sn.guidedTable }}</span></div>
+                          }
+                          @if (sn.scorecard) {
+                            <div class="ni-row"><span class="k">Scorecard:</span> <span class="v mono">{{ sn.scorecard }}</span></div>
+                          }
+                          @if (sn.decisionTree) {
+                            <div class="ni-row"><span class="k">Decision Tree:</span> <span class="v mono">{{ sn.decisionTree }}</span></div>
+                          }
+                          @if (sn.form) {
+                            <div class="ni-row"><span class="k">Form:</span> <span class="v mono">{{ sn.form }}</span></div>
+                          }
+                          @if (sn.group) {
+                            <div class="ni-row"><span class="k">User Group:</span> <span class="v mono">{{ sn.group }}</span></div>
+                          }
+                          @if (sn.handler) {
+                            <div class="ni-row"><span class="k">Work Handler:</span> <span class="v mono">{{ sn.handler }}</span></div>
+                          }
+                          @if (sn.code) {
+                            <div class="ni-code-block"><label>Script ({{ sn.lang || 'js' }}):</label><pre class="mono sm">{{ sn.code }}</pre></div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  }
                 </div>
 
                 <div class="zoomctrl">
@@ -215,61 +278,6 @@ type DeploymentTab = 'diagram' | 'definitions' | 'config';
                   <button (click)="zoomIn()" title="Zoom in" aria-label="Zoom in">+</button>
                   <button (click)="zoomReset()" title="Fit view">⤢</button>
                 </div>
-
-                <!-- Node Inspector Floating Drawer -->
-                @if (selectedNode(); as sn) {
-                  <div class="node-inspector glass">
-                    <div class="ni-header">
-                      <span class="ni-title">
-                        <span class="ni-chip" [style.background]="visual(sn.type).color"><app-icon [name]="visual(sn.type).icon" [size]="12" /></span>
-                        <b>{{ sn.name || sn.id }}</b>
-                      </span>
-                      <button class="ni-close" (click)="selectedNode.set(null)">×</button>
-                    </div>
-                    <div class="ni-body">
-                      <div class="ni-row"><span class="k">Type:</span> <span class="v mono">{{ sn.type }}</span></div>
-                      <div class="ni-row"><span class="k">Node ID:</span> <span class="v mono">{{ sn.id }}</span></div>
-                      @if (sn.type === 'call') {
-                        <div class="ni-call-box">
-                          <div class="ni-call-label">Sub-process Reference:</div>
-                          <div class="ni-call-target mono">{{ sn.calledProcessId || sn.processId || sn.calledElement || '—' }}</div>
-                          @if (findProcess(sn.calledProcessId || sn.processId || sn.calledElement); as cp) {
-                            <button class="btn sm primary ni-jump" (click)="selectedProcessId.set(cp.id); selectedNode.set(null)">
-                              <app-icon name="cornerDownRight" [size]="12" /> Switch to Sub-process
-                            </button>
-                          }
-                        </div>
-                      }
-                      @if (sn.ruleflowGroup) {
-                        <div class="ni-row"><span class="k">Ruleflow Group:</span> <span class="v mono">{{ sn.ruleflowGroup }}</span></div>
-                      }
-                      @if (sn.dmn) {
-                        <div class="ni-row"><span class="k">DMN Model:</span> <span class="v mono">{{ sn.dmn.model || sn.dmn }}</span></div>
-                      }
-                      @if (sn.guidedTable) {
-                        <div class="ni-row"><span class="k">Guided Table:</span> <span class="v mono">{{ sn.guidedTable }}</span></div>
-                      }
-                      @if (sn.scorecard) {
-                        <div class="ni-row"><span class="k">Scorecard:</span> <span class="v mono">{{ sn.scorecard }}</span></div>
-                      }
-                      @if (sn.decisionTree) {
-                        <div class="ni-row"><span class="k">Decision Tree:</span> <span class="v mono">{{ sn.decisionTree }}</span></div>
-                      }
-                      @if (sn.form) {
-                        <div class="ni-row"><span class="k">Form:</span> <span class="v mono">{{ sn.form }}</span></div>
-                      }
-                      @if (sn.group) {
-                        <div class="ni-row"><span class="k">User Group:</span> <span class="v mono">{{ sn.group }}</span></div>
-                      }
-                      @if (sn.handler) {
-                        <div class="ni-row"><span class="k">Work Handler:</span> <span class="v mono">{{ sn.handler }}</span></div>
-                      }
-                      @if (sn.code) {
-                        <div class="ni-code-block"><label>Script ({{ sn.lang || 'js' }}):</label><pre class="mono sm">{{ sn.code }}</pre></div>
-                      }
-                    </div>
-                  </div>
-                }
               </div>
             </main>
           </div>
@@ -848,25 +856,47 @@ type DeploymentTab = 'diagram' | 'definitions' | 'config';
       user-select: none;
     }
 
-    /* FLOATING NODE INSPECTOR */
-    .node-inspector {
+    /* CONTEXTUAL NODE INSPECTOR POPOVER (ANCHORED TO CLICKED NODE) */
+    .node-inspector-popover {
       position: absolute;
-      top: 20px;
-      right: 20px;
       width: 320px;
-      max-height: calc(100% - 40px);
+      max-height: 420px;
       border-radius: var(--radius-md);
       border: 1px solid var(--border-strong);
-      background: rgba(255, 255, 255, 0.94);
-      backdrop-filter: blur(12px);
-      box-shadow: var(--shadow-pop);
-      z-index: 20;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.22), 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+      z-index: 100;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      animation: popoverFadeIn .14s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    :host-context([data-theme='dark']) .node-inspector {
-      background: rgba(24, 24, 28, 0.94);
+    :host-context([data-theme='dark']) .node-inspector-popover {
+      background: rgba(24, 24, 28, 0.98);
+      border-color: var(--border-strong);
+    }
+    @keyframes popoverFadeIn {
+      from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .popover-arrow {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      transform: translateX(-50%) rotate(45deg);
+      z-index: 101;
+    }
+    .pos-below .popover-arrow {
+      top: -7px;
+      border-bottom: none;
+      border-right: none;
+    }
+    .pos-above .popover-arrow {
+      bottom: -7px;
+      border-top: none;
+      border-left: none;
     }
     .ni-header {
       padding: 12px 14px;
@@ -991,6 +1021,47 @@ export class DeploymentDetailComponent implements OnInit {
   selectedNode = signal<any | null>(null);
   zoom = signal(1);
   zoomPct = computed(() => Math.round(this.zoom() * 100));
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    this.selectedNode.set(null);
+  }
+
+  popoverPos = computed(() => {
+    const sn = this.selectedNode();
+    if (!sn) return null;
+    const dims = this.nodeDims(sn.type);
+    const popW = 320;
+    const popH = 260;
+
+    // Center horizontally over the node
+    const nodeCenterX = sn.x + (dims.w / 2);
+    let x = nodeCenterX - (popW / 2);
+
+    // Clamp X so the popover remains within canvas boundaries
+    const minX = 16;
+    const maxX = Math.max(minX, this.dw() - popW - 16);
+    x = Math.max(minX, Math.min(maxX, x));
+
+    // Calculate arrow position relative to the popover's left edge
+    const arrowLeft = Math.max(24, Math.min(popW - 24, nodeCenterX - x));
+
+    // Vertical placement: default below the node
+    const isCircleOrDiamond = this.isCircle(sn.type) || this.isDiamond(sn.type);
+    const labelExtra = isCircleOrDiamond ? 44 : 12;
+    const belowY = sn.y + dims.h + labelExtra;
+
+    let y = belowY;
+    let placement: 'above' | 'below' = 'below';
+
+    // If placing below exceeds the canvas height and there is room above, place above
+    if (belowY + popH > this.dh() && sn.y > popH + 20) {
+      y = Math.max(16, sn.y - popH - 14);
+      placement = 'above';
+    }
+
+    return { x, y, placement, arrowLeft };
+  });
 
   private wfNames = computed(() => new Map(this.workflows().map((w) => [w.id, w.name])));
   projectName(id: string) { return this.wfNames().get(id) || id; }

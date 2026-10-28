@@ -134,7 +134,7 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                     </div>
                   }
                   <div class="legend">Node badges show <b>execution count</b>. <span class="lg active"></span> active · <span class="lg visited"></span> visited · <span class="lg failed"></span> failed</div>
-                  <div class="dwrap card">
+                  <div class="dwrap card" (click)="pickedNode.set(null); picked.set(null)">
                     <div class="zoomlayer" [style.zoom]="zoom()" [style.height.px]="dh()" [style.width.px]="dw()">
                       <svg class="edges" [attr.width]="dw()" [attr.height]="dh()" [style.width.px]="dw()" [style.height.px]="dh()">
                         <defs>
@@ -165,7 +165,7 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                              [style.left.px]="n.x" [style.top.px]="n.y"
                              [style.width.px]="nodeDims(n.type).w" [style.height.px]="nodeDims(n.type).h"
                              [title]="n.name || n.id"
-                             (click)="canRetryOrSignal() && picked.set(n.id)">
+                             (click)="$event.stopPropagation(); selectInstanceNode(n)">
 
                           @if (isCircle(n.type)) {
                             <div class="circle-inner" [style.background]="n.type==='start' ? '#f0fdf4' : n.type==='end' ? '#fef2f2' : '#f5f3ff'">
@@ -197,6 +197,75 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
                       }
                       @for (b of labeledBranches(); track b.edge.id || $index) {
                         <div class="branchpill" [style.left.px]="b.x" [style.top.px]="b.y" [title]="b.text">{{ b.text }}</div>
+                      }
+
+                      <!-- CONTEXTUAL NODE EXECUTION POPOVER (ANCHORED AT CLICKED NODE) -->
+                      @if (pickedNode(); as pn) {
+                        @if (instancePopoverPos(); as pos) {
+                          <div class="node-inspector-popover"
+                               [style.left.px]="pos.x"
+                               [style.top.px]="pos.y"
+                               [class.pos-above]="pos.placement === 'above'"
+                               [class.pos-below]="pos.placement === 'below'"
+                               (click)="$event.stopPropagation()">
+                            <div class="popover-arrow" [style.left.px]="pos.arrowLeft"></div>
+                            <div class="ni-header">
+                              <span class="ni-title">
+                                <span class="ni-chip" [style.background]="visual(pn.type).color"><app-icon [name]="visual(pn.type).icon" [size]="12" /></span>
+                                <b>{{ pn.name || pn.id }}</b>
+                              </span>
+                              <button class="ni-close" (click)="pickedNode.set(null); picked.set(null)" aria-label="Close">×</button>
+                            </div>
+                            <div class="ni-body">
+                              <div class="ni-status-row">
+                                @if (isFailedNode(pn.id)) {
+                                  <span class="badge failed"><app-icon name="warning" [size]="11" /> Failed at this node</span>
+                                } @else if (isActive(pn.id)) {
+                                  <span class="badge active"><app-icon name="clock" [size]="11" /> Active Token</span>
+                                } @else if (count(pn.id) > 0) {
+                                  <span class="badge success"><app-icon name="check" [size]="11" /> Executed {{ count(pn.id) }}×</span>
+                                } @else {
+                                  <span class="badge muted">Not reached</span>
+                                }
+                              </div>
+
+                              @if (isFailedNode(pn.id) && inst()!.error) {
+                                <div class="ni-error-box">
+                                  <span class="ni-error-title">Failure Reason:</span>
+                                  <p class="ni-error-msg mono sm">{{ inst()!.error?.message }}</p>
+                                  @if (canRetryOrSignal()) {
+                                    <button class="btn sm danger ni-action-btn" (click)="retryPicked()">
+                                      <app-icon name="refresh" [size]="12" /> Retry Failed Node
+                                    </button>
+                                  }
+                                </div>
+                              }
+
+                              <div class="ni-row"><span class="k">Node Type:</span> <span class="v mono">{{ pn.type }}</span></div>
+                              <div class="ni-row"><span class="k">Node ID:</span> <span class="v mono">{{ pn.id }}</span></div>
+                              @if (pn.type === 'call') {
+                                <div class="ni-call-box">
+                                  <div class="ni-call-label">Sub-process Reference:</div>
+                                  <div class="ni-call-target mono">{{ pn.calledProcessId || pn.processId || pn.calledElement || '—' }}</div>
+                                </div>
+                              }
+                              @if (pn.group) {
+                                <div class="ni-row"><span class="k">Candidate Group:</span> <span class="v mono">{{ pn.group }}</span></div>
+                              }
+                              @if (pn.form) {
+                                <div class="ni-row"><span class="k">Form:</span> <span class="v mono">{{ pn.form }}</span></div>
+                              }
+
+                              @if (!isFailedNode(pn.id) && canRetryOrSignal()) {
+                                <div class="ni-actions">
+                                  <button class="btn sm ni-action-btn" (click)="retryPicked()">
+                                    <app-icon name="refresh" [size]="12" /> Re-trigger this node
+                                  </button>
+                                </div>
+                              }
+                            </div>
+                          </div>
+                        }
                       }
                     </div>
                     <div class="zoomctrl">
@@ -348,6 +417,129 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
     .zoomctrl button { width: 28px; height: 28px; border: none; background: transparent; border-radius: 50%; cursor: pointer; color: var(--text-secondary); font-size: 15px; display: grid; place-items: center; }
     .zoomctrl button:hover { background: var(--surface-3); color: var(--text); }
     .zoomctrl .zpct { width: auto; padding: 0 8px; font-size: 12px; font-weight: 600; }
+
+    /* CONTEXTUAL NODE INSPECTOR POPOVER (ANCHORED TO CLICKED NODE) */
+    .node-inspector-popover {
+      position: absolute;
+      width: 320px;
+      max-height: 420px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-strong);
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.22), 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      animation: popoverFadeIn .14s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    :host-context([data-theme='dark']) .node-inspector-popover {
+      background: rgba(24, 24, 28, 0.98);
+      border-color: var(--border-strong);
+    }
+    @keyframes popoverFadeIn {
+      from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .popover-arrow {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      transform: translateX(-50%) rotate(45deg);
+      z-index: 101;
+    }
+    .pos-below .popover-arrow {
+      top: -7px;
+      border-bottom: none;
+      border-right: none;
+    }
+    .pos-above .popover-arrow {
+      bottom: -7px;
+      border-top: none;
+      border-left: none;
+    }
+    .ni-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .ni-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13.5px;
+      font-weight: 600;
+      min-width: 0;
+    }
+    .ni-title b {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ni-chip {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .ni-close {
+      background: transparent;
+      border: none;
+      font-size: 18px;
+      line-height: 1;
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .ni-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+      font-size: 12.5px;
+    }
+    .ni-status-row { margin-bottom: 2px; }
+    .ni-error-box {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: var(--radius-sm);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    :host-context([data-theme='dark']) .ni-error-box {
+      background: rgba(220, 38, 38, 0.1);
+      border-color: rgba(220, 38, 38, 0.3);
+    }
+    .ni-error-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--red);
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .ni-error-msg { margin: 0; color: var(--red); font-size: 11.5px; }
+    .ni-row { display: flex; justify-content: space-between; gap: 10px; }
+    .ni-row .k { color: var(--muted); }
+    .ni-call-box {
+      background: #faf5ff;
+      border: 1px solid #e9d5ff;
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ni-call-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; color: #9333ea; }
+    .ni-action-btn { justify-content: center; width: 100%; margin-top: 4px; }
     .edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
     .ge { fill: none; stroke: var(--border-strong); stroke-width: 2; transition: stroke .2s, stroke-width .2s; }
     .ge.taken { stroke: var(--primary); stroke-width: 2.5; }
@@ -614,6 +806,49 @@ export class InstanceDetailComponent implements OnDestroy {
   zoomOut() { this.zoom.set(Math.max(0.4, Math.round((this.zoom() - 0.1) * 10) / 10)); }
   zoomReset() { this.zoom.set(1); }
   picked = signal<string | null>(null);
+  pickedNode = signal<any | null>(null);
+
+  selectInstanceNode(n: any) {
+    this.pickedNode.set(n);
+    this.picked.set(n.id);
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    this.pickedNode.set(null);
+    this.picked.set(null);
+  }
+
+  instancePopoverPos = computed(() => {
+    const sn = this.pickedNode();
+    if (!sn) return null;
+    const dims = this.nodeDims(sn.type);
+    const popW = 320;
+    const popH = 240;
+
+    const nodeCenterX = sn.x + (dims.w / 2);
+    let x = nodeCenterX - (popW / 2);
+
+    const minX = 16;
+    const maxX = Math.max(minX, this.dw() - popW - 16);
+    x = Math.max(minX, Math.min(maxX, x));
+
+    const arrowLeft = Math.max(24, Math.min(popW - 24, nodeCenterX - x));
+
+    const isCircleOrDiamond = this.isCircle(sn.type) || this.isDiamond(sn.type);
+    const labelExtra = isCircleOrDiamond ? 44 : 12;
+    const belowY = sn.y + dims.h + labelExtra;
+
+    let y = belowY;
+    let placement: 'above' | 'below' = 'below';
+
+    if (belowY + popH > this.dh() && sn.y > popH + 20) {
+      y = Math.max(16, sn.y - popH - 14);
+      placement = 'above';
+    }
+
+    return { x, y, placement, arrowLeft };
+  });
   tab = signal<Tab>((this.route.snapshot.queryParamMap.get('tab') as Tab) || 'details');
   NW = NW;
   tabDefs: { key: Tab; label: string }[] = [
