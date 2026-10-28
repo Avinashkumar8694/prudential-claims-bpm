@@ -209,7 +209,7 @@ export const RULES: Rule[] = [
         case 'call': if (!a.process) out.push(P('node-config', 'error', `Call activity "${label(n)}" has no called process`, { nodeId: n.id })); break;
         case 'forEach': if (!a.process) out.push(P('node-config', 'error', `Multi-instance "${label(n)}" has no process`, { nodeId: n.id }));
           if (!a.over) out.push(P('node-config', 'error', `Multi-instance "${label(n)}" has no collection`, { nodeId: n.id })); break;
-        case 'rule': if (!a.ruleflowGroup && !a.dmn && !a.decisionTree && !a.scorecard) out.push(P('node-config', 'error', `Business rule "${label(n)}" references no ruleflow group, DMN decision, decision tree, or scorecard`, { nodeId: n.id })); break;
+        case 'rule': if (!a.ruleflowGroup && !a.dmn && !a.decisionTree && !a.scorecard && !a.guidedTable) out.push(P('node-config', 'error', `Business rule "${label(n)}" references no ruleflow group, DMN decision, guided table, decision tree, or scorecard`, { nodeId: n.id })); break;
         case 'send': if (!a.message) out.push(P('node-config', 'error', `Send task "${label(n)}" has no message`, { nodeId: n.id })); break;
         case 'receive': if (!a.message) out.push(P('node-config', 'error', `Receive task "${label(n)}" has no message`, { nodeId: n.id })); break;
         case 'gateway': if (!a.mode) out.push(P('node-config', 'error', `Gateway "${label(n)}" has no mode`, { nodeId: n.id })); break;

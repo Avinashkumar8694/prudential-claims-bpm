@@ -155,7 +155,8 @@ export function evaluateGuidedTable(engine: EngineProject, name: string, vars: V
   const actions = table.actions || [];
   const rows = table.rows || [];
 
-  rows.forEach((row: any, i: number) => {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
     const matches = conditions.every((c: any) => {
       const v = (row.when || {})[c.field];
       if (v == null || v === '') return true; // empty cell = no constraint
@@ -164,7 +165,7 @@ export function evaluateGuidedTable(engine: EngineProject, name: string, vars: V
       return fn(input[c.field], v);
     });
 
-    if (!matches) return;
+    if (!matches) continue;
     fired.push(i + 1);
     for (const a of actions) {
       const v = (row.then || {})[a.field];
@@ -173,7 +174,8 @@ export function evaluateGuidedTable(engine: EngineProject, name: string, vars: V
         changed[a.field] = v;
       }
     }
-  });
+    if (table.hitPolicy === 'FIRST' || table.hitPolicy === 'FIRST_HIT') break;
+  }
 
   if (table.fact && table.fact !== name && vars[table.fact] && typeof vars[table.fact] === 'object') {
     Object.assign(vars[table.fact], out);
