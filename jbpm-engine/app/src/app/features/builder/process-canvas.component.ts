@@ -1,4 +1,4 @@
-import { Component, ElementRef, HostListener, Input, OnChanges, SimpleChanges, computed, inject, signal, viewChild } from '@angular/core';
+import { Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { WorkflowApiService } from '../../core/api/workflow-api.service';
 import { InstanceApiService } from '../../core/api/instance-api.service';
@@ -472,6 +472,7 @@ export class ProcessCanvasComponent implements OnChanges {
   /** The project's assets by kind, passed straight through to the property modal's asset-reference
    *  pickers (see properties-panel.component.ts). Owned by ProjectContextService one level up. */
   @Input() assets: Record<string, { name: string; usedBy: number }[]> = {};
+  @Output() saved = new EventEmitter<void>();
 
   catalog = signal<Catalog | null>(null);
   callableProcesses = signal<CallableProcess[]>([]);
@@ -1088,7 +1089,10 @@ export class ProcessCanvasComponent implements OnChanges {
   private save() {
     this.saveState.set('saving');
     this.api.saveProcess(this.workflowId, this.processId, this.buildProcess()).subscribe({
-      next: () => this.saveState.set('saved'),
+      next: () => {
+        this.saveState.set('saved');
+        this.saved.emit();
+      },
       error: () => this.saveState.set('dirty'),
     });
   }

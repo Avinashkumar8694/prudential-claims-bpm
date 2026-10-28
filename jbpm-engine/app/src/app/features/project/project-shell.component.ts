@@ -28,7 +28,14 @@ import { IconComponent } from '../../shared/icon.component';
         <span class="spacer"></span>
         <a class="btn" routerLink="/instances" [queryParams]="{ workflowId: ctx.id }">Instances</a>
         <a class="btn" routerLink="/deployments" [queryParams]="{ workflowId: ctx.id }">Deployments</a>
-        <button class="btn" (click)="ctx.exportKjar()" title="Export as a jBPM kjar (JSON file map)"><app-icon name="download" [size]="14" /> Export jBPM</button>
+        <button class="btn" (click)="ctx.exportEngineProject()" title="Export native project for Node.js engine (JSON)">
+          <app-icon name="download" [size]="14" /> Export (Node.js)
+        </button>
+        @if (ctx.isJbpmCompatible()) {
+          <button class="btn" (click)="ctx.exportKjar()" title="Export as a jBPM kjar (BPMN 2.0 / XML / Java)">
+            <app-icon name="download" [size]="14" /> Export jBPM
+          </button>
+        }
       </header>
 
       <nav class="tabs">

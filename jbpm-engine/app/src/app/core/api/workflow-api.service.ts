@@ -24,12 +24,21 @@ export class WorkflowApiService extends ApiBase {
   updateFolder(id: string, patch: { name?: string; parentId?: string | null }): Observable<Folder> { return this.http.patch<Folder>(`${this.base}/folders/${id}`, patch); }
   deleteFolder(id: string): Observable<void> { return this.http.delete<void>(`${this.base}/folders/${id}`); }
 
-  // import / export (jBPM kjar)
+  // import / export (jBPM kjar & Node.js engine)
   importJbpm(files: Record<string, string>, name?: string): Observable<ImportResult> { return this.http.post<any>(`${this.base}/import/jbpm`, { files, name }); }
   importAndDeployJbpm(files: Record<string, string>, name: string | undefined, environment: string): Observable<ImportResult & { deploymentId: string }> {
     return this.http.post<any>(`${this.base}/import/jbpm/deploy`, { files, name, environment });
   }
   exportVersion(versionId: string): Observable<{ files: Record<string, string> }> { return this.http.get<any>(`${this.base}/versions/${versionId}/export`); }
+  checkJbpmCompatibility(workflowId: string): Observable<{ valid: boolean; issues: any[] }> {
+    return this.http.get<any>(`${this.base}/workflows/${workflowId}/jbpm-compatibility`);
+  }
+  exportEngineProject(workflowId: string): Observable<any> {
+    return this.http.get<any>(`${this.base}/workflows/${workflowId}/export-engine`);
+  }
+  getEngine(workflowId: string): Observable<any> {
+    return this.http.get<any>(`${this.base}/workflows/${workflowId}/engine`);
+  }
 
   // processes (within a project) + assets
   listProcesses(projectId: string): Observable<{ id: string; name: string; nodes: number; flows: number }[]> { return this.items(this.http.get<ApiList<any>>(`${this.base}/workflows/${projectId}/processes`)); }

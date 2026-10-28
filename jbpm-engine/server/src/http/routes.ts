@@ -24,7 +24,7 @@ import { NotificationService } from '../modules/notifications/service.ts';
 import { SettingsService } from '../modules/settings/service.ts';
 import { TimerService } from '../modules/timers/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
-import { exportKjar } from '../modules/export/service.ts';
+import { exportKjar, validateJbpmExport } from '../modules/export/service.ts';
 import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { openapiSpec, swaggerHtml } from './openapi.ts';
@@ -124,6 +124,11 @@ export function buildRoutes(): Router {
 
   // --- project engine + assets ---
   r.get('/workflows/:id/engine', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new ProcessService(ctxOf(req)).getEngine(req.params.id))));
+  r.get('/workflows/:id/export-engine', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new ProcessService(ctxOf(req)).getEngine(req.params.id))));
+  r.get('/workflows/:id/jbpm-compatibility', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const engine = await new ProcessService(ctxOf(req)).getEngine(req.params.id);
+    res.json(validateJbpmExport(engine));
+  }));
   r.get('/workflows/:id/assets', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).list(req.params.id))));
   r.post('/workflows/:id/assets', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new AssetsService(ctxOf(req)).add(req.params.id, req.body?.kind, req.body?.name, actorOf(req), req.body?.fields))));
   r.get('/workflows/:id/assets/:kind/:name', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).get(req.params.id, req.params.kind, req.params.name))));
@@ -146,6 +151,14 @@ export function buildRoutes(): Router {
   r.get('/versions/:id/export', perm('workflow:view'), asyncHandler(async (req, res) => {
     const v = await new VersionService(ctxOf(req)).get(req.params.id);
     res.json(exportKjar(v.engine));
+  }));
+  r.get('/versions/:id/export-engine', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const v = await new VersionService(ctxOf(req)).get(req.params.id);
+    res.json(v.engine);
+  }));
+  r.get('/versions/:id/jbpm-compatibility', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const v = await new VersionService(ctxOf(req)).get(req.params.id);
+    res.json(validateJbpmExport(v.engine));
   }));
 
   // --- deployments ---

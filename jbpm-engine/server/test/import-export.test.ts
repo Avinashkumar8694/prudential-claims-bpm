@@ -6,7 +6,7 @@ import { fakeClock } from '../src/infra/ids.ts';
 import { makeContext } from '../src/context.ts';
 import { WorkflowService } from '../src/modules/workflows/service.ts';
 import { VersionService } from '../src/modules/versions/service.ts';
-import { exportKjar } from '../src/modules/export/service.ts';
+import { exportKjar, validateJbpmExport } from '../src/modules/export/service.ts';
 import { ImportService } from '../src/modules/import/service.ts';
 
 test('export → import round-trip: a kjar file map re-imports as a project with the same processes', async () => {
@@ -148,4 +148,49 @@ test('exportKjar succeeds when all scripts and conditions use Java', () => {
 
   const { files } = exportKjar(engine as any);
   assert.ok(files['src/main/resources/com/acme/test.java_proc.bpmn'] || Object.keys(files).some((f) => f.endsWith('.bpmn')));
+});
+
+test('validateJbpmExport detects incompatibility dynamically for hiding export option', () => {
+  const incompatibleEngine = {
+    id: 'incompatible-project',
+    name: 'Incompatible Project',
+    processes: [{
+      id: 'test.proc',
+      name: 'Test Process',
+      nodes: [
+        { id: 's', type: 'start', name: 'Start' },
+        { id: 'sc', type: 'script', name: 'JS Task', lang: 'js', code: 'vars.x = 1;' },
+        { id: 'e', type: 'end', name: 'End' },
+      ],
+      flows: [
+        { id: 'f1', from: 's', to: 'sc' },
+        { id: 'f2', from: 'sc', to: 'e' },
+      ],
+    }],
+  };
+  const result = validateJbpmExport(incompatibleEngine as any);
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.issues[0].rule, 'script-lang-javascript');
+
+  const compatibleEngine = {
+    id: 'compatible-project',
+    name: 'Compatible Project',
+    processes: [{
+      id: 'test.proc',
+      name: 'Test Process',
+      nodes: [
+        { id: 's', type: 'start', name: 'Start' },
+        { id: 'sc', type: 'script', name: 'Java Task', lang: 'java', code: 'kcontext.setVariable("x", 1);' },
+        { id: 'e', type: 'end', name: 'End' },
+      ],
+      flows: [
+        { id: 'f1', from: 's', to: 'sc' },
+        { id: 'f2', from: 'sc', to: 'e' },
+      ],
+    }],
+  };
+  const compResult = validateJbpmExport(compatibleEngine as any);
+  assert.strictEqual(compResult.valid, true);
+  assert.strictEqual(compResult.issues.length, 0);
 });

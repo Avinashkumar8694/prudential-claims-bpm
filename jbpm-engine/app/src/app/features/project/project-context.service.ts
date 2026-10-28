@@ -43,6 +43,7 @@ export class ProjectContextService {
   vars = signal<{ name: string; type: string }[]>([]);
   name = ''; description = ''; baseUrl = '';
   exportDenial = signal<JbpmExportDenial | null>(null);
+  isJbpmCompatible = signal<boolean>(false);
 
   constructor() {
     this.api.getWorkflow(this.id).subscribe((w) => {
@@ -51,9 +52,28 @@ export class ProjectContextService {
     });
     this.loadProcesses();
     this.loadAssets();
+    this.refreshCompatibility();
   }
-  loadProcesses() { this.api.listProcesses(this.id).subscribe((p) => this.processes.set(p)); }
-  loadAssets() { this.api.getAssets(this.id).subscribe((a) => { this.assets.set(a.assets); this.assetKinds.set(a.kinds); }); }
+  loadProcesses() {
+    this.api.listProcesses(this.id).subscribe((p) => {
+      this.processes.set(p);
+      this.refreshCompatibility();
+    });
+  }
+  loadAssets() {
+    this.api.getAssets(this.id).subscribe((a) => {
+      this.assets.set(a.assets);
+      this.assetKinds.set(a.kinds);
+      this.refreshCompatibility();
+    });
+  }
+
+  refreshCompatibility() {
+    this.api.checkJbpmCompatibility(this.id).subscribe({
+      next: (res) => this.isJbpmCompatible.set(!!res?.valid),
+      error: () => this.isJbpmCompatible.set(false),
+    });
+  }
 
   saveName() { const w = this.wf(); if (w) this.api.updateWorkflow(w.id, { name: this.name, description: this.description }).subscribe((u) => this.wf.set(u)); }
 
@@ -83,6 +103,25 @@ export class ProjectContextService {
     this.api.deleteAsset(this.id, kind, name).subscribe({
       next: () => { this.toast.success(`"${name}" deleted`); this.loadAssets(); },
       error: (e) => this.toast.error(e?.error?.error?.message || 'delete failed'),
+    });
+  }
+
+  exportEngineProject() {
+    const w = this.wf(); if (!w) return;
+    this.api.exportEngineProject(this.id).subscribe({
+      next: (engine) => {
+        const json = JSON.stringify(engine, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${w.key}-project.json`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        this.toast.success(`Exported Node.js engine project "${w.name}" successfully`);
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.error?.message || 'Failed to export Node.js engine project');
+      },
     });
   }
 

@@ -7,6 +7,8 @@ import { fromEngineProject, writeProject, type EngineProject } from '../../sdk/i
 import { validateJbpmExport } from './validate-jbpm-export.ts';
 import { jbpmExportDenied } from '../../infra/errors.ts';
 
+export { validateJbpmExport } from './validate-jbpm-export.ts';
+
 const BINARY = new Set(['.png', '.jpg', '.jpeg', '.gif', '.ico', '.zip', '.jar', '.xls', '.xlsx']);
 
 /** Build the kjar as a { relativePath -> content } map (text files; binaries as base64). */

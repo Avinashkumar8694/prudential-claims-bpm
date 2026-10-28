@@ -37,7 +37,7 @@ import { IconComponent } from '../../shared/icon.component';
                 [title]="(canvas()?.errorCount() ?? 0) > 0 ? 'Fix validation errors before deploying' : 'Publish + deploy to prod'"><app-icon name="deployments" [size]="14" /> Deploy</button>
       </div>
       <div class="canvas-body">
-        @if (pid(); as p) { <app-process-canvas [workflowId]="ctx.id" [processId]="p" [assets]="ctx.assets()" /> }
+        @if (pid(); as p) { <app-process-canvas [workflowId]="ctx.id" [processId]="p" [assets]="ctx.assets()" (saved)="ctx.refreshCompatibility()" /> }
       </div>
     </div>
   `,

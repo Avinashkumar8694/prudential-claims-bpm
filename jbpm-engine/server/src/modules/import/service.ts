@@ -212,9 +212,15 @@ export function convertProjectToNodeEngine(engine: EngineProject): EngineProject
   return engine;
 }
 
-/** Reconstruct an EngineProject from a kjar file map (writes to a temp dir, parses, converts). */
-export function kjarToEngine(files: Record<string, string>): EngineProject {
+/** Reconstruct an EngineProject from a kjar file map (writes to a temp dir, parses, converts) or native EngineProject JSON. */
+export function kjarToEngine(files: Record<string, string> | any): EngineProject {
   if (!files || !Object.keys(files).length) throw validation('no files to import');
+  if (Array.isArray(files.processes)) {
+    return files as EngineProject;
+  }
+  if (files.engine && Array.isArray(files.engine.processes)) {
+    return files.engine as EngineProject;
+  }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kjar-in-'));
   try {
     for (const [rel, content] of Object.entries(files)) {
