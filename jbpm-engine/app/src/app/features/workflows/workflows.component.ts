@@ -139,6 +139,16 @@ type Selection = 'all' | 'unfiled' | string;
     .menu-item.danger { color: var(--red); }
     .menu-item.danger:hover { background: var(--red-bg); }
     .menu-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+
+    @media (max-width: 768px) {
+      .hero { padding: 14px 14px 0; }
+      .hero-top { flex-direction: column; gap: 12px; }
+      .create { flex-direction: column; align-items: stretch; width: 100%; }
+      .create .in { width: 100%; }
+      .create .btn { width: 100%; justify-content: center; }
+      .main { padding: 14px; }
+      .grid { grid-template-columns: 1fr; }
+    }
   `],
 })
 export class WorkflowsComponent {

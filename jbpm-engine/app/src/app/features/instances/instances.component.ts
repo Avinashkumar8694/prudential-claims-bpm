@@ -315,6 +315,15 @@ const SAVED_KEY = 'instances.savedFilters';
     .btn.full { width: 100%; justify-content: center; margin-top: 6px; }
     .err { color: var(--red); font-size: 12px; margin: -4px 0 8px; }
     .empty-state { padding: 40px; text-align: center; }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail { position: static; width: 100%; }
+      .page { padding: 12px 14px; }
+      .pagehead { flex-direction: column; align-items: stretch; gap: 10px; }
+      .pagehead .btn, .pagehead a.btn { align-self: flex-start; }
+      .list { max-height: none; }
+    }
   `],
 })
 export class InstancesComponent {

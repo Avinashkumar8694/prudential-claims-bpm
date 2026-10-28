@@ -1428,6 +1428,35 @@ const TASK_STATUSES = [
     .modal-body textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12px; font-family: var(--font-mono); background: var(--surface); color: inherit; }
     .modal-body select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 13px; background: var(--surface); color: inherit; }
     .btn.full { width: 100%; justify-content: center; margin-top: 6px; }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .head { flex-direction: column; align-items: stretch; gap: 12px; }
+      .head .btn, .head a.btn { justify-content: center; }
+      .filter-bar { flex-direction: column; align-items: stretch; gap: 10px; padding: 12px; }
+      .filter-group { flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
+      .filter-group select { width: 100%; }
+      .pills { flex-wrap: wrap; width: 100%; }
+      .pill { flex: 1 1 auto; text-align: center; }
+      .date-inputs { flex-wrap: wrap; width: 100%; }
+      .date-inputs input[type="date"] { flex: 1 1 110px; min-width: 0; width: auto; }
+      .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .tabs::-webkit-scrollbar { display: none; }
+      .kpis { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .kpi { padding: 10px 12px; }
+      .kpi .n { font-size: 20px; }
+      .sla-grid { grid-template-columns: 1fr; }
+      .cols { grid-template-columns: 1fr; }
+      .donutcard .donutwrap { flex-direction: column; text-align: center; gap: 14px; }
+      .tp-summary-strip { flex-direction: column; align-items: stretch; gap: 10px; }
+      .tp-stat-sep { display: none; }
+      .view-mode-toggle { width: 100%; justify-content: center; }
+      .chart-legend-inline { flex-wrap: wrap; }
+      .lifecycle-stats { flex-direction: column; gap: 10px; }
+      .fieldrow { flex-direction: column; align-items: stretch; }
+      .fieldrow .fkey { width: 100%; }
+      .presets { flex-wrap: wrap; }
+    }
   `],
 })
 export class HomeComponent {

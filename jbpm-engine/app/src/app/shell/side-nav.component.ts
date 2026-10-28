@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map } from 'rxjs/operators';
 import { AuthService } from '../core/auth/auth.service';
@@ -18,31 +18,33 @@ interface NavItem { label: string; icon: string; link: string; }
   standalone: true,
   imports: [RouterLink, RouterLinkActive, IconComponent],
   template: `
-    <nav class="sidenav" [class.collapsed]="collapsed()">
+    <div class="drawer-backdrop" [class.show]="mobileOpen()" (click)="closeMobile()" aria-hidden="true"></div>
+    <nav class="sidenav" [class.collapsed]="collapsed()" [class.mobile-open]="mobileOpen()">
       <div class="brand">
         <span class="logo"><app-icon name="zap" [size]="17" /></span>
-        @if (!collapsed()) { <span class="brand-name">Workflow</span> }
+        @if (!collapsed() || mobileOpen()) { <span class="brand-name">Workflow</span> }
         <button class="theme-toggle" (click)="theme.toggle()" [title]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"><app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" [size]="15" /></button>
         <button class="collapse" (click)="collapsed.set(!collapsed())" title="Collapse navigation" aria-label="Collapse navigation"><app-icon name="chevronLeft" [size]="16" /></button>
+        <button class="mobile-close" (click)="closeMobile()" title="Close menu" aria-label="Close navigation"><app-icon name="close" [size]="16" /></button>
       </div>
       <ul>
         @for (item of items(); track item.link) {
           <li>
-            <a [routerLink]="item.link" routerLinkActive="active">
+            <a [routerLink]="item.link" routerLinkActive="active" (click)="closeMobile()">
               <app-icon class="ic" [name]="item.icon" [size]="18" />
-              @if (!collapsed()) { <span>{{ item.label }}</span> }
+              @if (!collapsed() || mobileOpen()) { <span>{{ item.label }}</span> }
             </a>
           </li>
         }
       </ul>
       @if (governance().length) {
-        @if (!collapsed()) { <div class="glabel">Governance</div> }
+        @if (!collapsed() || mobileOpen()) { <div class="glabel">Governance</div> }
         <ul>
           @for (item of governance(); track item.link) {
             <li>
-              <a [routerLink]="item.link" routerLinkActive="active">
+              <a [routerLink]="item.link" routerLinkActive="active" (click)="closeMobile()">
                 <app-icon class="ic" [name]="item.icon" [size]="18" />
-                @if (!collapsed()) { <span>{{ item.label }}</span> }
+                @if (!collapsed() || mobileOpen()) { <span>{{ item.label }}</span> }
               </a>
             </li>
           }
@@ -52,13 +54,13 @@ interface NavItem { label: string; icon: string; link: string; }
       @if (auth.user(); as u) {
         <div class="account">
           <span class="avatar">{{ u.username.slice(0, 1).toUpperCase() }}</span>
-          @if (!collapsed()) {
+          @if (!collapsed() || mobileOpen()) {
             <div class="who">
               <div class="uname">{{ u.username }}</div>
               <div class="roles muted">{{ u.roles.join(', ') || 'no roles' }}</div>
             </div>
           }
-          <button class="btn ghost logout" (click)="logout()" title="Sign out" aria-label="Sign out"><app-icon name="power" [size]="15" /></button>
+          <button class="btn ghost logout" (click)="logout(); closeMobile()" title="Sign out" aria-label="Sign out"><app-icon name="power" [size]="15" /></button>
         </div>
       }
     </nav>
@@ -77,6 +79,8 @@ interface NavItem { label: string; icon: string; link: string; }
     .theme-toggle { margin-left: auto; border: none; background: transparent; border-radius: var(--radius-xs); width: 28px; height: 28px; display: grid; place-items: center; cursor: pointer; color: var(--muted); font-size: 13px; }
     .theme-toggle:hover { background: var(--surface-3); color: var(--text); }
     .collapse { border: none; background: transparent; cursor: pointer; color: var(--muted); font-size: 16px; }
+    .mobile-close { display: none; }
+    .drawer-backdrop { display: none; }
     .glabel { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; padding: 14px 22px 4px; }
     ul { list-style: none; margin: 4px 0; padding: 0 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
     /* Active state is a soft tinted pill, not a hard left border — matches the airy direction. */
@@ -93,6 +97,40 @@ interface NavItem { label: string; icon: string; link: string; }
     .uname { font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .roles { font-size: 12px; text-transform: capitalize; color: var(--muted); }
     .logout { flex-shrink: 0; padding: 4px 8px; font-size: 14px; }
+
+    /* Mobile Drawer (<= 900px) */
+    @media (max-width: 900px) {
+      .drawer-backdrop {
+        display: block; position: fixed; inset: 0;
+        background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(2px);
+        z-index: 998; opacity: 0; pointer-events: none;
+        transition: opacity 0.25s ease;
+      }
+      .drawer-backdrop.show { opacity: 1; pointer-events: auto; }
+
+      .sidenav {
+        position: fixed; inset-block: 0; left: 0;
+        z-index: 1000; width: min(280px, 80dvw) !important;
+        height: 100vh; height: 100dvh;
+        transform: translateX(-100%);
+        transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.25);
+        border-right: 1px solid var(--border);
+      }
+      .sidenav.mobile-open {
+        transform: translateX(0);
+      }
+      .sidenav.collapsed .brand { flex-direction: row; padding: 14px 18px 16px; gap: 10px; }
+      .collapse { display: none; }
+      .mobile-close {
+        display: grid; place-items: center;
+        border: none; background: transparent; cursor: pointer;
+        color: var(--muted); padding: 4px; border-radius: var(--radius-xs);
+        margin-left: 4px;
+      }
+      .mobile-close:hover { background: var(--surface-3); color: var(--text); }
+      .brand-name { display: inline-block !important; }
+    }
   `],
 })
 export class SideNavComponent {
@@ -100,15 +138,26 @@ export class SideNavComponent {
   theme = inject(ThemeService);
   private router = inject(Router);
   collapsed = signal(isDetailRoute(this.router.url));
+  mobileOpen = signal(false);
 
   constructor() {
-    // Auto-collapse on a single-entity detail page (more room for the diagram/tabs); auto-restore
-    // once back on a list page. The manual toggle button still works, but the next navigation resets it.
+    // Auto-collapse on a single-entity detail page; auto-restore on a list page.
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd),
-      map((e) => isDetailRoute(e.urlAfterRedirects)),
-    ).subscribe((detail) => this.collapsed.set(detail));
+    ).subscribe((e) => {
+      this.collapsed.set(isDetailRoute(e.urlAfterRedirects));
+      this.mobileOpen.set(false); // auto-close drawer on route transition
+    });
   }
+
+  @HostListener('document:keydown.escape')
+  onEscape() {
+    if (this.mobileOpen()) this.closeMobile();
+  }
+
+  openMobile() { this.mobileOpen.set(true); }
+  closeMobile() { this.mobileOpen.set(false); }
+  toggleMobile() { this.mobileOpen.update((v) => !v); }
 
   // Order mirrors the ux_design sidenav (instances-list.html): Home, Projects, Deployments,
   // Instances, Execution Errors, Jobs & Timers, Tasks, Reports & Analytics.

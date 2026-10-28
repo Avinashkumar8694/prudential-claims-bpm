@@ -30,6 +30,13 @@ import { BreadcrumbComponent } from '../../shared/breadcrumb.component';
     .tabs a { border: none; background: transparent; padding: 12px 14px; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
     .tabs a:hover { color: var(--text); } .tabs a.active { color: var(--primary); border-bottom-color: var(--primary); }
     .tabbody { padding: 22px; }
+
+    @media (max-width: 768px) {
+      .crumbwrap { padding: 8px 14px 0; }
+      .ahead { padding: 8px 14px 10px; }
+      .tabs { padding: 0 14px; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+      .tabbody { padding: 12px 14px; }
+    }
   `],
 })
 export class AdminShellComponent {}

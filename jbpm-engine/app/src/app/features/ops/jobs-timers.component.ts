@@ -103,6 +103,13 @@ const KIND_LABEL: Record<TimerJob['kind'], string> = {
     .ta-r { text-align: right; white-space: nowrap; }
     .pager { margin-top: 12px; font-size: 12.5px; }
     .pad { padding: 16px; }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .filterbar { flex-direction: column; align-items: stretch; gap: 8px; }
+      .filterbar select, .filterbar input { width: 100% !important; }
+      .pager { flex-wrap: wrap; gap: 6px; }
+    }
   `],
 })
 export class JobsTimersComponent implements OnInit, OnDestroy {

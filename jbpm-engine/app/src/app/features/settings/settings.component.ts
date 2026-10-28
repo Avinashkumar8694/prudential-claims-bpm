@@ -203,6 +203,13 @@ type SettingsTab = 'account' | 'system';
     .switch.on::after { left: 17px; }
     .savebar { display: flex; align-items: center; gap: 8px; position: sticky; bottom: 0; background: var(--bg); padding: 12px 0; }
     .spacer { flex: 1; }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .setting-row { flex-direction: column; align-items: stretch; gap: 8px; }
+      .setting-row input, .setting-row select { width: 100% !important; }
+      .savebar { flex-wrap: wrap; }
+    }
   `],
 })
 export class SettingsComponent {

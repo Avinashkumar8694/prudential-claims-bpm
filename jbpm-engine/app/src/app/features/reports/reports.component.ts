@@ -663,6 +663,42 @@ function downloadFile(content: string, filename: string, mimeType: string) {
     .pad { padding: 20px; }
     .skeleton-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
     .skeleton-line { background: var(--surface-3); border-radius: 4px; animation: pulse 1.5s infinite; }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .pagehead { flex-direction: column; align-items: stretch; gap: 12px; }
+      .head-actions { width: 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+      .head-actions .btn { flex: 1 1 auto; justify-content: center; }
+
+      .filter-bar { padding: 12px; }
+      .filter-row { flex-direction: column; align-items: stretch; gap: 12px; }
+      .sub-filter-row { padding-top: 12px; }
+      .filter-group { flex-direction: column; align-items: stretch; gap: 6px; width: 100%; }
+      .filter-group select { width: 100%; }
+
+      .pills { flex-wrap: wrap; width: 100%; }
+      .pill { flex: 1 1 auto; text-align: center; padding: 6px 8px; font-size: 11.5px; }
+
+      .date-inputs { flex-wrap: wrap; width: 100%; }
+      .date-inputs input[type="date"] { flex: 1 1 120px; min-width: 0; width: auto; }
+      .date-inputs .btn { flex: 0 0 auto; }
+
+      .searchbox { min-width: 0; width: 100%; }
+
+      .tabs {
+        overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch;
+        scrollbar-width: none; margin-bottom: 12px;
+      }
+      .tabs::-webkit-scrollbar { display: none; }
+      .tabs button { padding: 8px 12px; font-size: 12.5px; flex-shrink: 0; }
+
+      .card-head { flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; }
+      .report-table th, .report-table td { padding: 8px 10px; font-size: 12px; }
+      .table-footer { flex-direction: column; align-items: flex-start; gap: 10px; padding: 10px 14px; }
+      .page-btns { width: 100%; justify-content: space-between; }
+
+      .adhoc-controls { grid-template-columns: 1fr; padding: 12px; gap: 12px; }
+    }
   `],
 })
 export class ReportsComponent implements OnInit {

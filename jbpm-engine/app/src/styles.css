@@ -295,3 +295,62 @@ input[type=checkbox], input[type=radio] { accent-color: var(--primary); width: 1
 @keyframes skeleton-shimmer { 100% { transform: translateX(100%); } }
 .skeleton-line { height: 12px; margin: 6px 0; }
 .skeleton-card { height: 96px; border-radius: var(--radius); }
+
+/* ---------------------------------------------------------------- Mobile Responsiveness */
+.table-wrap, .table-responsive, .tablecard, .listcard {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+@media (max-width: 768px) {
+  /* Prevent iOS automatic zoom on focus by ensuring comfortable input scale */
+  input:not([type=checkbox]):not([type=radio]), select, textarea {
+    font-size: 14.5px;
+  }
+
+  .page {
+    padding: 12px 14px !important;
+  }
+
+  .pagehead, .head {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+
+  .head-actions {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+
+  .tabs {
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-wrap: nowrap !important;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+
+  .grid4, .grid3, .grid2, .two-col {
+    grid-template-columns: 1fr !important;
+  }
+
+  .bulkbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .cardhead, .card-head {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+
+  .table-footer {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+}

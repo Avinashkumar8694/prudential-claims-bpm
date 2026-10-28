@@ -88,6 +88,16 @@ import { IconComponent } from '../shared/icon.component';
     .nbody { font-size: 12px; }
     .nwhen { font-size: 11px; }
     .muted { color: var(--muted); }
+
+    @media (max-width: 900px) {
+      :host { top: 8px; }
+      .bell { right: 12px; width: 32px; height: 32px; }
+      .panel {
+        right: 8px; top: 38px;
+        width: min(340px, calc(100vw - 16px));
+        max-height: calc(100vh - 70px);
+      }
+    }
   `],
 })
 export class NotificationsBellComponent implements OnInit, OnDestroy {

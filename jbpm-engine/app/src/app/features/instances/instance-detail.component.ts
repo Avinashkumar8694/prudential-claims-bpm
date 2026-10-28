@@ -585,6 +585,14 @@ interface DocRow { variable: string; filename: string; url?: string; mimeType?: 
     @media (max-width: 960px) {
       .tabgrid { grid-template-columns: 1fr; }
     }
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .topbar { flex-wrap: wrap; gap: 6px; }
+      .actionrow { flex-wrap: wrap; gap: 6px; }
+      .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .tabs::-webkit-scrollbar { display: none; }
+      .tabs button { margin-right: 12px; padding: 7px 4px; font-size: 12.5px; }
+    }
     .maincol { min-width: 0; }
     .pad { padding: 18px; }
     .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin: 16px 0 8px; }

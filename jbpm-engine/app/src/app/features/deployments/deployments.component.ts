@@ -378,6 +378,14 @@ import { IconComponent } from '../../shared/icon.component';
       justify-content: flex-end;
       gap: 10px;
     }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .pagehead { flex-direction: column; align-items: stretch; gap: 12px; }
+      .header-actions { flex-direction: column; align-items: stretch; width: 100%; }
+      .header-actions input, .header-actions select, .header-actions .btn { width: 100% !important; }
+      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+    }
   `],
 })
 export class DeploymentsComponent {

@@ -154,6 +154,16 @@ const SCOPES: { key: Scope; label: string }[] = [
     .infinite-bar { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; font-size: 12.5px; border-top: 1px solid var(--border); background: var(--surface); }
     .spinner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: pulse 1s infinite alternate; }
     @keyframes pulse { from { opacity: 0.3; transform: scale(0.8); } to { opacity: 1; transform: scale(1.2); } }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .pagehead { flex-direction: column; align-items: stretch; gap: 10px; }
+      .pagehead .btn { align-self: flex-start; }
+      .filters { flex-direction: column; align-items: stretch; gap: 8px; }
+      .filters .spacer { display: none; }
+      .filters select, .filters input { width: 100% !important; }
+      .bulkbar { flex-wrap: wrap; gap: 6px; }
+    }
   `],
 })
 export class TaskInboxComponent {

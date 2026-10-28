@@ -270,6 +270,17 @@ const TABS: { key: Tab; label: string }[] = [
     .donebanner.suspended { background: rgba(245, 158, 11, 0.12); color: var(--amber); border-color: var(--amber); }
     .readonly-note { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); font-size: 12px; margin-bottom: 12px; }
     input:disabled, textarea:disabled, button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .topbar { flex-wrap: wrap; gap: 8px; }
+      .actionrow { flex-wrap: wrap; gap: 6px; }
+      .tabs { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+      .tabs::-webkit-scrollbar { display: none; }
+      .grid2 { grid-template-columns: 1fr; }
+      .wrap { max-width: 100%; }
+      .pad { padding: 14px; }
+    }
   `],
 })
 export class TaskDetailComponent {

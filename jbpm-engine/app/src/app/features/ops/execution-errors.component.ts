@@ -316,6 +316,14 @@ const TYPES = ['process', 'task', 'job', 'integration'] as const;
     }
     .ta-r { text-align: right; }
     .pad { padding: 20px; }
+
+    @media (max-width: 768px) {
+      .page { padding: 12px 14px; }
+      .pagehead { flex-direction: column; align-items: stretch; gap: 10px; }
+      .kpirow { flex-wrap: wrap; }
+      .kpi { flex: 1 1 auto; }
+      .bulkbar { flex-wrap: wrap; gap: 6px; }
+    }
   `],
 })
 export class ExecutionErrorsComponent {
