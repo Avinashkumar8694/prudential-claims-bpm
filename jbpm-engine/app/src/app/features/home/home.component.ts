@@ -113,9 +113,9 @@ const TASK_STATUSES = [
         <div class="filter-group date-range-group">
           <span class="f-label"><app-icon name="calendar" [size]="13" /> Date Range:</span>
           <div class="date-inputs">
-            <input type="date" [ngModel]="customFrom()" (ngModelChange)="onFromChange($event)" placeholder="YYYY-MM-DD" title="Start Date" />
+            <input type="date" [ngModel]="customFrom()" (ngModelChange)="onFromChange($event)" (keyup.enter)="applyCustomDateRange()" placeholder="YYYY-MM-DD" title="Start Date" />
             <span class="to-sep">→</span>
-            <input type="date" [ngModel]="customTo()" (ngModelChange)="onToChange($event)" placeholder="YYYY-MM-DD" title="End Date" />
+            <input type="date" [ngModel]="customTo()" (ngModelChange)="onToChange($event)" (keyup.enter)="applyCustomDateRange()" placeholder="YYYY-MM-DD" title="End Date" />
             <button class="btn sm primary" (click)="applyCustomDateRange()" [disabled]="!customFrom() && !customTo()">Apply</button>
             @if (customFrom() || customTo()) {
               <button class="btn sm ghost" (click)="clearCustomDateRange()" title="Reset to All Time">✕</button>
@@ -203,6 +203,10 @@ const TASK_STATUSES = [
               <span class="n">{{ caseSummary()?.total ?? 0 }}</span>
               <span class="l">Total Cases</span>
             </a>
+            <div class="card kpi" title="Durable timers currently scheduled">
+              <span class="n" style="color: #0284c7;">{{ activeTimers() }}</span>
+              <span class="l">Active Timers</span>
+            </div>
           }
         </div>
 
@@ -228,8 +232,12 @@ const TASK_STATUSES = [
                 @for (d of dailyThroughput(); track d.date) {
                   <div class="tp-col" [title]="throughputTooltip(d)">
                     <div class="tp-bars">
-                      <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
-                      <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      @if (d.started > 0) {
+                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                      }
+                      @if (d.completed > 0) {
+                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      }
                       @if (d.failed > 0) {
                         <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
                       }
@@ -369,8 +377,12 @@ const TASK_STATUSES = [
                 @for (d of dailyThroughput(); track d.date) {
                   <div class="tp-col" [title]="throughputTooltip(d)">
                     <div class="tp-bars">
-                      <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
-                      <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      @if (d.started > 0) {
+                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                      }
+                      @if (d.completed > 0) {
+                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      }
                       @if (d.failed > 0) {
                         <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
                       }
@@ -1246,6 +1258,7 @@ export class HomeComponent {
   });
 
   taskGroups = computed(() => this.tasks()?.byGroup ?? []);
+  activeTimers = computed(() => this.summary()?.jobs?.scheduled ?? 0);
 
   instStatusRows = computed<StatusRow[]>(() => this.statusRows(this.procs()?.byStatus, INSTANCE_STATUSES));
   instTotal = computed(() => this.instStatusRows().reduce((a, r) => a + r.count, 0));
@@ -1330,16 +1343,16 @@ export class HomeComponent {
     const now = new Date();
     const toStr = (d: Date) => d.toISOString().slice(0, 10);
     if (w === '1d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 86400000)));
+      this.customFrom.set(toStr(now));
       this.customTo.set(toStr(now));
     } else if (w === '7d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 7 * 86400000)));
+      this.customFrom.set(toStr(new Date(now.getTime() - 6 * 86400000)));
       this.customTo.set(toStr(now));
     } else if (w === '30d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 30 * 86400000)));
+      this.customFrom.set(toStr(new Date(now.getTime() - 29 * 86400000)));
       this.customTo.set(toStr(now));
     } else if (w === '90d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 90 * 86400000)));
+      this.customFrom.set(toStr(new Date(now.getTime() - 89 * 86400000)));
       this.customTo.set(toStr(now));
     } else if (w === 'all') {
       this.customFrom.set('');
@@ -1462,8 +1475,9 @@ export class HomeComponent {
   }
 
   pctOfThroughput(val: number): number {
+    if (!val || val <= 0) return 0;
     const max = this.maxThroughputVal();
-    return max > 0 ? Math.max(3, Math.min(100, (val / max) * 100)) : 0;
+    return max > 0 ? Math.max(4, Math.min(100, (val / max) * 100)) : 0;
   }
 
   statusEntries(byStatus: Record<string, number>): [string, number][] {
@@ -1674,7 +1688,23 @@ export class HomeComponent {
   exportCsv() {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     let header: string[]; let rows: unknown[][]; let name: string;
-    if (this.tab() === 'tasks') {
+    if (this.tab() === 'overview') {
+      header = ['Metric', 'Value'];
+      rows = [
+        ['Active Instances', this.activeInstances()],
+        ['Completed Instances', this.completedInstances()],
+        ['Failed Instances', this.failedInstances()],
+        ['Failure Rate (%)', this.failureRate()],
+        ['Open Tasks', this.openTasks()],
+        ['SLA Compliance (%)', this.slaRate()],
+        ['Active Deployments', this.summary()?.deployments?.active ?? 0],
+        ['Total Cases', this.caseSummary()?.total ?? 0],
+        ['Active Timers', this.activeTimers()],
+        ['Process Scope', this.selectedProcess || 'All Processes'],
+        ['Date Range', this.dateRangeLabel()],
+      ];
+      name = 'executive-overview-summary.csv';
+    } else if (this.tab() === 'tasks') {
       header = ['Task Name', 'Completed Count', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
       rows = this.byTask().map((t) => [t.name, t.count, t.avgMs, t.minMs, t.maxMs]);
       name = 'tasks-analytics.csv';

@@ -215,6 +215,9 @@ export class QueryService {
     } else if (fromBound) {
       startDate = new Date(fromBound);
       endDate = now;
+    } else if (toBound) {
+      endDate = new Date(toBound);
+      startDate = new Date(endDate.getTime() - 13 * 86400000);
     } else {
       const numDays = opts?.days ? Math.min(Math.max(Number(opts.days), 3), 90) : 14;
       endDate = now;
@@ -224,11 +227,13 @@ export class QueryService {
     if (Number.isNaN(startDate.getTime())) startDate = new Date(now.getTime() - 13 * 86400000);
     if (Number.isNaN(endDate.getTime()) || endDate < startDate) endDate = now;
 
-    const diffDays = Math.min(Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / 86400000) + 1), 90);
-    const cursor = new Date(startDate);
-    for (let d = 0; d < diffDays; d++) {
+    const startStr = startDate.toISOString().slice(0, 10);
+    const endStr = endDate.toISOString().slice(0, 10);
+    const cursor = new Date(`${startStr}T00:00:00.000Z`);
+    while (true) {
       const key = cursor.toISOString().slice(0, 10);
       dailyMap.set(key, { started: 0, completed: 0, failed: 0 });
+      if (key >= endStr || dailyMap.size >= 90) break;
       cursor.setDate(cursor.getDate() + 1);
     }
 

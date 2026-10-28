@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { DecimalPipe, JsonPipe } from '@angular/common';
 import { forkJoin } from 'rxjs';
@@ -23,7 +23,7 @@ import type {
   WorkflowTat,
 } from '../../core/models';
 
-type ReportsTab = 'processes' | 'tasks' | 'cases' | 'queries';
+type ReportsTab = 'overview' | 'processes' | 'tasks' | 'cases' | 'queries';
 type TimeWindow = 'all' | '1d' | '7d' | '30d' | '90d' | 'custom';
 
 interface StatusRow {
@@ -70,7 +70,7 @@ const TASK_STATUSES = [
 @Component({
   selector: 'app-reports',
   standalone: true,
-  imports: [FormsModule, DecimalPipe, JsonPipe, BreadcrumbComponent, IconComponent],
+  imports: [FormsModule, RouterLink, DecimalPipe, JsonPipe, BreadcrumbComponent, IconComponent],
   template: `
     <div class="page">
       <div class="crumbwrap">
@@ -106,9 +106,9 @@ const TASK_STATUSES = [
         <div class="filter-group date-range-group">
           <span class="f-label"><app-icon name="calendar" [size]="13" /> Date Range:</span>
           <div class="date-inputs">
-            <input type="date" [ngModel]="customFrom()" (ngModelChange)="onFromChange($event)" placeholder="YYYY-MM-DD" title="Start Date" />
+            <input type="date" [ngModel]="customFrom()" (ngModelChange)="onFromChange($event)" (keyup.enter)="applyCustomDateRange()" placeholder="YYYY-MM-DD" title="Start Date" />
             <span class="to-sep">→</span>
-            <input type="date" [ngModel]="customTo()" (ngModelChange)="onToChange($event)" placeholder="YYYY-MM-DD" title="End Date" />
+            <input type="date" [ngModel]="customTo()" (ngModelChange)="onToChange($event)" (keyup.enter)="applyCustomDateRange()" placeholder="YYYY-MM-DD" title="End Date" />
             <button class="btn sm primary" (click)="applyCustomDateRange()" [disabled]="!customFrom() && !customTo()">Apply</button>
             @if (customFrom() || customTo()) {
               <button class="btn sm ghost" (click)="clearCustomDateRange()" title="Reset to All Time">✕</button>
@@ -132,7 +132,11 @@ const TASK_STATUSES = [
         </div>
       </div>
 
+      <!-- Navigation Tabs -->
       <nav class="tabs" role="tablist">
+        <button role="tab" [attr.aria-selected]="tab() === 'overview'" [class.active]="tab() === 'overview'" (click)="setTab('overview')">
+          <app-icon name="home" [size]="14" /> Overview
+        </button>
         <button role="tab" [attr.aria-selected]="tab() === 'processes'" [class.active]="tab() === 'processes'" (click)="setTab('processes')">
           <app-icon name="instances" [size]="14" /> Processes
         </button>
@@ -160,127 +164,328 @@ const TASK_STATUSES = [
             <button class="btn" (click)="load()"><app-icon name="refresh" [size]="14" /> Retry</button>
           </div>
         </div>
-      } @else if (tab() === 'processes') {
-        <!-- ============================== Processes tab ============================== -->
+      } @else {
+        <!-- Global Executive KPIs -->
         <div class="kpis">
-          @for (k of kpis(); track k.label) {
-            <div class="card kpi">
-              <div class="kv tnum" [style.color]="k.color || null">{{ k.value }}</div>
-              <div class="kl">{{ k.label }}</div>
-            </div>
-          }
+          <a class="card kpi" routerLink="/instances" [queryParams]="{status: 'running'}">
+            <span class="kv tnum" style="color: var(--blue);">{{ activeInstances() }}</span>
+            <span class="kl">Active Instances</span>
+          </a>
+          <a class="card kpi" routerLink="/instances" [queryParams]="{status: 'completed'}">
+            <span class="kv tnum" style="color: var(--green);">{{ completedInstances() }}</span>
+            <span class="kl">Completed Instances</span>
+          </a>
+          <a class="card kpi" routerLink="/errors">
+            <span class="kv tnum" [class.red]="failedInstances() > 0">{{ failedInstances() }}</span>
+            <span class="kl">Failed / Errors</span>
+          </a>
+          <div class="card kpi">
+            <span class="kv tnum" [style.color]="failureRateColor()">{{ failureRate() }}%</span>
+            <span class="kl">Failure Rate</span>
+          </div>
+          <a class="card kpi" routerLink="/tasks">
+            <span class="kv tnum amber">{{ openTasks() }}</span>
+            <span class="kl">Open Tasks</span>
+          </a>
+          <div class="card kpi">
+            <span class="kv tnum" [style.color]="slaColor()">{{ slaRate() }}%</span>
+            <span class="kl">SLA Compliance</span>
+          </div>
+          <a class="card kpi" routerLink="/deployments">
+            <span class="kv tnum" style="color: var(--purple);">{{ summary()?.deployments?.active ?? 0 }}</span>
+            <span class="kl">Active Deployments</span>
+          </a>
+          <a class="card kpi" routerLink="/instances" [queryParams]="{type: 'cases'}">
+            <span class="kv tnum">{{ caseSummary()?.total ?? 0 }}</span>
+            <span class="kl">Total Cases</span>
+          </a>
+          <div class="card kpi" title="Durable timers currently scheduled">
+            <span class="kv tnum" style="color: #0284c7;">{{ activeTimers() }}</span>
+            <span class="kl">Active Timers</span>
+          </div>
         </div>
 
-        @if (dailyThroughput().length > 0) {
-          <section class="card chart full-width" style="margin-bottom: 16px;">
-            <div class="row charthead">
-              <div>
-                <h3>Execution Volume &amp; Daily Throughput</h3>
-                <p class="chartsub">Instance completions and starts over time</p>
+        <!-- ==================== Tab 1: Overview ==================== -->
+        @if (tab() === 'overview') {
+          @if (dailyThroughput().length > 0) {
+            <section class="card chart full-width" style="margin-bottom: 16px;">
+              <div class="row charthead">
+                <div>
+                  <h3>Execution Throughput Over Time</h3>
+                  <p class="chartsub">Daily instance starts vs. completions over the selected period</p>
+                </div>
+                <div class="spacer"></div>
+                <div class="chart-legend-inline">
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
+                </div>
               </div>
-              <div class="spacer"></div>
-              <div class="chart-legend-inline">
-                <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
-                <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
-                <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
+
+              <div class="throughput-chart">
+                @for (d of dailyThroughput(); track d.date) {
+                  <div class="tp-col" [title]="throughputTooltip(d)">
+                    <div class="tp-bars">
+                      @if (d.started > 0) {
+                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                      }
+                      @if (d.completed > 0) {
+                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      }
+                      @if (d.failed > 0) {
+                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+                      }
+                    </div>
+                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+                  </div>
+                }
               </div>
-            </div>
-            <div class="throughput-chart">
-              @for (d of dailyThroughput(); track d.date) {
-                <div class="tp-col" [title]="throughputTooltip(d)">
-                  <div class="tp-bars">
-                    <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
-                    <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
-                    @if (d.failed > 0) {
-                      <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+            </section>
+          }
+
+          <div class="chartgrid">
+            <section class="card chart">
+              <div class="row charthead">
+                <h3>Process Instances Status Mix</h3>
+                <div class="spacer"></div>
+                <span class="muted small tnum">{{ instTotal() }} total</span>
+              </div>
+              <p class="chartsub">Distribution across all running, waiting, and completed executions</p>
+              @if (instTotal() > 0) {
+                <div class="barlist">
+                  @for (r of instStatusRows(); track r.key) {
+                    <div class="barrow">
+                      <div class="row lab">
+                        <span class="dot" [style.background]="r.color"></span>
+                        <span>{{ r.label }}</span>
+                        <div class="spacer"></div>
+                        <span class="tnum muted">{{ r.count }}</span>
+                      </div>
+                      <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="nodata">No instances found for this filter scope.</p>
+              }
+            </section>
+
+            <section class="card chart donutcard">
+              <div class="row charthead">
+                <h3>Execution State Ratio</h3>
+              </div>
+              @if (instTotal() > 0) {
+                <div class="donutwrap">
+                  <div class="donut" [style.background]="instDonut()" role="img" aria-label="Instance status distribution">
+                    <div class="hole"><span class="tnum">{{ instTotal() }}</span></div>
+                  </div>
+                  <div class="legend">
+                    @for (r of nonZero(instStatusRows()); track r.key) {
+                      <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
                     }
                   </div>
-                  <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
                 </div>
+              } @else {
+                <p class="nodata">Nothing to chart yet.</p>
               }
+            </section>
+          </div>
+
+          <div class="two-col">
+            <section class="card tablecard">
+              <div class="row cardhead">
+                <h3>Duration by Process Definition</h3>
+                <div class="spacer"></div>
+                <button class="btn sm" (click)="setTab('processes')">View All →</button>
+              </div>
+              @if (byProcess().length) {
+                <table>
+                  <thead><tr><th>Process</th><th class="num">Executions</th><th class="num">Avg Turnaround</th><th class="num">Action</th></tr></thead>
+                  <tbody>
+                    @for (p of byProcess().slice(0, 5); track p.processId) {
+                      <tr>
+                        <td><b>{{ p.processId }}</b></td>
+                        <td class="num tnum">{{ p.count }}</td>
+                        <td class="num">
+                          <span class="avgcell">
+                            <span class="avgbar"><span [style.width.%]="pctOf(p.avgMs, maxProcAvg())"></span></span>
+                            <span class="tnum">{{ ms(p.avgMs) }}</span>
+                          </span>
+                        </td>
+                        <td class="num">
+                          <a class="btn sm" [routerLink]="['/instances']" [queryParams]="{processId: p.processId}">View →</a>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <p class="nodata pad">No completed instances recorded yet.</p>
+              }
+            </section>
+
+            <section class="card tablecard">
+              <div class="row cardhead">
+                <h3>Duration by User Task</h3>
+                <div class="spacer"></div>
+                <button class="btn sm" (click)="setTab('tasks')">View All →</button>
+              </div>
+              @if (byTask().length) {
+                <table>
+                  <thead><tr><th>Task Name</th><th class="num">Completed</th><th class="num">Avg Turnaround</th></tr></thead>
+                  <tbody>
+                    @for (t of byTask().slice(0, 5); track t.name) {
+                      <tr>
+                        <td><b>{{ t.name }}</b></td>
+                        <td class="num tnum">{{ t.count }}</td>
+                        <td class="num">
+                          <span class="avgcell">
+                            <span class="avgbar"><span [style.width.%]="pctOf(t.avgMs, maxTaskAvg())"></span></span>
+                            <span class="tnum">{{ ms(t.avgMs) }}</span>
+                          </span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              } @else {
+                <p class="nodata pad">No completed human tasks recorded yet.</p>
+              }
+            </section>
+          </div>
+        }
+
+        <!-- ==================== Tab 2: Processes ==================== -->
+        @if (tab() === 'processes') {
+          @if (dailyThroughput().length > 0) {
+            <section class="card chart full-width" style="margin-bottom: 16px;">
+              <div class="row charthead">
+                <div>
+                  <h3>Execution Volume &amp; Daily Throughput</h3>
+                  <p class="chartsub">Instance completions and starts over time</p>
+                </div>
+                <div class="spacer"></div>
+                <div class="chart-legend-inline">
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--blue);"></span> Started</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--green);"></span> Completed</span>
+                  <span class="leg-item"><span class="dot-sw" style="background: var(--red);"></span> Failed</span>
+                </div>
+              </div>
+              <div class="throughput-chart">
+                @for (d of dailyThroughput(); track d.date) {
+                  <div class="tp-col" [title]="throughputTooltip(d)">
+                    <div class="tp-bars">
+                      @if (d.started > 0) {
+                        <div class="tp-bar blue" [style.height.%]="pctOfThroughput(d.started)"></div>
+                      }
+                      @if (d.completed > 0) {
+                        <div class="tp-bar green" [style.height.%]="pctOfThroughput(d.completed)"></div>
+                      }
+                      @if (d.failed > 0) {
+                        <div class="tp-bar red" [style.height.%]="pctOfThroughput(d.failed)"></div>
+                      }
+                    </div>
+                    <span class="tp-label">{{ formatDayLabel(d.date) }}</span>
+                  </div>
+                }
+              </div>
+            </section>
+          }
+
+          <div class="chartgrid">
+            <section class="card chart">
+              <div class="row charthead">
+                <h3>Instances by Status</h3>
+                <div class="spacer"></div>
+                <span class="muted small tnum">{{ instTotal() }} total</span>
+              </div>
+              <p class="chartsub">Every instance recorded in this time scope</p>
+              @if (instTotal() > 0) {
+                <div class="barlist">
+                  @for (r of instStatusRows(); track r.key) {
+                    <div class="barrow">
+                      <div class="row lab">
+                        <span class="dot" [style.background]="r.color"></span>
+                        <span>{{ r.label }}</span>
+                        <div class="spacer"></div>
+                        <span class="tnum muted">{{ r.count }}</span>
+                      </div>
+                      <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <p class="nodata">No instances yet.</p>
+              }
+            </section>
+
+            <section class="card chart donutcard">
+              <div class="row charthead"><h3>Status Distribution</h3></div>
+              @if (instTotal() > 0) {
+                <div class="donutwrap">
+                  <div class="donut" [style.background]="instDonut()" role="img" aria-label="Instance status distribution">
+                    <div class="hole"><span class="tnum">{{ instTotal() }}</span></div>
+                  </div>
+                  <div class="legend">
+                    @for (r of nonZero(instStatusRows()); track r.key) {
+                      <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
+                    }
+                  </div>
+                </div>
+              } @else {
+                <p class="nodata">Nothing to chart yet.</p>
+              }
+            </section>
+          </div>
+
+          <section class="card tablecard">
+            <div class="row cardhead">
+              <h3>Duration by Process Definition</h3>
+              <div class="spacer"></div>
+              <input class="search-input" [(ngModel)]="procSearch" placeholder="Search processes…" />
             </div>
+            @if (filteredProcesses().length) {
+              <table>
+                <thead>
+                  <tr>
+                    <th>Process Definition</th>
+                    <th class="num">Executions</th>
+                    <th class="num">Avg Turnaround</th>
+                    <th class="num">Min</th>
+                    <th class="num">Max</th>
+                    <th class="num">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (p of filteredProcesses(); track p.processId) {
+                    <tr>
+                      <td><span class="font-bold">{{ p.processId }}</span></td>
+                      <td class="num tnum">{{ p.count }}</td>
+                      <td class="num">
+                        <span class="avgcell">
+                          <span class="avgbar"><span [style.width.%]="pctOf(p.avgMs, maxProcAvg())"></span></span>
+                          <span class="tnum">{{ ms(p.avgMs) }}</span>
+                        </span>
+                      </td>
+                      <td class="num tnum muted">{{ ms(p.minMs) }}</td>
+                      <td class="num tnum muted">{{ ms(p.maxMs) }}</td>
+                      <td class="num">
+                        <a class="btn sm" [routerLink]="['/instances']" [queryParams]="{processId: p.processId}">
+                          View Instances →
+                        </a>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            } @else {
+              <p class="nodata pad">No completed instances match the current filters.</p>
+            }
           </section>
         }
 
-        <div class="chartgrid">
-          <section class="card chart">
-            <div class="row charthead">
-              <h3>Instances by status</h3>
-              <div class="spacer"></div>
-              <span class="muted small tnum">{{ instTotal() }} total</span>
-            </div>
-            <p class="chartsub">every instance recorded in this time scope</p>
-            @if (instTotal() > 0) {
-              <div class="barlist">
-                @for (r of instStatusRows(); track r.key) {
-                  <div class="barrow">
-                    <div class="row lab">
-                      <span class="dot" [style.background]="r.color"></span>
-                      <span>{{ r.label }}</span>
-                      <div class="spacer"></div>
-                      <span class="tnum muted">{{ r.count }}</span>
-                    </div>
-                    <div class="track"><span [style.width.%]="r.pctOfMax" [style.background]="r.color"></span></div>
-                  </div>
-                }
-              </div>
-            } @else {
-              <p class="nodata">No instances yet.</p>
-            }
-          </section>
-
-          <section class="card chart donutcard">
-            <div class="row charthead"><h3>Completed vs. running mix</h3></div>
-            @if (instTotal() > 0) {
-              <div class="donutwrap">
-                <div class="donut" [style.background]="instDonut()" role="img" aria-label="Instance status distribution">
-                  <div class="hole"><span class="tnum">{{ instTotal() }}</span></div>
-                </div>
-                <div class="legend">
-                  @for (r of nonZero(instStatusRows()); track r.key) {
-                    <div class="li"><span class="sw" [style.background]="r.color"></span> {{ r.label }} · {{ r.share }}%</div>
-                  }
-                </div>
-              </div>
-            } @else {
-              <p class="nodata">Nothing to chart yet.</p>
-            }
-          </section>
-        </div>
-
-        <section class="card tablecard">
-          <div class="row cardhead">
-            <h3>Duration by process definition</h3>
-            <div class="spacer"></div>
-            <input class="search-input" [(ngModel)]="procSearch" placeholder="Search processes…" />
-          </div>
-          @if (filteredProcesses().length) {
-            <table>
-              <thead><tr><th>Process</th><th class="num">Count</th><th class="num">Avg duration</th><th class="num">Min</th><th class="num">Max</th></tr></thead>
-              <tbody>
-                @for (p of filteredProcesses(); track p.processId) {
-                  <tr>
-                    <td><b>{{ p.processId }}</b></td>
-                    <td class="num tnum">{{ p.count }}</td>
-                    <td class="num">
-                      <span class="avgcell">
-                        <span class="avgbar"><span [style.width.%]="pctOf(p.avgMs, maxProcAvg())"></span></span>
-                        <span class="tnum">{{ ms(p.avgMs) }}</span>
-                      </span>
-                    </td>
-                    <td class="num tnum muted">{{ ms(p.minMs) }}</td>
-                    <td class="num tnum muted">{{ ms(p.maxMs) }}</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          } @else {
-            <p class="nodata pad">No completed instances match the current filters.</p>
-          }
-        </section>
-
-      } @else if (tab() === 'tasks') {
         <!-- ============================== Tasks tab ============================== -->
+        @if (tab() === 'tasks') {
         <div class="sla-grid">
           <div class="card sla-card">
             <span class="sla-title">SLA Compliance Rate</span>
@@ -422,9 +627,10 @@ const TASK_STATUSES = [
             }
           </section>
         </div>
+      }
 
-      } @else if (tab() === 'cases') {
-        <!-- ============================== Cases tab ============================== -->
+      <!-- ============================== Cases tab ============================== -->
+      @if (tab() === 'cases') {
         <div class="grid" style="margin-bottom: 20px;">
           <div class="card pad">
             <div class="row charthead">
@@ -551,9 +757,10 @@ const TASK_STATUSES = [
             }
           </section>
         </div>
+      }
 
-      } @else if (tab() === 'queries') {
-        <!-- ============================== Queries tab ============================== -->
+      <!-- ============================== Queries tab ============================== -->
+      @if (tab() === 'queries') {
         <div class="query-builder-wrap">
           <div class="row charthead" style="margin-bottom: 12px;">
             <div>
@@ -661,7 +868,7 @@ const TASK_STATUSES = [
                                   @if (col === 'id') {
                                     <span class="mono tnum font-bold">{{ formatColVal(row[col]) }}</span>
                                   } @else if (col === 'status') {
-                                    <span class="badge">{{ formatColVal(row[col]) }}</span>
+                                    <span class="badge" [style.color]="statusColor(formatColVal(row[col]))">{{ formatColVal(row[col]) }}</span>
                                   } @else {
                                     <span>{{ formatColVal(row[col]) }}</span>
                                   }
@@ -702,7 +909,8 @@ const TASK_STATUSES = [
           </div>
         </div>
       }
-    </div>
+    }
+  </div>
   `,
   styles: [`
     .page { padding: 24px 32px 32px; display: flex; flex-direction: column; gap: 16px; max-width: 1400px; margin: 0 auto; }
@@ -730,10 +938,12 @@ const TASK_STATUSES = [
     .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
 
     /* KPIs */
-    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
-    .kpi { position: relative; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 4px; }
+    .kpi { position: relative; overflow: hidden; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; cursor: pointer; border-radius: var(--radius-md); transition: background .15s ease; }
+    .kpi:hover { background: var(--surface-2); }
     .kpi::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad-brand); }
     .kv { font-size: 24px; font-weight: 750; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .kv.amber { color: var(--amber); } .kv.red { color: var(--red); }
     .kl { font-size: var(--text-xs); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
 
     /* SLAs */
@@ -843,7 +1053,7 @@ export class ReportsComponent {
   private router = inject(Router);
   private toast = inject(ToastService);
 
-  tab = signal<ReportsTab>('processes');
+  tab = signal<ReportsTab>('overview');
   timeWindow = signal<TimeWindow>('all');
   customFrom = signal<string>('');
   customTo = signal<string>('');
@@ -884,6 +1094,7 @@ export class ReportsComponent {
 
   tabLabel = computed(() => {
     switch (this.tab()) {
+      case 'overview': return 'Executive Overview';
       case 'tasks': return 'Tasks & SLAs';
       case 'cases': return 'Cases & Workflows';
       case 'queries': return 'Ad-Hoc Queries';
@@ -951,10 +1162,10 @@ export class ReportsComponent {
   constructor() {
     this.route.queryParamMap.subscribe((m) => {
       const t = m.get('tab') as ReportsTab;
-      if (t && ['processes', 'tasks', 'cases', 'queries'].includes(t)) {
+      if (t && ['overview', 'processes', 'tasks', 'cases', 'queries'].includes(t)) {
         this.tab.set(t);
       } else {
-        this.tab.set('processes');
+        this.tab.set('overview');
       }
     });
     this.load();
@@ -970,16 +1181,16 @@ export class ReportsComponent {
     const now = new Date();
     const toStr = (d: Date) => d.toISOString().slice(0, 10);
     if (w === '1d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 86400000)));
+      this.customFrom.set(toStr(now));
       this.customTo.set(toStr(now));
     } else if (w === '7d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 7 * 86400000)));
+      this.customFrom.set(toStr(new Date(now.getTime() - 6 * 86400000)));
       this.customTo.set(toStr(now));
     } else if (w === '30d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 30 * 86400000)));
+      this.customFrom.set(toStr(new Date(now.getTime() - 29 * 86400000)));
       this.customTo.set(toStr(now));
     } else if (w === '90d') {
-      this.customFrom.set(toStr(new Date(now.getTime() - 90 * 86400000)));
+      this.customFrom.set(toStr(new Date(now.getTime() - 89 * 86400000)));
       this.customTo.set(toStr(now));
     } else if (w === 'all') {
       this.customFrom.set('');
@@ -1055,7 +1266,25 @@ export class ReportsComponent {
     this.analyticsApi.listSavedQueries().subscribe({ next: (q: SavedQuery[]) => this.savedQueries.set(q), error: () => {} });
   }
 
-  // ---- Processes Tab ----
+  // ---- Executive Overview & Process Metrics ----
+  activeInstances = computed(() => {
+    const s = this.summary()?.instances.byStatus ?? {};
+    return (s['running'] ?? 0) + (s['waiting'] ?? 0);
+  });
+  completedInstances = computed(() => this.summary()?.instances.byStatus?.['completed'] ?? 0);
+  failedInstances = computed(() => this.summary()?.instances.byStatus?.['failed'] ?? 0);
+  failureRate = computed(() => this.procs()?.failureRate ?? 0);
+  failureRateColor = computed(() => {
+    const r = this.failureRate();
+    return r > 5 ? 'var(--red)' : r > 0 ? 'var(--amber)' : 'var(--green)';
+  });
+  openTasks = computed(() => {
+    const s = this.summary()?.tasks.byStatus ?? {};
+    return Object.entries(s).filter(([k]) => k !== 'completed' && k !== 'skipped')
+      .reduce((a, [, v]) => a + v, 0);
+  });
+  activeTimers = computed(() => this.summary()?.jobs?.scheduled ?? 0);
+
   kpis = computed(() => {
     const s = this.summary();
     const p = this.procs();
@@ -1092,8 +1321,19 @@ export class ReportsComponent {
   }
 
   pctOfThroughput(val: number): number {
+    if (!val || val <= 0) return 0;
     const max = this.maxThroughputVal();
-    return max > 0 ? Math.max(3, Math.min(100, (val / max) * 100)) : 0;
+    return max > 0 ? Math.max(4, Math.min(100, (val / max) * 100)) : 0;
+  }
+
+  statusColor(s: string) {
+    const low = (s || '').toLowerCase();
+    return low === 'failed' || low === 'error' ? 'var(--red)'
+      : low === 'completed' || low === 'resolved' || low === 'closed' || low === 'approved' ? 'var(--green)'
+      : low === 'aborted' || low === 'cancelled' ? 'var(--muted)'
+      : low === 'suspended' ? 'var(--purple)'
+      : low === 'waiting' || low === 'created' || low === 'reserved' ? 'var(--amber)'
+      : 'var(--blue)';
   }
 
   instStatusRows = computed<StatusRow[]>(() => this.statusRows(this.procs()?.byStatus, INSTANCE_STATUSES));
@@ -1325,7 +1565,23 @@ export class ReportsComponent {
   exportCsv() {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     let header: string[]; let rows: unknown[][]; let name: string;
-    if (this.tab() === 'processes') {
+    if (this.tab() === 'overview') {
+      header = ['Metric', 'Value'];
+      rows = [
+        ['Active Instances', this.activeInstances()],
+        ['Completed Instances', this.completedInstances()],
+        ['Failed Instances', this.failedInstances()],
+        ['Failure Rate (%)', this.failureRate()],
+        ['Open Tasks', this.openTasks()],
+        ['SLA Compliance (%)', this.slaRate()],
+        ['Active Deployments', this.summary()?.deployments?.active ?? 0],
+        ['Total Cases', this.caseSummary()?.total ?? 0],
+        ['Active Timers', this.activeTimers()],
+        ['Process Scope', this.selectedProcess || 'All Processes'],
+        ['Date Range', this.dateRangeLabel()],
+      ];
+      name = 'reports-overview-summary.csv';
+    } else if (this.tab() === 'processes') {
       header = ['Process Definition', 'Executions', 'Avg Turnaround (ms)', 'Min (ms)', 'Max (ms)'];
       rows = this.byProcess().map((p) => [p.processId, p.count, p.avgMs, p.minMs, p.maxMs]);
       name = 'reports-processes.csv';
