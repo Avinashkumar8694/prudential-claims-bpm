@@ -122,6 +122,9 @@ const paths: Record<string, any> = {
   '/deployments/{id}/undeploy': { post: { tags: ['Deployments'], summary: 'Undeploy (deactivate)', parameters: [idParam()], responses: ok(ref('Deployment')) } },
   '/deployments/{id}/archive': { post: { tags: ['Deployments'], summary: 'Archive a deployment', parameters: [idParam()], responses: ok(ref('Deployment')) } },
   '/deployments/{id}/export': { get: { tags: ['Import/Export'], summary: 'Export a deployment as a jBPM kjar', parameters: [idParam()], responses: ok({ type: 'object' }) } },
+  '/deployments/{id}/snapshot': { get: { tags: ['Deployments'], summary: 'Export a self-contained deployment snapshot (.json)', parameters: [idParam()], responses: ok({ type: 'object' }) } },
+  '/deployments/{id}/restore': { post: { tags: ['Deployments'], summary: 'Restore a deployment snapshot back into the project draft', parameters: [idParam()], responses: ok({ type: 'object' }) } },
+  '/deployments/import': { post: { tags: ['Deployments'], summary: 'Import a deployment snapshot package', requestBody: jsonBody({ type: 'object' }), responses: created(ref('Deployment')) } },
   '/deployments/{id}/definitions': { get: { tags: ['Processes'], summary: 'Process definitions in a deployment', parameters: [idParam()], responses: ok(listOf('ProcessDef')) } },
 
   '/instances': {

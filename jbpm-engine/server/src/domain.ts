@@ -55,6 +55,12 @@ export interface Deployment extends Entity {
   versionNumber?: number; versionLabel?: string;   // shown as "Version" in the instance list
   deployedAt: string; deployedBy: string;
   undeployedAt?: string; archivedAt?: string;
+  snapshot?: {
+    frozenAt: string;
+    versionNumber?: number;
+    versionLabel?: string;
+    frozen: boolean;
+  };
 }
 
 export type InstanceStatus = 'running' | 'waiting' | 'completed' | 'aborted' | 'failed' | 'suspended';

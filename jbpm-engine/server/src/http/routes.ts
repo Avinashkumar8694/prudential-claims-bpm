@@ -178,6 +178,18 @@ export function buildRoutes(): Router {
     const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
     res.json(exportKjar(d.engine));
   }));
+  r.get('/deployments/:id/snapshot', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const snap = await new DeploymentService(ctxOf(req)).exportSnapshot(req.params.id);
+    const filename = `deployment-${snap.deployment.workflowId}-${snap.deployment.environment}-v${snap.deployment.versionNumber || 1}.json`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.json(snap);
+  }));
+  r.post('/deployments/:id/restore', perm('workflow:edit'), asyncHandler(async (req, res) => {
+    res.json(await new DeploymentService(ctxOf(req)).restore(req.params.id, actorOf(req)));
+  }));
+  r.post('/deployments/import', perm('workflow:deploy'), asyncHandler(async (req, res) => {
+    res.status(201).json(await new DeploymentService(ctxOf(req)).importSnapshot(req.body, actorOf(req)));
+  }));
   r.get('/deployments/:id/definitions', perm('workflow:view'), asyncHandler(async (req, res) => {
     const d = await new DeploymentService(ctxOf(req)).get(req.params.id);
     res.json({ items: (d.engine.processes || []).map((p) => ({ id: p.id, name: p.name || p.id, nodes: (p.nodes || []).length, startable: (p.nodes || []).some((n) => n.type === 'start') })) });

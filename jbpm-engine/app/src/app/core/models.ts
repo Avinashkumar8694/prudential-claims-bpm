@@ -18,8 +18,15 @@ export interface Branch { id: string; workflowId: string; name: string; headVers
 export interface Version { id: string; workflowId: string; branchId: string; number: number; label?: string; state: 'draft' | 'published'; engine: any; message?: string; createdAt: string; }
 export interface Deployment {
   id: string; workflowId: string; versionId: string; branchId: string;
+  engine?: any;
   env: Record<string, string>; tags: string[]; status: 'active' | 'inactive' | 'archived';
   environment: string; versionNumber?: number; versionLabel?: string; deployedAt: string; deployedBy: string;
+  snapshot?: {
+    frozenAt: string;
+    versionNumber?: number;
+    versionLabel?: string;
+    frozen: boolean;
+  };
 }
 /** One process definition contained in a deployment (jBPM's "what's running in this container" view). */
 export interface DeploymentProcessDef { id: string; name: string; nodes: number; startable: boolean; }

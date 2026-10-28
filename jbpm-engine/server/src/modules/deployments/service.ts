@@ -1,10 +1,11 @@
 // Deployments: immutable runnable snapshots of a published version, labeled with tags, grouped by
 // environment. Exactly one deployment is ACTIVE per (workflow, environment). See docs/09.
 import type { AppContext } from '../../context.ts';
-import { Collections, type Deployment, type TimerJob, type Version } from '../../domain.ts';
+import { Collections, type Branch, type Deployment, type TimerJob, type Version, type Workflow } from '../../domain.ts';
 import { conflict, notFound, validation } from '../../infra/errors.ts';
 import { computeDue } from '../../engine/duration.ts';
 import { NotificationService } from '../notifications/service.ts';
+import { VersionService } from '../versions/service.ts';
 
 export class DeploymentService {
   constructor(private ctx: AppContext) {}
@@ -49,6 +50,12 @@ export class DeploymentService {
       status: 'inactive', environment,
       versionNumber: v.number, versionLabel: v.label,
       deployedAt: this.ctx.clock(), deployedBy: actor,
+      snapshot: {
+        frozenAt: this.ctx.clock(),
+        versionNumber: v.number,
+        versionLabel: v.label,
+        frozen: true,
+      },
     };
     await this.dp().put(dep);
     await this.ctx.audit({ actor, kind: 'deployment.created', workflowId: v.workflowId, deploymentId: dep.id, data: { versionId, environment, tags: dep.tags } });
@@ -155,5 +162,150 @@ export class DeploymentService {
       d.tenantId === this.ctx.tenantId && d.workflowId === workflowId && d.environment === environment && d.status === 'active');
     if (!active.length) throw conflict(`no active deployment for environment "${environment}"`);
     return active[0]!;
+  }
+
+  /** Export frozen deployment snapshot package for download or archiving. */
+  async exportSnapshot(id: string): Promise<any> {
+    const d = await this.get(id);
+    return {
+      format: 'jbpm-deployment-snapshot',
+      version: 1,
+      exportedAt: this.ctx.clock(),
+      deployment: {
+        id: d.id,
+        workflowId: d.workflowId,
+        environment: d.environment,
+        versionNumber: d.versionNumber,
+        versionLabel: d.versionLabel,
+        deployedAt: d.deployedAt,
+        deployedBy: d.deployedBy,
+        tags: d.tags,
+        env: d.env,
+        status: d.status,
+      },
+      engine: structuredClone(d.engine),
+    };
+  }
+
+  /** Restore deployment snapshot into the project (writes a fresh draft to the project's branch). */
+  async restore(id: string, actor: string): Promise<{ ok: boolean; workflowId: string; versionNumber?: number; message: string }> {
+    const d = await this.get(id);
+    const workflows = this.ctx.store.repo<Workflow>(Collections.workflows);
+    const w = await workflows.get(d.workflowId);
+    if (!w || w.tenantId !== this.ctx.tenantId) throw notFound('Workflow');
+
+    const verSvc = new VersionService(this.ctx);
+    const draft = await verSvc.saveDraft(
+      w.defaultBranchId,
+      structuredClone(d.engine),
+      actor,
+      `Restored from deployment snapshot ${d.id} (v${d.versionNumber ?? '?'}, ${d.environment})`
+    );
+
+    await this.ctx.audit({
+      actor,
+      kind: 'deployment.restored',
+      workflowId: d.workflowId,
+      deploymentId: d.id,
+      data: {
+        draftVersionId: draft.id,
+        versionNumber: d.versionNumber,
+        environment: d.environment,
+      },
+    });
+
+    return {
+      ok: true,
+      workflowId: d.workflowId,
+      versionNumber: d.versionNumber,
+      message: `Snapshot of deployment v${d.versionNumber ?? ''} restored to project draft successfully.`,
+    };
+  }
+
+  /** Import a frozen deployment snapshot package and create an immutable deployment unit. */
+  async importSnapshot(body: { snapshot?: any; engine?: any; environment?: string; activate?: boolean }, actor: string): Promise<Deployment> {
+    const raw = body.snapshot || body;
+    const engine = raw.engine || (raw.processes ? raw : undefined);
+    if (!engine || !Array.isArray(engine.processes) || engine.processes.length === 0) {
+      throw validation('Invalid deployment snapshot: missing engine processes.');
+    }
+
+    const env = (body.environment || raw.deployment?.environment || raw.environment || 'dev').trim();
+    if (!env) throw validation('Environment is required.');
+
+    let workflowId = raw.deployment?.workflowId || raw.workflowId;
+    const workflows = this.ctx.store.repo<Workflow>(Collections.workflows);
+    let wf = workflowId ? await workflows.get(workflowId) : undefined;
+    if (!wf || wf.tenantId !== this.ctx.tenantId) {
+      const name = engine.name || engine.id || 'Imported Project';
+      const existing = await workflows.query((w) => w.tenantId === this.ctx.tenantId && (w.name === name || w.id === workflowId));
+      if (existing.length) {
+        wf = existing[0];
+        workflowId = wf.id;
+      } else {
+        const wfId = this.ctx.newId();
+        const branchId = this.ctx.newId();
+        wf = {
+          id: wfId,
+          tenantId: this.ctx.tenantId,
+          name,
+          defaultBranchId: branchId,
+          createdAt: this.ctx.clock(),
+          createdBy: actor,
+        };
+        await workflows.put(wf);
+        const branches = this.ctx.store.repo<Branch>(Collections.branches);
+        await branches.put({
+          id: branchId,
+          tenantId: this.ctx.tenantId,
+          workflowId: wfId,
+          name: 'main',
+          createdAt: this.ctx.clock(),
+          createdBy: actor,
+        });
+        workflowId = wfId;
+      }
+    }
+
+    const depId = this.ctx.newId();
+    const verNumber = raw.deployment?.versionNumber ?? 1;
+    const verLabel = raw.deployment?.versionLabel ? `${raw.deployment.versionLabel} (imported)` : 'imported';
+
+    const dep: Deployment = {
+      id: depId,
+      tenantId: this.ctx.tenantId,
+      workflowId,
+      versionId: raw.deployment?.versionId || this.ctx.newId(),
+      branchId: wf.defaultBranchId || '',
+      engine: structuredClone(engine),
+      env: raw.deployment?.env || raw.env || {},
+      tags: [...new Set([env, ...(raw.deployment?.tags || raw.tags || []), 'imported'])],
+      status: 'inactive',
+      environment: env,
+      versionNumber: verNumber,
+      versionLabel: verLabel,
+      deployedAt: this.ctx.clock(),
+      deployedBy: actor,
+      snapshot: {
+        frozenAt: this.ctx.clock(),
+        versionNumber: verNumber,
+        versionLabel: verLabel,
+        frozen: true,
+      },
+    };
+
+    await this.dp().put(dep);
+    await this.ctx.audit({
+      actor,
+      kind: 'deployment.imported',
+      workflowId,
+      deploymentId: dep.id,
+      data: { environment: env, versionNumber: verNumber },
+    });
+
+    if (body.activate) {
+      return this.activate(dep.id, actor);
+    }
+    return dep;
   }
 }
