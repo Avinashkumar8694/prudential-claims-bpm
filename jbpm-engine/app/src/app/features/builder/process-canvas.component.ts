@@ -194,7 +194,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
             @if (nodeModalTab() === 'props') {
               <div class="modal-body">
                 <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
-                <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" [cheatSheetContent]="cheatSheetContent()" (changed)="markDirty()" (openCheatSheet)="openCheatSheet()"></app-properties-panel>
+                <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" [cheatSheetContent]="cheatSheetContent()" [javaReferenceContent]="javaReferenceContent()" (changed)="markDirty()" (openCheatSheet)="openCheatSheet($event)"></app-properties-panel>
                 <button class="btn danger full" (click)="del($event, n); closeNodeEditor()">Delete node</button>
               </div>
             } @else {
@@ -280,8 +280,8 @@ const COL_W = NW + 100, ROW_H = NH + 46;
         <div class="modal-bg" (click)="closeCheatSheet()">
           <div class="modal wide docs-modal" (click)="$event.stopPropagation()">
             <div class="modal-h">
-              <span class="chip sm" style="background:#0891b2;color:#fff;"><app-icon name="code" [size]="13" /></span>
-              <span>JavaScript &amp; Flow Variables Cheat Sheet</span>
+              <span class="chip sm" [style.background]="cheatSheetLang() === 'java' ? '#d97706' : '#0891b2'" style="color:#fff;"><app-icon name="code" [size]="13" /></span>
+              <span>{{ cheatSheetTitle() }}</span>
               <span class="spacer"></span>
               <button class="x" (click)="closeCheatSheet()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
             </div>
@@ -582,8 +582,10 @@ export class ProcessCanvasComponent implements OnChanges {
   }
 
   showCheatSheet = signal(false);
+  cheatSheetLang = signal<string>('js');
 
-  openCheatSheet() {
+  openCheatSheet(lang: string = 'js') {
+    this.cheatSheetLang.set(lang);
     this.showCheatSheet.set(true);
   }
 
@@ -591,8 +593,21 @@ export class ProcessCanvasComponent implements OnChanges {
     this.showCheatSheet.set(false);
   }
 
+  cheatSheetTitle(): string {
+    return this.cheatSheetLang() === 'java'
+      ? 'Java & Imported Script Reference'
+      : 'JavaScript & Flow Variables Cheat Sheet';
+  }
+
   cheatSheetContent(): string {
+    if (this.cheatSheetLang() === 'java') {
+      return this.catalog()?.javaReference || '# Java & Imported Script Reference\n\nNo Java reference content available.';
+    }
     return this.catalog()?.cheatSheet || '# JavaScript & Flow Variables Cheat Sheet\n\nNo cheat sheet content available.';
+  }
+
+  javaReferenceContent(): string {
+    return this.catalog()?.javaReference || '# Java & Imported Script Reference\n\nNo Java reference content available.';
   }
   linkFrom = signal<string | null>(null);
   linkError = signal<string>('');

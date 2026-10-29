@@ -51,9 +51,10 @@ interface Snippet {
           type="button"
           class="tool-btn cheat"
           (click)="onCheatClick()"
-          title="Open JavaScript & Flow Variables Cheat Sheet"
+          [title]="lang === 'java' ? 'Open Java & Imported Script Reference' : 'Open JavaScript & Flow Variables Cheat Sheet'"
         >
-          <app-icon name="code" [size]="12" /> Cheat Sheet
+          <app-icon name="code" [size]="12" />
+          {{ lang === 'java' ? 'Java Reference' : 'Cheat Sheet' }}
         </button>
         <button
           type="button"
@@ -99,7 +100,7 @@ interface Snippet {
       @if (maximized() && showDrawer()) {
         <aside class="side-drawer card">
           <div class="drawer-header">
-            <span>Flow Variables &amp; Snippets</span>
+            <span>{{ lang === 'java' ? 'Java Reference & Snippets' : 'Flow Variables & Snippets' }}</span>
             <button class="x-btn" (click)="showDrawer.set(false)" aria-label="Close drawer">
               <app-icon name="close" [size]="14" />
             </button>
@@ -108,7 +109,7 @@ interface Snippet {
           <div class="drawer-scroll">
             <div class="section-title">Quick Snippet Insert</div>
             <div class="snippet-grid">
-              @for (snip of snippets; track snip.label) {
+              @for (snip of effectiveSnippets(); track snip.label) {
                 <button
                   type="button"
                   class="snip-card"
@@ -121,10 +122,10 @@ interface Snippet {
               }
             </div>
 
-            @if (cheatSheetContent) {
-              <div class="section-title mt-4">Full Quick Reference</div>
+            @if (effectiveCheatSheetContent(); as content) {
+              <div class="section-title mt-4">{{ lang === 'java' ? 'Java Reference Manual' : 'Full Quick Reference' }}</div>
               <div class="drawer-markdown">
-                <app-markdown-viewer [content]="cheatSheetContent" />
+                <app-markdown-viewer [content]="content" />
               </div>
             }
           </div>
@@ -420,9 +421,10 @@ export class CodeEditorComponent implements OnChanges, AfterViewInit {
   @Input() placeholder = '// Write JavaScript logic here...';
   @Input() readOnly = false;
   @Input() cheatSheetContent?: string;
+  @Input() javaReferenceContent?: string;
 
   @Output() codeChange = new EventEmitter<string>();
-  @Output() openCheatSheet = new EventEmitter<void>();
+  @Output() openCheatSheet = new EventEmitter<string>();
 
   gutterPane = viewChild<ElementRef<HTMLDivElement>>('gutterPane');
   codeArea = viewChild<ElementRef<HTMLTextAreaElement>>('codeArea');
@@ -490,6 +492,60 @@ export class CodeEditorComponent implements OnChanges, AfterViewInit {
     },
   ];
 
+  readonly javaSnippets: Snippet[] = [
+    {
+      label: 'kcontext Read & Write',
+      desc: 'Reads and writes process variables via ProcessContext',
+      code: 'String caseId = (String) kcontext.getVariable("caseId");\nkcontext.setVariable("status", "APPROVED");',
+    },
+    {
+      label: 'Signal Process Instance',
+      desc: 'Delivers an event to this instance to resume waiting nodes',
+      code: 'kcontext.getProcessInstance().signalEvent("PAYMENT_CONFIRMED", "TX-101");',
+    },
+    {
+      label: 'Jackson ObjectNode Builder',
+      desc: 'Constructs request JSON via Jackson ObjectMapper tree model',
+      code: 'com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();\ncom.fasterxml.jackson.databind.node.ObjectNode req = mapper.createObjectNode();\nreq.put("caseId", (String) kcontext.getVariable("caseId"));\nkcontext.setVariable("reqPayload", req.toString());',
+    },
+    {
+      label: 'Jackson Response Parser',
+      desc: 'Parses raw HTTP response body in on-exit script',
+      code: 'com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();\ncom.fasterxml.jackson.databind.JsonNode res = mapper.readTree((String) kcontext.getVariable("resPayload"));\nString code = res.path("data").path("code").asText("");\nkcontext.setVariable("authCode", code);',
+    },
+    {
+      label: 'Java Collections (ArrayList / HashMap)',
+      desc: 'Constructs standard Java collections',
+      code: 'java.util.List<String> list = new java.util.ArrayList<String>();\nlist.add("FirstItem");\njava.util.Map<String, Object> map = new java.util.HashMap<String, Object>();\nmap.put("total", list.size());',
+    },
+    {
+      label: 'System Audit Log',
+      desc: 'Outputs to the instance execution audit timeline',
+      code: 'System.out.println("Processing case " + kcontext.getProcessInstance().getCorrelationKey());',
+    },
+    {
+      label: 'Sequence Flow Condition Recipe',
+      desc: 'Evaluates boolean routing decision in Java condition',
+      code: 'return ((Number) kcontext.getVariable("amount")).doubleValue() > 1000.0;',
+    },
+    {
+      label: 'Abort Instance',
+      desc: 'Aborts this process instance via KieRuntime',
+      code: 'kcontext.getKieRuntime().abortProcessInstance(kcontext.getProcessInstance().getId());',
+    },
+  ];
+
+  effectiveSnippets = computed<Snippet[]>(() => {
+    return this.lang === 'java' ? this.javaSnippets : this.snippets;
+  });
+
+  effectiveCheatSheetContent = computed(() => {
+    if (this.lang === 'java') {
+      return this.javaReferenceContent || this.cheatSheetContent || '';
+    }
+    return this.cheatSheetContent || '';
+  });
+
   lineNumbers = computed<number[]>(() => {
     const text = this.code || '';
     const count = text.split('\n').length;
@@ -548,7 +604,7 @@ export class CodeEditorComponent implements OnChanges, AfterViewInit {
     if (this.maximized()) {
       this.showDrawer.set(!this.showDrawer());
     } else {
-      this.openCheatSheet.emit();
+      this.openCheatSheet.emit(this.lang);
     }
   }
 

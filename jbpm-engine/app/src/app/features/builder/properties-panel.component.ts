@@ -34,8 +34,9 @@ import { CodeEditorComponent } from '../../shared/code-editor.component';
                   [lang]="val('lang') || val(f.key + 'Lang') || 'js'"
                   [placeholder]="f.placeholder || '// Write script logic here...'"
                   [cheatSheetContent]="cheatSheetContent"
+                  [javaReferenceContent]="javaReferenceContent"
                   (codeChange)="set(f.key, $event)"
-                  (openCheatSheet)="openCheatSheet.emit()"
+                  (openCheatSheet)="openCheatSheet.emit($event)"
                 ></app-code-editor>
               }
               @case ('textarea') { <textarea rows="3" [ngModel]="val(f.key)" (ngModelChange)="set(f.key, $event)" [placeholder]="f.placeholder || ''"></textarea> }
@@ -200,8 +201,9 @@ export class PropertiesPanelComponent implements OnChanges {
    *  (see server's /catalog/processes) and, once one is picked on THIS node, the 'called' source. */
   @Input() callableProcesses: CallableProcess[] = [];
   @Input() cheatSheetContent?: string;
+  @Input() javaReferenceContent?: string;
   @Output() changed = new EventEmitter<void>();
-  @Output() openCheatSheet = new EventEmitter<void>();
+  @Output() openCheatSheet = new EventEmitter<string>();
   kv: Record<string, { k: string; v: string }[]> = {};
   sl: Record<string, string[]> = {};
   errorCodes = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'];

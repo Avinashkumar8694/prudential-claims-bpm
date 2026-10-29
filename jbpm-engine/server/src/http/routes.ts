@@ -73,6 +73,12 @@ function getCheatSheetReadme(): string {
   if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');
   return '';
 }
+
+function getJavaReferenceReadme(): string {
+  const p = path.resolve(__dirname, '../../../docs/usage_docs/16-java-and-imported-script-reference.md');
+  if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');
+  return '';
+}
 import { resolveWorkflowServiceStore } from '../workflow-service/store/index.ts';
 import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
 import { hub } from '../infra/ws-hub.ts';
@@ -110,8 +116,16 @@ export function buildRoutes(): Router {
     readmes: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, getNodeReadme(d.engineType)])), // engineType → full markdown README
     assetReadmes: Object.fromEntries(Object.keys(ASSET_FILE_MAP).map((k) => [k, getAssetReadme(k)])), // assetKind → full markdown README
     cheatSheet: getCheatSheetReadme(), // full JavaScript & variables cheat sheet markdown
+    javaReference: getJavaReferenceReadme(), // full Java & imported script reference markdown
   }));
-  r.get('/catalog/cheat-sheet', (_req, res) => res.json({ cheatSheet: getCheatSheetReadme() }));
+  r.get('/catalog/cheat-sheet', (req, res) => {
+    const lang = String(req.query.lang || 'js');
+    if (lang === 'java') {
+      res.json({ cheatSheet: getJavaReferenceReadme(), lang: 'java' });
+    } else {
+      res.json({ cheatSheet: getCheatSheetReadme(), lang: 'js' });
+    }
+  });
   r.get('/catalog/nodes/:engineType', (req, res) => {
     const def = NODE_DEF_BY_TYPE[req.params.engineType];
     if (!def) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'node type not found' } });
