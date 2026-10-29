@@ -48,7 +48,121 @@ flowchart TD
 
 ---
 
-## 2. Structured Error Context Schema
+## 2. Sequence Diagrams: Execution Workflows
+
+### Sequence 1: Local Boundary Precedence vs. Global Bubbling
+
+This sequence illustrates how a local boundary error event intercepts a failure locally, preventing invocation of the Project Global Error Handler:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Engine as ExecutionEngine
+    participant Node as HTTP / Task Node
+    participant Boundary as Boundary Error Catch
+    participant Global as Global Error Handler
+    participant Store as Repository Store
+
+    Engine->>Node: execute handle(node)
+    Node-->>Engine: return { error: "HTTP 503", errorCode: "SERVICE_ERROR" }
+    Engine->>Engine: raiseError(inst, node, code, message)
+    Note over Engine: Check Tier 1: boundaryHandler.findErrorHandler()
+    alt Local Boundary Attached to Node
+        Engine->>Boundary: push active token on Boundary Node
+        Engine->>Store: persist instance with errorInfo
+        Boundary-->>Engine: execute local recovery sequence flow
+        Note over Engine: Global Error Handler is NOT invoked!
+    else No Local Boundary (or rethrow: true)
+        Engine->>Global: Check dep.globalErrorHandler.enabled
+        Engine->>Global: Spawn Global Error Handler Process Instance
+    end
+```
+
+---
+
+### Sequence 2: Global Error Handler with `repair-and-resume` & Node Retry
+
+This sequence illustrates how an unhandled REST error bubbles up to the Global Error Handler, which repairs the authentication state and triggers a re-execution of the failing node:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant MainInst as Main Process Instance
+    participant Engine as ExecutionEngine
+    participant ErrProc as Global Error Handler Process
+    participant DB as Instance Store
+
+    MainInst->>Engine: HTTP Node fails with 401 Unauthorized
+    Engine->>Engine: findErrorHandler() -> None found (Unhandled)
+    Engine->>Engine: Check dep.globalErrorHandler -> Enabled (repair-and-resume)
+    Engine->>ErrProc: Spawn error instance (isErrorHandler: true)
+    Note over ErrProc: Injects failedContext, failedEndpoint, failedPayload
+    ErrProc->>ErrProc: Script Task: Refresh OAuth Token via Auth Server
+    ErrProc->>ErrProc: Set vars.authToken = "new_token_999"
+    ErrProc->>ErrProc: Set vars.errorHandlerAction = "retry"
+    ErrProc-->>Engine: Settle: status = 'completed'
+    Engine->>MainInst: Apply outputMappings: authToken -> authToken
+    Engine->>MainInst: Set errorRepaired = true, clear inst.error
+    Engine->>MainInst: Push active token on failing HTTP node (Retry!)
+    MainInst->>Engine: Re-execute HTTP Node with new authToken
+    Engine-->>MainInst: Success (HTTP 200 OK) -> Path completes!
+```
+
+---
+
+### Sequence 3: Circuit Breaker Loop Prevention
+
+This sequence illustrates how the engine prevents infinite recursive loops when an error occurs inside the Global Error Handler process itself:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as Main Process Instance
+    participant Engine as ExecutionEngine
+    participant ErrInst as Global Error Handler Instance
+    participant Audit as ExecutionError Log
+
+    Main->>Engine: Script Node fails with SCRIPT_ERROR
+    Engine->>ErrInst: Spawn Global Error Handler (isErrorHandler: true)
+    ErrInst->>Engine: Step: Run Script in Error Handler
+    Engine-->>ErrInst: Script throws: "SyntaxError inside error handler"
+    Engine->>Engine: raiseError(ErrInst, "SCRIPT_ERROR")
+    Note over Engine: CIRCUIT BREAKER CHECK: ErrInst.isErrorHandler === true
+    Engine->>Audit: Log ExecutionError: "Circuit Breaker: loop prevented"
+    Engine->>ErrInst: Set status = 'failed', endedAt = now()
+    Note over Engine: Hard stop! Zero recursion. Original instance halts cleanly.
+```
+
+---
+
+### Sequence 4: Project Environment Variables (`env`) Lifecycle
+
+This sequence illustrates how arbitrary project environment variables are defined, deployed, and accessed in JavaScript and Java sandboxes:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User as Author / UI
+    participant Settings as Project Settings
+    participant API as Workflow API
+    participant Deploy as Deployment Service
+    participant Sandbox as Execution Sandbox
+
+    User->>Settings: Add env: { INTEGRATION_LAYER_URL, API_KEY, TIMEOUT }
+    Settings->>API: updateWorkflow(wf.id, { env })
+    API-->>Settings: Workflow.env updated
+    User->>Deploy: Deploy Published Version to "prod"
+    Deploy->>Deploy: Merges { ...wf.env, ...deploy.env }
+    Deploy-->>User: Deployment.env active with merged variables
+    Note over Sandbox: Runtime Execution (Instance started)
+    Sandbox->>Sandbox: In pure JS: env.API_KEY / System.getenv("API_KEY")
+    Sandbox->>Sandbox: In Java: System.getenv("INTEGRATION_LAYER_URL")
+    Sandbox->>Sandbox: In Java: kcontext.getKieRuntime().getEnvironment().get(...)
+```
+
+---
+
+## 3. Structured Error Context Schema
 
 When an error occurs, the engine constructs enriched error payloads for both local instance variables (`errorInfo`) and the Global Error Handler process (`errorContext` + convenience variables).
 
@@ -95,7 +209,7 @@ When the Project Global Error Handler process is spawned, it receives the follow
 
 ---
 
-## 3. Global Error Handler Strategies & Variable Mapping
+## 4. Global Error Handler Strategies & Variable Mapping
 
 In **Project Settings** (`ProjectSettingsComponent`), projects can choose from three resolution strategies:
 
@@ -129,7 +243,7 @@ Spawns the global error process as an asynchronous operational incident for supp
 
 ---
 
-## 4. Recursion Prevention: The Circuit Breaker
+## 5. Recursion Prevention: The Circuit Breaker
 
 A critical challenge in workflow error handling is recursion loops: **What happens if the Global Error Handler itself throws an error?**
 
@@ -153,7 +267,7 @@ Without strict controls, an error in the global error handler would trigger the 
 
 ---
 
-## 5. Task & Boundary Flags
+## 6. Task & Boundary Flags
 
 ### Flag 1: `throwError: boolean` (Soft Failure vs Hard Error)
 Configured on **Service (REST) Tasks** (`http` nodes):
@@ -169,7 +283,7 @@ Configured on **Boundary Events** and **Error End Events**:
 
 ---
 
-## 6. Real-World Case Study: Policy Management System
+## 7. Real-World Case Study: Policy Management System
 
 In the Prudential Policy System (`extracted_projects/policy_system`):
 - `rest-executor.bpmn` executes a REST call to an external core policy service.
@@ -200,7 +314,7 @@ With our engine:
 
 ---
 
-## 7. Project Environment Variables (`env`)
+## 8. Project Environment Variables (`env`)
 
 In enterprise jBPM, environment variables and configuration properties were managed via server-level `-D` system properties or KIE workbench profiles.
 
@@ -257,14 +371,15 @@ const url = isAbsolute ? n.url : `${baseUrl}${n.url}`;
 
 ---
 
-## 8. Summary Checklist for Error Handling & Configuration
+## 9. Comprehensive Comparison Matrix
 
-| Feature | Local Boundary Catch | Project Global Error Handler |
-| :--- | :--- | :--- |
-| **Scope** | Single activity node | Entire Project / Workflow |
-| **Precedence** | Always runs first (Tier 1) | Runs if unhandled locally (Tier 4) |
-| **Trigger Criteria** | Error code or `*` | Filter array (e.g. `['SERVICE_ERROR', '500']` or `['*']`) |
-| **Output Mapping** | Direct flow variables | Configured `outputMappings` table |
-| **Resumption** | Continues along boundary flow | `repair-and-resume` (with optional retry) |
-| **Loop Protection** | BPMN sequence flow structure | Hard Circuit Breaker (`depth = 1`) |
-| **Configuration Location**| Node Canvas & Properties Panel | Project Settings Card |
+| Feature | Local Boundary Catch | Process Event Subprocess | Project Global Error Handler |
+| :--- | :--- | :--- | :--- |
+| **Scope** | Single host activity node | Entire process definition | Entire Project across all processes |
+| **Precedence** | Tier 1 (Always runs first) | Tier 2/3 (Runs if no boundary) | Tier 4 (Runs if unhandled / rethrown) |
+| **Matching Rule** | Error code or `*` on host node | Subprocess error start event | Configured filter array (e.g. `['SERVICE_ERROR', '500']` or `['*']`) |
+| **Input Context** | `inst.variables.errorInfo` | `inst.variables.errorInfo` | `errorContext`, `failedContext`, `failedEndpoint`, `failedPayload`, etc. |
+| **Resumption** | Boundary outgoing flow | Outgoing flow from subprocess | `repair-and-resume` (with optional retry) |
+| **Output Mapping** | Direct mutation | Subprocess output mappings | Project-level `outputMappings` table |
+| **Loop Protection** | BPMN graph flow topology | Standard join/token limits | Hard Circuit Breaker (`recursion depth = 1`) |
+| **Configuration** | Canvas Drag-and-drop | Canvas Event Subprocess | Project Settings Card |
