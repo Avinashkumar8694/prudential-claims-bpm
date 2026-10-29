@@ -67,7 +67,7 @@ interface NavItem { label: string; icon: string; link: string; }
   `,
   styles: [`
     /* Borderless white rail — separation comes from the content pane's tint, not a divider line. */
-    .sidenav { width: var(--sidenav-w); background: var(--surface); height: 100%; display: flex; flex-direction: column; transition: width .15s; padding: 6px 0; }
+    .sidenav { width: var(--sidenav-w); background: var(--surface); height: 100%; display: flex; flex-direction: column; transition: width .15s; padding: 6px 0; border-right: 1px solid var(--border); }
     .sidenav.collapsed { width: 68px; }
     .brand { display: flex; align-items: center; gap: 10px; padding: 14px 18px 16px; }
     /* Collapsed: no brand-name to fill the row, so the logo + toggle + collapse button (the toggle's

@@ -25,7 +25,7 @@ import mermaid from 'mermaid';
     .markdown-container {
       font-size: 13px;
       line-height: 1.6;
-      color: var(--text, #1e293b);
+      color: var(--text);
       word-break: break-word;
     }
     :host ::ng-deep h1 {
@@ -33,82 +33,108 @@ import mermaid from 'mermaid';
       font-weight: 700;
       margin: 0 0 12px;
       padding-bottom: 6px;
-      border-bottom: 1px solid var(--border, #e2e8f0);
-      color: var(--text-strong, #0f172a);
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
     }
     :host ::ng-deep h2 {
       font-size: 16px;
       font-weight: 600;
       margin: 20px 0 8px;
-      color: var(--text-strong, #0f172a);
+      color: var(--text);
     }
     :host ::ng-deep h3 {
       font-size: 14px;
       font-weight: 600;
       margin: 14px 0 6px;
-      color: var(--text-strong, #0f172a);
+      color: var(--text);
+    }
+    :host ::ng-deep h4 {
+      font-size: 13px;
+      font-weight: 600;
+      margin: 12px 0 4px;
+      color: var(--text);
     }
     :host ::ng-deep p {
       margin: 0 0 10px;
+      color: var(--text);
+    }
+    :host ::ng-deep strong, :host ::ng-deep b {
+      color: var(--text);
+      font-weight: 650;
     }
     :host ::ng-deep ul, :host ::ng-deep ol {
       margin: 0 0 12px;
       padding-left: 20px;
+      color: var(--text);
     }
     :host ::ng-deep li {
       margin-bottom: 4px;
+      color: var(--text);
     }
     :host ::ng-deep table {
       width: 100%;
       border-collapse: collapse;
       margin: 14px 0;
       font-size: 12px;
+      border: 1px solid var(--border);
     }
     :host ::ng-deep th, :host ::ng-deep td {
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border);
       padding: 7px 10px;
       text-align: left;
+      color: var(--text);
     }
     :host ::ng-deep th {
-      background: var(--surface-muted, #f8fafc);
+      background: var(--surface-3);
       font-weight: 600;
     }
+    :host ::ng-deep td {
+      background: var(--surface);
+    }
     :host ::ng-deep pre {
-      background: var(--surface-code, #0f172a);
-      color: #f8fafc;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      color: var(--text);
       padding: 12px;
       border-radius: 8px;
       overflow-x: auto;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
       font-size: 12px;
       margin: 10px 0;
     }
     :host ::ng-deep code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
       font-size: 12px;
-      background: var(--surface-muted, #f1f5f9);
-      color: #0f172a;
+      background: var(--surface-3);
+      color: var(--primary);
+      border: 1px solid var(--border);
       padding: 2px 5px;
       border-radius: 4px;
     }
     :host ::ng-deep pre code {
       background: transparent;
       color: inherit;
+      border: none;
       padding: 0;
     }
     :host ::ng-deep blockquote {
       margin: 12px 0;
       padding: 8px 14px;
-      border-left: 4px solid var(--primary, #3b82f6);
-      background: var(--primary-50, #eff6ff);
+      border-left: 4px solid var(--primary);
+      background: var(--primary-50);
       border-radius: 0 6px 6px 0;
-      color: var(--text-muted, #334155);
+      color: var(--text);
+    }
+    :host ::ng-deep hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 16px 0;
     }
     :host ::ng-deep .mermaid-wrapper {
       margin: 16px 0;
       padding: 16px;
-      background: var(--surface, #ffffff);
-      border: 1px solid var(--border, #e2e8f0);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
       border-radius: 8px;
       text-align: center;
       overflow-x: auto;
@@ -206,6 +232,18 @@ export class MarkdownViewerComponent implements OnInit, OnChanges, AfterViewInit
   private async renderMermaidDiagrams(): Promise<void> {
     if (!isPlatformBrowser(this.platformId) || !this.mermaidInitialized || !this.containerRef) {
       return;
+    }
+
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    try {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isDark ? 'dark' : 'default',
+        securityLevel: 'loose',
+        fontFamily: 'inherit',
+      });
+    } catch (e) {
+      // ignore re-init errors
     }
 
     const container = this.containerRef.nativeElement;

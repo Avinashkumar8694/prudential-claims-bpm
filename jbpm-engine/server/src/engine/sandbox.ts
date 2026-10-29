@@ -233,6 +233,8 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
     node: buildNodeGlobal(opts),
     env: { ...(opts.env || {}) },
     console: { log: (...a: unknown[]) => log(a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ')) },
+    getVariable: (k: string) => vars[k],
+    setVariable: (k: string, v: unknown) => { vars[k] = v; },
   };
   installJsCompat(sandbox);
   vm.createContext(sandbox);
@@ -267,7 +269,7 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
 }
 
 const RESERVED_SANDBOX_KEYS = new Set([
-  'kcontext', 'vars', 'instance', 'node', 'env', 'console',
+  'kcontext', 'vars', 'instance', 'node', 'env', 'console', 'getVariable', 'setVariable',
   'Java', 'java', 'System', 'KieFunctions', 'org', 'com', 'makeJacksonNode',
   'Boolean', 'String', 'Number', 'Object', 'Array', 'Integer', 'Long', 'Double', 'Float',
   'Error', 'Date', 'Math', 'JSON', 'RegExp', 'Map', 'Set', 'Promise', 'Function',
@@ -321,6 +323,7 @@ export async function evalCondition(expr: string | undefined, lang: string | und
     instance: buildInstanceGlobal(vars, ctx, actions),
     node: buildNodeGlobal(ctx),
     env: { ...(ctx.env || {}) },
+    getVariable: (k: string) => vars[k],
   };
   installJsCompat(sandbox);
   vm.createContext(sandbox);

@@ -251,3 +251,43 @@ test('instance/node also work in a JS gateway condition', async () => {
   assert.ok(inst.history.some((h) => h.nodeId === 'a'));
   assert.ok(!inst.history.some((h) => h.nodeId === 'b'));
 });
+
+test('getVariable and setVariable top-level helpers work in JS script and gateway condition', async () => {
+  const inst = await run(newCtx(),
+    [
+      { id: 's', type: 'start' },
+      { id: 't', type: 'script', lang: 'js', code: 'setVariable("status", "VALIDATED:" + getVariable("code")); setVariable("flag", true);' },
+      { id: 'g', type: 'gateway', mode: 'exclusive' },
+      { id: 'a', type: 'manual', name: 'A' }, { id: 'b', type: 'manual', name: 'B' }, { id: 'e', type: 'end' },
+    ],
+    [
+      { id: 'f1', from: 's', to: 't' },
+      { id: 'f2', from: 't', to: 'g' },
+      { id: 'f3', from: 'g', to: 'a', lang: 'js', when: 'getVariable("flag") === true' },
+      { id: 'f4', from: 'g', to: 'b', lang: 'js', when: 'getVariable("flag") !== true' },
+      { id: 'f5', from: 'a', to: 'e' }, { id: 'f6', from: 'b', to: 'e' },
+    ],
+    { code: 'ABC' },
+  );
+  assert.strictEqual(inst.status, 'completed', JSON.stringify(inst.error));
+  assert.strictEqual(inst.variables['status'], 'VALIDATED:ABC');
+  assert.ok(inst.history.some((h) => h.nodeId === 'a'));
+});
+
+test('bare variable names work directly in JS gateway condition', async () => {
+  const inst = await run(newCtx(),
+    [
+      { id: 's', type: 'start' }, { id: 'g', type: 'gateway', mode: 'exclusive' },
+      { id: 'a', type: 'manual', name: 'A' }, { id: 'b', type: 'manual', name: 'B' }, { id: 'e', type: 'end' },
+    ],
+    [
+      { id: 'f1', from: 's', to: 'g' },
+      { id: 'f2', from: 'g', to: 'a', lang: 'js', when: 'amount > 1000' },
+      { id: 'f3', from: 'g', to: 'b', lang: 'js', when: 'amount <= 1000' },
+      { id: 'f4', from: 'a', to: 'e' }, { id: 'f5', from: 'b', to: 'e' },
+    ],
+    { amount: 5000 },
+  );
+  assert.strictEqual(inst.status, 'completed', JSON.stringify(inst.error));
+  assert.ok(inst.history.some((h) => h.nodeId === 'a'));
+});

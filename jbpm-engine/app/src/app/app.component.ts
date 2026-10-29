@@ -46,18 +46,17 @@ import { IconComponent } from './shared/icon.component';
     /* The app is a floating rounded surface on the page's mesh gradient, not a full-bleed grey
        chrome. The inset is deliberately small on narrow viewports so no horizontal space is
        wasted, and grows on wide screens where the gradient backdrop can breathe. */
-    :host { display: flex; flex-direction: column; height: 100vh; height: 100dvh; padding: 0; }
+    :host { display: flex; flex-direction: column; height: 100vh; height: 100dvh; margin: 0; padding: 0; }
     .layout {
       flex: 1; display: flex; min-height: 0;
-      margin: 12px; border-radius: var(--radius-shell);
-      background: var(--surface); box-shadow: var(--shadow-shell);
-      overflow: hidden; border: 1px solid var(--border);
+      margin: 0; border-radius: 0;
+      background: var(--surface); box-shadow: none;
+      overflow: hidden; border: none;
     }
     /* relative so the floating notifications bell can pin to the pane's top-right corner */
     .main { flex: 1; min-width: 0; overflow: auto; background: var(--surface-2); position: relative; }
     .mobile-topbar { display: none; }
 
-    @media (min-width: 1600px) { .layout { margin: 20px 24px; } }
     @media (max-width: 900px) {
       .layout {
         margin: 0; border-radius: 0; border: none;
