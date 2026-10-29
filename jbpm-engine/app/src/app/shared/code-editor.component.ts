@@ -454,14 +454,14 @@ export class CodeEditorComponent implements OnChanges, AfterViewInit {
       code: 'if (KieFunctions.greaterThan(amount, 5000) && KieFunctions.equalsTo(status, "PENDING")) {\n  vars.isHighValue = true;\n}',
     },
     {
-      label: 'Jackson ObjectNode Builder',
-      desc: 'Builds JSON payload via Jackson ObjectMapper tree API',
-      code: 'var mapper = new com.fasterxml.jackson.databind.ObjectMapper();\nvar req = mapper.createObjectNode();\nreq.put("caseId", instance.correlationKey);\nreq.put("amount", vars.amount);\nreqPayload = req.toString();',
+      label: 'Build JSON Request Payload',
+      desc: 'Constructs an outgoing JSON payload object for HTTP service tasks',
+      code: 'const req = {\n  caseId: instance.correlationKey,\n  amount: amount,\n  items: ["Item-A", "Item-B"],\n  timestamp: new Date().toISOString()\n};\nreqPayload = JSON.stringify(req);',
     },
     {
-      label: 'Java Collections (ArrayList / HashMap)',
-      desc: 'Creates Java collection shims in JavaScript',
-      code: 'var list = new java.util.ArrayList();\nlist.add("FirstItem");\nvar map = new java.util.HashMap();\nmap.put("total", list.size());',
+      label: 'Array Filter & Aggregation',
+      desc: 'Standard JavaScript array filtering and reduce operations',
+      code: 'const activeItems = (vars.items || []).filter(item => item.isActive);\nconst totalCost = activeItems.reduce((sum, item) => sum + (item.price || 0), 0);\nvars.summary = { count: activeItems.length, total: totalCost };',
     },
     {
       label: 'Instance Signal & Events',
