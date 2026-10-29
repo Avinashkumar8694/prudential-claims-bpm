@@ -24,6 +24,8 @@ the engine itself; read this folder if you're *running* or *using* it.
 | 13 | [Multi-version deploy sequence](13-multi-version-deploy-sequence.md) | Full request/response trace: deploying the same project twice, one instance per version, then fetching tasks and signals — plus exactly when each identifier (`workflowId`, `versionId`, `deploymentId`, `instanceId`) is generated |
 | 14 | [Workflow instance management](14-workflow-instance-management.md) | Dynamic instance management, variable mutation policies, retry behaviors, and state transitions |
 | 15 | [JavaScript & Flow Variables Cheat Sheet](15-javascript-and-flow-variables-cheatsheet.md) | Complete reference: sandbox globals, bare variables, `vars`, `instance` API, condition expressions, HTTP exit scripts, and data mappings |
+| 16 | [Java & Imported Script Reference Manual](16-java-and-imported-script-reference.md) | JVM sidecar execution, `kcontext` API, Jackson JSON parsing, collections, and Java condition expressions for imported jBPM projects |
+| 17 | [Hierarchical Error Handling & Environment Variables Guide](17-error-handling-and-environment-guide.md) | 4-tier error resolution hierarchy, local boundary vs. project global error handler, repair-and-resume strategies, circuit breakers, and project environment variables (`env`) |
 
 ## Reference
 

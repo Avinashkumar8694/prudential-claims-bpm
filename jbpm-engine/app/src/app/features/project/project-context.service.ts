@@ -4,7 +4,7 @@ import { WorkflowApiService } from '../../core/api/workflow-api.service';
 import { DeploymentApiService } from '../../core/api/deployment-api.service';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
-import type { Workflow } from '../../core/models';
+import type { Workflow, GlobalErrorHandlerConfig } from '../../core/models';
 
 export interface JbpmExportDenialIssue {
   processId: string;
@@ -41,6 +41,8 @@ export class ProjectContextService {
   assets = signal<Record<string, { name: string; usedBy: number; refs?: any[] }[]>>({});
   assetKinds = signal<{ key: string; label: string; nameField: string }[]>([]);
   vars = signal<{ name: string; type: string }[]>([]);
+  envList = signal<{ key: string; value: string }[]>([]);
+  globalErrorHandler = signal<GlobalErrorHandlerConfig>({ enabled: false, strategy: 'repair-and-resume', filter: ['*'] });
   name = ''; description = ''; baseUrl = '';
   instanceCreationMode: 'both' | 'case-only' | 'process-only' | '' = '';
   exportDenial = signal<JbpmExportDenial | null>(null);
@@ -51,6 +53,9 @@ export class ProjectContextService {
       this.wf.set(w); this.name = w.name; this.description = w.description || '';
       this.instanceCreationMode = (w.instanceCreationMode as any) || '';
       this.vars.set([...(w.variables || [])]);
+      const envRecord = w.env || {};
+      this.envList.set(Object.entries(envRecord).map(([key, value]) => ({ key, value })));
+      this.globalErrorHandler.set(w.globalErrorHandler || { enabled: false, strategy: 'repair-and-resume', filter: ['*'] });
     });
     this.loadProcesses();
     this.loadAssets();
@@ -101,7 +106,42 @@ export class ProjectContextService {
   }
   addVar() { this.vars.set([...this.vars(), { name: '', type: 'string' }]); }
   rmVar(i: number) { const v = [...this.vars()]; v.splice(i, 1); this.vars.set(v); }
-  saveVars() { const w = this.wf(); if (w) this.api.updateWorkflow(w.id, { variables: this.vars().filter((v) => v.name.trim()) as any }).subscribe((u) => this.wf.set(u)); }
+  saveVars() { const w = this.wf(); if (w) this.api.updateWorkflow(w.id, { variables: this.vars().filter((v) => v.name.trim()) as any }).subscribe((u) => { this.wf.set(u); this.toast.success('Shared variables saved'); }); }
+
+  addEnvVar() { this.envList.set([...this.envList(), { key: '', value: '' }]); }
+  rmEnvVar(i: number) { const list = [...this.envList()]; list.splice(i, 1); this.envList.set(list); }
+  saveEnv() {
+    const w = this.wf();
+    if (!w) return;
+    const envObj: Record<string, string> = {};
+    for (const item of this.envList()) {
+      const k = item.key.trim();
+      if (k) envObj[k] = item.value;
+    }
+    this.api.updateWorkflow(w.id, { env: envObj } as any).subscribe({
+      next: (u) => {
+        this.wf.set(u);
+        this.toast.success('Environment variables saved');
+      },
+      error: () => this.toast.error('Failed to save environment variables'),
+    });
+  }
+
+  updateGlobalErrorHandler(patch: Partial<GlobalErrorHandlerConfig>) {
+    this.globalErrorHandler.set({ ...this.globalErrorHandler(), ...patch });
+  }
+
+  saveGlobalErrorHandler() {
+    const w = this.wf();
+    if (!w) return;
+    this.api.updateWorkflow(w.id, { globalErrorHandler: this.globalErrorHandler() } as any).subscribe({
+      next: (u) => {
+        this.wf.set(u);
+        this.toast.success('Project Global Error Handler saved');
+      },
+      error: () => this.toast.error('Failed to save Global Error Handler'),
+    });
+  }
 
   addAsset(kind: string, name: string, fields?: Record<string, unknown>) {
     const n = name.trim(); if (!n) return;

@@ -77,7 +77,7 @@ export class WorkflowService {
     return workflow;
   }
 
-  async update(id: string, patch: Partial<Pick<Workflow, 'name' | 'description' | 'permissions' | 'variables' | 'folderId' | 'instanceCreationMode'>>, actor: string): Promise<Workflow> {
+  async update(id: string, patch: Partial<Pick<Workflow, 'name' | 'description' | 'permissions' | 'variables' | 'folderId' | 'instanceCreationMode' | 'env' | 'globalErrorHandler'>>, actor: string): Promise<Workflow> {
     const w = await this.get(id);
     if (patch.name !== undefined) w.name = patch.name.trim() || w.name;
     if (patch.description !== undefined) w.description = patch.description;
@@ -85,6 +85,8 @@ export class WorkflowService {
     if (patch.variables !== undefined) w.variables = patch.variables;
     if (patch.folderId !== undefined) { await this.assertFolderValid(patch.folderId); w.folderId = patch.folderId; }
     if (patch.instanceCreationMode !== undefined) w.instanceCreationMode = patch.instanceCreationMode;
+    if (patch.env !== undefined) w.env = patch.env;
+    if (patch.globalErrorHandler !== undefined) w.globalErrorHandler = patch.globalErrorHandler;
     w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
     await this.wf().put(w);
     await this.ctx.audit({ actor, kind: 'workflow.updated', workflowId: id });

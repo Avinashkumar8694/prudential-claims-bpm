@@ -6,6 +6,20 @@ export interface Audited { createdAt: string; createdBy: string; updatedAt: stri
 
 export interface WorkflowPermission { role: string; actions: ('view' | 'edit' | 'deploy' | 'run' | 'admin')[]; }
 
+export interface GlobalErrorHandlerConfig {
+  enabled: boolean;
+  /** Process ID in this project that executes as the global error handler */
+  processId?: string;
+  /** Resolution strategy when error occurs */
+  strategy?: 'spawn' | 'repair-and-resume' | 'compensate-and-abort';
+  /** Mapping from error process output variable to original instance variable */
+  outputMappings?: Record<string, string>;
+  /** Error codes to intercept (e.g. ['*'] or ['SERVICE_ERROR', 'SCRIPT_ERROR']) */
+  filter?: string[];
+  /** Whether unhandled errors inside the error handler process rethrow to system log */
+  rethrowOnFailure?: boolean;
+}
+
 export interface Workflow extends Entity, Audited {
   id: string; tenantId: string;
   name: string; key: string; description?: string;
@@ -17,6 +31,10 @@ export interface Workflow extends Entity, Audited {
   folderId?: string | null;
   /** Instance creation mode allowed for this project ('both' | 'case-only' | 'process-only') */
   instanceCreationMode?: 'both' | 'case-only' | 'process-only';
+  /** Arbitrary project-level environment variables deployed to all environments */
+  env?: Record<string, string>;
+  /** Project-level Global Error Handler configuration */
+  globalErrorHandler?: GlobalErrorHandlerConfig;
 }
 
 /** Organizes Workflows into a tree for the Projects page — purely presentational, no effect on
@@ -51,6 +69,7 @@ export interface Deployment extends Entity {
   id: string; tenantId: string; workflowId: string; versionId: string; branchId: string;
   engine: EngineProject;
   env: Record<string, string>;
+  globalErrorHandler?: GlobalErrorHandlerConfig;
   tags: string[];
   status: DeploymentStatus;
   environment: string;
@@ -93,6 +112,10 @@ export interface Instance extends Entity {
   // Compensation stack: activities completed successfully that have a compensation handler attached,
   // in completion order. A compensate throw runs the matching entries in reverse (LIFO).
   compensations?: Array<{ host: string; handler: string }>;
+  /** Set if this instance is running as a Global Error Handler (prevents recursion loops) */
+  isErrorHandler?: boolean;
+  /** ID of the failed instance this error handler instance is processing */
+  handlingInstanceId?: string;
   startedAt: string; startedBy: string; endedAt?: string;
 }
 

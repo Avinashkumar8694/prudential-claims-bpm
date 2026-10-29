@@ -10,6 +10,7 @@ export const def: NodeDef = {
   schema: [GENERAL, { title: 'End behavior', fields: [
     { key: 'result', label: 'Result', widget: 'select', options: ['(normal)', 'terminate'], help: 'terminate cancels all other tokens and ends the whole instance' },
     { key: 'throw', label: 'Throw event', widget: 'event', options: ['none', 'signal', 'error', 'escalation', 'message'] },
+    { key: 'throw.rethrow', label: 'Rethrow to Global Error Handler', widget: 'bool', help: 'If true, bubbles the error end event up to the project global error handler.' },
     { key: 'throw.correlationKey', label: 'Correlate to', widget: 'varRef', varSource: 'ownRef', placeholder: '$claimId', help: 'Deliver only to the waiting instance whose own correlationKey matches this variable’s value; blank = deliver to every instance waiting on this name' },
   ] }],
   diagram: { icon: 'error', color: '#dc2626', shape: 'circle' },

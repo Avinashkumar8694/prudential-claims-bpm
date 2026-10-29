@@ -9,8 +9,10 @@ export const def: NodeDef = {
     { key: 'url', label: 'URL (appended to base)', widget: 'text', placeholder: '/v1/claims' },
     { key: 'headers', label: 'Headers', widget: 'keyval' },
     { key: 'body', label: 'Body (value or $var)', widget: 'keyval', valueSource: 'ownRef', help: 'Right side: "$name" to send one of this process\'s own variables, or a literal value.' },
-  ] }, { title: 'Response', fields: [
+  ] }, { title: 'Response & Error Handling', fields: [
     { key: 'resultTo', label: 'Map response → variable (var ← JSONPath)', widget: 'keyval', keySource: 'own', help: 'Left = this process\'s variable to write (pick an existing one to overwrite it, or type a new name), e.g. verifierId ← $.verifierId.' },
+    { key: 'throwError', label: 'Throw error on failure (Default: On)', widget: 'bool', help: 'When off, HTTP 4xx/5xx or network errors are written to errorVar (soft failure) instead of raising SERVICE_ERROR.' },
+    { key: 'errorVar', label: 'Soft-failure variable (when Throw Error is Off)', widget: 'text', placeholder: 'serviceError', help: 'Variable name to store { httpStatus, url, responseBody, method } on soft failure.' },
     { key: 'exitScript', label: 'Exit script (hook)', widget: 'code', placeholder: '// raw response in resPayload', help: 'Optional post-processing script executed with resPayload bound.' },
   ] }],
   diagram: { icon: 'globe', color: '#0d9488', shape: 'rectangle' },

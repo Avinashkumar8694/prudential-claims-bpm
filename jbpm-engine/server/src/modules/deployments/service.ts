@@ -12,6 +12,7 @@ export class DeploymentService {
   private dp() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
   private ve() { return this.ctx.store.repo<Version>(Collections.versions); }
   private tm() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
+  private wf() { return this.ctx.store.repo<Workflow>(Collections.workflows); }
 
   async get(id: string): Promise<Deployment> {
     const d = await this.dp().get(id);
@@ -49,9 +50,13 @@ export class DeploymentService {
     const environment = (input.environment || '').trim();
     if (!environment) throw validation('environment is required');
 
+    const workflow = await this.wf().get(v.workflowId);
+    const mergedEnv = { ...(workflow?.env || {}), ...(input.env || {}) };
+
     const dep: Deployment = {
       id: this.ctx.newId(), tenantId: this.ctx.tenantId, workflowId: v.workflowId, versionId: v.id, branchId: v.branchId,
-      engine: structuredClone(v.engine), env: input.env || {},
+      engine: structuredClone(v.engine), env: mergedEnv,
+      globalErrorHandler: workflow?.globalErrorHandler,
       tags: [...new Set([environment, ...(input.tags || [])])],
       status: 'inactive', environment,
       versionNumber: v.number, versionLabel: v.label,

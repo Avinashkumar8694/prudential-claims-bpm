@@ -12,6 +12,7 @@ export const def: NodeDef = {
     { key: 'on', label: 'Catch from', widget: 'nodes', help: 'Pick node(s) to catch (boundary), or “All nodes” for a process-wide handler. Connect this node’s outgoing flow to the recovery path.' },
     { key: 'event', label: 'Trigger', widget: 'event', options: ['error', 'timer', 'message', 'signal', 'escalation', 'condition'] },
     { key: 'interrupting', label: 'Interrupting (cancel the caught activity)', widget: 'bool' },
+    { key: 'rethrow', label: 'Rethrow to Global Error Handler', widget: 'bool', help: 'If enabled, unhandled errors bubble up to the project global error handler.' },
   ] }],
   diagram: { icon: 'warning', color: '#7c3aed', shape: 'circle' },
   typeLabel: 'Boundary event',

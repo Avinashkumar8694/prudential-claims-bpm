@@ -36,7 +36,28 @@ export const handler: NodeHandler = async (c) => {
       ...(method === 'GET' || method === 'HEAD' ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(httpTimeout * 1000),
     });
-    if (!res.ok) return { error: `HTTP ${res.status} from ${url}`, errorCode: 'SERVICE_ERROR' };
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      let errJson: any;
+      try { errJson = errText ? JSON.parse(errText) : undefined; } catch { errJson = errText; }
+      const details: Record<string, unknown> = {
+        httpStatus: res.status,
+        statusText: res.statusText,
+        url,
+        method,
+        responseBody: errJson ?? errText,
+        headers: Object.fromEntries(res.headers.entries()),
+      };
+      if (n.throwError === false || n.handleResponseErrors === false) {
+        const errorVar = n.errorVar || 'serviceError';
+        return { vars: { [errorVar]: details }, outcome: `HTTP ${res.status} (soft-failure)` };
+      }
+      return {
+        error: `HTTP ${res.status} from ${url}${errText ? ': ' + errText.slice(0, 300) : ''}`,
+        errorCode: 'SERVICE_ERROR',
+        errorDetails: details,
+      };
+    }
     const text = await res.text();
     let json: any; try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
     const vars: Record<string, unknown> = {};
@@ -60,11 +81,16 @@ export const handler: NodeHandler = async (c) => {
         Object.assign(vars, scriptVars);
       } catch (e) {
         const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'SCRIPT_ERROR';
-        return { error: `exitScript failed: ${(e as Error).message}`, errorCode: code };
+        return { error: `exitScript failed: ${(e as Error).message}`, errorCode: code, errorDetails: { lang: n.lang, error: (e as Error).message } };
       }
     }
     return { vars, outcome: `HTTP ${res.status}` };
   } catch (e) {
-    return { error: `service call failed: ${(e as Error).message}`, errorCode: 'SERVICE_ERROR' };
+    const details = { url, method, error: (e as Error).message };
+    if (n.throwError === false || n.handleResponseErrors === false) {
+      const errorVar = n.errorVar || 'serviceError';
+      return { vars: { [errorVar]: details }, outcome: 'Service call failed (soft-failure)' };
+    }
+    return { error: `service call failed: ${(e as Error).message}`, errorCode: 'SERVICE_ERROR', errorDetails: details };
   }
 };

@@ -125,7 +125,7 @@ export class ExecutionEngine {
             // an admin opted in — no behavior change for any existing deployment).
             this.removeToken(inst, token.id);
             const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'RUNTIME_ERROR';
-            if (this.raiseError(inst, p, node.id!, code, (e as Error).message)) continue;
+            if (await this.raiseError(inst, p, dep, node.id!, code, (e as Error).message)) continue;
             inst.status = 'failed'; inst.error = { nodeId: node.id!, message: (e as Error).message, at: this.ctx.clock() }; break;
           }
           // Message/signal/escalation boundaries get a WAITING token of their own, same idea as the
@@ -140,14 +140,15 @@ export class ExecutionEngine {
         if (result.error) {
           this.removeToken(inst, token.id);
           const code = result.errorCode || 'RUNTIME_ERROR';
-          if (this.raiseError(inst, p, node.id!, code, result.error)) continue;   // routed to an error catch
+          if (await this.raiseError(inst, p, dep, node.id!, code, result.error, result.errorDetails)) continue;   // routed to an error catch
           inst.status = 'failed'; inst.error = { nodeId: node.id!, message: result.error, at: this.ctx.clock() }; break;
         }
         if (result.end === 'terminate') { inst.tokens = []; inst.status = 'completed'; break; }
         if (result.end === 'error') {
           this.removeToken(inst, token.id);
           const code = (node as any).throw?.error || 'ERROR';
-          if (this.raiseError(inst, p, node.id!, code, `error end: ${code}`)) continue;
+          const rethrow = result.rethrow ?? (node as any).throw?.rethrow ?? (node as any).rethrow;
+          if (await this.raiseError(inst, p, dep, node.id!, code, `error end: ${code}`, undefined, rethrow)) continue;
           inst.status = 'failed'; inst.error = { nodeId: node.id!, message: `unhandled error end (${code})`, at: this.ctx.clock() }; break;
         }
         // an activity that completed normally and has a compensation boundary → remember its handler.
@@ -298,7 +299,7 @@ export class ExecutionEngine {
    *  multi-instance token: route to an error boundary if one is attached, otherwise fail the parent
    *  and cascade upward — the same either way regardless of which node type raised it. */
   private async failParentWith(parent: Instance, p: EngineProcess, pdep: Deployment, nodeId: string, code: string, message: string): Promise<void> {
-    if (this.raiseError(parent, p, nodeId, code, message)) {
+    if (await this.raiseError(parent, p, pdep, nodeId, code, message)) {
       parent.status = 'running';
       await this.runToQuiescence(parent, pdep);   // handler token → runs recovery, then settles (may cascade)
     } else {
@@ -589,17 +590,180 @@ export class ExecutionEngine {
   // orchestration that ACTS on a match (mutating instance/token state) stays here.
 
   /** Route an error to a matching error-catch; returns true if handled (a handler token was spawned). */
-  private raiseError(inst: Instance, p: EngineProcess, failingNodeId: string, code: string, message: string): boolean {
-    const handler = boundaryHandler.findErrorHandler(p.nodes, failingNodeId, code);
-    if (!handler) return false;
-    inst.variables[ERROR_VAR] = { code, node: failingNodeId, message };
-    // a global catch (on: '*', or any event sub-process error-catch) is interrupting for the whole
-    // instance → cancel all other tokens. A host-specific boundary only ever cancels its own host,
-    // which the caller has already done before raiseError runs.
-    if (boundaryHandler.isGlobalCatch(handler)) inst.tokens = [];
-    inst.tokens.push({ id: this.ctx.newId(), nodeId: handler.id!, state: 'active', enteredAt: this.ctx.clock() });
-    this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: inst.tokens.at(-1)!.id });
-    return true;
+  private async raiseError(
+    inst: Instance,
+    p: EngineProcess,
+    dep: Deployment,
+    failingNodeId: string,
+    code: string,
+    message: string,
+    details?: Record<string, unknown>,
+    rethrow?: boolean
+  ): Promise<boolean> {
+    const nodeDef = p.nodes.find((n) => n.id === failingNodeId);
+    const errorInfo = {
+      code,
+      node: failingNodeId,
+      nodeName: nodeDef?.name || failingNodeId,
+      nodeType: nodeDef?.type || 'unknown',
+      message,
+      details: details || {},
+      at: this.ctx.clock(),
+    };
+    inst.variables[ERROR_VAR] = errorInfo;
+
+    // TIER 1 & 2: Local Boundary / Process-level Catch
+    // If rethrow is false/undefined, we check local and process-level error handlers first.
+    if (!rethrow) {
+      const handler = boundaryHandler.findErrorHandler(p.nodes, failingNodeId, code);
+      if (handler) {
+        // a global catch (on: '*', or any event sub-process error-catch) is interrupting for the whole
+        // instance → cancel all other tokens. A host-specific boundary only ever cancels its own host,
+        // which the caller has already done before raiseError runs.
+        if (boundaryHandler.isGlobalCatch(handler)) inst.tokens = [];
+        inst.tokens.push({ id: this.ctx.newId(), nodeId: handler.id!, state: 'active', enteredAt: this.ctx.clock() });
+        this.emit({ kind: 'node.entered', instanceId: inst.id, nodeId: handler.id!, tokenId: inst.tokens.at(-1)!.id });
+        return true;
+      }
+    }
+
+    // TIER 3 & 4: Project Global Error Handler
+    // If no local or process catch handled it, check if the project has a global error handler configured.
+    const geh = dep.globalErrorHandler;
+    if (!geh || !geh.enabled || !geh.processId) {
+      return false;
+    }
+
+    // CIRCUIT BREAKER / LOOP PREVENTION:
+    // If this instance itself is running as an error handler (isErrorHandler: true),
+    // strictly PREVENT recursion! Recursion depth is capped at 1.
+    if (inst.isErrorHandler) {
+      return false;
+    }
+
+    // Error filter check
+    if (geh.filter && geh.filter.length > 0) {
+      const filterMatches = geh.filter.some((f) => {
+        if (f === '*' || f.toUpperCase() === 'ANY') return true;
+        if (f === code) return true;
+        if (details?.httpStatus && String(details.httpStatus) === f) return true;
+        return false;
+      });
+      if (!filterMatches) {
+        return false;
+      }
+    }
+
+    // Resolve the error handler process definition
+    const errorProc = dep.engine.processes.find((pr) => pr.id === geh.processId);
+    if (!errorProc) {
+      return false;
+    }
+    const startNode = errorProc.nodes.find((n) => n.type === 'start');
+    if (!startNode) {
+      return false;
+    }
+
+    // Construct enriched error context payload
+    const errorContext = {
+      failedInstanceId: inst.id,
+      workflowId: inst.workflowId,
+      deploymentId: inst.deploymentId,
+      processId: p.id,
+      processName: p.name,
+      nodeId: failingNodeId,
+      nodeName: nodeDef?.name || failingNodeId,
+      nodeType: nodeDef?.type || 'unknown',
+      errorCode: code,
+      errorMessage: message,
+      details: details || {},
+      failedVariables: { ...inst.variables },
+      occurredAt: this.ctx.clock(),
+    };
+
+    const handlerVars: Record<string, unknown> = {
+      ...inst.variables,
+      errorInfo,
+      errorContext,
+      failedContext: JSON.stringify(errorContext),
+      failedEndpoint: (details?.url as string) || '',
+      failedPayload: (details?.responseBody != null ? (typeof details.responseBody === 'string' ? details.responseBody : JSON.stringify(details.responseBody)) : ''),
+      failedMethod: (details?.method as string) || '',
+      failedHeaders: details?.headers ? (typeof details.headers === 'string' ? details.headers : JSON.stringify(details.headers)) : '',
+      errorCode: code,
+      errorMessage: message,
+      failedNodeId: failingNodeId,
+    };
+
+    // Spawn the Global Error Handler instance
+    const handlerInst: Instance = {
+      id: this.ctx.newId(),
+      tenantId: inst.tenantId,
+      deploymentId: inst.deploymentId,
+      workflowId: inst.workflowId,
+      processId: geh.processId,
+      status: 'running',
+      variables: handlerVars,
+      tokens: [{ id: this.ctx.newId(), nodeId: startNode.id!, state: 'active', enteredAt: this.ctx.clock() }],
+      history: [],
+      startedAt: this.ctx.clock(),
+      startedBy: inst.startedBy || 'system',
+      isErrorHandler: true, // CIRCUIT BREAKER
+      handlingInstanceId: inst.id,
+    };
+
+    await this.inst().put(handlerInst);
+    this.emit({ kind: 'instance.started', instanceId: handlerInst.id });
+    await this.runToQuiescence(handlerInst, dep);
+    await this.inst().put(handlerInst);
+
+    const strategy = geh.strategy || 'repair-and-resume';
+
+    if (strategy === 'repair-and-resume') {
+      if (handlerInst.status === 'completed') {
+        // Apply output mappings
+        if (geh.outputMappings && Object.keys(geh.outputMappings).length > 0) {
+          for (const [errVar, targetVar] of Object.entries(geh.outputMappings)) {
+            if (errVar in handlerInst.variables) {
+              inst.variables[targetVar] = handlerInst.variables[errVar];
+            }
+          }
+        } else {
+          // Merge non-internal variables modified by the handler
+          for (const [k, v] of Object.entries(handlerInst.variables)) {
+            if (!['errorInfo', 'errorContext', 'failedContext', 'failedVariables', 'failedEndpoint', 'failedPayload', 'failedMethod', 'failedHeaders', 'errorCode', 'errorMessage', 'failedNodeId'].includes(k)) {
+              inst.variables[k] = v;
+            }
+          }
+        }
+        delete inst.error;
+        inst.variables['errorRepaired'] = true;
+
+        // If the error handler specified retry, retry the failing node
+        if (handlerInst.variables['errorHandlerAction'] === 'retry') {
+          inst.tokens.push({ id: this.ctx.newId(), nodeId: failingNodeId, state: 'active', enteredAt: this.ctx.clock() });
+        } else {
+          // Default: advance to default targets of the failing node
+          const targets = this.outgoing(p, failingNodeId).map((f) => f.to);
+          for (const t of targets) {
+            inst.tokens.push({ id: this.ctx.newId(), nodeId: t, state: 'active', enteredAt: this.ctx.clock() });
+          }
+        }
+        return true; // Successfully repaired and resumed!
+      } else {
+        // Handler did not complete successfully (e.g. failed or aborted)
+        return false;
+      }
+    } else if (strategy === 'compensate-and-abort') {
+      inst.status = 'aborted';
+      inst.endedAt = this.ctx.clock();
+      inst.error = { nodeId: failingNodeId, message: `Compensated and aborted by global error handler (${geh.processId})`, at: this.ctx.clock() };
+      return true;
+    } else {
+      // strategy === 'spawn' (fire-and-forget incident process)
+      // Original instance fails normally
+      return false;
+    }
   }
 
   private defaultTargets(p: EngineProcess, node: EngineNode, _inst: Instance): string[] {
@@ -695,7 +859,7 @@ export class ExecutionEngine {
       const c = this.buildCtx(node, inst, p, {}, dep, tokenId);
       const exitErr = await this.runLifecycle(node, 'onExit', c);
       if (exitErr) {
-        if (!this.raiseError(inst, p, node.id!, 'SCRIPT_ERROR', exitErr)) {
+        if (!(await this.raiseError(inst, p, dep, node.id!, 'SCRIPT_ERROR', exitErr))) {
           inst.status = 'failed';
           inst.error = { nodeId: node.id!, message: exitErr, at: this.ctx.clock() };
           return this.runToQuiescence(inst, dep);   // status !== 'running' → settles/persists/cleans up, no looping

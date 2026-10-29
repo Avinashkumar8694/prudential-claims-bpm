@@ -24,7 +24,15 @@ export const handler: NodeHandler = async (c) => {
     });
   } catch (e) {
     const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'SCRIPT_ERROR';
-    return { error: `script failed: ${(e as Error).message}`, errorCode: code };
+    return {
+      error: `script failed: ${(e as Error).message}`,
+      errorCode: code,
+      errorDetails: {
+        lang: n.lang || 'js',
+        message: (e as Error).message,
+        stack: (e as Error).stack,
+      },
+    };
   }
   return { vars, ...(logs.length ? { outcome: logs.join('\n') } : {}) };
 };

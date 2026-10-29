@@ -1,6 +1,15 @@
 // Client-side mirrors of the server domain (docs/04-data-model.md). Kept intentionally loose.
 export interface EngineVar { name: string; type: string; }
 
+export interface GlobalErrorHandlerConfig {
+  enabled: boolean;
+  processId?: string;
+  strategy?: 'spawn' | 'repair-and-resume' | 'compensate-and-abort';
+  outputMappings?: Record<string, string>;
+  filter?: string[];
+  rethrowOnFailure?: boolean;
+}
+
 export interface Workflow {
   id: string; name: string; key: string; description?: string;
   defaultBranchId: string;
@@ -13,6 +22,10 @@ export interface Workflow {
   folderId?: string | null;
   /** Instance creation mode: 'both' | 'case-only' | 'process-only' */
   instanceCreationMode?: 'both' | 'case-only' | 'process-only';
+  /** Project-level environment variables deployed to all environments */
+  env?: Record<string, string>;
+  /** Project-level Global Error Handler configuration */
+  globalErrorHandler?: GlobalErrorHandlerConfig;
 }
 /** Organizes Workflows into a tree on the Projects page — purely presentational. */
 export interface Folder { id: string; name: string; parentId?: string | null; createdAt: string; updatedAt: string; }
