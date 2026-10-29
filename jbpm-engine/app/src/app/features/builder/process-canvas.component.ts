@@ -194,7 +194,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
             @if (nodeModalTab() === 'props') {
               <div class="modal-body">
                 <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
-                <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" (changed)="markDirty()" (openCheatSheet)="openCheatSheet()"></app-properties-panel>
+                <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" [cheatSheetContent]="cheatSheetContent()" (changed)="markDirty()" (openCheatSheet)="openCheatSheet()"></app-properties-panel>
                 <button class="btn danger full" (click)="del($event, n); closeNodeEditor()">Delete node</button>
               </div>
             } @else {

@@ -2,13 +2,14 @@ import { Component, EventEmitter, Input, OnChanges, Output } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import type { CallableProcess, UiField as Field, UiSection as Section, VarSource } from '../../core/models';
 import { IconComponent } from '../../shared/icon.component';
+import { CodeEditorComponent } from '../../shared/code-editor.component';
 
 // Generic, schema-driven property editor. Renders every configurable field for the selected node's
 // type (from NODE_SCHEMA) so a node can be fully configured. Emits `changed` on any edit.
 @Component({
   selector: 'app-properties-panel',
   standalone: true,
-  imports: [IconComponent, FormsModule],
+  imports: [IconComponent, FormsModule, CodeEditorComponent],
   template: `
     @for (sec of sections; track sec.title) {
       <div class="sec">
@@ -28,18 +29,14 @@ import { IconComponent } from '../../shared/icon.component';
                 </select>
               }
               @case ('code') {
-                @if (val('lang') === 'java' || val(f.key + 'Lang') === 'java') {
-                  <div class="lang-pill java"><span class="pill-badge">Java</span> <span class="pill-note">Imported (language locked)</span></div>
-                } @else {
-                  <div class="lang-pill js">
-                    <span class="pill-badge">JavaScript</span>
-                    <span class="pill-note">Node.js Sandbox VM</span>
-                    <button type="button" class="cheat-pill" (click)="openCheatSheet.emit()" title="View JavaScript & Flow Variables Cheat Sheet">
-                      <app-icon name="code" [size]="12" /> Cheat Sheet
-                    </button>
-                  </div>
-                }
-                <textarea class="mono" rows="6" [ngModel]="val(f.key)" (ngModelChange)="set(f.key, $event)" [placeholder]="f.placeholder || ''"></textarea>
+                <app-code-editor
+                  [code]="val(f.key) || ''"
+                  [lang]="val('lang') || val(f.key + 'Lang') || 'js'"
+                  [placeholder]="f.placeholder || '// Write script logic here...'"
+                  [cheatSheetContent]="cheatSheetContent"
+                  (codeChange)="set(f.key, $event)"
+                  (openCheatSheet)="openCheatSheet.emit()"
+                ></app-code-editor>
               }
               @case ('textarea') { <textarea rows="3" [ngModel]="val(f.key)" (ngModelChange)="set(f.key, $event)" [placeholder]="f.placeholder || ''"></textarea> }
               @case ('stringlist') {
@@ -202,6 +199,7 @@ export class PropertiesPanelComponent implements OnChanges {
   /** Every process behind a currently-active deployment, tenant-wide — backs the 'processRef' widget
    *  (see server's /catalog/processes) and, once one is picked on THIS node, the 'called' source. */
   @Input() callableProcesses: CallableProcess[] = [];
+  @Input() cheatSheetContent?: string;
   @Output() changed = new EventEmitter<void>();
   @Output() openCheatSheet = new EventEmitter<void>();
   kv: Record<string, { k: string; v: string }[]> = {};
