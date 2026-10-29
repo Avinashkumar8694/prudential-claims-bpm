@@ -215,10 +215,12 @@ export function installRealmPrototypes(target: any): void {
       if (o == null) return false;
       return this.valueOf() === (typeof o.valueOf === 'function' ? o.valueOf() : o);
     });
-    def(target.Object.prototype, 'path', function (this: any, k: string) {
-      const v = (this && typeof this === 'object') ? this[k] : undefined;
-      return makeJacksonNode(v);
-    });
+    if (target !== globalThis) {
+      def(target.Object.prototype, 'path', function (this: any, k: string) {
+        const v = (this && typeof this === 'object') ? this[k] : undefined;
+        return makeJacksonNode(v);
+      });
+    }
     def(target.Object.prototype, 'has', function (this: any, k: string) {
       return this && typeof this === 'object' && Object.prototype.hasOwnProperty.call(this, k);
     });

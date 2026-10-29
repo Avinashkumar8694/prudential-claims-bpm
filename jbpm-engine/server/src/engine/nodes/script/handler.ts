@@ -11,9 +11,13 @@ export const handler: NodeHandler = async (c) => {
   if (n.lang && n.lang !== 'js' && n.lang !== 'java') return { outcome: 'skipped-nonjs' };
   const vars = { ...c.inst.variables };
   const logs: string[] = [];
-  const { maxConcurrentScripts } = await new SettingsService(c.app).get();
+  const settings = await new SettingsService(c.app).get();
+  const maxConcurrentScripts = settings.maxConcurrentScripts;
+  const timeoutMs = (settings.scriptTimeoutSeconds && settings.scriptTimeoutSeconds > 0)
+    ? settings.scriptTimeoutSeconds * 1000
+    : config.scriptTimeoutMs;
   try {
-    await runScript(n.code || '', vars, config.scriptTimeoutMs, {
+    await runScript(n.code || '', vars, timeoutMs, {
       ...kcontextInfoOf(c), log: (line) => logs.push(line), lang: n.lang,
       varTypes: varTypesOf(c), onAction: onActionOf(c),
       tenantId: c.app.tenantId, maxConcurrentScripts,

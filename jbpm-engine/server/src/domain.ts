@@ -114,7 +114,7 @@ export interface Task extends Entity {
   priority?: number;
   status: TaskStatus;
   inputs: Record<string, unknown>; outputs?: Record<string, unknown>;
-  createdAt: string; dueAt?: string; completedAt?: string; completedBy?: string;
+  createdAt: string; claimedAt?: string; dueAt?: string; completedAt?: string; completedBy?: string;
 }
 
 export interface TimerJob extends Entity {
@@ -182,8 +182,17 @@ export interface SystemSettings extends Entity {
   auditRetentionDays: number;
   allowRunningVariableEdits: boolean;
   executorIntervalSeconds: number;
+  timerBatchSize?: number;                 // max due timers claimed & processed per batch (default: 50)
   defaultJobRetries: number;
+  jobRetryBackoffMultiplier?: number;      // backoff multiplier for retryable jobs (default: 2, min: 1)
+  scriptTimeoutSeconds?: number;           // max runtime for script execution in seconds (default: 5, min: 1)
   slaWarnThresholdPct: number;             // e.g. 80 → amber at 80% of time-to-due elapsed
+  defaultTaskSlaHours?: number;            // fallback task SLA deadline in hours if not set in node (default: 48, min: 1)
+  autoReleaseClaimedTaskHours?: number;    // auto-release idle claimed tasks after X hours back to group pool (0 = disabled)
+  httpTimeoutSeconds?: number;             // outbound REST / service task HTTP timeout in seconds (default: 10, min: 1)
+  outboundAllowlist?: string;              // comma-separated hostnames or .domain suffixes allowed for outbound HTTP
+  historyAuditLevel?: 'full' | 'activity' | 'minimal'; // audit trail verbosity (default: 'full')
+  logLevel?: 'debug' | 'info' | 'warn' | 'error';       // system log level (default: 'info')
   sessionTimeoutHours: number;
   emailEnabled: boolean;
   emailFrom?: string; smtpHost?: string; smtpPort?: number;

@@ -74,7 +74,7 @@ export class TaskService {
     await this.assertOwnable(t, user);
     await this.assertInstanceActionable(t);
     if (t.status !== 'created' && t.status !== 'reserved') throw conflict('task not claimable');
-    t.assignee = user; t.status = 'reserved';
+    t.assignee = user; t.status = 'reserved'; t.claimedAt = this.ctx.clock();
     await this.repo().put(t);
     await this.ctx.audit({ actor: user, kind: 'task.claimed', instanceId: t.instanceId, taskId: t.id });
     return t;
@@ -85,10 +85,41 @@ export class TaskService {
     await this.assertInstanceActionable(t);
     if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
     if (t.status !== 'reserved' && t.status !== 'inprogress') throw conflict(`task is ${t.status}, not releasable`);
-    t.assignee = undefined; t.status = 'created';
+    t.assignee = undefined; t.status = 'created'; t.claimedAt = undefined;
     await this.repo().put(t);
     await this.ctx.audit({ actor: user, kind: 'task.released', instanceId: t.instanceId, taskId: t.id });
     return t;
+  }
+
+  /** Auto-release tasks claimed longer than `maxHours` back to the group pool. */
+  async autoReleaseIdle(maxHours: number): Promise<number> {
+    if (maxHours <= 0) return 0;
+    const nowIso = this.ctx.clock();
+    const nowMs = Date.parse(nowIso);
+    const cutoffMs = nowMs - (maxHours * 3600 * 1000);
+    const claimedTasks = await this.repo().query((t) =>
+      t.tenantId === this.ctx.tenantId &&
+      (t.status === 'reserved' || t.status === 'inprogress') &&
+      Boolean(t.claimedAt) &&
+      Date.parse(t.claimedAt!) <= cutoffMs,
+    );
+    let releasedCount = 0;
+    for (const t of claimedTasks) {
+      const prevAssignee = t.assignee;
+      t.assignee = undefined;
+      t.status = 'created';
+      t.claimedAt = undefined;
+      await this.repo().put(t);
+      await this.ctx.audit({
+        actor: 'system',
+        kind: 'task.released',
+        instanceId: t.instanceId,
+        taskId: t.id,
+        data: { reason: 'auto-release-idle', idleHours: maxHours, previousAssignee: prevAssignee },
+      });
+      releasedCount++;
+    }
+    return releasedCount;
   }
 
   /** userTask.outputs declares processVar ← taskVar (see engine/nodes/user-task/def.ts's schema) —

@@ -635,7 +635,11 @@ export class ExecutionEngine {
     if (!text) return undefined;
     const lang = (node as any)[`${kind}Lang`] as string | undefined;
     try {
-      await runScript(text, c.inst.variables, config.scriptTimeoutMs, {
+      const settings = await new SettingsService(c.app).get().catch(() => null);
+      const timeoutMs = (settings?.scriptTimeoutSeconds && settings.scriptTimeoutSeconds > 0)
+        ? settings.scriptTimeoutSeconds * 1000
+        : config.scriptTimeoutMs;
+      await runScript(text, c.inst.variables, timeoutMs, {
         ...kcontextInfoOf(c), lang, varTypes: varTypesOf(c), onAction: onActionOf(c),
       });
       return undefined;

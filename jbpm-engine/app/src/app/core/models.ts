@@ -143,8 +143,17 @@ export interface SystemSettings {
   auditRetentionDays: number;
   allowRunningVariableEdits: boolean;
   executorIntervalSeconds: number;
+  timerBatchSize?: number;
   defaultJobRetries: number;
+  jobRetryBackoffMultiplier?: number;
+  scriptTimeoutSeconds?: number;
   slaWarnThresholdPct: number;
+  defaultTaskSlaHours?: number;
+  autoReleaseClaimedTaskHours?: number;
+  httpTimeoutSeconds?: number;
+  outboundAllowlist?: string;
+  historyAuditLevel?: 'full' | 'activity' | 'minimal';
+  logLevel?: 'debug' | 'info' | 'warn' | 'error';
   sessionTimeoutHours: number;
   emailEnabled: boolean;
   emailFrom?: string; smtpHost?: string; smtpPort?: number;

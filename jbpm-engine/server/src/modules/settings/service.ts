@@ -4,6 +4,7 @@ import type { AppContext } from '../../context.ts';
 import { Collections, type SystemSettings } from '../../domain.ts';
 import { validation } from '../../infra/errors.ts';
 import { encryptAtRest, decryptAtRest } from '../../infra/crypto.ts';
+import { logger } from '../../infra/logger.ts';
 
 export const DEFAULT_SETTINGS: Omit<SystemSettings, 'id' | 'tenantId'> = {
   defaultPageSize: 20,
@@ -11,8 +12,17 @@ export const DEFAULT_SETTINGS: Omit<SystemSettings, 'id' | 'tenantId'> = {
   auditRetentionDays: 365,
   allowRunningVariableEdits: true,
   executorIntervalSeconds: 5,
+  timerBatchSize: 50,
   defaultJobRetries: 3,
+  jobRetryBackoffMultiplier: 2,
+  scriptTimeoutSeconds: 5,
   slaWarnThresholdPct: 80,
+  defaultTaskSlaHours: 48,
+  autoReleaseClaimedTaskHours: 0,
+  httpTimeoutSeconds: 10,
+  outboundAllowlist: '',
+  historyAuditLevel: 'full' as const,
+  logLevel: 'info' as const,
   sessionTimeoutHours: 8,
   emailEnabled: false,
   instanceCreationMode: 'both' as const,
@@ -59,9 +69,21 @@ export class SettingsService {
     if (patch.instanceCreationMode !== undefined && !['both', 'case-only', 'process-only'].includes(patch.instanceCreationMode)) {
       throw validation(`instanceCreationMode must be 'both', 'case-only', or 'process-only'`);
     }
-    for (const k of ['instanceRetentionDays', 'auditRetentionDays', 'executorIntervalSeconds', 'defaultJobRetries', 'sessionTimeoutHours'] as const) {
+    for (const k of ['instanceRetentionDays', 'auditRetentionDays', 'executorIntervalSeconds', 'timerBatchSize', 'defaultJobRetries', 'sessionTimeoutHours', 'scriptTimeoutSeconds', 'jobRetryBackoffMultiplier', 'httpTimeoutSeconds', 'defaultTaskSlaHours'] as const) {
       const v = patch[k];
       if (v !== undefined && (typeof v !== 'number' || v <= 0)) throw validation(`${k} must be a positive number`);
+    }
+    if (patch.autoReleaseClaimedTaskHours !== undefined && (typeof patch.autoReleaseClaimedTaskHours !== 'number' || patch.autoReleaseClaimedTaskHours < 0)) {
+      throw validation('autoReleaseClaimedTaskHours must be a non-negative number');
+    }
+    if (patch.historyAuditLevel !== undefined && !['full', 'activity', 'minimal'].includes(patch.historyAuditLevel)) {
+      throw validation(`historyAuditLevel must be 'full', 'activity', or 'minimal'`);
+    }
+    if (patch.logLevel !== undefined) {
+      if (!['debug', 'info', 'warn', 'error'].includes(patch.logLevel)) {
+        throw validation(`logLevel must be 'debug', 'info', 'warn', or 'error'`);
+      }
+      logger.setLevel(patch.logLevel);
     }
     if (patch.slaWarnThresholdPct !== undefined && (patch.slaWarnThresholdPct < 1 || patch.slaWarnThresholdPct > 100)) {
       throw validation('slaWarnThresholdPct must be between 1 and 100');
