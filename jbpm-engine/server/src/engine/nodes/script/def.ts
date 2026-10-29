@@ -6,17 +6,17 @@ export const def: NodeDef = {
   ports: { maxIn: 1, maxOut: 1 },
   schema: [GENERAL, { title: 'Script (JavaScript / Java)', fields: [
     { key: 'lang', label: 'Language dialect', widget: 'select', options: ['js', 'java'], help: 'JavaScript (Node.js engine) or Java (JVM sidecar).' },
-    { key: 'code', label: 'Script body', widget: 'code', placeholder: 'vars.status = "APPROVED";\n// or direct variables:\namount = amount * 1.1;', help: 'Direct JS variables (vars.x, bare x = val) or jBPM kcontext.' },
+    { key: 'code', label: 'Script body', widget: 'code', placeholder: 'vars.status = "APPROVED";\n// or direct variables:\namount = amount * 1.1;', help: 'Direct JS variables (vars.x, bare x = val) or kcontext.' },
   ] }],
   diagram: { icon: 'code', color: '#0891b2', shape: 'rectangle' },
   typeLabel: 'Script task',
   docs: {
     summary: 'Executes procedural logic in Node.js VM (JavaScript) or JVM sidecar (Java 8). Supports direct variable access, vars helper, and legacy kcontext.',
-    purpose: 'Provides sandboxed procedural logic execution. For Node.js, read and write variables directly as plain JS variables or via the vars helper. Legacy jBPM processes can also use kcontext.',
+    purpose: 'Provides sandboxed procedural logic execution. For Node.js, read and write variables directly as plain JS variables or via the vars helper. Procedural compatibility scripts can also use kcontext.',
     whenToUse: [
       'Use the modern Node.js way (vars.x or direct variables) for clean, concise JavaScript code in native JSON workflows.',
       'Use for synchronous data transformations, payload mapping, and business rule calculations.',
-      'Use Java dialect (or kcontext) when importing existing jBPM / Drools processes without rewriting.',
+      'Use Java dialect (or kcontext) when importing existing workflows without rewriting.',
     ],
     whenNotToUse: [
       'Do not perform outbound network or database calls in a script (use Service/HTTP Task).',
@@ -30,9 +30,9 @@ export const def: NodeDef = {
         exampleJson: { id: 'script_1', name: 'Calculate Total', type: 'script', lang: 'js', code: '// Direct variable access:\nconst tax = amount * 0.18;\ntotal = amount + tax;\nvars.status = "CALCULATED";\nconsole.log(`Calculated total: ${total} for case ${instance.correlationKey}`);' },
       },
       {
-        title: 'Legacy jBPM kcontext Compatibility',
-        description: 'Uses jBPM kcontext.getVariable() and setVariable() for imported jBPM processes.',
-        whenToUse: 'Maintaining imported jBPM processes or running Java 8 dialect.',
+        title: 'Procedural kcontext Compatibility',
+        description: 'Uses kcontext.getVariable() and setVariable() for compatibility scripts.',
+        whenToUse: 'Maintaining procedural compatibility scripts or running Java 8 dialect.',
         exampleJson: { id: 'script_legacy', name: 'Legacy Script', type: 'script', lang: 'js', code: 'const amount = kcontext.getVariable("amount") || 0;\nkcontext.setVariable("tax", amount * 0.18);' },
       },
       {

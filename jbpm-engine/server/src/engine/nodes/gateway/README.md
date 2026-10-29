@@ -75,13 +75,13 @@ The **Gateway** controls the divergence (forking) and convergence (joining) of s
 }
 ```
 
-### Sequence Flow Condition Expressions (Node.js Engine vs Legacy jBPM)
+### Sequence Flow Condition Expressions (Modern vs Compatibility Dialect)
 When configuring conditional sequence flows exiting an Exclusive or Inclusive Gateway:
 - **Modern Node.js (Recommended)**: Use plain JavaScript expressions referencing process variables directly:
   - `amount > 5000`
   - `riskTier === 'HIGH' && priority === 'CRITICAL'`
   - `vars.claim.payout > 1000`
-- **jBPM Compatibility**: Legacy expressions using `kcontext.getVariable("key")` or Java sidecar conditions are fully supported.
+- **Compatibility Dialect**: Expressions using `kcontext.getVariable("key")` or Java sidecar conditions are fully supported.
 
 ## 6. Testing Scenarios & Verification Guide
 1. **Exclusive Ordering**: Configure flows `[x > 10, x > 5]`; pass `x = 15`; verify only flow 1 (`x > 10`) is taken.

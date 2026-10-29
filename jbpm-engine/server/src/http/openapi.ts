@@ -23,7 +23,7 @@ const schemas = {
   NodeVisit: { type: 'object', properties: { tokenId: { type: 'string' }, nodeId: { type: 'string' }, type: { type: 'string' }, enteredAt: { type: 'string' }, exitedAt: { type: 'string' }, outcome: { type: 'string' } } },
   Token: { type: 'object', properties: { id: { type: 'string' }, nodeId: { type: 'string' }, state: { type: 'string', enum: ['active', 'waiting'] }, waitFor: { type: 'object' } } },
   Instance: { type: 'object', properties: { id: { type: 'string' }, workflowId: { type: 'string' }, deploymentId: { type: 'string' }, processId: { type: 'string' }, correlationKey: { type: 'string' }, status: { type: 'string', enum: ['running', 'waiting', 'completed', 'aborted', 'failed', 'suspended'] }, variables: { type: 'object' }, tokens: { type: 'array', items: ref('Token') }, history: { type: 'array', items: ref('NodeVisit') }, parentInstanceId: { type: 'string' }, startedAt: { type: 'string' }, startedBy: { type: 'string' }, endedAt: { type: 'string' } } },
-  InstanceGraph: { type: 'object', properties: { nodes: { type: 'array', items: {} }, flows: { type: 'array', items: {} }, diagram: { type: 'object', properties: { activeNodeIds: { type: 'array', items: { type: 'string' } }, visitedNodeIds: { type: 'array', items: { type: 'string' } }, status: { type: 'string' } } }, counts: { type: 'object', additionalProperties: { type: 'integer' }, description: 'per-node execution count (jBPM instance badges)' }, status: { type: 'string' } } },
+  InstanceGraph: { type: 'object', properties: { nodes: { type: 'array', items: {} }, flows: { type: 'array', items: {} }, diagram: { type: 'object', properties: { activeNodeIds: { type: 'array', items: { type: 'string' } }, visitedNodeIds: { type: 'array', items: { type: 'string' } }, status: { type: 'string' } } }, counts: { type: 'object', additionalProperties: { type: 'integer' }, description: 'per-node execution count' }, status: { type: 'string' } } },
   Task: { type: 'object', properties: { id: { type: 'string' }, instanceId: { type: 'string' }, nodeId: { type: 'string' }, name: { type: 'string' }, group: { type: 'string' }, assignee: { type: 'string' }, status: { type: 'string', enum: ['created', 'reserved', 'inprogress', 'completed', 'skipped', 'error'] }, inputs: { type: 'object' }, outputs: { type: 'object' }, createdAt: { type: 'string' }, dueAt: { type: 'string' }, completedAt: { type: 'string' }, completedBy: { type: 'string' } } },
   TimerJob: { type: 'object', properties: { id: { type: 'string' }, instanceId: { type: 'string' }, nodeId: { type: 'string' }, kind: { type: 'string', enum: ['duration', 'cycle', 'date', 'start'] }, dueAt: { type: 'string' }, cycle: { type: 'string' }, status: { type: 'string', enum: ['scheduled', 'fired', 'cancelled'] }, deploymentId: { type: 'string' }, processId: { type: 'string' } } },
   UserRow: { type: 'object', properties: { user: { type: 'string' }, groups: { type: 'array', items: { type: 'string' } }, startedInstances: { type: 'integer' }, openTasks: { type: 'integer' }, completedTasks: { type: 'integer' } } },
@@ -95,7 +95,7 @@ const paths: Record<string, any> = {
     delete: { tags: ['Assets'], summary: 'Delete an asset — blocked (409) while any process node still references it', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Asset name')], responses: { '204': { description: 'Deleted' }, '409': { description: 'Still referenced', content: { 'application/json': { schema: ref('Error') } } } } },
   },
   '/workflows/{id}/assets/{kind}/{name}/test': {
-    post: { tags: ['Assets'], summary: 'Execute, simulate, or test an asset according to its jBPM purpose', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Asset name')], requestBody: jsonBody({ type: 'object' }, false), responses: ok({ type: 'object' }) },
+    post: { tags: ['Assets'], summary: 'Execute, simulate, or test an asset according to its purpose', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Asset name')], requestBody: jsonBody({ type: 'object' }, false), responses: ok({ type: 'object' }) },
   },
   '/workflows/{id}/branches': {
     get: { tags: ['Versioning'], summary: 'List branches', parameters: [idParam()], responses: ok(listOf('Branch')) },
@@ -236,7 +236,7 @@ const paths: Record<string, any> = {
 export const openapiSpec = {
   openapi: '3.0.3',
   info: {
-    title: 'jBPM-style BPM Engine API',
+    title: 'BPM Workflow Engine API',
     version: '0.1.0',
     description: 'Node-native BPM engine REST API — authoring, versioning, deployment lifecycle, runtime process instances, human tasks, KIE-Server-style query & analytics, and IAM (users/groups/roles). `POST /auth/login` issues a JWT; send it as `Authorization: Bearer <token>` on every other request. Each route requires a permission granted by one of the caller’s roles — see `DEFAULT_ROLES` in modules/iam/service.ts.',
   },

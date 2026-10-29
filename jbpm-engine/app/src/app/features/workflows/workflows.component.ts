@@ -29,7 +29,7 @@ type Selection = 'all' | 'unfiled' | string;
             <input #imp type="file" accept="application/json,.json,.bpmn,.bpmn2,.xml,application/xml,text/xml" hidden (change)="importFile($event)" />
             <button class="btn" (click)="imp.click()" title="Import a jBPM kjar exported as JSON, or a single .bpmn file"><app-icon name="upload" [size]="14" /> Import jBPM</button>
             <input #impDeploy type="file" accept="application/json,.json,.bpmn,.bpmn2,.xml,application/xml,text/xml" hidden (change)="importAndDeployFile($event)" />
-            <button class="btn" (click)="impDeploy.click()" title="Import a jBPM kjar or single .bpmn file and deploy it immediately — no manual Publish/Deploy step, same as deploying a pre-built artifact in jBPM"><app-icon name="deployments" [size]="14" /> Import &amp; Deploy</button>
+            <button class="btn" (click)="impDeploy.click()" title="Import a kjar or single .bpmn file and deploy it immediately"><app-icon name="deployments" [size]="14" /> Import &amp; Deploy</button>
           </div>
         </div>
 
@@ -55,7 +55,7 @@ type Selection = 'all' | 'unfiled' | string;
           <div class="empty-state">
             <div class="es-icon"><app-icon name="zap" [size]="24" /></div>
             <h3>{{ selected() === 'all' ? 'No projects yet' : 'No projects here yet' }}</h3>
-            <p>{{ selected() === 'all' ? 'Create your first project above, or import an existing jBPM kjar.' : 'Create a project above, or move an existing one into this folder.' }}</p>
+            <p>{{ selected() === 'all' ? 'Create your first project above, or import an existing kjar / BPMN process.' : 'Create a project above, or move an existing one into this folder.' }}</p>
           </div>
         } @else {
           <div class="grid">

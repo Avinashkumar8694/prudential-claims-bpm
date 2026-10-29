@@ -20,7 +20,7 @@ flowchart LR
             console.log('Processed:', amount);
             getVariable('key') / setVariable('key', val)"]
         end
-        subgraph LegacyJBPM["jBPM Compatibility Dialect"]
+        subgraph LegacyInterop["Procedural Compatibility Dialect"]
             JB1["kcontext.getVariable('key')"]
             JB2["kcontext.setVariable('key', value)"]
             JB3["kcontext.getProcessInstance()"]
@@ -39,13 +39,13 @@ flowchart LR
 
 The **Script Task** executes procedural logic synchronously inside an isolated, secure execution realm. It is used to perform data transformations, calculate derived values, format payloads, or implement custom business rules directly in the workflow token flow.
 
-Because this is a native **Node.js Workflow Engine**, authors have direct, idiomatic access to JavaScript and process variables without verbose ceremony. At the same time, the engine provides 100% backward compatibility for imported **jBPM / Drools** processes using `kcontext` or Java 8 scripts.
+Because this is a native **Node.js Workflow Engine**, authors have direct, idiomatic access to JavaScript and process variables without verbose ceremony. At the same time, the engine provides backward compatibility for procedural scripts using `kcontext` or Java 8 scripts.
 
 ---
 
-## 2. Modern Node.js Way vs Legacy jBPM Compatibility
+## 2. Modern Node.js Scripting vs Compatibility Dialect
 
-| Capability | Modern Node.js / JavaScript (Recommended) | Legacy jBPM Compatibility Dialect |
+| Capability | Modern Node.js / JavaScript (Recommended) | Procedural Compatibility Dialect |
 |---|---|---|
 | **Reading Variables** | Bare variable name: `amount` or `vars.amount` | `kcontext.getVariable("amount")` |
 | **Writing Variables** | Bare assignment: `status = "APPROVED"` or `vars.status = "APPROVED"` | `kcontext.setVariable("status", "APPROVED")` |
@@ -80,18 +80,18 @@ Because this is a native **Node.js Workflow Engine**, authors have direct, idiom
   - `console.log(...)`: Outputs log entries captured in process instance execution audit logs.
 - **When to Use**: All new workflows, data transformations, array processing, and arithmetic calculations.
 
-### Scenario B: Legacy jBPM kcontext Compatibility (`lang: 'js'`)
-- **Behavior**: Provides the full jBPM `kcontext` object hierarchy:
+### Scenario B: Procedural kcontext Compatibility (`lang: 'js'`)
+- **Behavior**: Provides the standard `kcontext` object hierarchy:
   - `kcontext.getVariable("key")`: Reads a process variable.
   - `kcontext.setVariable("key", value)`: Writes or updates a process variable.
   - `kcontext.getNodeInstance()`: Returns `{ getId(), getNodeId(), getNodeName() }`.
   - `kcontext.getProcessInstance()`: Returns `{ getId(), getProcessId(), getProcessName(), getCorrelationKey(), getState() }`.
   - `kcontext.getKieRuntime()`: Returns `{ signalEvent(type, event, [id]), abortProcessInstance(id) }`.
-- **When to Use**: Maintaining or running processes imported directly from Red Hat PAM / jBPM without modifying script contents.
+- **When to Use**: Running procedural scripts that require `kcontext` method syntax without modifying script contents.
 
 ### Scenario C: Real Java 8 Execution (`lang: 'java'`)
 - **Behavior**: Dispatched to the local Java sidecar subprocess. The sidecar compiles and executes real Java 8 bytecode against typed variables (`java.lang.String`, `java.lang.Integer`, `java.util.Map`, etc.) with full standard library support (lambdas, streams, `Optional`).
-- **When to Use**: Legacy kjars containing Java scripts or complex Java domain libraries.
+- **When to Use**: Complex Java-specific calculations or legacy Java code.
 
 ---
 
@@ -119,11 +119,11 @@ Because this is a native **Node.js Workflow Engine**, authors have direct, idiom
 }
 ```
 
-### Example 2: Legacy jBPM Compatibility Script
+### Example 2: Compatibility Script
 ```json
 {
-  "id": "script_legacy_jbpm",
-  "name": "Legacy jBPM Variable Mapping",
+  "id": "script_compat_variables",
+  "name": "Compatibility Variable Mapping",
   "type": "script",
   "lang": "js",
   "code": "var amount = kcontext.getVariable(\"claimAmount\");\nvar deductible = kcontext.getVariable(\"policyDeductible\");\nvar net = amount - deductible;\nkcontext.setVariable(\"payoutAmount\", net);\nkcontext.setVariable(\"status\", \"ADJUDICATED\");"

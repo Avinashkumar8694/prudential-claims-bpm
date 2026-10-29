@@ -99,7 +99,7 @@ interface AssetRow {
   standalone: true,
   imports: [FormsModule, IconComponent, AssetFieldsComponent, MarkdownViewerComponent],
   template: `
-    <p class="hint">Assets are shared across the project's processes and become real jBPM assets on export. Nodes link to them by name (business rule tasks reference a DRL ruleset's group, forms are picked by name on user tasks, and so on).</p>
+    <p class="hint">Assets are shared across the project's processes and can be exported as standard artifacts. Nodes link to them by name (business rule tasks reference a DRL ruleset's group, forms are picked by name on user tasks, and so on).</p>
 
     <div class="toolbar">
       <input class="search" placeholder="Search assets…" [(ngModel)]="q" />
@@ -308,7 +308,7 @@ interface AssetRow {
                 } @else if (d.row.kind === 'types') {
                   <div class="java-preview-card card">
                     <div class="java-hdr">
-                      <span>Generated jBPM Data Object POJO ({{ d.raw.package || 'com.acme.model' }}.{{ d.raw.name }})</span>
+                      <span>Generated Data Object POJO ({{ d.raw.package || 'com.acme.model' }}.{{ d.raw.name }})</span>
                       <button class="btn sm ghost" (click)="copyJava(generateJavaPojo(d.raw))">
                         {{ copiedJava() ? 'Copied!' : 'Copy .java' }}
                       </button>
@@ -822,7 +822,7 @@ export class ProjectAssetsComponent implements OnInit {
       case 'decisionTrees': return 'Traverse decision tree conditions and execute leaf node action consequences.';
       case 'scorecards': return 'Calculate baseline and characteristic score weights against input attributes.';
       case 'enumerations': return 'Validate allowed enumeration values and test form/task dropdown integration.';
-      case 'types': return 'Preview generated Java POJO data object definition with getters and setters for jBPM engine compatibility.';
+      case 'types': return 'Preview generated Java POJO data object definition with getters and setters.';
       case 'messages': return 'Validate BPMN 2.0 message contract, correlation property, and payload structure.';
       case 'tests': return 'Execute all test scenario cases against the target asset and verify expected vs actual outcomes.';
       default: return 'Test asset logic and execution.';
@@ -886,7 +886,7 @@ export class ProjectAssetsComponent implements OnInit {
     const className = type?.name || 'DataObject';
     const fields = Array.isArray(type?.fields) ? type.fields : [];
     let code = `package ${pkg};\n\n`;
-    code += `/**\n * jBPM Data Object: ${className}\n */\n`;
+    code += `/**\n * Data Object: ${className}\n */\n`;
     code += `public class ${className} implements java.io.Serializable {\n\n`;
     code += `    private static final long serialVersionUID = 1L;\n\n`;
     for (const f of fields) {

@@ -1,7 +1,7 @@
 # Work Item Task (`workItem`)
 
 ## 1. Overview & Purpose
-A **Work Item Task** integrates domain-specific pluggable handlers into the BPMN workflow. In traditional jBPM, these are custom `WorkItemHandler` implementations. In our engine, built-in handlers include **Email**, **SMS**, **DBQuery**, **Compute**, and **Log**, with full parameter substitution and result binding.
+A **Work Item Task** integrates domain-specific pluggable handlers into the BPMN workflow. These pluggable handlers allow decoupling task execution from workflow orchestration. In our engine, built-in handlers include **Email**, **SMS**, **DBQuery**, **Compute**, and **Log**, with full parameter substitution and result binding.
 
 ```mermaid
 flowchart LR

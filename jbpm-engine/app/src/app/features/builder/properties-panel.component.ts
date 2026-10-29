@@ -29,7 +29,7 @@ import { IconComponent } from '../../shared/icon.component';
               }
               @case ('code') {
                 @if (val('lang') === 'java' || val(f.key + 'Lang') === 'java') {
-                  <div class="lang-pill java"><span class="pill-badge">Java</span> <span class="pill-note">Imported from jBPM (language locked)</span></div>
+                  <div class="lang-pill java"><span class="pill-badge">Java</span> <span class="pill-note">Imported (language locked)</span></div>
                 } @else {
                   <div class="lang-pill js"><span class="pill-badge">JavaScript</span> <span class="pill-note">Node.js Sandbox VM</span></div>
                 }

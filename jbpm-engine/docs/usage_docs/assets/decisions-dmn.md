@@ -8,7 +8,7 @@
 
 **DMN Decisions** author industry-standard Decision Model and Notation (DMN 1.2) decision tables without requiring manual XML authoring or raw FEEL expression parsing. 
 
-At design time, business users and rule authors define input columns, output columns, hit policies, and declarative condition cells. At runtime or export, the system synthesizes compliant DMN 1.2 XML that evaluates in the engine's built-in decision table executor or executes within a jBPM/Drools KIE container.
+At design time, business users and rule authors define input columns, output columns, hit policies, and declarative condition cells. At runtime or export, the system synthesizes compliant DMN 1.2 XML that evaluates directly in the engine's built-in decision table executor or exports for standard DMN interoperability.
 
 ```mermaid
 flowchart TD

@@ -39,7 +39,7 @@ flowchart LR
 
 ### Scenario E: Drools Ruleflow Group (`ruleflowGroup: 'group_name'`)
 - **Behavior**: Activates a named ruleflow-group in Drools DRL rulesets, firing rules against working memory.
-- **When to Use**: Legacy jBPM / Drools migrations.
+- **When to Use**: Rule-flow group based execution, DRL rulesets, and Drools rule execution.
 
 ## 3. Property Reference & Possible Values
 
