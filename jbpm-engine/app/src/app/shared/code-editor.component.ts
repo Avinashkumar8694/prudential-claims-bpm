@@ -449,9 +449,34 @@ export class CodeEditorComponent implements OnChanges, AfterViewInit {
       code: 'const tier = getVariable("riskTier");\nsetVariable("level", tier === "HIGH" ? 2 : 1);',
     },
     {
-      label: 'Instance Signal',
+      label: 'KieFunctions Comparisons',
+      desc: 'Enterprise safe equality and boundary checks',
+      code: 'if (KieFunctions.greaterThan(amount, 5000) && KieFunctions.equalsTo(status, "PENDING")) {\n  vars.isHighValue = true;\n}',
+    },
+    {
+      label: 'Jackson ObjectNode Builder',
+      desc: 'Builds JSON payload via Jackson ObjectMapper tree API',
+      code: 'var mapper = new com.fasterxml.jackson.databind.ObjectMapper();\nvar req = mapper.createObjectNode();\nreq.put("caseId", instance.correlationKey);\nreq.put("amount", vars.amount);\nreqPayload = req.toString();',
+    },
+    {
+      label: 'Java Collections (ArrayList / HashMap)',
+      desc: 'Creates Java collection shims in JavaScript',
+      code: 'var list = new java.util.ArrayList();\nlist.add("FirstItem");\nvar map = new java.util.HashMap();\nmap.put("total", list.size());',
+    },
+    {
+      label: 'Instance Signal & Events',
       desc: 'Delivers an event to resume this process instance',
       code: 'instance.signal("DOC_RECEIVED", { docId: "D-101" });',
+    },
+    {
+      label: 'HTTP Exit Script (Parse resPayload)',
+      desc: 'Parses raw HTTP response body in service exit script',
+      code: 'const res = JSON.parse(resPayload);\nvars.apiStatus = res.status;\nstatus = res.success ? "PROCESSED" : "FAILED";',
+    },
+    {
+      label: 'Gateway Condition Recipe',
+      desc: 'Multi-line boolean condition for XOR/OR gateways',
+      code: 'const netAmount = requestedAmount - deductible;\nreturn netAmount > 25000 && riskRating !== "LOW";',
     },
     {
       label: 'System Audit Log',
