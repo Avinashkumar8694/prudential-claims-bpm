@@ -383,3 +383,69 @@ const url = isAbsolute ? n.url : `${baseUrl}${n.url}`;
 | **Output Mapping** | Direct mutation | Subprocess output mappings | Project-level `outputMappings` table |
 | **Loop Protection** | BPMN graph flow topology | Standard join/token limits | Hard Circuit Breaker (`recursion depth = 1`) |
 | **Configuration** | Canvas Drag-and-drop | Canvas Event Subprocess | Project Settings Card |
+
+---
+
+## 10. Automated Edge Case Test Suite Matrix (16 Verified Scenarios)
+
+Every edge case across local boundaries, event subprocesses, Call Activities, soft-failures, sequential retries, and project-level environment inheritance is continuously tested and verified in [`hierarchical-error-handling.test.ts`](file:///Users/avinashgupta/Documents/Prudentials/pru-neu-integration-layer/docs/prudential-claims-bpm/jbpm-engine/server/test/hierarchical-error-handling.test.ts):
+
+| # | Edge Case Scenario | Automated Test Name | Verified Behavior | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **1** | Local Boundary Priority | `Local boundary error takes precedence over project global error handler` | Local boundary catches error immediately; global handler is not invoked. | **PASSED** |
+| **2** | Global Handler Resolution | `Unhandled node error invokes Global Error Handler with repair-and-resume` | Unhandled error escalates to GEH, repaired variables map back, flow advances. | **PASSED** |
+| **3** | Direct Node Retry | `Global Error Handler with retry action` | GEH sets `vars.errorHandlerAction = "retry"`, failing node is re-executed. | **PASSED** |
+| **4** | Circuit Breaker Protection | `Circuit Breaker prevents recursion if Global Error Handler itself throws` | `isErrorHandler: true` blocks re-entrant error handling, prevents infinite loop. | **PASSED** |
+| **5** | Environment Inheritance | `Workflow.env merges into Deployment.env and is accessible in runtime sandbox` | Project env keys accessible via `env.KEY` and `System.getenv("KEY")`. | **PASSED** |
+| **6** | Boundary Rethrow Bubbling | `Local boundary with rethrow bubbles to Global Error Handler` | Boundary node with `rethrow: true` passes error up to GEH. | **PASSED** |
+| **7** | Error Code Filtering | `Global Error Handler filter skips non-matching errors` | Handler with `filter: ['SERVICE_ERROR']` ignores `SCRIPT_ERROR` and fails cleanly. | **PASSED** |
+| **8** | Specific vs Catch-All Priority | `Specific error catch matches before catch-all on the same node` | Exact code match (`SCRIPT_ERROR`) fires before catch-all (`*`). | **PASSED** |
+| **9** | Parent Call Activity Catch | `Call Activity child failure is caught by Parent Error Boundary before Global Handler` | Unhandled child error is caught by parent boundary before GEH escalation. | **PASSED** |
+| **10** | Child Error Bubble to Global | `Call Activity child failure without Parent Boundary bubbles to Global Handler` | Without parent boundary, child error escalates to project GEH. | **PASSED** |
+| **11** | Compensate & Abort Strategy | `Global Error Handler compensate-and-abort marks original instance aborted` | Runs compensation and transitions instance status to `aborted`. | **PASSED** |
+| **12** | Global Handler Failure Tracking | `Global Error Handler failure records descriptive error on original instance` | If GEH crashes, original instance fails with descriptive handler error message. | **PASSED** |
+| **13** | Jackson Context Unpacking | `Jackson-style JSON parsing of failedContext in Global Error Handler` | GEH unpacks `failedContext` via `JSON.parse` matching `policy_system` pattern. | **PASSED** |
+| **14** | Deployment Env Overrides | `Deployment-time env overrides workflow.env while inheriting non-overridden keys` | Specific env keys overridden at deploy time; other keys inherit from workflow. | **PASSED** |
+| **15** | HTTP Soft Failure Flag | `throwError=false on task produces soft-failure without raising engine error` | Task saves `{ url, method, error }` into `errorVar` and proceeds normally. | **PASSED** |
+| **16** | Sequential Retry Tracking | `Sequential retry tracking in Global Error Handler up to limit` | GEH tracks retries across failures, successfully recovering on attempt 3. | **PASSED** |
+
+### Sequence 5: Parent Call Activity Boundary Interception
+```mermaid
+sequenceDiagram
+    autonumber
+    participant ParentInst as Parent Process Instance
+    participant ChildInst as Child Process Instance
+    participant Engine as ExecutionEngine
+    participant ParentBoundary as Parent Boundary Event
+    participant Global as Global Error Handler
+
+    ParentInst->>ChildInst: Call Activity spawns child process
+    ChildInst->>Engine: Child Script Node fails with FATAL_ERROR
+    Engine->>Engine: Child raiseError: Check inst.parentInstanceId && !inst.independent
+    Note over Engine: Child error bubbles to Parent Call Activity! Global handler bypassed.
+    Engine->>ParentBoundary: Activate boundary error token on Call Activity
+    ParentBoundary->>ParentInst: Execute parent recovery flow
+    Note over ParentInst: Parent recovers & completes normally. Global was NOT called.
+```
+
+### Sequence 6: Sequential Retry Tracking via Global Error Handler
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Main as Main Process Instance
+    participant Engine as ExecutionEngine
+    participant GEH as Retry Manager (Global Handler)
+
+    Main->>Engine: Node flaky_service fails (attempt 0)
+    Engine->>GEH: Spawn Retry Manager (retryAttempts: 0)
+    GEH->>GEH: Increment retryAttempts to 1, set errorHandlerAction = "retry"
+    GEH-->>Engine: Completed
+    Engine->>Main: Map retryAttempts=1, push token on flaky_service (Retry #1)
+    Main->>Engine: Node flaky_service fails (attempt 1)
+    Engine->>GEH: Spawn Retry Manager (retryAttempts: 1)
+    GEH->>GEH: Increment retryAttempts to 2, set errorHandlerAction = "retry"
+    GEH-->>Engine: Completed
+    Engine->>Main: Map retryAttempts=2, push token on flaky_service (Retry #2)
+    Main->>Engine: Node flaky_service succeeds on attempt 2!
+    Main-->>Engine: Main process completes successfully.
+```
