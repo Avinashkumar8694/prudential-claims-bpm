@@ -74,6 +74,7 @@ export interface Catalog {
   docs?: Record<string, any>;
   readmes?: Record<string, string>;       // engineType → full markdown README
   assetReadmes?: Record<string, string>;  // assetKind → full markdown README
+  cheatSheet?: string;                    // full JavaScript & flow variables cheat sheet markdown
 }
 
 /** One process behind a currently-active deployment, tenant-wide — exactly what a 'call'/'forEach'

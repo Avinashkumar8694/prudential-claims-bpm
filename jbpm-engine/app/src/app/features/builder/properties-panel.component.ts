@@ -31,7 +31,13 @@ import { IconComponent } from '../../shared/icon.component';
                 @if (val('lang') === 'java' || val(f.key + 'Lang') === 'java') {
                   <div class="lang-pill java"><span class="pill-badge">Java</span> <span class="pill-note">Imported (language locked)</span></div>
                 } @else {
-                  <div class="lang-pill js"><span class="pill-badge">JavaScript</span> <span class="pill-note">Node.js Sandbox VM</span></div>
+                  <div class="lang-pill js">
+                    <span class="pill-badge">JavaScript</span>
+                    <span class="pill-note">Node.js Sandbox VM</span>
+                    <button type="button" class="cheat-pill" (click)="openCheatSheet.emit()" title="View JavaScript & Flow Variables Cheat Sheet">
+                      <app-icon name="code" [size]="12" /> Cheat Sheet
+                    </button>
+                  </div>
                 }
                 <textarea class="mono" rows="6" [ngModel]="val(f.key)" (ngModelChange)="set(f.key, $event)" [placeholder]="f.placeholder || ''"></textarea>
               }
@@ -130,6 +136,12 @@ import { IconComponent } from '../../shared/icon.component';
                   }
                   @case ('escalation') { <input class="mt" placeholder="Escalation code" [ngModel]="val(f.key + '.escalation')" (ngModelChange)="set(f.key + '.escalation', $event)" /> }
                   @case ('condition') {
+                    <div class="cond-header">
+                      <span class="cond-sub">Condition (JavaScript)</span>
+                      <button type="button" class="cheat-pill" (click)="openCheatSheet.emit()" title="View JavaScript & Flow Variables Cheat Sheet">
+                        <app-icon name="code" [size]="12" /> Cheat Sheet
+                      </button>
+                    </div>
                     <input class="mt" placeholder="Condition expression (JavaScript)" [ngModel]="val(f.key + '.condition')" (ngModelChange)="set(f.key + '.condition', $event); set(f.key + '.lang', 'js')" />
                   }
                   @case ('timer') {
@@ -157,6 +169,10 @@ import { IconComponent } from '../../shared/icon.component';
     .lang-pill.java { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
     .lang-pill.js { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
     .pill-badge { font-weight: 700; text-transform: uppercase; }
+    .cheat-pill { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); background: var(--surface-2, rgba(255,255,255,0.06)); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--primary); cursor: pointer; transition: all 0.15s ease; }
+    .cheat-pill:hover { background: var(--primary-50, rgba(99,102,241,0.15)); border-color: var(--primary); }
+    .cond-header { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; margin-bottom: 2px; }
+    .cond-sub { font-size: 11.5px; color: var(--text-secondary); }
     .pill-note { opacity: 0.85; font-size: 11px; }
     .mt { margin-top: 6px; }
     small { display: block; color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.4; }
@@ -187,6 +203,7 @@ export class PropertiesPanelComponent implements OnChanges {
    *  (see server's /catalog/processes) and, once one is picked on THIS node, the 'called' source. */
   @Input() callableProcesses: CallableProcess[] = [];
   @Output() changed = new EventEmitter<void>();
+  @Output() openCheatSheet = new EventEmitter<void>();
   kv: Record<string, { k: string; v: string }[]> = {};
   sl: Record<string, string[]> = {};
   errorCodes = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'];

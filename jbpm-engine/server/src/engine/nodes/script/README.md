@@ -41,6 +41,9 @@ The **Script Task** executes procedural logic synchronously inside an isolated, 
 
 Because this is a native **Node.js Workflow Engine**, authors have direct, idiomatic access to JavaScript and process variables without verbose ceremony. At the same time, the engine provides backward compatibility for procedural scripts using `kcontext` or Java 8 scripts.
 
+> [!TIP]
+> **Complete JavaScript & Variables Cheat Sheet**: For full syntax reference on sandbox globals (`vars`, bare variables, `instance` API, `node` metadata, `console.log`, sequence flow condition syntax, and cross-node data mapping), see the [JavaScript & Flow Variables Cheat Sheet](../../../../docs/usage_docs/15-javascript-and-flow-variables-cheatsheet.md). Also accessible directly from the Workflow Designer by clicking the **JS Cheat Sheet** button.
+
 ---
 
 ## 2. Modern Node.js Scripting vs Compatibility Dialect

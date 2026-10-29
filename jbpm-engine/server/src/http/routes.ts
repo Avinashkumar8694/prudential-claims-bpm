@@ -67,6 +67,12 @@ function getAssetReadme(kind: string): string {
   if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');
   return '';
 }
+
+function getCheatSheetReadme(): string {
+  const p = path.resolve(__dirname, '../../../docs/usage_docs/15-javascript-and-flow-variables-cheatsheet.md');
+  if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');
+  return '';
+}
 import { resolveWorkflowServiceStore } from '../workflow-service/store/index.ts';
 import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
 import { hub } from '../infra/ws-hub.ts';
@@ -103,7 +109,9 @@ export function buildRoutes(): Router {
     docs: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.docs || null])),      // engineType → structured documentation & scenarios
     readmes: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, getNodeReadme(d.engineType)])), // engineType → full markdown README
     assetReadmes: Object.fromEntries(Object.keys(ASSET_FILE_MAP).map((k) => [k, getAssetReadme(k)])), // assetKind → full markdown README
+    cheatSheet: getCheatSheetReadme(), // full JavaScript & variables cheat sheet markdown
   }));
+  r.get('/catalog/cheat-sheet', (_req, res) => res.json({ cheatSheet: getCheatSheetReadme() }));
   r.get('/catalog/nodes/:engineType', (req, res) => {
     const def = NODE_DEF_BY_TYPE[req.params.engineType];
     if (!def) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'node type not found' } });

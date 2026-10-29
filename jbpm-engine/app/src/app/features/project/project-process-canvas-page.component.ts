@@ -25,6 +25,7 @@ import { IconComponent } from '../../shared/icon.component';
         </div>
         <span class="divider"></span>
         <button class="btn ghost" (click)="canvas()?.openVars()">Variables ({{ canvas()?.procVars()?.length || 0 }})</button>
+        <button class="btn ghost" (click)="canvas()?.openCheatSheet()" title="View JavaScript & Flow Variables Cheat Sheet"><app-icon name="code" [size]="14" /> JS Cheat Sheet</button>
         <button class="icon-btn" (click)="canvas()?.autoLayout()" title="Auto-layout">▦</button>
         <span class="spacer"></span>
         <button class="btn" (click)="canvas()?.run()">▷ Run</button>

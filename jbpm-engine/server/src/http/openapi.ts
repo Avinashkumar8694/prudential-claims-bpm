@@ -44,6 +44,7 @@ const schemas = {
 // ---- paths (grouped by tag) ----
 const paths: Record<string, any> = {
   '/catalog/nodes': { get: { tags: ['Catalog'], summary: 'Node palette, property schemas and connection ports', responses: ok({ type: 'object' }) } },
+  '/catalog/cheat-sheet': { get: { tags: ['Catalog'], summary: 'JavaScript and flow variables cheat sheet', responses: ok({ type: 'object', properties: { cheatSheet: { type: 'string' } } }) } },
   '/catalog/nodes/{engineType}': { get: { tags: ['Catalog'], summary: 'One node type definition', parameters: [idParam('engineType', 'Engine node type')], responses: { ...ok({ type: 'object' }), '404': { description: 'Not found', content: { 'application/json': { schema: ref('Error') } } } } } },
   '/catalog/assets/readmes': { get: { tags: ['Catalog'], summary: 'All asset markdown documentation', responses: ok({ type: 'object' }) } },
   '/catalog/assets/{kind}/readme': { get: { tags: ['Catalog'], summary: 'Asset markdown documentation by kind', parameters: [idParam('kind', 'Asset kind')], responses: { ...ok({ type: 'object' }), '404': { description: 'Not found', content: { 'application/json': { schema: ref('Error') } } } } } },

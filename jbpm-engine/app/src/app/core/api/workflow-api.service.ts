@@ -9,6 +9,7 @@ import type { Branch, CallableProcess, Catalog, Folder, ImportResult, Validation
 export class WorkflowApiService extends ApiBase {
   // catalog
   catalog(): Observable<Catalog> { return this.http.get<Catalog>(`${this.base}/catalog/nodes`); }
+  cheatSheet(): Observable<{ cheatSheet: string }> { return this.http.get<{ cheatSheet: string }>(`${this.base}/catalog/cheat-sheet`); }
   nodeReadme(engineType: string): Observable<any> { return this.http.get<any>(`${this.base}/catalog/nodes/${engineType}`); }
   assetReadme(kind: string): Observable<{ kind: string; readme: string }> { return this.http.get<{ kind: string; readme: string }>(`${this.base}/catalog/assets/${kind}/readme`); }
   callableProcesses(): Observable<CallableProcess[]> { return this.items(this.http.get<ApiList<CallableProcess>>(`${this.base}/catalog/processes`)); }

@@ -22,8 +22,9 @@ The **Service Task (REST)** connects the BPM engine to external microservices, p
 - **When to Use**: Standard REST responses mapping into process data without writing code.
 
 ### Scenario D: Exit Script Post-Processing Hook (`exitScript`)
-- **Behavior**: Runs a post-response script (JS or Java) with the raw response body bound to `resPayload`.
-- **When to Use**: Complex XML parsing, cryptographic signature verification, or conditional branching based on status codes.
+- **Behavior**: Runs a post-response script (JS or Java) with the raw response body bound to `resPayload` and access to all flow variables (`vars`, `instance`, `node`, `console.log`).
+- **When to Use**: Custom response normalization, complex payload handling, or conditional status mapping.
+- **Cheat Sheet**: See the [JavaScript & Flow Variables Cheat Sheet](../../../../docs/usage_docs/15-javascript-and-flow-variables-cheatsheet.md) for complete details on `resPayload` and `vars`.
 
 ## 3. Property Reference & Possible Values
 

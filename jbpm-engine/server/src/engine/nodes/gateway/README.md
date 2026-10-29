@@ -83,6 +83,9 @@ When configuring conditional sequence flows exiting an Exclusive or Inclusive Ga
   - `vars.claim.payout > 1000`
 - **Compatibility Dialect**: Expressions using `kcontext.getVariable("key")` or Java sidecar conditions are fully supported.
 
+> [!TIP]
+> **Condition Syntax & Recipes**: See the [JavaScript & Flow Variables Cheat Sheet](../../../../docs/usage_docs/15-javascript-and-flow-variables-cheatsheet.md) for full condition recipes including string pattern matching, array methods, and multi-line condition blocks.
+
 ## 6. Testing Scenarios & Verification Guide
 1. **Exclusive Ordering**: Configure flows `[x > 10, x > 5]`; pass `x = 15`; verify only flow 1 (`x > 10`) is taken.
 2. **Parallel Synchronization**: Fork 2 tasks; complete task 1; verify join gateway waits; complete task 2; verify join resumes.

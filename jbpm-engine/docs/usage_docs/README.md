@@ -1,4 +1,4 @@
-# jBPM Engine — Usage Documentation
+# Workflow Engine — Usage Documentation
 
 This folder is the **user/operator-facing** documentation set: how to install, configure, and use the
 engine and its Angular builder. It is separate from `../` (the numbered `01-`…`17-` documents), which
@@ -22,6 +22,8 @@ the engine itself; read this folder if you're *running* or *using* it.
 | 11 | [Importing & exporting real jBPM](11-importing-and-exporting-jbpm.md) | kjar import, Java-dialect scripts, DMN/DRL recovery, export back to a `.bpmn2` project |
 | 12 | [Reports & analytics](12-reports-and-analytics.md) | The Reports page: process, task, and SLA views |
 | 13 | [Multi-version deploy sequence](13-multi-version-deploy-sequence.md) | Full request/response trace: deploying the same project twice, one instance per version, then fetching tasks and signals — plus exactly when each identifier (`workflowId`, `versionId`, `deploymentId`, `instanceId`) is generated |
+| 14 | [Workflow instance management](14-workflow-instance-management.md) | Dynamic instance management, variable mutation policies, retry behaviors, and state transitions |
+| 15 | [JavaScript & Flow Variables Cheat Sheet](15-javascript-and-flow-variables-cheatsheet.md) | Complete reference: sandbox globals, bare variables, `vars`, `instance` API, condition expressions, HTTP exit scripts, and data mappings |
 
 ## Reference
 

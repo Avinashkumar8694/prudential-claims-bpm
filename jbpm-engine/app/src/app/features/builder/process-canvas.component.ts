@@ -194,7 +194,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
             @if (nodeModalTab() === 'props') {
               <div class="modal-body">
                 <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
-                <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" (changed)="markDirty()"></app-properties-panel>
+                <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" (changed)="markDirty()" (openCheatSheet)="openCheatSheet()"></app-properties-panel>
                 <button class="btn danger full" (click)="del($event, n); closeNodeEditor()">Delete node</button>
               </div>
             } @else {
@@ -231,8 +231,16 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                 <label class="fld"><span>Branch label</span><input [(ngModel)]="e.label" (ngModelChange)="onEdgeChange(e)" placeholder="e.g. Open, Close, Approved…" /></label>
                 <p class="hint">Shown on the canvas above this branch. Leave empty for a plain numbered branch.</p>
               }
-              <label class="fld"><span>Condition (js)</span><input [(ngModel)]="e.when" (ngModelChange)="onEdgeChange(e)" placeholder="e.g. amount > 1000" /></label>
-              <p class="hint">Leave empty for an unconditional / default flow.</p>
+              <label class="fld">
+                <div class="fld-lbl-row">
+                  <span>Condition (js)</span>
+                  <button type="button" class="cheat-pill" (click)="openCheatSheet()" title="View JavaScript & Flow Variables Cheat Sheet">
+                    <app-icon name="code" [size]="12" /> Cheat Sheet
+                  </button>
+                </div>
+                <input [(ngModel)]="e.when" (ngModelChange)="onEdgeChange(e)" placeholder="e.g. amount > 1000 &amp;&amp; riskTier === 'HIGH'" />
+              </label>
+              <p class="hint">Leave empty for an unconditional / default flow. Evaluates bare variables (<code>amount</code>), <code>vars.key</code>, or functional conditions.</p>
               <button class="btn danger full" (click)="delEdge(e.id); closeEdgeEditor()">Delete connection</button>
             </div>
           </div>
@@ -242,9 +250,16 @@ const COL_W = NW + 100, ROW_H = NH + 46;
       @if (showVars()) {
         <div class="modal-bg" (click)="closeVars()">
           <div class="modal" (click)="$event.stopPropagation()">
-            <div class="modal-h"><span>Process Variables</span><span class="spacer"></span><button class="x" (click)="closeVars()" aria-label="Close"><app-icon name="close" [size]="15" /></button></div>
+            <div class="modal-h">
+              <span>Process Variables</span>
+              <span class="spacer"></span>
+              <button type="button" class="cheat-pill mr-2" (click)="openCheatSheet()" title="View JavaScript & Flow Variables Cheat Sheet">
+                <app-icon name="code" [size]="12" /> JS &amp; Variables Cheat Sheet
+              </button>
+              <button class="x" (click)="closeVars()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+            </div>
             <div class="modal-body">
-              <p class="hint">Typed data this process carries. Referenced from scripts (kcontext), conditions, and data mappings.</p>
+              <p class="hint">Typed data this process carries. Access in scripts via bare names (<code>amount</code>), <code>vars.name</code>, or <code>getVariable('name')</code>.</p>
               @for (v of procVars(); track $index) {
                 <div class="vrow">
                   <input placeholder="name" [(ngModel)]="v.name" (ngModelChange)="markDirty()" />
@@ -256,6 +271,22 @@ const COL_W = NW + 100, ROW_H = NH + 46;
               }
               @if (!procVars().length) { <p class="muted">No variables yet.</p> }
               <button class="add" (click)="addVar()">+ add variable</button>
+            </div>
+          </div>
+        </div>
+      }
+
+      @if (showCheatSheet()) {
+        <div class="modal-bg" (click)="closeCheatSheet()">
+          <div class="modal wide docs-modal" (click)="$event.stopPropagation()">
+            <div class="modal-h">
+              <span class="chip sm" style="background:#0891b2;color:#fff;"><app-icon name="code" [size]="13" /></span>
+              <span>JavaScript &amp; Flow Variables Cheat Sheet</span>
+              <span class="spacer"></span>
+              <button class="x" (click)="closeCheatSheet()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+            </div>
+            <div class="modal-body docs-scroll-pane">
+              <app-markdown-viewer [content]="cheatSheetContent()" />
             </div>
           </div>
         </div>
@@ -494,6 +525,10 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     .modal-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; }
     .modal-h .chip.sm { width: 24px; height: 24px; border-radius: 7px; color: #fff; display: grid; place-items: center; font-size: 12px; }
     .modal-h .x { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); }
+    .fld-lbl-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .cheat-pill { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); background: var(--surface-2, rgba(255,255,255,0.06)); border-radius: 6px; padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--primary); cursor: pointer; transition: all 0.15s ease; }
+    .cheat-pill:hover { background: var(--primary-50, rgba(99,102,241,0.15)); border-color: var(--primary); }
+    .mr-2 { margin-right: 8px; }
     .modal-body { padding: 16px 18px; overflow: auto; }
     .vrow { display: flex; gap: 8px; margin-bottom: 8px; }
     .vrow input { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
@@ -544,6 +579,20 @@ export class ProcessCanvasComponent implements OnChanges {
 
   closeDocs() {
     this.viewingDocs.set(null);
+  }
+
+  showCheatSheet = signal(false);
+
+  openCheatSheet() {
+    this.showCheatSheet.set(true);
+  }
+
+  closeCheatSheet() {
+    this.showCheatSheet.set(false);
+  }
+
+  cheatSheetContent(): string {
+    return this.catalog()?.cheatSheet || '# JavaScript & Flow Variables Cheat Sheet\n\nNo cheat sheet content available.';
   }
   linkFrom = signal<string | null>(null);
   linkError = signal<string>('');
