@@ -28,6 +28,45 @@ import { exportKjar, validateJbpmExport } from '../modules/export/service.ts';
 import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { openapiSpec, swaggerHtml } from './openapi.ts';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const NODE_FOLDER_MAP: Record<string, string> = {
+  userTask: 'user-task',
+  forEach: 'for-each',
+  workItem: 'work-item',
+};
+
+function getNodeReadme(engineType: string): string {
+  const folder = NODE_FOLDER_MAP[engineType] || engineType;
+  const p = path.resolve(__dirname, `../engine/nodes/${folder}/README.md`);
+  if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');
+  return '';
+}
+
+const ASSET_FILE_MAP: Record<string, string> = {
+  forms: 'forms.md',
+  decisions: 'decisions-dmn.md',
+  guidedTables: 'guided-tables.md',
+  scorecards: 'scorecards.md',
+  decisionTrees: 'decision-trees.md',
+  types: 'types.md',
+  enumerations: 'enumerations.md',
+  rulesets: 'rulesets-drl.md',
+  messages: 'messages.md',
+  tests: 'tests.md',
+};
+
+function getAssetReadme(kind: string): string {
+  const file = ASSET_FILE_MAP[kind] || `${kind}.md`;
+  const p = path.resolve(__dirname, `../../../docs/usage_docs/assets/${file}`);
+  if (fs.existsSync(p)) return fs.readFileSync(p, 'utf-8');
+  return '';
+}
 import { resolveWorkflowServiceStore } from '../workflow-service/store/index.ts';
 import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
 import { hub } from '../infra/ws-hub.ts';
@@ -53,7 +92,7 @@ export function buildRoutes(): Router {
   r.get('/openapi.json', (_req, res) => res.json(openapiSpec));
   r.get('/docs', (_req, res) => res.type('html').send(swaggerHtml));
 
-  // --- catalog: the UI gets the node list + per-node config (palette, ports, property schema) here ---
+  // --- catalog: the UI gets the node list + per-node config (palette, ports, property schema, docs) here ---
   r.get('/catalog/nodes', (_req, res) => res.json({
     categories: CATEGORIES,
     nodes: NODE_DEFS.flatMap((d) => d.palette),                                  // palette tiles
@@ -61,11 +100,21 @@ export function buildRoutes(): Router {
     ports: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.ports])),    // engineType → { in, out }
     diagram: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.diagram])),       // engineType → { icon, color, shape } for diagram rendering
     typeLabels: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.typeLabel])),   // engineType → neutral display name
+    docs: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, d.docs || null])),      // engineType → structured documentation & scenarios
+    readmes: Object.fromEntries(NODE_DEFS.map((d) => [d.engineType, getNodeReadme(d.engineType)])), // engineType → full markdown README
+    assetReadmes: Object.fromEntries(Object.keys(ASSET_FILE_MAP).map((k) => [k, getAssetReadme(k)])), // assetKind → full markdown README
   }));
   r.get('/catalog/nodes/:engineType', (req, res) => {
     const def = NODE_DEF_BY_TYPE[req.params.engineType];
     if (!def) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'node type not found' } });
-    res.json(def);
+    const readme = getNodeReadme(req.params.engineType);
+    res.json({ ...def, readme });
+  });
+  r.get('/catalog/assets/readmes', (_req, res) => res.json(Object.fromEntries(Object.keys(ASSET_FILE_MAP).map((k) => [k, getAssetReadme(k)]))));
+  r.get('/catalog/assets/:kind/readme', (req, res) => {
+    const readme = getAssetReadme(req.params.kind);
+    if (!readme) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'asset docs not found' } });
+    res.json({ kind: req.params.kind, readme });
   });
   // Every process a 'call'/'forEach' node can actually resolve at runtime: any process on any
   // currently-active deployment, tenant-wide (same project or a different one) — exactly matching

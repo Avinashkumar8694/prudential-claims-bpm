@@ -7,6 +7,7 @@ import type { CallableProcess, Catalog, NodeSpec, Problem } from '../../core/mod
 import { PropertiesPanelComponent } from './properties-panel.component';
 import { ProblemsPanelComponent } from './problems-panel.component';
 import { IconComponent } from '../../shared/icon.component';
+import { MarkdownViewerComponent } from '../../shared/markdown-viewer.component';
 
 // A canvas node is just an engine node with x/y layout coords stored alongside (ignored by the SDK).
 interface CNode { id: string; type: string; name?: string; x: number; y: number; [k: string]: any; }
@@ -31,7 +32,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
 @Component({
   selector: 'app-process-canvas',
   standalone: true,
-  imports: [IconComponent, FormsModule, PropertiesPanelComponent, ProblemsPanelComponent],
+  imports: [IconComponent, FormsModule, PropertiesPanelComponent, ProblemsPanelComponent, MarkdownViewerComponent],
   template: `
     <div class="builder">
       <div class="body">
@@ -47,6 +48,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                        (click)="addFromPalette(n)" [title]="'Drag onto canvas, or click to add: ' + n.label">
                     <span class="pic" [style.background]="visual(n.engineType).color"><app-icon [name]="visual(n.engineType).icon" [size]="13" /></span>
                     <span class="plabel">{{ n.label }}</span>
+                    <button type="button" class="p-info" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); openDocsFor(n.engineType, n.label)" title="View documentation and scenarios" aria-label="Documentation"><app-icon name="info" [size]="12" /></button>
                   </div>
                 }
               </div>
@@ -108,6 +110,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
 
                   @if (hasOut(n.type)) { <span class="port out" title="Drag to a target node to connect" (pointerdown)="startLink($event, n)" (click)="$event.stopPropagation()"></span> }
                   @if (selNode()?.id===n.id) {
+                    <button class="ninfo" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); openDocsFor(n.type, labelFor(n))" title="Documentation & Scenarios" aria-label="View node documentation"><app-icon name="info" [size]="12" /></button>
                     <button class="ndel" (pointerdown)="$event.stopPropagation()" (click)="del($event, n)" title="Delete" aria-label="Delete node"><app-icon name="trash" [size]="13" /></button>
                   }
                 </div>
@@ -151,6 +154,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                         <div class="ptile" (click)="pickAdd(n)" [title]="n.label">
                           <span class="pic" [style.background]="visual(n.engineType).color"><app-icon [name]="visual(n.engineType).icon" [size]="13" /></span>
                           <span class="plabel">{{ n.label }}</span>
+                          <button type="button" class="p-info" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); openDocsFor(n.engineType, n.label)" title="View documentation and scenarios" aria-label="Documentation"><app-icon name="info" [size]="12" /></button>
                         </div>
                       }
                     </div>
@@ -176,12 +180,43 @@ const COL_W = NW + 100, ROW_H = NH + 46;
 
       @if (editingNode(); as n) {
         <div class="modal-bg" (click)="closeNodeEditor()">
-          <div class="modal" (click)="$event.stopPropagation()">
-            <div class="modal-h"><span class="chip sm" [style.background]="visual(n.type).color"><app-icon [name]="visual(n.type).icon" [size]="13" /></span>{{ typeLabel(n) }}<span class="spacer"></span><button class="x" (click)="closeNodeEditor()" aria-label="Close"><app-icon name="close" [size]="15" /></button></div>
-            <div class="modal-body">
-              <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
-              <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" (changed)="markDirty()"></app-properties-panel>
-              <button class="btn danger full" (click)="del($event, n); closeNodeEditor()">Delete node</button>
+          <div class="modal" [class.wide]="nodeModalTab() === 'docs'" (click)="$event.stopPropagation()">
+            <div class="modal-h">
+              <span class="chip sm" [style.background]="visual(n.type).color"><app-icon [name]="visual(n.type).icon" [size]="13" /></span>
+              <span>{{ typeLabel(n) }}</span>
+              <span class="spacer"></span>
+              <div class="m-tabs">
+                <button type="button" class="m-tab-btn" [class.active]="nodeModalTab() === 'props'" (click)="nodeModalTab.set('props')">Properties</button>
+                <button type="button" class="m-tab-btn" [class.active]="nodeModalTab() === 'docs'" (click)="nodeModalTab.set('docs')"><app-icon name="info" [size]="12" /> Guide & Docs</button>
+              </div>
+              <button class="x" (click)="closeNodeEditor()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+            </div>
+            @if (nodeModalTab() === 'props') {
+              <div class="modal-body">
+                <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
+                <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" (changed)="markDirty()"></app-properties-panel>
+                <button class="btn danger full" (click)="del($event, n); closeNodeEditor()">Delete node</button>
+              </div>
+            } @else {
+              <div class="modal-body docs-scroll-pane">
+                <app-markdown-viewer [content]="readmeFor(n.type)" />
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (viewingDocs(); as doc) {
+        <div class="modal-bg" (click)="closeDocs()">
+          <div class="modal wide docs-modal" (click)="$event.stopPropagation()">
+            <div class="modal-h">
+              <span class="chip sm" [style.background]="visual(doc.engineType).color"><app-icon [name]="visual(doc.engineType).icon" [size]="13" /></span>
+              <span>{{ doc.label }} — Guide & Scenarios</span>
+              <span class="spacer"></span>
+              <button class="x" (click)="closeDocs()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+            </div>
+            <div class="modal-body docs-scroll-pane">
+              <app-markdown-viewer [content]="doc.content" />
             </div>
           </div>
         </div>
@@ -243,7 +278,10 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     .ptile:hover { background: var(--surface-3); border-color: var(--border); }
     .ptile:active { cursor: grabbing; }
     .pic { width: 24px; height: 24px; flex-shrink: 0; display: grid; place-items: center; border-radius: 7px; color: #fff; font-size: 12px; font-weight: 600; }
-    .plabel { font-size: 12.5px; color: var(--text); line-height: 1.3; }
+    .plabel { font-size: 12.5px; color: var(--text); line-height: 1.3; flex: 1; min-width: 0; }
+    .p-info { margin-left: auto; border: none; background: transparent; color: var(--muted); padding: 3px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; opacity: 0; transition: opacity .12s, background-color .12s, color .12s; flex-shrink: 0; }
+    .ptile:hover .p-info { opacity: 0.8; }
+    .p-info:hover { opacity: 1 !important; color: var(--primary, #3b82f6); background: var(--surface-2, rgba(0,0,0,0.06)); }
 
     .canvas { position: relative; flex: 1; overflow: hidden; }
     .scrollArea { position: absolute; inset: 0; overflow: auto; cursor: default;
@@ -446,6 +484,13 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     .modal-bg { position: fixed; inset: 0; background: rgba(16,24,40,.4); display: grid; place-items: center; z-index: 50; }
     .modal { background: var(--surface); border-radius: 14px; width: 480px; max-width: 92vw; max-height: 80vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
     .modal.narrow { width: 400px; }
+    .modal.wide { width: 880px; max-width: 95vw; height: 85vh; max-height: 85vh; }
+    .m-tabs { display: flex; gap: 4px; background: var(--surface-2, #f1f5f9); padding: 3px; border-radius: 8px; margin-right: 6px; }
+    .m-tab-btn { border: none; background: transparent; font-size: 12px; font-weight: 500; color: var(--muted); padding: 4px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+    .m-tab-btn.active { background: var(--surface); color: var(--text-strong); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    .docs-scroll-pane { padding: 18px 24px; overflow-y: auto; flex: 1; background: var(--surface); }
+    .ninfo { position: absolute; top: -12px; right: 22px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--primary, #3b82f6); display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
+    .ninfo:hover { background: var(--primary-50, #eff6ff); border-color: var(--primary); }
     .modal-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; }
     .modal-h .chip.sm { width: 24px; height: 24px; border-radius: 7px; color: #fff; display: grid; place-items: center; font-size: 12px; }
     .modal-h .x { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); }
@@ -484,6 +529,22 @@ export class ProcessCanvasComponent implements OnChanges {
   selEdge = signal<string | null>(null);
   editingNode = signal<CNode | null>(null);
   editingEdge = signal<CEdge | null>(null);
+  nodeModalTab = signal<'props' | 'docs'>('props');
+  viewingDocs = signal<{ engineType: string; label: string; content: string } | null>(null);
+
+  readmeFor(type: string): string {
+    return this.catalog()?.readmes?.[type] || 'No documentation available for this node.';
+  }
+
+  openDocsFor(engineType: string, label?: string) {
+    const content = this.readmeFor(engineType);
+    const displayLabel = label || this.catalog()?.typeLabels?.[engineType] || engineType;
+    this.viewingDocs.set({ engineType, label: displayLabel, content });
+  }
+
+  closeDocs() {
+    this.viewingDocs.set(null);
+  }
   linkFrom = signal<string | null>(null);
   linkError = signal<string>('');
   saveState = signal<'saved' | 'saving' | 'dirty'>('saved');
@@ -842,7 +903,7 @@ export class ProcessCanvasComponent implements OnChanges {
   selectNode(ev: Event, n: CNode) { ev.stopPropagation(); if (this.linkFrom()) { this.completeLink(n); return; } this.selNode.set(n); this.selEdge.set(null); }
   selectEdge(ev: Event, e: CEdge) { ev.stopPropagation(); this.selEdge.set(e.id); this.selNode.set(null); }
   bgClick() { this.linkFrom.set(null); this.linkMoved = false; this.linkError.set(''); this.selNode.set(null); this.selEdge.set(null); this.addPopoverFor.set(null); }
-  openNodeEditor(n: CNode) { this.selNode.set(n); this.selEdge.set(null); this.editingNode.set(n); }
+  openNodeEditor(n: CNode) { this.selNode.set(n); this.selEdge.set(null); this.editingNode.set(n); this.nodeModalTab.set('props'); }
   closeNodeEditor() { this.editingNode.set(null); }
   openEdgeEditor(e: CEdge) { this.selEdge.set(e.id); this.selNode.set(null); this.editingEdge.set(e); }
   closeEdgeEditor() { this.editingEdge.set(null); }

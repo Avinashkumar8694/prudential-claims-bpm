@@ -45,6 +45,8 @@ const schemas = {
 const paths: Record<string, any> = {
   '/catalog/nodes': { get: { tags: ['Catalog'], summary: 'Node palette, property schemas and connection ports', responses: ok({ type: 'object' }) } },
   '/catalog/nodes/{engineType}': { get: { tags: ['Catalog'], summary: 'One node type definition', parameters: [idParam('engineType', 'Engine node type')], responses: { ...ok({ type: 'object' }), '404': { description: 'Not found', content: { 'application/json': { schema: ref('Error') } } } } } },
+  '/catalog/assets/readmes': { get: { tags: ['Catalog'], summary: 'All asset markdown documentation', responses: ok({ type: 'object' }) } },
+  '/catalog/assets/{kind}/readme': { get: { tags: ['Catalog'], summary: 'Asset markdown documentation by kind', parameters: [idParam('kind', 'Asset kind')], responses: { ...ok({ type: 'object' }), '404': { description: 'Not found', content: { 'application/json': { schema: ref('Error') } } } } } },
   '/catalog/processes': { get: { tags: ['Catalog'], summary: 'Every process behind a currently-active deployment, tenant-wide — what a call activity / multi-instance node can resolve', responses: ok({ type: 'object' }) } },
   '/validate': { post: { tags: ['Authoring'], summary: 'Validate an in-progress process (no save)', requestBody: jsonBody({ type: 'object' }), responses: ok(ref('ValidationResult')) } },
   '/import/jbpm': { post: { tags: ['Import/Export'], summary: 'Import a jBPM kjar (file map) as a new project', requestBody: jsonBody({ type: 'object', properties: { files: { type: 'object', additionalProperties: { type: 'string' } }, name: { type: 'string' } } }), responses: created({ type: 'object', properties: { workflowId: { type: 'string' }, processes: { type: 'integer' } } }) } },

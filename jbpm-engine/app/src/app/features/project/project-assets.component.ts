@@ -1,4 +1,4 @@
-import { Component, HostListener, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ProjectContextService } from './project-context.service';
@@ -6,6 +6,8 @@ import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
 import { IconComponent } from '../../shared/icon.component';
 import { AssetFieldsComponent } from './asset-fields.component';
+import { MarkdownViewerComponent } from '../../shared/markdown-viewer.component';
+import { WorkflowApiService } from '../../core/api/workflow-api.service';
 
 interface ExtraField {
   key: string;
@@ -95,7 +97,7 @@ interface AssetRow {
 @Component({
   selector: 'app-project-assets',
   standalone: true,
-  imports: [FormsModule, IconComponent, AssetFieldsComponent],
+  imports: [FormsModule, IconComponent, AssetFieldsComponent, MarkdownViewerComponent],
   template: `
     <p class="hint">Assets are shared across the project's processes and become real jBPM assets on export. Nodes link to them by name (business rule tasks reference a DRL ruleset's group, forms are picked by name on user tasks, and so on).</p>
 
@@ -112,9 +114,14 @@ interface AssetRow {
           <span>All assets</span><span class="badge">{{ allRows().length }}</span>
         </button>
         @for (k of ctx.assetKinds(); track k.key) {
-          <button class="krow" [class.active]="kindFilter() === k.key" (click)="kindFilter.set(k.key)">
-            <span>{{ k.label }}</span><span class="badge">{{ (ctx.assets()[k.key] || []).length }}</span>
-          </button>
+          <div class="krow-wrap" [class.active]="kindFilter() === k.key">
+            <button class="krow" [class.active]="kindFilter() === k.key" (click)="kindFilter.set(k.key)">
+              <span>{{ k.label }}</span><span class="badge">{{ (ctx.assets()[k.key] || []).length }}</span>
+            </button>
+            <button type="button" class="k-info-btn" (click)="$event.stopPropagation(); openAssetDocs(k.key, k.label)" title="View {{ k.label }} documentation & examples" aria-label="Documentation">
+              <app-icon name="info" [size]="13" />
+            </button>
+          </div>
         }
       </aside>
 
@@ -210,6 +217,9 @@ interface AssetRow {
               </button>
               <button class="subtab-btn" [class.active]="detailTab() === 'test'" (click)="openTestTab(d)">
                 <app-icon name="play" [size]="13" /> Test & Simulate
+              </button>
+              <button class="subtab-btn" [class.active]="detailTab() === 'docs'" (click)="detailTab.set('docs')">
+                <app-icon name="info" [size]="13" /> Guide & Docs
               </button>
             </div>
 
@@ -375,6 +385,12 @@ interface AssetRow {
                 }
               </div>
             }
+
+            @if (detailTab() === 'docs') {
+              <div class="docs-scroll-pane">
+                <app-markdown-viewer [content]="assetDocsContent(d.row.kind)" />
+              </div>
+            }
           </div>
         </div>
       </div>
@@ -425,6 +441,22 @@ interface AssetRow {
         </div>
       </div>
     }
+
+    @if (viewingAssetDocs(); as adoc) {
+      <div class="modal-bg" (click)="closeAssetDocs()">
+        <div class="modal wide" (click)="$event.stopPropagation()">
+          <div class="modal-h">
+            <app-icon name="info" [size]="15" />
+            <span>{{ adoc.label }} — Specification & Documentation</span>
+            <span class="spacer"></span>
+            <button class="x" (click)="closeAssetDocs()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+          </div>
+          <div class="modal-body docs-scroll-pane">
+            <app-markdown-viewer [content]="adoc.content" />
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; max-width: 760px; line-height: 1.5; }
@@ -435,6 +467,14 @@ interface AssetRow {
     .rail { padding: 14px; }
     .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; margin: 14px 0 8px; }
     .section-title.first { margin-top: 0; }
+    .krow-wrap { display: flex; align-items: center; border-radius: var(--radius-sm); transition: background-color .12s; margin-bottom: 2px; }
+    .krow-wrap:hover { background: var(--surface-3); }
+    .krow-wrap.active { background: var(--primary-50); }
+    .krow-wrap .krow { flex: 1; margin-bottom: 0; }
+    .k-info-btn { border: none; background: transparent; color: var(--muted); padding: 5px 6px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; opacity: 0; transition: opacity .12s, color .12s; margin-right: 4px; }
+    .krow-wrap:hover .k-info-btn { opacity: 0.8; }
+    .k-info-btn:hover { opacity: 1 !important; color: var(--primary, #3b82f6); background: var(--surface-2); }
+    .docs-scroll-pane { padding: 18px 24px; overflow-y: auto; flex: 1; max-height: 72vh; background: var(--surface); }
     .krow { display: flex; align-items: center; justify-content: space-between; width: 100%; border: none; background: none; padding: 7px 8px; border-radius: var(--radius-sm); font-size: 13px; cursor: pointer; color: var(--text-secondary); text-align: left; }
     .krow:hover { background: var(--surface-3); }
     .krow.active { background: var(--primary-50); color: var(--primary); font-weight: 600; }
@@ -542,8 +582,9 @@ interface AssetRow {
     .prow-main { font-size: 13px; font-weight: 500; }
   `],
 })
-export class ProjectAssetsComponent {
+export class ProjectAssetsComponent implements OnInit {
   ctx = inject(ProjectContextService);
+  private api = inject(WorkflowApiService);
   private toast = inject(ToastService);
   private modal = inject(ModalService);
   private router = inject(Router);
@@ -563,9 +604,32 @@ export class ProjectAssetsComponent {
 
   detail = signal<{ row: AssetRow; usedBy: { kind: string; process: string; processId?: string; nodeId?: string; nodeName?: string; via: string }[]; raw: any } | null>(null);
   detailError = signal('');
-  detailTab = signal<'config' | 'test'>('config');
+  detailTab = signal<'config' | 'test' | 'docs'>('config');
 
   usageModalFor = signal<AssetRow | null>(null);
+  assetReadmes = signal<Record<string, string>>({});
+  viewingAssetDocs = signal<{ kind: string; label: string; content: string } | null>(null);
+
+  ngOnInit() {
+    this.api.catalog().subscribe((c) => {
+      if (c?.assetReadmes) {
+        this.assetReadmes.set(c.assetReadmes);
+      }
+    });
+  }
+
+  assetDocsContent(kind: string): string {
+    return this.assetReadmes()[kind] || 'No documentation available for this asset type.';
+  }
+
+  openAssetDocs(kind: string, label: string) {
+    const content = this.assetDocsContent(kind);
+    this.viewingAssetDocs.set({ kind, label, content });
+  }
+
+  closeAssetDocs() {
+    this.viewingAssetDocs.set(null);
+  }
 
   // Test & Simulation State
   testLoading = signal<boolean>(false);

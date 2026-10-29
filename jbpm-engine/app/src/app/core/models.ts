@@ -71,6 +71,9 @@ export interface Catalog {
   /** engineType → neutral display name for the type itself (e.g. "Gateway"), distinct from a palette
    *  tile's own more specific label (e.g. "Exclusive Gateway"). */
   typeLabels: Record<string, string>;
+  docs?: Record<string, any>;
+  readmes?: Record<string, string>;       // engineType → full markdown README
+  assetReadmes?: Record<string, string>;  // assetKind → full markdown README
 }
 
 /** One process behind a currently-active deployment, tenant-wide — exactly what a 'call'/'forEach'
