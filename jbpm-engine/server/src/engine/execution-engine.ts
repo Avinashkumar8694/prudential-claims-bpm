@@ -141,7 +141,7 @@ export class ExecutionEngine {
           this.removeToken(inst, token.id);
           const code = result.errorCode || 'RUNTIME_ERROR';
           if (await this.raiseError(inst, p, dep, node.id!, code, result.error, result.errorDetails)) continue;   // routed to an error catch
-          inst.status = 'failed'; inst.error = { nodeId: node.id!, message: result.error, at: this.ctx.clock() }; break;
+          inst.status = 'failed'; inst.error ||= { nodeId: node.id!, message: result.error, at: this.ctx.clock() }; break;
         }
         if (result.end === 'terminate') { inst.tokens = []; inst.status = 'completed'; break; }
         if (result.end === 'error') {
@@ -149,7 +149,7 @@ export class ExecutionEngine {
           const code = (node as any).throw?.error || 'ERROR';
           const rethrow = result.rethrow ?? (node as any).throw?.rethrow ?? (node as any).rethrow;
           if (await this.raiseError(inst, p, dep, node.id!, code, `error end: ${code}`, undefined, rethrow)) continue;
-          inst.status = 'failed'; inst.error = { nodeId: node.id!, message: `unhandled error end (${code})`, at: this.ctx.clock() }; break;
+          inst.status = 'failed'; inst.error ||= { nodeId: node.id!, message: `unhandled error end (${code})`, at: this.ctx.clock() }; break;
         }
         // an activity that completed normally and has a compensation boundary → remember its handler.
         // WHICH boundaries match is boundary/handler.ts's decision; resolving the boundary's outgoing
@@ -634,6 +634,13 @@ export class ExecutionEngine {
       return false;
     }
 
+    // If this is a dependent child process instance (call activity child),
+    // unhandled errors propagate up to the parent Call Activity first so the parent's
+    // boundary error event can catch it before escalating to the project global handler.
+    if (inst.parentInstanceId && !inst.independent) {
+      return false;
+    }
+
     // CIRCUIT BREAKER / LOOP PREVENTION:
     // If this instance itself is running as an error handler (isErrorHandler: true),
     // strictly PREVENT recursion! Recursion depth is capped at 1.
@@ -752,6 +759,7 @@ export class ExecutionEngine {
         return true; // Successfully repaired and resumed!
       } else {
         // Handler did not complete successfully (e.g. failed or aborted)
+        inst.error = { nodeId: failingNodeId, message: `Global error handler (${geh.processId}) failed: ${handlerInst.error?.message || handlerInst.status}`, at: this.ctx.clock() };
         return false;
       }
     } else if (strategy === 'compensate-and-abort') {

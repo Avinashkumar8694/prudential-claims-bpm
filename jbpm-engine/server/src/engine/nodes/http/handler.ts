@@ -26,7 +26,13 @@ export const handler: NodeHandler = async (c) => {
   // why the relative/baseUrl path (operator-configured, trusted) is deliberately left alone.
   if (isAbsolute) {
     try { await assertOutboundAllowed(url, settings.outboundAllowlist); }
-    catch (e) { return { error: (e as Error).message, errorCode: 'SSRF_BLOCKED' }; }
+    catch (e) {
+      if (n.throwError === false || n.handleResponseErrors === false) {
+        const errorVar = n.errorVar || 'serviceError';
+        return { vars: { [errorVar]: { url, method, error: (e as Error).message, errorCode: 'SSRF_BLOCKED' } }, outcome: 'SSRF blocked (soft-failure)' };
+      }
+      return { error: (e as Error).message, errorCode: 'SSRF_BLOCKED' };
+    }
   }
   const httpTimeout = (settings.httpTimeoutSeconds && settings.httpTimeoutSeconds > 0) ? settings.httpTimeoutSeconds : 10;
   try {
