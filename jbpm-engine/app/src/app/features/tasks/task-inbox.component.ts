@@ -18,6 +18,23 @@ const SCOPES: { key: Scope; label: string }[] = [
   { key: 'mine', label: 'My Tasks' }, { key: 'available', label: 'Available' }, { key: 'all', label: 'All' },
 ];
 
+export interface TaskColumnDef {
+  key: string;
+  label: string;
+  visible: boolean;
+  mandatory?: boolean;
+}
+
+const DEFAULT_TASK_COLUMNS: TaskColumnDef[] = [
+  { key: 'select', label: 'Checkbox', visible: true, mandatory: true },
+  { key: 'task', label: 'Task Name & ID', visible: true, mandatory: true },
+  { key: 'piid', label: 'Process Instance ID', visible: true, mandatory: true },
+  { key: 'owner', label: 'Group / Owner', visible: true, mandatory: false },
+  { key: 'priority', label: 'Priority', visible: true, mandatory: false },
+  { key: 'due', label: 'Due Date', visible: true, mandatory: false },
+  { key: 'status', label: 'Status', visible: true, mandatory: true },
+];
+
 // Task Inbox — jBPM-style: scoped tabs (My Tasks / Available-to-claim / All), same list shape as
 // Instances/Deployments. Detail lives at its own route (/tasks/:id, see task-detail.component.ts).
 @Component({
@@ -30,6 +47,30 @@ const SCOPES: { key: Scope; label: string }[] = [
       <header class="pagehead">
         <h1>Tasks</h1>
         <span class="spacer"></span>
+        <div class="col-picker-wrap">
+          <button class="btn" (click)="toggleColPicker($event)" title="Customize visible table columns">
+            <app-icon name="columns" [size]="14" /> Columns
+          </button>
+          @if (colPickerOpen()) {
+            <div class="col-picker-menu" (click)="$event.stopPropagation()">
+              <div class="col-picker-h">
+                <span>Customize Columns</span>
+                <button class="col-reset-btn" (click)="resetColumns()">Reset</button>
+              </div>
+              <div class="col-picker-list">
+                @for (col of columns(); track col.key) {
+                  <label class="col-picker-item" [class.disabled]="col.mandatory">
+                    <input type="checkbox" [checked]="col.visible" [disabled]="col.mandatory" (change)="toggleCol(col.key)" />
+                    <span>{{ col.label }}</span>
+                    @if (col.mandatory) {
+                      <span class="col-lock-tag">(Required)</span>
+                    }
+                  </label>
+                }
+              </div>
+            </div>
+          }
+        </div>
         <button class="btn" (click)="reload()"><app-icon name="refresh" [size]="14" /> Refresh</button>
       </header>
 
@@ -73,44 +114,60 @@ const SCOPES: { key: Scope; label: string }[] = [
           <table>
             <thead>
               <tr>
-                <th style="width: 38px;">
-                  @if (actionableVisibleCount() > 0) {
-                    <input
-                      type="checkbox"
-                      [checked]="isAllActionableSelected()"
-                      [indeterminate]="isSomeActionableSelected()"
-                      (change)="toggleSelectAll()"
-                      title="Select all actionable tasks"
-                    />
-                  }
-                </th>
-                <th>Task</th>
-                <th>PIID</th>
-                <th>Group / Owner</th>
-                <th>Priority</th>
-                <th>Due</th>
-                <th>Status</th>
+                @if (isColVisible('select')) {
+                  <th style="width: 38px;">
+                    @if (actionableVisibleCount() > 0) {
+                      <input
+                        type="checkbox"
+                        [checked]="isAllActionableSelected()"
+                        [indeterminate]="isSomeActionableSelected()"
+                        (change)="toggleSelectAll()"
+                        title="Select all actionable tasks"
+                      />
+                    }
+                  </th>
+                }
+                @if (isColVisible('task')) { <th>Task</th> }
+                @if (isColVisible('piid')) { <th>PIID</th> }
+                @if (isColVisible('owner')) { <th>Group / Owner</th> }
+                @if (isColVisible('priority')) { <th>Priority</th> }
+                @if (isColVisible('due')) { <th>Due</th> }
+                @if (isColVisible('status')) { <th>Status</th> }
               </tr>
             </thead>
             <tbody>
               @for (t of visible(); track t.id) {
                 <tr [class.overdue]="isOverdue(t)">
-                  <td (click)="$event.stopPropagation()">
-                    @if (isActionable(t)) {
-                      <input type="checkbox" [checked]="selectedIds().has(t.id)" (change)="toggleSelect(t.id)" />
-                    } @else {
-                      <input type="checkbox" disabled [title]="'Task is ' + t.status + ' and cannot be claimed, released, or reassigned'" style="opacity: 0.25; cursor: not-allowed;" />
-                    }
-                  </td>
-                  <td><a class="tlink" [routerLink]="['/tasks', t.id]"><b>{{ t.name }}</b></a><div class="muted sm mono">{{ shortId(t.id) }}</div></td>
-                  <td><a class="ilink mono" [routerLink]="['/instances', t.instanceId]">{{ shortId(t.instanceId) }}</a></td>
-                  <td class="muted">{{ t.group || '—' }} @if (t.assignee) { <div class="sm">→ {{ t.assignee }}</div> }</td>
-                  <td class="muted">{{ t.priority ?? '—' }}</td>
-                  <td class="muted mono">{{ t.dueAt ? (t.dueAt | slice:0:16) : '—' }} @if (isOverdue(t)) { <span class="badge archived">overdue</span> }</td>
-                  <td>
-                    <span class="badge" [class.active]="t.status==='completed'" [class.inactive]="t.status==='created' || t.status==='reserved' || t.status==='inprogress'">{{ t.status }}</span>
-                    @if (scope() === 'available' && t.status === 'created') { <button class="btn sm" (click)="quickClaim(t)">Claim</button> }
-                  </td>
+                  @if (isColVisible('select')) {
+                    <td (click)="$event.stopPropagation()">
+                      @if (isActionable(t)) {
+                        <input type="checkbox" [checked]="selectedIds().has(t.id)" (change)="toggleSelect(t.id)" />
+                      } @else {
+                        <input type="checkbox" disabled [title]="'Task is ' + t.status + ' and cannot be claimed, released, or reassigned'" style="opacity: 0.25; cursor: not-allowed;" />
+                      }
+                    </td>
+                  }
+                  @if (isColVisible('task')) {
+                    <td><a class="tlink" [routerLink]="['/tasks', t.id]"><b>{{ t.name }}</b></a><div class="muted sm mono">{{ shortId(t.id) }}</div></td>
+                  }
+                  @if (isColVisible('piid')) {
+                    <td><a class="ilink mono" [routerLink]="['/instances', t.instanceId]">{{ shortId(t.instanceId) }}</a></td>
+                  }
+                  @if (isColVisible('owner')) {
+                    <td class="muted">{{ t.group || '—' }} @if (t.assignee) { <div class="sm">→ {{ t.assignee }}</div> }</td>
+                  }
+                  @if (isColVisible('priority')) {
+                    <td class="muted">{{ t.priority ?? '—' }}</td>
+                  }
+                  @if (isColVisible('due')) {
+                    <td class="muted mono">{{ t.dueAt ? (t.dueAt | slice:0:16) : '—' }} @if (isOverdue(t)) { <span class="badge archived">overdue</span> }</td>
+                  }
+                  @if (isColVisible('status')) {
+                    <td>
+                      <span class="badge" [class.active]="t.status==='completed'" [class.inactive]="t.status==='created' || t.status==='reserved' || t.status==='inprogress'">{{ t.status }}</span>
+                      @if (scope() === 'available' && t.status === 'created') { <button class="btn sm" (click)="quickClaim(t)">Claim</button> }
+                    </td>
+                  }
                 </tr>
               }
             </tbody>
@@ -155,6 +212,30 @@ const SCOPES: { key: Scope; label: string }[] = [
     .spinner-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--primary); animation: pulse 1s infinite alternate; }
     @keyframes pulse { from { opacity: 0.3; transform: scale(0.8); } to { opacity: 1; transform: scale(1.2); } }
 
+    .col-picker-wrap { position: relative; }
+    .col-picker-menu {
+      position: absolute; top: calc(100% + 6px); right: 0; width: 240px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; box-shadow: var(--shadow-pop); z-index: 40;
+      padding: 10px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .col-picker-h {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); padding-bottom: 6px;
+      font-size: 12px; font-weight: 700;
+    }
+    .col-reset-btn {
+      background: none; border: none; font-size: 11px; color: var(--primary);
+      cursor: pointer; padding: 0;
+    }
+    .col-reset-btn:hover { text-decoration: underline; }
+    .col-picker-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+    .col-picker-item {
+      display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; user-select: none;
+    }
+    .col-picker-item.disabled { opacity: 0.6; cursor: not-allowed; }
+    .col-lock-tag { font-size: 10px; color: var(--muted); margin-left: auto; }
+
     @media (max-width: 768px) {
       .page { padding: 12px 14px; }
       .pagehead { flex-direction: column; align-items: stretch; gap: 10px; }
@@ -185,8 +266,66 @@ export class TaskInboxComponent {
   overdueOnly = false;
   search = '';
   selectedIds = signal<Set<string>>(new Set());
+  columns = signal<TaskColumnDef[]>(this.loadColumns());
+  colPickerOpen = signal(false);
   private instanceIdFilter = this.route.snapshot.queryParamMap.get('instanceId') || '';
   private searchTimer: ReturnType<typeof setTimeout> | undefined;
+
+  private loadColumns(): TaskColumnDef[] {
+    try {
+      const raw = localStorage.getItem('tasks.columns.v1');
+      if (raw) {
+        const saved: Record<string, boolean> = JSON.parse(raw);
+        return DEFAULT_TASK_COLUMNS.map((col) => {
+          if (col.mandatory) return { ...col, visible: true };
+          return { ...col, visible: saved[col.key] !== undefined ? !!saved[col.key] : col.visible };
+        });
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_TASK_COLUMNS.map((c) => ({ ...c }));
+  }
+
+  private saveColumns(cols: TaskColumnDef[]) {
+    try {
+      const record = Object.fromEntries(cols.map((c) => [c.key, c.visible]));
+      localStorage.setItem('tasks.columns.v1', JSON.stringify(record));
+    } catch {
+      // ignore
+    }
+  }
+
+  isColVisible(key: string): boolean {
+    const col = this.columns().find((c) => c.key === key);
+    return col ? col.visible : true;
+  }
+
+  toggleColPicker(event: Event) {
+    event.stopPropagation();
+    this.colPickerOpen.set(!this.colPickerOpen());
+  }
+
+  toggleCol(key: string) {
+    const next = this.columns().map((c) => {
+      if (c.key === key && !c.mandatory) {
+        return { ...c, visible: !c.visible };
+      }
+      return c;
+    });
+    this.columns.set(next);
+    this.saveColumns(next);
+  }
+
+  resetColumns() {
+    const reset = DEFAULT_TASK_COLUMNS.map((c) => ({ ...c }));
+    this.columns.set(reset);
+    this.saveColumns(reset);
+  }
+
+  @HostListener('document:click') closeColPickerOnOutsideClick() {
+    this.colPickerOpen.set(false);
+  }
 
   @HostListener('window:scroll') onWindowScroll() {
     const threshold = 250;

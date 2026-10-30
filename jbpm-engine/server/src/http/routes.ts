@@ -180,11 +180,31 @@ export function buildRoutes(): Router {
   r.delete('/folders/:id', perm('workflow:edit'), asyncHandler(async (req, res) => { await new FolderService(ctxOf(req)).delete(req.params.id); res.status(204).end(); }));
 
   // --- workflows ---
-  r.get('/workflows', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new WorkflowService(ctxOf(req)).list() })));
+  r.get('/workflows', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const svc = new WorkflowService(ctxOf(req));
+    if (req.query.archived === 'true') {
+      return res.json({ items: await svc.listArchived() });
+    }
+    const includeArchived = req.query.includeArchived === 'true' || req.query.all === 'true';
+    res.json({ items: await svc.list(includeArchived) });
+  }));
   r.post('/workflows', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new WorkflowService(ctxOf(req)).create(req.body, actorOf(req)))));
+  r.post('/workflows/purge-archived', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).purgeAllArchived(actorOf(req)))));
   r.get('/workflows/:id', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).get(req.params.id))));
   r.patch('/workflows/:id', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).update(req.params.id, req.body, actorOf(req)))));
-  r.delete('/workflows/:id', perm('workflow:edit'), asyncHandler(async (req, res) => { await new WorkflowService(ctxOf(req)).archive(req.params.id, actorOf(req)); res.status(204).end(); }));
+  r.delete('/workflows/:id', perm('workflow:edit'), asyncHandler(async (req, res) => {
+    if (req.query.purge === 'true') {
+      await new WorkflowService(ctxOf(req)).purge(req.params.id, actorOf(req));
+      return res.status(204).end();
+    }
+    await new WorkflowService(ctxOf(req)).archive(req.params.id, actorOf(req));
+    res.status(204).end();
+  }));
+  r.post('/workflows/:id/restore', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).restore(req.params.id, actorOf(req)))));
+  r.delete('/workflows/:id/purge', perm('workflow:edit'), asyncHandler(async (req, res) => {
+    await new WorkflowService(ctxOf(req)).purge(req.params.id, actorOf(req));
+    res.status(204).end();
+  }));
   r.put('/workflows/:id/permissions', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).setPermissions(req.params.id, req.body, actorOf(req)))));
   r.put('/workflows/:id/variables', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new WorkflowService(ctxOf(req)).setVariables(req.params.id, req.body, actorOf(req)))));
 

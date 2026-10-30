@@ -9,7 +9,7 @@ import { ModalService } from '../../shared/modal.service';
 import type { Folder, ImportResult, Workflow, Problem } from '../../core/models';
 import { IconComponent } from '../../shared/icon.component';
 
-type Selection = 'all' | 'unfiled' | string;
+type Selection = 'all' | 'unfiled' | 'archived' | string;
 
 @Component({
   selector: 'app-workflows',
@@ -39,6 +39,7 @@ type Selection = 'all' | 'unfiled' | string;
           @for (row of flatFolders(); track row.folder.id) {
             <button class="chip" [class.on]="selected() === row.folder.id" (click)="select(row.folder.id)"><app-icon name="folder" [size]="14" /> {{ row.folder.name }} <span class="ct">{{ countFor(row.folder.id) }}</span></button>
           }
+          <button class="chip" [class.on]="selected() === 'archived'" (click)="select('archived')"><app-icon name="trash" [size]="14" /> Archived <span class="ct">{{ archivedWorkflows().length }}</span></button>
           <span class="spacer"></span>
           <input class="in sm" placeholder="+ New folder" [(ngModel)]="newFolderName" (keyup.enter)="createFolder()" />
         </div>
@@ -47,6 +48,19 @@ type Selection = 'all' | 'unfiled' | string;
       <div class="main">
         @if (selected() !== 'all') { <div class="crumbwrap"><app-breadcrumb [crumbs]="crumbs()" /></div> }
 
+        @if (selected() === 'archived' && archivedWorkflows().length > 0) {
+          <div class="archived-banner">
+            <div>
+              <strong>Archived Projects</strong>
+              <div class="muted sm">These projects are inactive and hidden from process modeling. You can restore them or permanently purge them.</div>
+            </div>
+            <span class="spacer"></span>
+            <button class="btn danger sm" (click)="purgeAllArchived()">
+              <app-icon name="trash" [size]="14" /> Purge All Archived ({{ archivedWorkflows().length }})
+            </button>
+          </div>
+        }
+
         @if (loading()) {
           <div class="grid">
             @for (_ of [1,2,3]; track $index) { <div class="card wf skeleton skeleton-card"></div> }
@@ -54,38 +68,48 @@ type Selection = 'all' | 'unfiled' | string;
         } @else if (filteredWorkflows().length === 0) {
           <div class="empty-state">
             <div class="es-icon"><app-icon name="zap" [size]="24" /></div>
-            <h3>{{ selected() === 'all' ? 'No projects yet' : 'No projects here yet' }}</h3>
-            <p>{{ selected() === 'all' ? 'Create your first project above, or import an existing kjar / BPMN process.' : 'Create a project above, or move an existing one into this folder.' }}</p>
+            <h3>{{ selected() === 'archived' ? 'No archived projects' : (selected() === 'all' ? 'No projects yet' : 'No projects here yet') }}</h3>
+            <p>{{ selected() === 'archived' ? 'Archived projects will appear here when archived from the project menu.' : (selected() === 'all' ? 'Create your first project above, or import an existing kjar / BPMN process.' : 'Create a project above, or move an existing one into this folder.') }}</p>
           </div>
         } @else {
           <div class="grid">
             @for (w of filteredWorkflows(); track w.id) {
-              <div class="card wf" [class.has-err]="w.validationSummary?.hasErrors">
+              <div class="card wf" [class.has-err]="w.validationSummary?.hasErrors" [class.archived-card]="selected() === 'archived'">
                 <div class="wf-top">
-                  <a class="wf-link" [routerLink]="['/projects', w.id]">
-                    <span class="ic"><app-icon [name]="w.validationSummary?.hasErrors ? 'alert-triangle' : 'zap'" [size]="16" /></span>
-                    <div class="wf-titles">
-                      <div class="wf-name">{{ w.name }}</div>
-                      <div class="muted key">{{ w.key }}</div>
-                    </div>
-                  </a>
-                  <div class="menu-wrap">
-                    <button class="kebab" (click)="toggleMenu(w.id, $event)" title="More actions">⋯</button>
-                    @if (openMenu() === w.id) {
-                      <div class="menu" (click)="$event.stopPropagation()">
-                        <div class="menu-h">Move to folder</div>
-                        <button class="menu-item" [class.active]="!w.folderId" (click)="pick(w, '')">(No folder)</button>
-                        @for (row of flatFolders(); track row.folder.id) {
-                          <button class="menu-item" [class.active]="w.folderId === row.folder.id" (click)="pick(w, row.folder.id)">{{ indent(row.depth) }}{{ row.folder.name }}</button>
-                        }
-                        <div class="menu-sep"></div>
-                        <button class="menu-item danger" (click)="archive(w)">Archive project</button>
+                  @if (selected() === 'archived') {
+                    <div class="wf-link archived-link">
+                      <span class="ic"><app-icon name="folder" [size]="16" /></span>
+                      <div class="wf-titles">
+                        <div class="wf-name">{{ w.name }}</div>
+                        <div class="muted key">{{ w.key }} <span class="badge archived sm">archived</span></div>
                       </div>
-                    }
-                  </div>
+                    </div>
+                  } @else {
+                    <a class="wf-link" [routerLink]="['/projects', w.id]">
+                      <span class="ic"><app-icon [name]="w.validationSummary?.hasErrors ? 'alert-triangle' : 'zap'" [size]="16" /></span>
+                      <div class="wf-titles">
+                        <div class="wf-name">{{ w.name }}</div>
+                        <div class="muted key">{{ w.key }}</div>
+                      </div>
+                    </a>
+                    <div class="menu-wrap">
+                      <button class="kebab" (click)="toggleMenu(w.id, $event)" title="More actions">⋯</button>
+                      @if (openMenu() === w.id) {
+                        <div class="menu" (click)="$event.stopPropagation()">
+                          <div class="menu-h">Move to folder</div>
+                          <button class="menu-item" [class.active]="!w.folderId" (click)="pick(w, '')">(No folder)</button>
+                          @for (row of flatFolders(); track row.folder.id) {
+                            <button class="menu-item" [class.active]="w.folderId === row.folder.id" (click)="pick(w, row.folder.id)">{{ indent(row.depth) }}{{ row.folder.name }}</button>
+                          }
+                          <div class="menu-sep"></div>
+                          <button class="menu-item danger" (click)="archive(w)">Archive project</button>
+                        </div>
+                      }
+                    </div>
+                  }
                 </div>
 
-                @if (w.validationSummary?.hasErrors) {
+                @if (selected() !== 'archived' && w.validationSummary?.hasErrors) {
                   <div class="wf-danger-indicator" role="button" tabindex="0" (click)="openProblemsModal(w, $event)" [title]="workflowProblemTooltip(w)">
                     <app-icon name="alert-triangle" [size]="12" />
                     <span>{{ w.validationSummary?.errorCount }} issue{{ (w.validationSummary?.errorCount || 0) > 1 ? 's' : '' }} (Deploy Blocked)</span>
@@ -95,10 +119,18 @@ type Selection = 'all' | 'unfiled' | string;
 
                 @if (w.description) { <p class="wf-desc">{{ w.description }}</p> }
                 <div class="wf-footer">
-                  <span class="muted upd">Updated {{ w.updatedAt | slice:0:10 }}</span>
-                  <a class="btn sm" [class.primary]="!w.validationSummary?.hasErrors" [class.btn-danger-outline]="w.validationSummary?.hasErrors" [routerLink]="['/projects', w.id]">
-                    {{ w.validationSummary?.hasErrors ? 'Fix Issues →' : 'Open →' }}
-                  </a>
+                  @if (selected() === 'archived') {
+                    <span class="muted upd">Archived {{ w.updatedAt | slice:0:10 }}</span>
+                    <div style="display:flex; gap:8px;">
+                      <button class="btn sm" (click)="restore(w)" title="Restore project"><app-icon name="refresh" [size]="12" /> Restore</button>
+                      <button class="btn sm danger" (click)="purge(w)" title="Permanently delete project"><app-icon name="trash" [size]="12" /> Purge</button>
+                    </div>
+                  } @else {
+                    <span class="muted upd">Updated {{ w.updatedAt | slice:0:10 }}</span>
+                    <a class="btn sm" [class.primary]="!w.validationSummary?.hasErrors" [class.btn-danger-outline]="w.validationSummary?.hasErrors" [routerLink]="['/projects', w.id]">
+                      {{ w.validationSummary?.hasErrors ? 'Fix Issues →' : 'Open →' }}
+                    </a>
+                  }
                 </div>
               </div>
             }
@@ -205,6 +237,15 @@ type Selection = 'all' | 'unfiled' | string;
     .menu-item.danger:hover { background: var(--red-bg); }
     .menu-sep { height: 1px; background: var(--border); margin: 6px 4px; }
 
+    .archived-banner {
+      display: flex; align-items: center; justify-content: space-between; gap: 14px;
+      padding: 12px 18px; border-radius: 10px; margin-bottom: 16px;
+      background: var(--surface-2); border: 1px dashed var(--border);
+    }
+    .archived-card { opacity: 0.88; border-style: dashed; }
+    .archived-card:hover { opacity: 1; }
+    .archived-link { display: flex; align-items: center; gap: 10px; cursor: default; }
+
     @media (max-width: 768px) {
       .hero { padding: 14px 14px 0; }
       .hero-top { flex-direction: column; gap: 12px; }
@@ -279,6 +320,7 @@ export class WorkflowsComponent {
   private toast = inject(ToastService);
   private modal = inject(ModalService);
   workflows = signal<Workflow[]>([]);
+  archivedWorkflows = signal<Workflow[]>([]);
   folders = signal<Folder[]>([]);
   loading = signal(true);
   newName = '';
@@ -320,6 +362,7 @@ export class WorkflowsComponent {
   unfiledCount = computed(() => this.workflows().filter((w) => !w.folderId).length);
   filteredWorkflows = computed(() => {
     const sel = this.selected();
+    if (sel === 'archived') return this.archivedWorkflows();
     if (sel === 'all') return this.workflows();
     if (sel === 'unfiled') return this.workflows().filter((w) => !w.folderId);
     return this.workflows().filter((w) => w.folderId === sel);
@@ -327,6 +370,7 @@ export class WorkflowsComponent {
   crumbs = computed<Crumb[]>(() => {
     const sel = this.selected();
     if (sel === 'all') return [{ label: 'Projects' }];
+    if (sel === 'archived') return [{ label: 'Projects', onClick: () => this.select('all') }, { label: 'Archived Projects' }];
     if (sel === 'unfiled') return [{ label: 'Projects', onClick: () => this.select('all') }, { label: 'Unfiled' }];
     const byId = new Map(this.folders().map((f) => [f.id, f]));
     const chain: Folder[] = [];
@@ -342,6 +386,13 @@ export class WorkflowsComponent {
   reload() {
     this.loading.set(true);
     this.api.listWorkflows().subscribe({ next: (ws) => { this.workflows.set(ws); this.loading.set(false); }, error: () => this.loading.set(false) });
+    this.reloadArchived();
+  }
+  reloadArchived() {
+    this.api.listArchivedWorkflows().subscribe({
+      next: (ws) => this.archivedWorkflows.set(ws),
+      error: () => {},
+    });
   }
   reloadFolders() { this.api.listFolders().subscribe((fs) => this.folders.set(fs)); }
   select(s: Selection) { this.selected.set(s); }
@@ -388,6 +439,52 @@ export class WorkflowsComponent {
       this.api.archiveWorkflow(w.id).subscribe({
         next: () => { this.toast.success(`"${w.name}" archived`); this.reload(); },
         error: (e) => this.toast.error(e?.error?.error?.message || 'Could not archive project'),
+      });
+    }
+  }
+
+  async restore(w: Workflow) {
+    this.api.restoreWorkflow(w.id).subscribe({
+      next: () => {
+        this.toast.success(`"${w.name}" restored`);
+        this.reload();
+      },
+      error: (e) => this.toast.error(e?.error?.error?.message || 'Could not restore project'),
+    });
+  }
+
+  async purge(w: Workflow) {
+    if (await this.modal.confirm({
+      title: 'Permanently purge project',
+      message: `Permanently delete "${w.name}"? This cannot be undone. All project drafts, branches, and versions will be removed.`,
+      confirmLabel: 'Purge Permanently',
+      danger: true,
+    })) {
+      this.api.purgeWorkflow(w.id).subscribe({
+        next: () => {
+          this.toast.success(`"${w.name}" permanently purged`);
+          this.reload();
+        },
+        error: (e) => this.toast.error(e?.error?.error?.message || 'Could not purge project'),
+      });
+    }
+  }
+
+  async purgeAllArchived() {
+    const count = this.archivedWorkflows().length;
+    if (count === 0) return;
+    if (await this.modal.confirm({
+      title: 'Purge all archived projects',
+      message: `Permanently delete all ${count} archived project(s)? This cannot be undone.`,
+      confirmLabel: `Purge ${count} Project${count > 1 ? 's' : ''}`,
+      danger: true,
+    })) {
+      this.api.purgeAllArchivedWorkflows().subscribe({
+        next: (res) => {
+          this.toast.success(`Successfully purged ${res.purgedCount} archived project(s)`);
+          this.reload();
+        },
+        error: (e) => this.toast.error(e?.error?.error?.message || 'Could not purge archived projects'),
       });
     }
   }

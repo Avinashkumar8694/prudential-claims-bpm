@@ -16,10 +16,14 @@ export class WorkflowApiService extends ApiBase {
 
   // workflows
   listWorkflows(): Observable<Workflow[]> { return this.items(this.http.get<ApiList<Workflow>>(`${this.base}/workflows`)); }
+  listArchivedWorkflows(): Observable<Workflow[]> { return this.items(this.http.get<ApiList<Workflow>>(`${this.base}/workflows?archived=true`)); }
   getWorkflow(id: string): Observable<Workflow> { return this.http.get<Workflow>(`${this.base}/workflows/${id}`); }
   createWorkflow(body: { name: string; description?: string; folderId?: string | null }): Observable<Workflow> { return this.http.post<Workflow>(`${this.base}/workflows`, body); }
   updateWorkflow(id: string, patch: Partial<Workflow>): Observable<Workflow> { return this.http.patch<Workflow>(`${this.base}/workflows/${id}`, patch); }
   archiveWorkflow(id: string): Observable<void> { return this.http.delete<void>(`${this.base}/workflows/${id}`); }
+  restoreWorkflow(id: string): Observable<Workflow> { return this.http.post<Workflow>(`${this.base}/workflows/${id}/restore`, {}); }
+  purgeWorkflow(id: string): Observable<void> { return this.http.delete<void>(`${this.base}/workflows/${id}/purge`); }
+  purgeAllArchivedWorkflows(): Observable<{ purgedCount: number }> { return this.http.post<{ purgedCount: number }>(`${this.base}/workflows/purge-archived`, {}); }
 
   // folders (Projects-page tree; always consumed alongside workflows on that one page)
   listFolders(): Observable<Folder[]> { return this.items(this.http.get<ApiList<Folder>>(`${this.base}/folders`)); }

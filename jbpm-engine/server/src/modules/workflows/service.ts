@@ -29,9 +29,14 @@ export class WorkflowService {
     if (!f || f.tenantId !== this.ctx.tenantId) throw notFound('Folder');
   }
 
-  async list(): Promise<Workflow[]> {
-    return (await this.wf().query((w) => w.tenantId === this.ctx.tenantId && !w.archived))
+  async list(includeArchived = false): Promise<Workflow[]> {
+    return (await this.wf().query((w) => w.tenantId === this.ctx.tenantId && (includeArchived ? true : !w.archived)))
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  async listArchived(): Promise<Workflow[]> {
+    return (await this.wf().query((w) => w.tenantId === this.ctx.tenantId && Boolean(w.archived)))
+      .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
   }
 
   async get(id: string): Promise<Workflow> {
@@ -105,5 +110,40 @@ export class WorkflowService {
     w.archived = true; w.updatedAt = this.ctx.clock(); w.updatedBy = actor;
     await this.wf().put(w);
     await this.ctx.audit({ actor, kind: 'workflow.archived', workflowId: id });
+  }
+
+  async restore(id: string, actor: string): Promise<Workflow> {
+    const w = await this.get(id);
+    w.archived = false;
+    w.updatedAt = this.ctx.clock();
+    w.updatedBy = actor;
+    await this.wf().put(w);
+    await this.ctx.audit({ actor, kind: 'workflow.restored', workflowId: id });
+    return w;
+  }
+
+  async purge(id: string, actor: string): Promise<void> {
+    const w = await this.get(id);
+    // Delete all branches associated with this workflow
+    const branches = await this.br().query((b) => b.tenantId === this.ctx.tenantId && b.workflowId === id);
+    for (const b of branches) {
+      await this.br().delete(b.id);
+    }
+    // Delete all versions associated with this workflow
+    const versions = await this.ve().query((v) => v.tenantId === this.ctx.tenantId && v.workflowId === id);
+    for (const v of versions) {
+      await this.ve().delete(v.id);
+    }
+    // Delete the workflow record itself
+    await this.wf().delete(id);
+    await this.ctx.audit({ actor, kind: 'workflow.purged', workflowId: id, data: { name: w.name, key: w.key } });
+  }
+
+  async purgeAllArchived(actor: string): Promise<{ purgedCount: number }> {
+    const archived = await this.listArchived();
+    for (const w of archived) {
+      await this.purge(w.id, actor);
+    }
+    return { purgedCount: archived.length };
   }
 }

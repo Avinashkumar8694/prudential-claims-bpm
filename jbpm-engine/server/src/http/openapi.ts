@@ -63,13 +63,22 @@ const paths: Record<string, any> = {
     delete: { tags: ['Projects'], summary: 'Delete an empty folder', parameters: [idParam()], responses: { '204': { description: 'Deleted' }, '409': { description: 'Folder is not empty', content: { 'application/json': { schema: ref('Error') } } } } },
   },
   '/workflows': {
-    get: { tags: ['Projects'], summary: 'List projects', responses: ok(listOf('Workflow')) },
+    get: { tags: ['Projects'], summary: 'List projects', parameters: [q('archived', 'Set to true to list only archived projects'), q('includeArchived', 'Include archived projects in the list')], responses: ok(listOf('Workflow')) },
     post: { tags: ['Projects'], summary: 'Create a project', requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' } } }), responses: created(ref('Workflow')) },
+  },
+  '/workflows/purge-archived': {
+    post: { tags: ['Projects'], summary: 'Permanently purge all archived projects', responses: ok({ type: 'object', properties: { purgedCount: { type: 'number' } } }) },
   },
   '/workflows/{id}': {
     get: { tags: ['Projects'], summary: 'Get a project', parameters: [idParam()], responses: ok(ref('Workflow')) },
     patch: { tags: ['Projects'], summary: 'Update a project', parameters: [idParam()], requestBody: jsonBody({ type: 'object' }), responses: ok(ref('Workflow')) },
-    delete: { tags: ['Projects'], summary: 'Archive a project', parameters: [idParam()], responses: { '204': { description: 'Archived' } } },
+    delete: { tags: ['Projects'], summary: 'Archive a project (or purge with ?purge=true)', parameters: [idParam(), q('purge', 'Set true to permanently purge instead of archive')], responses: { '204': { description: 'Archived or purged' } } },
+  },
+  '/workflows/{id}/restore': {
+    post: { tags: ['Projects'], summary: 'Restore an archived project', parameters: [idParam()], responses: ok(ref('Workflow')) },
+  },
+  '/workflows/{id}/purge': {
+    delete: { tags: ['Projects'], summary: 'Permanently delete an archived project', parameters: [idParam()], responses: { '204': { description: 'Permanently purged' } } },
   },
   '/workflows/{id}/permissions': { put: { tags: ['Projects'], summary: 'Set project permissions', parameters: [idParam()], requestBody: jsonBody({ type: 'array', items: {} }), responses: ok(ref('Workflow')) } },
   '/workflows/{id}/variables': { put: { tags: ['Projects'], summary: 'Set project variables', parameters: [idParam()], requestBody: jsonBody({ type: 'array', items: {} }), responses: ok(ref('Workflow')) } },
