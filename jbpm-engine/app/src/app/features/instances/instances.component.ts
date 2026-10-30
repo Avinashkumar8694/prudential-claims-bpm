@@ -18,6 +18,26 @@ const STATUSES = ['running', 'waiting', 'suspended', 'failed', 'completed', 'abo
 interface SavedFilter { name: string; stateSet: string[]; typeFilter: string; errorsOnly: boolean; q: string; qBy: string; projectFilter: string; isDefault?: boolean; }
 const SAVED_KEY = 'instances.savedFilters';
 
+export interface TableColumnDef {
+  key: string;
+  label: string;
+  visible: boolean;
+  mandatory?: boolean;
+}
+
+const DEFAULT_COLUMNS: TableColumnDef[] = [
+  { key: 'select', label: 'Checkbox', visible: true, mandatory: true },
+  { key: 'piid', label: 'PIID (Instance ID)', visible: true, mandatory: true },
+  { key: 'caseId', label: 'Case ID', visible: false, mandatory: false }, // Hidden by default as requested!
+  { key: 'process', label: 'Process & Project', visible: true, mandatory: false },
+  { key: 'status', label: 'Status', visible: true, mandatory: true },
+  { key: 'initiator', label: 'Initiator', visible: true, mandatory: false },
+  { key: 'started', label: 'Started Time', visible: true, mandatory: false },
+  { key: 'duration', label: 'Duration', visible: true, mandatory: false },
+  { key: 'errors', label: 'Errors Count', visible: true, mandatory: false },
+  { key: 'actions', label: 'Row Actions', visible: true, mandatory: true },
+];
+
 @Component({
   selector: 'app-instances',
   standalone: true,
@@ -31,6 +51,30 @@ const SAVED_KEY = 'instances.savedFilters';
           <p class="muted sub">Unified view of process executions and cases across the engine. Filterable by state, type, and variables.</p>
         </div>
         <span class="spacer"></span>
+        <div class="col-picker-wrap">
+          <button class="btn" (click)="toggleColPicker($event)" title="Customize visible table columns">
+            <app-icon name="columns" [size]="14" /> Columns
+          </button>
+          @if (colPickerOpen()) {
+            <div class="col-picker-menu" (click)="$event.stopPropagation()">
+              <div class="col-picker-h">
+                <span>Customize Columns</span>
+                <button class="col-reset-btn" (click)="resetColumns()">Reset</button>
+              </div>
+              <div class="col-picker-list">
+                @for (col of columns(); track col.key) {
+                  <label class="col-picker-item" [class.disabled]="col.mandatory">
+                    <input type="checkbox" [checked]="col.visible" [disabled]="col.mandatory" (change)="toggleCol(col.key)" />
+                    <span>{{ col.label }}</span>
+                    @if (col.mandatory) {
+                      <span class="col-lock-tag">(Required)</span>
+                    }
+                  </label>
+                }
+              </div>
+            </div>
+          }
+        </div>
         <button class="btn" (click)="reload()"><app-icon name="refresh" [size]="14" /> Refresh</button>
         @if (canCreateCase()) {
           <button class="btn" (click)="openStartCase()"><app-icon name="plus" [size]="13" /> New Case</button>
@@ -107,54 +151,74 @@ const SAVED_KEY = 'instances.savedFilters';
           <div class="list card" (scroll)="onTableScroll($event)">
             <table>
               <thead><tr>
-                <th style="width:36px;"></th>
-                <th style="width:120px;">PIID</th>
-                <th style="width:130px;">Case ID</th>
-                <th>Process & Project</th>
-                <th style="width:100px;">Status</th>
-                <th style="width:120px;">Initiator</th>
-                <th class="sortable" style="width:110px;" (click)="sortDesc.set(!sortDesc())">Started <span class="sort-ic">{{ sortDesc() ? '▼' : '▲' }}</span></th>
-                <th style="width:90px;">Duration</th>
-                <th style="width:60px;">Errors</th>
-                <th style="width:40px;"></th>
+                @if (isColVisible('select')) { <th style="width:36px;"></th> }
+                @if (isColVisible('piid')) { <th style="width:120px;">PIID</th> }
+                @if (isColVisible('caseId')) { <th style="width:130px;">Case ID</th> }
+                @if (isColVisible('process')) { <th>Process &amp; Project</th> }
+                @if (isColVisible('status')) { <th style="width:100px;">Status</th> }
+                @if (isColVisible('initiator')) { <th style="width:120px;">Initiator</th> }
+                @if (isColVisible('started')) { <th class="sortable" style="width:110px;" (click)="sortDesc.set(!sortDesc())">Started <span class="sort-ic">{{ sortDesc() ? '▼' : '▲' }}</span></th> }
+                @if (isColVisible('duration')) { <th style="width:90px;">Duration</th> }
+                @if (isColVisible('errors')) { <th style="width:60px;">Errors</th> }
+                @if (isColVisible('actions')) { <th style="width:40px;"></th> }
               </tr></thead>
               <tbody>
                 @for (i of paged(); track i.id) {
                   <tr [class.sel]="selectedIds().has(i.id)">
-                    <td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="selectedIds().has(i.id)" (change)="toggleSelect(i.id)" /></td>
-                    <td class="mono piid">
-                      <a [routerLink]="['/instances', i.id]" [title]="i.id">{{ shortId(i.id) }}</a>
-                    </td>
-                    <td>
-                      @if (i.caseInstanceId) {
-                        <a class="case-chip" [routerLink]="['/instances', i.id]" [queryParams]="{tab: 'case'}" [title]="'Case ID: ' + i.caseInstanceId">
-                          <app-icon name="inbox" [size]="11" /> {{ shortId(i.caseInstanceId) }}
-                        </a>
-                      } @else {
-                        <span class="muted">—</span>
-                      }
-                    </td>
-                    <td>
-                      <a class="plain" [routerLink]="['/instances', i.id]">{{ procName(i) }}</a>
-                      <div class="proj muted">
-                        {{ projectName(i.workflowId) }}
-                        @if (i.caseWorkflowName) {
-                          · <span class="case-tag">{{ i.caseWorkflowName }}</span>
+                    @if (isColVisible('select')) {
+                      <td (click)="$event.stopPropagation()"><input type="checkbox" [checked]="selectedIds().has(i.id)" (change)="toggleSelect(i.id)" /></td>
+                    }
+                    @if (isColVisible('piid')) {
+                      <td class="mono piid">
+                        <a [routerLink]="['/instances', i.id]" [title]="i.id">{{ shortId(i.id) }}</a>
+                      </td>
+                    }
+                    @if (isColVisible('caseId')) {
+                      <td>
+                        @if (i.caseInstanceId) {
+                          <a class="case-chip" [routerLink]="['/instances', i.id]" [queryParams]="{tab: 'case'}" [title]="'Case ID: ' + i.caseInstanceId">
+                            <app-icon name="inbox" [size]="11" /> {{ shortId(i.caseInstanceId) }}
+                          </a>
+                        } @else {
+                          <span class="muted">—</span>
                         }
-                      </div>
-                    </td>
-                    <td><span class="badge" [style.color]="statusColor(i.status)">{{ i.status }}</span></td>
-                    <td>{{ i.startedBy || '—' }}</td>
-                    <td class="muted">{{ ago(i.startedAt) }}</td>
-                    <td class="muted">{{ duration(i) }}</td>
-                    <td><span class="err-badge" [class.has]="i.status === 'failed'">{{ i.status === 'failed' ? 1 : 0 }}</span></td>
-                    <td class="menucell" (click)="$event.stopPropagation()">
-                      <button class="kebab" (click)="openMenu($event, i.id)" aria-label="Row actions" aria-haspopup="menu"><app-icon name="more" [size]="15" /></button>
-                    </td>
+                      </td>
+                    }
+                    @if (isColVisible('process')) {
+                      <td>
+                        <a class="plain" [routerLink]="['/instances', i.id]">{{ procName(i) }}</a>
+                        <div class="proj muted">
+                          {{ projectName(i.workflowId) }}
+                          @if (i.caseWorkflowName) {
+                            · <span class="case-tag">{{ i.caseWorkflowName }}</span>
+                          }
+                        </div>
+                      </td>
+                    }
+                    @if (isColVisible('status')) {
+                      <td><span class="badge" [style.color]="statusColor(i.status)">{{ i.status }}</span></td>
+                    }
+                    @if (isColVisible('initiator')) {
+                      <td>{{ i.startedBy || '—' }}</td>
+                    }
+                    @if (isColVisible('started')) {
+                      <td class="muted">{{ ago(i.startedAt) }}</td>
+                    }
+                    @if (isColVisible('duration')) {
+                      <td class="muted">{{ duration(i) }}</td>
+                    }
+                    @if (isColVisible('errors')) {
+                      <td><span class="err-badge" [class.has]="i.status === 'failed'">{{ i.status === 'failed' ? 1 : 0 }}</span></td>
+                    }
+                    @if (isColVisible('actions')) {
+                      <td class="menucell" (click)="$event.stopPropagation()">
+                        <button class="kebab" (click)="openMenu($event, i.id)" aria-label="Row actions" aria-haspopup="menu"><app-icon name="more" [size]="15" /></button>
+                      </td>
+                    }
                   </tr>
                 }
                 @if (filtered().length === 0) {
-                  <tr><td colspan="10">
+                  <tr><td [attr.colspan]="visibleColumnCount()">
                     @if (hasFilters()) {
                       <div class="empty-state">
                         <div class="es-icon"><app-icon name="search" [size]="24" /></div>
@@ -316,6 +380,30 @@ const SAVED_KEY = 'instances.savedFilters';
     .err { color: var(--red); font-size: 12px; margin: -4px 0 8px; }
     .empty-state { padding: 40px; text-align: center; }
 
+    .col-picker-wrap { position: relative; }
+    .col-picker-menu {
+      position: absolute; top: calc(100% + 6px); right: 0; width: 240px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; box-shadow: var(--shadow-pop); z-index: 40;
+      padding: 10px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .col-picker-h {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); padding-bottom: 6px;
+      font-size: 12px; font-weight: 700;
+    }
+    .col-reset-btn {
+      background: none; border: none; font-size: 11px; color: var(--primary);
+      cursor: pointer; padding: 0;
+    }
+    .col-reset-btn:hover { text-decoration: underline; }
+    .col-picker-list { display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow-y: auto; }
+    .col-picker-item {
+      display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer; user-select: none;
+    }
+    .col-picker-item.disabled { opacity: 0.6; cursor: not-allowed; }
+    .col-lock-tag { font-size: 10px; color: var(--muted); margin-left: auto; }
+
     @media (max-width: 900px) {
       .layout { grid-template-columns: 1fr; }
       .rail { position: static; width: 100%; }
@@ -376,9 +464,69 @@ export class InstancesComponent {
   startCaseError = signal('');
   startingCaseLoading = signal(false);
 
+  columns = signal<TableColumnDef[]>(this.loadColumns());
+  colPickerOpen = signal(false);
+
+  private loadColumns(): TableColumnDef[] {
+    try {
+      const raw = localStorage.getItem('instances.columns.v1');
+      if (raw) {
+        const saved: Record<string, boolean> = JSON.parse(raw);
+        return DEFAULT_COLUMNS.map((col) => {
+          if (col.mandatory) return { ...col, visible: true };
+          return { ...col, visible: saved[col.key] !== undefined ? !!saved[col.key] : col.visible };
+        });
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_COLUMNS.map((c) => ({ ...c }));
+  }
+
+  private saveColumns(cols: TableColumnDef[]) {
+    try {
+      const record = Object.fromEntries(cols.map((c) => [c.key, c.visible]));
+      localStorage.setItem('instances.columns.v1', JSON.stringify(record));
+    } catch {
+      // ignore
+    }
+  }
+
+  isColVisible(key: string): boolean {
+    const col = this.columns().find((c) => c.key === key);
+    return col ? col.visible : true;
+  }
+
+  visibleColumnCount = computed(() => this.columns().filter((c) => c.visible).length);
+
+  toggleColPicker(event: Event) {
+    event.stopPropagation();
+    this.colPickerOpen.set(!this.colPickerOpen());
+  }
+
+  toggleCol(key: string) {
+    const next = this.columns().map((c) => {
+      if (c.key === key && !c.mandatory) {
+        return { ...c, visible: !c.visible };
+      }
+      return c;
+    });
+    this.columns.set(next);
+    this.saveColumns(next);
+  }
+
+  resetColumns() {
+    const reset = DEFAULT_COLUMNS.map((c) => ({ ...c }));
+    this.columns.set(reset);
+    this.saveColumns(reset);
+  }
+
   private searchTimer: ReturnType<typeof setTimeout> | undefined;
 
-  @HostListener('document:click') closeMenu() { this.menuFor.set(null); }
+  @HostListener('document:click') closeMenu() {
+    this.menuFor.set(null);
+    this.colPickerOpen.set(false);
+  }
   @HostListener('window:scroll') onWindowScroll() {
     const threshold = 250;
     const pos = window.innerHeight + window.scrollY;

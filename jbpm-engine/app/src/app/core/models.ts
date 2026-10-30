@@ -20,6 +20,13 @@ export interface GlobalErrorHandlerConfig {
   rethrowOnFailure?: boolean;
 }
 
+export interface WorkflowValidationSummary {
+  hasErrors: boolean;
+  errorCount: number;
+  warningCount: number;
+  problems?: { rule: string; severity: string; message: string; nodeId?: string; flowId?: string }[];
+}
+
 export interface Workflow {
   id: string; name: string; key: string; description?: string;
   defaultBranchId: string;
@@ -30,12 +37,14 @@ export interface Workflow {
   createdAt: string; updatedAt: string; archived?: boolean;
   /** Which Folder (Projects-page tree) this project is organized under; null/undefined = root/unfiled. */
   folderId?: string | null;
-  /** Instance creation mode: 'both' | 'case-only' | 'process-only' */
-  instanceCreationMode?: 'both' | 'case-only' | 'process-only';
+  /** Instance creation mode: 'both' | 'case-only' | 'process-only' | 'none' */
+  instanceCreationMode?: 'both' | 'case-only' | 'process-only' | 'none';
   /** Project-level environment variables deployed to all environments */
   env?: Record<string, string>;
   /** Project-level Global Error Handler configuration */
   globalErrorHandler?: GlobalErrorHandlerConfig;
+  /** Cached validation summary for visual danger indicators */
+  validationSummary?: WorkflowValidationSummary;
 }
 /** Organizes Workflows into a tree on the Projects page — purely presentational. */
 export interface Folder { id: string; name: string; parentId?: string | null; createdAt: string; updatedAt: string; }

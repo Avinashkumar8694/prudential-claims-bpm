@@ -339,7 +339,8 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     .node.sel { border-color: var(--primary) !important; box-shadow: 0 0 0 3px rgba(91,61,245,.2), var(--shadow-card); }
     .node.linking { border-color: var(--primary); }
     .node.droptarget { border-color: var(--green) !important; box-shadow: 0 0 0 3px rgba(22,163,74,.22), var(--shadow-card); cursor: alias; }
-    .node.has-err { border-color: #ef4444 !important; }
+    .node.has-err { border-color: #ef4444 !important; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25), var(--shadow-card); }
+    .node.has-err:hover { box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.4), var(--shadow-pop); }
     .node.has-warn { border-color: #f59e0b !important; }
 
     /* TASK / ACTIVITY RECTANGLE */
@@ -467,7 +468,12 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     }
 
     .nmark { position: absolute; top: -9px; left: -9px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #fff; box-shadow: var(--shadow-card); z-index: 6; }
-    .nmark.err { background: var(--red); } .nmark.warn { background: #d97706; }
+    .nmark.err { background: var(--red); cursor: pointer; animation: danger-pulse 2s infinite ease-in-out; }
+    .nmark.warn { background: #d97706; cursor: pointer; }
+    @keyframes danger-pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.18); }
+    }
 
     .port { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 2px solid var(--border-strong); transform: translateY(-50%); cursor: crosshair; z-index: 5; }
     .port:hover { border-color: var(--primary); background: #eae6ff; transform: translateY(-50%) scale(1.25); }

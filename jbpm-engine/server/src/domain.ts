@@ -32,6 +32,13 @@ export interface GlobalErrorHandlerConfig {
   rethrowOnFailure?: boolean;
 }
 
+export interface WorkflowValidationSummary {
+  hasErrors: boolean;
+  errorCount: number;
+  warningCount: number;
+  problems?: { rule: string; severity: string; message: string; nodeId?: string; flowId?: string }[];
+}
+
 export interface Workflow extends Entity, Audited {
   id: string; tenantId: string;
   name: string; key: string; description?: string;
@@ -47,6 +54,8 @@ export interface Workflow extends Entity, Audited {
   env?: Record<string, string>;
   /** Project-level Global Error Handler configuration */
   globalErrorHandler?: GlobalErrorHandlerConfig;
+  /** Cached validation summary for project head draft */
+  validationSummary?: WorkflowValidationSummary;
 }
 
 /** Organizes Workflows into a tree for the Projects page — purely presentational, no effect on

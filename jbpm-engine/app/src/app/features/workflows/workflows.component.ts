@@ -60,10 +60,10 @@ type Selection = 'all' | 'unfiled' | string;
         } @else {
           <div class="grid">
             @for (w of filteredWorkflows(); track w.id) {
-              <div class="card wf">
+              <div class="card wf" [class.has-err]="w.validationSummary?.hasErrors">
                 <div class="wf-top">
                   <a class="wf-link" [routerLink]="['/projects', w.id]">
-                    <span class="ic"><app-icon name="zap" [size]="16" /></span>
+                    <span class="ic"><app-icon [name]="w.validationSummary?.hasErrors ? 'alert-triangle' : 'zap'" [size]="16" /></span>
                     <div class="wf-titles">
                       <div class="wf-name">{{ w.name }}</div>
                       <div class="muted key">{{ w.key }}</div>
@@ -84,10 +84,20 @@ type Selection = 'all' | 'unfiled' | string;
                     }
                   </div>
                 </div>
+
+                @if (w.validationSummary?.hasErrors) {
+                  <div class="wf-danger-indicator" [title]="workflowProblemTooltip(w)">
+                    <app-icon name="alert-triangle" [size]="12" />
+                    <span>{{ w.validationSummary?.errorCount }} issue{{ (w.validationSummary?.errorCount || 0) > 1 ? 's' : '' }} (Deploy Blocked)</span>
+                  </div>
+                }
+
                 @if (w.description) { <p class="wf-desc">{{ w.description }}</p> }
                 <div class="wf-footer">
                   <span class="muted upd">Updated {{ w.updatedAt | slice:0:10 }}</span>
-                  <a class="btn primary sm" [routerLink]="['/projects', w.id]">Open →</a>
+                  <a class="btn sm" [class.primary]="!w.validationSummary?.hasErrors" [class.btn-danger-outline]="w.validationSummary?.hasErrors" [routerLink]="['/projects', w.id]">
+                    {{ w.validationSummary?.hasErrors ? 'Fix Issues →' : 'Open →' }}
+                  </a>
                 </div>
               </div>
             }
@@ -148,6 +158,29 @@ type Selection = 'all' | 'unfiled' | string;
       .create .btn { width: 100%; justify-content: center; }
       .main { padding: 14px; }
       .grid { grid-template-columns: 1fr; }
+    }
+    .card.wf.has-err {
+      border: 1.5px solid #ef4444 !important;
+      background: rgba(239, 68, 68, 0.02);
+    }
+    .card.wf.has-err .ic {
+      background: rgba(239, 68, 68, 0.15) !important;
+      color: #ef4444;
+    }
+    .wf-danger-indicator {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(239, 68, 68, 0.12); color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 6px; padding: 4px 8px; font-size: 11px;
+      font-weight: 700; margin: 4px 0;
+    }
+    .btn-danger-outline {
+      border: 1px solid rgba(239, 68, 68, 0.4) !important;
+      color: #ef4444 !important;
+      background: rgba(239, 68, 68, 0.06) !important;
+    }
+    .btn-danger-outline:hover {
+      background: rgba(239, 68, 68, 0.15) !important;
     }
   `],
 })
@@ -211,6 +244,12 @@ export class WorkflowsComponent {
   toggleMenu(id: string, ev: Event) { ev.stopPropagation(); this.openMenu.set(this.openMenu() === id ? null : id); }
   @HostListener('document:click') closeMenuOnOutsideClick() { this.openMenu.set(null); }
   pick(w: Workflow, folderId: string) { this.moveToFolder(w, folderId); this.openMenu.set(null); }
+
+  workflowProblemTooltip(w: Workflow): string {
+    const problems = w.validationSummary?.problems || [];
+    if (!problems.length) return 'Validation errors found in draft processes';
+    return problems.map((p) => `[${p.severity.toUpperCase()}] ${p.rule}: ${p.message}`).join('\n');
+  }
 
   create() {
     const name = this.newName.trim();

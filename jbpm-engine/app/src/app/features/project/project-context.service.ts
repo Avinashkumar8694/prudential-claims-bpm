@@ -37,14 +37,14 @@ export class ProjectContextService {
 
   id = this.route.snapshot.paramMap.get('id')!;
   wf = signal<Workflow | null>(null);
-  processes = signal<{ id: string; name: string; nodes: number; flows: number }[]>([]);
+  processes = signal<{ id: string; name: string; nodes: number; flows: number; hasErrors?: boolean; errorCount?: number; warningCount?: number; problems?: any[] }[]>([]);
   assets = signal<Record<string, { name: string; usedBy: number; refs?: any[] }[]>>({});
   assetKinds = signal<{ key: string; label: string; nameField: string }[]>([]);
   vars = signal<{ name: string; type: string }[]>([]);
   envList = signal<{ key: string; value: string }[]>([]);
   globalErrorHandler = signal<GlobalErrorHandlerConfig>({ enabled: false, rules: [] });
   name = ''; description = ''; baseUrl = '';
-  instanceCreationMode: 'both' | 'case-only' | 'process-only' | '' = '';
+  instanceCreationMode: 'both' | 'case-only' | 'process-only' | 'none' | '' = '';
   exportDenial = signal<JbpmExportDenial | null>(null);
   isJbpmCompatible = signal<boolean>(false);
 

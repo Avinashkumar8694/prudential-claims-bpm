@@ -25,4 +25,10 @@ export class ValidationService {
     const res = await this.validate(process);
     if (!res.ok) throw new ApiError('VALIDATION_FAILED', `Cannot ${action}: ${res.errors.length} validation error(s)`, res.errors);
   }
+
+  /** Throw VALIDATION_FAILED if any process in the project has errors (gates publish/deploy). */
+  async assertValidProject(project: EngineProject, action = 'deploy'): Promise<void> {
+    const res = await this.validateProject(project);
+    if (!res.ok) throw new ApiError('VALIDATION_FAILED', `Cannot ${action}: ${res.errors.length} validation error(s) found in project processes`, res.errors);
+  }
 }

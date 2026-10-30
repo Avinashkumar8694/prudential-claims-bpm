@@ -13,13 +13,42 @@ import { IconComponent } from '../../shared/icon.component';
     <div class="setrow"><label>Description</label><input [(ngModel)]="ctx.description" (blur)="ctx.saveName()" placeholder="What this project does" /></div>
     <div class="setrow">
       <label>Instance creation mode</label>
-      <select [(ngModel)]="ctx.instanceCreationMode" (ngModelChange)="ctx.saveCreationMode()">
-        <option value="">Inherit system default</option>
-        <option value="both">Both (Process & Case Instances)</option>
-        <option value="case-only">Case Instances Only</option>
-        <option value="process-only">Process Instances Only</option>
-      </select>
-      <small>Controls which instance types users can start within this project.</small>
+      <div class="creation-box">
+        <div class="mode-select-row">
+          <select [ngModel]="ctx.instanceCreationMode" (ngModelChange)="setCreationMode($event)">
+            <option value="">Inherit System Default</option>
+            <option value="both">Both (Process &amp; Case Instances)</option>
+            <option value="process-only">Process Instances Only</option>
+            <option value="case-only">Case Instances Only</option>
+            <option value="none">None (Creation Disabled)</option>
+          </select>
+        </div>
+
+        <div class="switches-grid">
+          <div class="switch-item">
+            <div class="switch-text">
+              <span class="switch-name">Enable Process Creation</span>
+              <span class="switch-sub">Start BPMN workflow instances from this project</span>
+            </div>
+            <button type="button" class="switch" [class.on]="canCreateProcess()" role="switch" [attr.aria-checked]="canCreateProcess()" (click)="toggleProcessSwitch()"></button>
+          </div>
+
+          <div class="switch-item">
+            <div class="switch-text">
+              <span class="switch-name">Enable Case Creation</span>
+              <span class="switch-sub">Start dynamic case instances from this project</span>
+            </div>
+            <button type="button" class="switch" [class.on]="canCreateCase()" role="switch" [attr.aria-checked]="canCreateCase()" (click)="toggleCaseSwitch()"></button>
+          </div>
+        </div>
+
+        @if (ctx.instanceCreationMode === '') {
+          <div class="inherit-note">
+            <app-icon name="info" [size]="13" /> Inheriting system default. Toggle switches or select an option to customize.
+          </div>
+        }
+      </div>
+      <small>Controls whether users can start process instances, case instances, both, or none within this project.</small>
     </div>
     <div class="setrow"><label>Integration base URL</label><input [(ngModel)]="ctx.baseUrl" placeholder="http://localhost:3000" /><small>Applied per deployment environment for service tasks.</small></div>
 
@@ -213,10 +242,57 @@ import { IconComponent } from '../../shared/icon.component';
     .rule-title { font-size: 13px; font-weight: 600; color: var(--text, #f1f5f9); flex: 1; }
     .btn-link { background: none; border: none; color: var(--accent, #6366f1); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; }
     .mapping-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .creation-box { display: flex; flex-direction: column; gap: 10px; max-width: 580px; }
+    .mode-select-row select { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; background: var(--surface); color: inherit; }
+    .switches-grid { display: flex; flex-direction: column; gap: 8px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+    .switch-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .switch-text { display: flex; flex-direction: column; }
+    .switch-name { font-size: 13px; font-weight: 600; color: inherit; }
+    .switch-sub { font-size: 11px; color: var(--muted); }
+    .switch { width: 36px; height: 20px; border-radius: 10px; background: var(--border-strong, #475569); position: relative; border: none; cursor: pointer; transition: background .15s; flex-shrink: 0; }
+    .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+    .switch.on { background: var(--primary, #6366f1); }
+    .switch.on::after { transform: translateX(16px); }
+    .inherit-note { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); font-style: italic; }
   `],
 })
 export class ProjectSettingsComponent {
   ctx = inject(ProjectContextService);
+
+  canCreateProcess(): boolean {
+    const m = this.ctx.instanceCreationMode;
+    return m === '' || m === 'both' || m === 'process-only';
+  }
+
+  canCreateCase(): boolean {
+    const m = this.ctx.instanceCreationMode;
+    return m === '' || m === 'both' || m === 'case-only';
+  }
+
+  toggleProcessSwitch() {
+    const nextProc = !this.canCreateProcess();
+    const curCase = this.canCreateCase();
+    this.applySwitches(nextProc, curCase);
+  }
+
+  toggleCaseSwitch() {
+    const curProc = this.canCreateProcess();
+    const nextCase = !this.canCreateCase();
+    this.applySwitches(curProc, nextCase);
+  }
+
+  private applySwitches(proc: boolean, cse: boolean) {
+    if (proc && cse) this.ctx.instanceCreationMode = 'both';
+    else if (proc && !cse) this.ctx.instanceCreationMode = 'process-only';
+    else if (!proc && cse) this.ctx.instanceCreationMode = 'case-only';
+    else this.ctx.instanceCreationMode = 'none';
+    this.ctx.saveCreationMode();
+  }
+
+  setCreationMode(mode: 'both' | 'case-only' | 'process-only' | 'none' | '') {
+    this.ctx.instanceCreationMode = mode;
+    this.ctx.saveCreationMode();
+  }
 
   ruleList = signal<{
     id: string;

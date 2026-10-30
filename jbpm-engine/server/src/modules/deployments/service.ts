@@ -6,6 +6,7 @@ import { conflict, notFound, validation } from '../../infra/errors.ts';
 import { computeDue } from '../../engine/duration.ts';
 import { NotificationService } from '../notifications/service.ts';
 import { VersionService } from '../versions/service.ts';
+import { ValidationService } from '../validation/service.ts';
 
 export class DeploymentService {
   constructor(private ctx: AppContext) {}
@@ -50,6 +51,9 @@ export class DeploymentService {
     const environment = (input.environment || '').trim();
     if (!environment) throw validation('environment is required');
 
+    // Strict validation gate: Invalid or unsupported processes cannot be deployed
+    await new ValidationService().assertValidProject(v.engine, 'deploy');
+
     const workflow = await this.wf().get(v.workflowId);
     const mergedEnv = { ...(workflow?.env || {}), ...(input.env || {}) };
 
@@ -89,6 +93,9 @@ export class DeploymentService {
   async activate(id: string, actor: string): Promise<Deployment> {
     const d = await this.get(id);
     if (d.status === 'archived') throw conflict('cannot activate an archived deployment');
+    if (d.engine) {
+      await new ValidationService().assertValidProject(d.engine, 'activate');
+    }
     const siblings = await this.dp().query((x) =>
       x.tenantId === this.ctx.tenantId && x.workflowId === d.workflowId && x.environment === d.environment && x.status === 'active');
     for (const s of siblings) {

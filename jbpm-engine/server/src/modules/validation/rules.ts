@@ -146,7 +146,7 @@ export const RULES: Rule[] = [
     const out: Problem[] = [];
     for (const n of c.nodes) {
       if (!NODE_DEF_BY_TYPE[n.type]) {
-        out.push(P('unsupported-construct', 'warning', `"${label(n)}" (${n.type}) is a construct this engine doesn't structurally support — imported as opaque data; it will not execute as intended and needs manual reconstruction`, { nodeId: n.id }));
+        out.push(P('unsupported-construct', 'error', `"${label(n)}" (${n.type}) is a construct this engine doesn't structurally support — imported as opaque data; it will not execute as intended and needs manual reconstruction`, { nodeId: n.id }));
       }
     }
     return out;
