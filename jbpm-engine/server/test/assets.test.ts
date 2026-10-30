@@ -5,6 +5,7 @@ import assert from 'node:assert';
 import { MemoryStore } from '../src/store/memory-store.ts';
 import { fakeClock } from '../src/infra/ids.ts';
 import { makeContext } from '../src/context.ts';
+import { Collections, type AuditEvent } from '../src/domain.ts';
 import { WorkflowService } from '../src/modules/workflows/service.ts';
 import { AssetsService } from '../src/modules/assets/service.ts';
 
@@ -121,4 +122,55 @@ test('AssetsService.duplicate: clones asset within project with new name', async
   assert.strictEqual(cloned.asset.decisions[0].name, 'Eligibility_V2');
   assert.deepStrictEqual(cloned.asset.decisions[0].rules, original.asset.decisions[0].rules);
   assert(cloned.asset.namespace.includes('eligibility-v2'));
+});
+
+test('AssetsService.duplicate edge cases: rejects blank name, identical name, existing name, non-existent asset, and handles non-default nameField + deep clone', async () => {
+  const ctx = newCtx();
+  const wf = await new WorkflowService(ctx).create({ name: 'Claims' }, 'a');
+  const assets = new AssetsService(ctx);
+
+  await assets.add(wf.id, 'forms', 'ClaimForm', 'a');
+  await assets.add(wf.id, 'rulesets', 'triage-rules', 'a');
+
+  // 1. Rejects blank / whitespace name
+  await assert.rejects(
+    () => assets.duplicate(wf.id, 'forms', 'ClaimForm', '   ', 'a'),
+    (err: any) => err.code === 'VALIDATION_FAILED' && err.message.includes('new asset name is required'),
+  );
+
+  // 2. Rejects identical name
+  await assert.rejects(
+    () => assets.duplicate(wf.id, 'forms', 'ClaimForm', 'ClaimForm', 'a'),
+    (err: any) => err.code === 'VALIDATION_FAILED' && err.message.includes('must be different from current name'),
+  );
+
+  // 3. Rejects collision with existing asset name
+  await assets.add(wf.id, 'forms', 'ExistingForm', 'a');
+  await assert.rejects(
+    () => assets.duplicate(wf.id, 'forms', 'ClaimForm', 'ExistingForm', 'a'),
+    (err: any) => err.code === 'VALIDATION_FAILED' && err.message.includes('already exists'),
+  );
+
+  // 4. Rejects non-existent source asset
+  await assert.rejects(
+    () => assets.duplicate(wf.id, 'forms', 'NonExistent', 'NewForm', 'a'),
+    (err: any) => err.code === 'NOT_FOUND',
+  );
+
+  // 5. Handles non-default nameField (e.g. rulesets uses 'group')
+  const dupRuleset = await assets.duplicate(wf.id, 'rulesets', 'triage-rules', 'triage-rules-v2', 'a');
+  assert.strictEqual(dupRuleset.name, 'triage-rules-v2');
+  const clonedRuleset = await assets.get(wf.id, 'rulesets', 'triage-rules-v2');
+  assert.strictEqual(clonedRuleset.asset.group, 'triage-rules-v2');
+
+  // 6. Deep clone mutation isolation
+  await assets.update(wf.id, 'rulesets', 'triage-rules-v2', { customMeta: 'mutated' }, 'a');
+  const origRuleset = await assets.get(wf.id, 'rulesets', 'triage-rules');
+  assert.strictEqual((origRuleset.asset as any).customMeta, undefined, 'original asset was not mutated');
+
+  // 7. Audit log verification
+  const auditEntries = await ctx.store.repo<AuditEvent>(Collections.audit).list();
+  const dupAudit = auditEntries.find((e: any) => e.kind === 'asset.duplicated' && e.data?.name === 'triage-rules-v2');
+  assert(dupAudit, 'audit log entry created for asset.duplicated');
+  assert.strictEqual(dupAudit.data.source, 'triage-rules');
 });

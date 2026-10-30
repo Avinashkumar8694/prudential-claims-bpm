@@ -1155,9 +1155,9 @@ export class ProcessCanvasComponent implements OnChanges {
 
     const base = payload.node;
     const baseType = base.type || 'task';
-    let newId = `${baseType}_${++this.idc}`;
+    let newId = `${baseType}_${++this.idc}_${Date.now().toString(36).slice(-3)}`;
     while (this.nodes().some((x) => x.id === newId)) {
-      newId = `${baseType}_${++this.idc}`;
+      newId = `${baseType}_${++this.idc}_${Date.now().toString(36).slice(-3)}`;
     }
 
     let newX = (base.x || 100) + 40;
@@ -1192,10 +1192,14 @@ export class ProcessCanvasComponent implements OnChanges {
 
   @HostListener('document:keydown', ['$event'])
   onKeyDown(ev: KeyboardEvent) {
+    if (this.editingNode() || this.editingEdge() || this.showVars() || this.showCheatSheet() || this.viewingDocs()) {
+      return;
+    }
+
     const activeEl = document.activeElement as HTMLElement | null;
     if (activeEl) {
       const tag = activeEl.tagName.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || activeEl.isContentEditable) {
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || activeEl.isContentEditable || activeEl.closest('.modal') || activeEl.closest('.modal-bg')) {
         return;
       }
     }
