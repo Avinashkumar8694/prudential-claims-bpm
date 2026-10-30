@@ -263,7 +263,7 @@ const schemas = {
       processId: { type: 'string', example: 'claims-intake.process' },
       name: { type: 'string', example: 'Claims Intake' },
       workflowId: { type: 'string', example: 'claims-intake' },
-      package: { type: 'string', example: 'com.prudential.claims' },
+      package: { type: 'string', example: 'com.enterprise.claims' },
       deploymentId: { type: 'string', example: 'dep_101' },
       version: { type: 'string', example: 'v1' },
       instances: {
@@ -903,7 +903,7 @@ const paths: Record<string, any> = {
     post: {
       tags: ['Case Service'],
       summary: 'Initialize a new consolidated claim case',
-      description: 'Creates a claim case in DRAFT status following the Prudential Claim Case schema specification.',
+      description: 'Creates a claim case in DRAFT status following the Claim Case schema specification.',
       requestBody: jsonBody(ref('CaseObject')),
       responses: created({ type: 'object', properties: { caseId: { type: 'string' }, policyNumber: { type: 'string' }, claimType: { type: 'string' }, caseStatus: { type: 'string' }, createdAt: { type: 'string' }, updatedAt: { type: 'string' } } }),
     },
@@ -1021,11 +1021,11 @@ const paths: Record<string, any> = {
 export const openapiSpec = {
   openapi: '3.0.3',
   info: {
-    title: 'Prudential Claims BPM — Engine & Integration API',
+    title: 'BPM & Case Workflow Engine — Integration API',
     version: '1.0.0',
-    description: `## Prudential Claims BPM Workflow & Integration Engine
+    description: `## BPM & Case Workflow Engine
 
-Welcome to the **Prudential Claims BPM REST & Event Integration API**. This specification covers both developer intake integration and engine management.
+Welcome to the **BPM REST & Event Integration API**. This specification covers both developer intake integration and engine management.
 
 ### 1. Authentication & API Token Generation
 All endpoints (except \`POST /api/auth/login\` and \`GET /api/crypto/public-key\`) require a valid JWT Bearer token:
@@ -1099,7 +1099,7 @@ export const swaggerHtml = `<!doctype html>
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Prudential Claims BPM — Developer Integration API</title>
+  <title>Workflow Engine — Developer Integration API</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
   <style>
     body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fafafa; }
@@ -1131,7 +1131,7 @@ export const swaggerHtml = `<!doctype html>
 <body>
   <div class="auth-banner">
     <div>
-      <h1>Prudential Claims BPM — Developer Integration API</h1>
+      <h1>Workflow Engine — Developer Integration API</h1>
       <p>Interactive OpenAPI 3.0 Documentation for External Systems, Portals, and Claim Integrations</p>
     </div>
     <div class="auth-badge" id="session-badge">Authenticated Session</div>

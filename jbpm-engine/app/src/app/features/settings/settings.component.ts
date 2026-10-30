@@ -146,7 +146,7 @@ type SettingsTab = 'account' | 'system';
               </div>
               <div class="setting-row">
                 <div class="lbl">Outbound domain allowlist<span class="shint">Comma-separated hostnames or .domain suffixes permitted to bypass SSRF private network filters.</span></div>
-                <input [(ngModel)]="s.outboundAllowlist" placeholder="api.prudential.com, .internal.corp, localhost" style="width:300px;" />
+                <input [(ngModel)]="s.outboundAllowlist" placeholder="api.enterprise.com, .internal.corp, localhost" style="width:300px;" />
               </div>
             </section>
 

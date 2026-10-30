@@ -19,7 +19,7 @@ import { IconComponent } from '../../shared/icon.component';
           </div>
           <h1 class="page-title">Developer Integration & API Guide</h1>
           <p class="page-subtitle">
-            Integrate client web applications, portal frontends, insurance claim intake pipelines, and external webhook services directly with the Prudential Claims BPM Engine.
+            Integrate client web applications, portal frontends, insurance claim intake pipelines, and external webhook services directly with the BPM Workflow Engine.
           </p>
         </div>
         <div class="header-actions">
@@ -529,7 +529,7 @@ export class IntegrationGuideComponent {
   -H "Authorization: Bearer ${this.activeToken()}" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "workflowId": "prudential-claims-system",
+    "workflowId": "claims-intake-system",
     "processId": "proc_claims_assessment",
     "correlationKey": "CLM-2026-99214",
     "variables": {
@@ -622,7 +622,7 @@ async function startClaimWorkflow() {
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      workflowId: 'prudential-claims-system',
+      workflowId: 'claims-intake-system',
       correlationKey: 'CLM-2026-99214',
       variables: {
         policyNumber: 'POL-99214',
@@ -653,7 +653,7 @@ headers = {
 
 def start_claim():
     payload = {
-        "workflowId": "prudential-claims-system",
+        "workflowId": "claims-intake-system",
         "correlationKey": "CLM-2026-99214",
         "variables": {
             "policyNumber": "POL-99214",
@@ -682,7 +682,7 @@ public class ClaimIntegrationClient {
         String token = "${this.activeToken()}";
         String body = """
             {
-              "workflowId": "prudential-claims-system",
+              "workflowId": "claims-intake-system",
               "correlationKey": "CLM-2026-99214",
               "variables": {
                 "policyNumber": "POL-99214",

@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Prudential Claims BPM — Engine & Integration API",
+    "title": "BPM & Case Workflow Engine — Integration API",
     "version": "1.0.0",
-    "description": "## Prudential Claims BPM Workflow & Integration Engine\n\nWelcome to the **Prudential Claims BPM REST & Event Integration API**. This specification covers both developer intake integration and engine management.\n\n### 1. Authentication & API Token Generation\nAll endpoints (except `POST /api/auth/login` and `GET /api/crypto/public-key`) require a valid JWT Bearer token:\n1. **Acquire Token**: Send your credentials to `POST /api/auth/login`:\n   ```json\n   POST /api/auth/login\n   {\n     \"username\": \"admin\",\n     \"password\": \"your-password\"\n   }\n   ```\n2. **Authorize Requests**: Attach the returned token in the HTTP Authorization header:\n   `Authorization: Bearer <token>`\n3. **Browser Direct Access**: When viewing API documentation in a browser, pass `?token=<token>` in the URL.\n\n### 2. Ephemeral In-Transit Cryptography\nFor high-security environments, credentials and sensitive claims variables can be encrypted before transmission using the ephemeral RSA-OAEP public key retrieved from `GET /api/crypto/public-key`.\n\n### 3. Core Integration Workflows\n- **Intake & Starting Workflows**: `POST /api/instances`, `POST /api/workflow-instances`, or `POST /api/caseservice/case`\n- **Inspecting Running Instances**: `GET /api/instances/{id}`, `GET /api/workflow-instances/{id}`, or `GET /api/caseservice/case/{caseId}`\n- **Human Task Workbench**: Query inboxes at `GET /api/tasks`, claim via `POST /api/tasks/{id}/claim`, complete with outputs via `POST /api/tasks/{id}/complete`, or reject/fail via `POST /api/tasks/{id}/fail`\n- **Event Callbacks & Signals**: Deliver targeted signals via `POST /api/instances/{id}/signal` or broadcast signals across all instances via `POST /api/signals/{signalName}`\n- **Case Roles & Milestones**: Manage case role assignments via `PUT /api/workflow-instances/{id}/roles/{roleName}` and track milestones via `GET /api/workflow-instances/{id}/milestones`\n- **SLA & Workload Analytics**: Query SLA breaches and workload distribution via `GET /api/query/analytics/sla-violations` and `GET /api/query/analytics/workload`\n- **Operational Failures & Recovery**: Monitor incidents at `GET /api/errors` and re-trigger execution via `POST /api/instances/{id}/retry`\n\n### 4. Realtime Event Streaming (WebSockets)\nConnect via WebSocket to `ws://<host>/api/ws?token=<token>`. Once connected, subscribe to instance topics:\n```json\n{ \"op\": \"sub\", \"topics\": [\"instance:<instanceId>\"] }\n```\n"
+    "description": "## BPM & Case Workflow Engine\n\nWelcome to the **BPM REST & Event Integration API**. This specification covers both developer intake integration and engine management.\n\n### 1. Authentication & API Token Generation\nAll endpoints (except `POST /api/auth/login` and `GET /api/crypto/public-key`) require a valid JWT Bearer token:\n1. **Acquire Token**: Send your credentials to `POST /api/auth/login`:\n   ```json\n   POST /api/auth/login\n   {\n     \"username\": \"admin\",\n     \"password\": \"your-password\"\n   }\n   ```\n2. **Authorize Requests**: Attach the returned token in the HTTP Authorization header:\n   `Authorization: Bearer <token>`\n3. **Browser Direct Access**: When viewing API documentation in a browser, pass `?token=<token>` in the URL.\n\n### 2. Ephemeral In-Transit Cryptography\nFor high-security environments, credentials and sensitive claims variables can be encrypted before transmission using the ephemeral RSA-OAEP public key retrieved from `GET /api/crypto/public-key`.\n\n### 3. Core Integration Workflows\n- **Intake & Starting Workflows**: `POST /api/instances`, `POST /api/workflow-instances`, or `POST /api/caseservice/case`\n- **Inspecting Running Instances**: `GET /api/instances/{id}`, `GET /api/workflow-instances/{id}`, or `GET /api/caseservice/case/{caseId}`\n- **Human Task Workbench**: Query inboxes at `GET /api/tasks`, claim via `POST /api/tasks/{id}/claim`, complete with outputs via `POST /api/tasks/{id}/complete`, or reject/fail via `POST /api/tasks/{id}/fail`\n- **Event Callbacks & Signals**: Deliver targeted signals via `POST /api/instances/{id}/signal` or broadcast signals across all instances via `POST /api/signals/{signalName}`\n- **Case Roles & Milestones**: Manage case role assignments via `PUT /api/workflow-instances/{id}/roles/{roleName}` and track milestones via `GET /api/workflow-instances/{id}/milestones`\n- **SLA & Workload Analytics**: Query SLA breaches and workload distribution via `GET /api/query/analytics/sla-violations` and `GET /api/query/analytics/workload`\n- **Operational Failures & Recovery**: Monitor incidents at `GET /api/errors` and re-trigger execution via `POST /api/instances/{id}/retry`\n\n### 4. Realtime Event Streaming (WebSockets)\nConnect via WebSocket to `ws://<host>/api/ws?token=<token>`. Once connected, subscribe to instance topics:\n```json\n{ \"op\": \"sub\", \"topics\": [\"instance:<instanceId>\"] }\n```\n"
   },
   "servers": [
     {
@@ -1551,7 +1551,7 @@
           },
           "package": {
             "type": "string",
-            "example": "com.prudential.claims"
+            "example": "com.enterprise.claims"
           },
           "deploymentId": {
             "type": "string",
@@ -11078,7 +11078,7 @@
           "Case Service"
         ],
         "summary": "Initialize a new consolidated claim case",
-        "description": "Creates a claim case in DRAFT status following the Prudential Claim Case schema specification.",
+        "description": "Creates a claim case in DRAFT status following the Claim Case schema specification.",
         "requestBody": {
           "required": true,
           "content": {
