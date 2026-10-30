@@ -163,6 +163,74 @@ const schemas = {
       achievedBy: { type: 'string', example: 'alice' },
     },
   },
+  TaskAttachment: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'att_01' },
+      taskId: { type: 'string', example: 'tsk_101' },
+      name: { type: 'string', example: 'death_certificate.pdf' },
+      mimeType: { type: 'string', example: 'application/pdf' },
+      url: { type: 'string', example: 'https://s3.amazonaws.com/claims-docs/cert.pdf' },
+      sizeBytes: { type: 'integer', example: 1048576 },
+      author: { type: 'string', example: 'john.doe' },
+      at: { type: 'string', format: 'date-time' },
+    },
+  },
+  NodeInstance: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'hist_0_start' },
+      tokenId: { type: 'string', example: 'tok_1' },
+      nodeId: { type: 'string', example: 'reviewNode' },
+      nodeName: { type: 'string', example: 'Examiner Review' },
+      type: { type: 'string', example: 'userTask' },
+      state: { type: 'string', enum: ['active', 'waiting', 'completed'], example: 'completed' },
+      enteredAt: { type: 'string', format: 'date-time' },
+      exitedAt: { type: 'string', format: 'date-time' },
+      outcome: { type: 'string' },
+    },
+  },
+  BulkResult: {
+    type: 'object',
+    properties: {
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            ok: { type: 'boolean' },
+            error: { type: 'string' },
+          },
+        },
+      },
+    },
+  },
+  CaseFlag: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'flg_01' },
+      flagType: { type: 'string', example: 'FRAUD_SUSPICION' },
+      flagValue: {},
+      reason: { type: 'string', example: 'Address mismatch on claim submission' },
+      raisedAt: { type: 'string', format: 'date-time' },
+      raisedBy: { type: 'string', example: 'system' },
+    },
+  },
+  CaseDocument: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'doc_01' },
+      document_name: { type: 'string', example: 'certified_death_certificate.pdf' },
+      document_type: { type: 'string', example: 'DEATH_CERTIFICATE' },
+      s3_key: { type: 'string', nullable: true, example: 'claims/docs/cert.pdf' },
+      required: { type: 'boolean', example: true },
+      status: { type: 'string', example: 'UPLOADED' },
+      type: { type: 'string', example: 'USER_UPLOADED' },
+      uploadedAt: { type: 'string', format: 'date-time' },
+      uploadedBy: { type: 'string', example: 'john.examiner' },
+    },
+  },
 };
 
 // ---- paths (grouped by tag) ----
@@ -277,12 +345,25 @@ const paths: Record<string, any> = {
   '/instances/{id}/suspend': { post: { tags: ['Instances'], summary: 'Suspend (cascades to the whole subtree)', parameters: [idParam()], responses: ok(ref('Instance')) } },
   '/instances/{id}/resume': { post: { tags: ['Instances'], summary: 'Resume the subtree', parameters: [idParam()], responses: ok(ref('Instance')) } },
   '/instances/{id}/abort': { post: { tags: ['Instances'], summary: 'Abort (cascades to active children)', parameters: [idParam()], responses: ok(ref('Instance')) } },
+  '/instances/{id}/nodes': { get: { tags: ['Instances'], summary: 'List executed and active node instances', parameters: [idParam()], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('NodeInstance') } } }) } },
+  '/instances/{id}/variables': {
+    get: { tags: ['Instances'], summary: 'Get current variables dictionary of an instance', parameters: [idParam()], responses: ok({ type: 'object' }) },
+    put: { tags: ['Instances'], summary: 'Edit instance variables inline (audited; refused once the instance has ended)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', additionalProperties: {} }), responses: ok(ref('Instance')) },
+  },
+  '/instances/{id}/variable-history': { get: { tags: ['Instances'], summary: 'Per-variable change history (from the audit trail)', parameters: [idParam(), q('name', 'Only this variable')], responses: ok(listOf('VariableChange')) } },
+  '/instances/bulk/abort': { post: { tags: ['Instances'], summary: 'Bulk abort process instances', requestBody: jsonBody({ type: 'object', properties: { instanceIds: { type: 'array', items: { type: 'string' } } } }), responses: ok(ref('BulkResult')) } },
+  '/instances/bulk/signal': { post: { tags: ['Instances'], summary: 'Bulk signal process instances', requestBody: jsonBody({ type: 'object', properties: { instanceIds: { type: 'array', items: { type: 'string' } }, name: { type: 'string' }, payload: { type: 'object' } } }), responses: ok(ref('BulkResult')) } },
 
   '/tasks': { get: { tags: ['Human Tasks'], summary: 'List tasks', parameters: [q('assignee', 'Owned by user'), q('group', 'Group queue'), q('status', 'Task status'), q('overdue', 'true = only tasks past their dueAt and not yet completed/skipped')], responses: ok(listOf('Task')) } },
+  '/tasks/bulk/claim': { post: { tags: ['Human Tasks'], summary: 'Bulk claim tasks', requestBody: jsonBody({ type: 'object', properties: { taskIds: { type: 'array', items: { type: 'string' } } } }), responses: ok(ref('BulkResult')) } },
+  '/tasks/bulk/release': { post: { tags: ['Human Tasks'], summary: 'Bulk release tasks', requestBody: jsonBody({ type: 'object', properties: { taskIds: { type: 'array', items: { type: 'string' } } } }), responses: ok(ref('BulkResult')) } },
+  '/tasks/bulk/complete': { post: { tags: ['Human Tasks'], summary: 'Bulk complete tasks', requestBody: jsonBody({ type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: { taskId: { type: 'string' }, outputs: { type: 'object' } } } } } }), responses: ok(ref('BulkResult')) } },
   '/tasks/{id}': {
     get: { tags: ['Human Tasks'], summary: 'Get a task', parameters: [idParam()], responses: ok(ref('Task')) },
     patch: { tags: ['Human Tasks'], summary: 'Admin edits: priority / due date (null dueAt clears it)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { priority: { type: 'integer' }, dueAt: { type: 'string', format: 'date-time', nullable: true } } }), responses: ok(ref('Task')) },
   },
+  '/tasks/{id}/inputs': { get: { tags: ['Human Tasks'], summary: 'Get task input variables', parameters: [idParam()], responses: ok({ type: 'object' }) } },
+  '/tasks/{id}/outputs': { get: { tags: ['Human Tasks'], summary: 'Get task output variables', parameters: [idParam()], responses: ok({ type: 'object' }) } },
   '/tasks/{id}/claim': { post: { tags: ['Human Tasks'], summary: 'Claim a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/release': { post: { tags: ['Human Tasks'], summary: 'Release a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/complete': { post: { tags: ['Human Tasks'], summary: 'Complete a task (resumes the instance)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object' } } }), responses: ok(ref('Task')) } },
@@ -297,6 +378,8 @@ const paths: Record<string, any> = {
       responses: ok(ref('Task')),
     },
   },
+  '/tasks/{id}/suspend': { post: { tags: ['Human Tasks'], summary: 'Suspend task (pause work)', parameters: [idParam()], responses: ok(ref('Task')) } },
+  '/tasks/{id}/resume': { post: { tags: ['Human Tasks'], summary: 'Resume task from suspended state', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/start': { post: { tags: ['Human Tasks'], summary: 'Start working (reserved → inprogress; starting from Ready implicitly claims)', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/stop': { post: { tags: ['Human Tasks'], summary: 'Stop working (inprogress → reserved, ownership kept)', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/save': { post: { tags: ['Human Tasks'], summary: 'Save partial outputs without completing', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object' } } }), responses: ok(ref('Task')) } },
@@ -308,9 +391,12 @@ const paths: Record<string, any> = {
     post: { tags: ['Human Tasks'], summary: 'Add a comment', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { body: { type: 'string' } } }), responses: created(ref('TaskComment')) },
   },
   '/tasks/{id}/comments/{cid}': { delete: { tags: ['Human Tasks'], summary: 'Delete a comment (author or business admin)', parameters: [idParam(), idParam('cid', 'Comment id')], responses: { '204': { description: 'Deleted' } } } },
+  '/tasks/{id}/attachments': {
+    get: { tags: ['Human Tasks'], summary: 'List task document attachments', parameters: [idParam()], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('TaskAttachment') } } }) },
+    post: { tags: ['Human Tasks'], summary: 'Add attachment/evidence to task', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, mimeType: { type: 'string' }, url: { type: 'string' }, sizeBytes: { type: 'integer' } } }), responses: created(ref('TaskAttachment')) },
+  },
+  '/tasks/{id}/attachments/{aid}': { delete: { tags: ['Human Tasks'], summary: 'Delete a task attachment', parameters: [idParam(), idParam('aid', 'Attachment id')], responses: { '204': { description: 'Deleted' } } } },
   '/tasks/{id}/events': { get: { tags: ['Human Tasks'], summary: 'Task audit trail (the Logs tab)', parameters: [idParam()], responses: ok(listOf('AuditEvent')) } },
-  '/instances/{id}/variables': { put: { tags: ['Instances'], summary: 'Edit instance variables inline (audited; refused once the instance has ended)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', additionalProperties: {} }), responses: ok(ref('Instance')) } },
-  '/instances/{id}/variable-history': { get: { tags: ['Instances'], summary: 'Per-variable change history (from the audit trail)', parameters: [idParam(), q('name', 'Only this variable')], responses: ok(listOf('VariableChange')) } },
   '/signals/{signalName}': {
     post: {
       tags: ['Signals'],
@@ -457,6 +543,104 @@ const paths: Record<string, any> = {
     get: { tags: ['Workflow Instances'], summary: 'List achieved case milestones', parameters: [idParam()], responses: ok({ type: 'object', properties: { milestones: { type: 'array', items: ref('Milestone') } } }) },
     post: { tags: ['Workflow Instances'], summary: 'Achieve or record a case milestone', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string', example: 'PAS_VALIDATED' } } }), responses: created({ type: 'object', properties: { milestones: { type: 'array', items: ref('Milestone') } } }) },
   },
+  '/workflow-instances/{id}/flags': {
+    get: {
+      tags: ['Workflow Instances'],
+      summary: 'List active and cleared flags for case (caseLevel, policyLevel, beneficiaryLevel)',
+      parameters: [idParam()],
+      responses: ok({
+        type: 'object',
+        properties: {
+          caseLevel: { type: 'array', items: ref('CaseFlag') },
+          policyLevel: { type: 'array', items: ref('CaseFlag') },
+          beneficiaryLevel: { type: 'array', items: ref('CaseFlag') },
+        },
+      }),
+    },
+    post: {
+      tags: ['Workflow Instances'],
+      summary: 'Add compliance or operational flag to case',
+      parameters: [idParam()],
+      requestBody: jsonBody({
+        type: 'object',
+        required: ['flagType'],
+        properties: {
+          flagType: { type: 'string', example: 'FRAUD_SUSPICION' },
+          level: { type: 'string', enum: ['caseLevel', 'policyLevel', 'beneficiaryLevel'], example: 'caseLevel' },
+          reason: { type: 'string', example: 'Claim amount exceeds normal threshold' },
+          flagValue: {},
+        },
+      }),
+      responses: created(ref('CaseFlag')),
+    },
+  },
+  '/workflow-instances/{id}/flags/{flagId}': {
+    delete: {
+      tags: ['Workflow Instances'],
+      summary: 'Clear or delete a flag from case',
+      parameters: [idParam(), idParam('flagId', 'Flag identifier or flagType')],
+      responses: { '204': { description: 'Flag cleared' } },
+    },
+  },
+  '/workflow-instances/{id}/documents': {
+    get: {
+      tags: ['Workflow Instances'],
+      summary: 'List supporting documents registered for case',
+      parameters: [idParam()],
+      responses: ok({
+        type: 'object',
+        properties: {
+          documents: { type: 'array', items: ref('CaseDocument') },
+        },
+      }),
+    },
+    post: {
+      tags: ['Workflow Instances'],
+      summary: 'Attach supporting document reference to case',
+      parameters: [idParam()],
+      requestBody: jsonBody({
+        type: 'object',
+        required: ['document_name'],
+        properties: {
+          document_name: { type: 'string', example: 'death_cert.pdf' },
+          document_type: { type: 'string', example: 'DEATH_CERTIFICATE' },
+          s3_key: { type: 'string', example: 'claims/2026/04/cert.pdf' },
+          required: { type: 'boolean', example: true },
+          status: { type: 'string', example: 'UPLOADED' },
+          type: { type: 'string', example: 'USER_UPLOADED' },
+        },
+      }),
+      responses: created(ref('CaseDocument')),
+    },
+  },
+  '/workflow-instances/{id}/documents/{docId}': {
+    delete: {
+      tags: ['Workflow Instances'],
+      summary: 'Remove document reference from case',
+      parameters: [idParam(), idParam('docId', 'Document identifier or document_name')],
+      responses: { '204': { description: 'Document removed' } },
+    },
+  },
+  '/workflow-instances/{id}/dynamic-tasks': {
+    post: {
+      tags: ['Workflow Instances'],
+      summary: 'Create dynamic ad-hoc human task in running case',
+      parameters: [idParam()],
+      requestBody: jsonBody({
+        type: 'object',
+        required: ['name'],
+        properties: {
+          name: { type: 'string', example: 'Special Investigation Unit Review' },
+          assignee: { type: 'string', example: 'examiner1' },
+          group: { type: 'string', example: 'fraud_investigators' },
+          priority: { type: 'integer', example: 9 },
+          dueAt: { type: 'string', format: 'date-time' },
+          inputs: { type: 'object' },
+        },
+      }),
+      responses: created(ref('Task')),
+    },
+  },
   '/workflow-instances/{id}/signal': {
     post: { tags: ['Workflow Instances'], summary: 'Deliver business signal to workflow instance', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string', example: 'DOCUMENTS_RECEIVED' }, payload: { type: 'object', example: { docCount: 3, verified: true } } } }), responses: ok(ref('WorkflowInstance')) },
   },
@@ -546,6 +730,84 @@ const paths: Record<string, any> = {
       summary: 'Archive or soft-delete claim case',
       parameters: [idParam('caseId', 'Case Object UUID')],
       responses: { '204': { description: 'Deleted' } },
+    },
+  },
+  '/caseservice/case/{caseId}/flags': {
+    get: {
+      tags: ['Case Service'],
+      summary: 'List flags on claim case (caseLevel, policyLevel, beneficiaryLevel)',
+      parameters: [idParam('caseId', 'Case Object UUID')],
+      responses: ok({
+        type: 'object',
+        properties: {
+          caseLevel: { type: 'array', items: ref('CaseFlag') },
+          policyLevel: { type: 'array', items: ref('CaseFlag') },
+          beneficiaryLevel: { type: 'array', items: ref('CaseFlag') },
+        },
+      }),
+    },
+    post: {
+      tags: ['Case Service'],
+      summary: 'Raise a compliance or evaluation flag on claim case',
+      parameters: [idParam('caseId', 'Case Object UUID')],
+      requestBody: jsonBody({
+        type: 'object',
+        required: ['flagType'],
+        properties: {
+          flagType: { type: 'string', example: 'MANUAL_PAYOUT_OVERRIDE' },
+          level: { type: 'string', enum: ['caseLevel', 'policyLevel', 'beneficiaryLevel'], example: 'caseLevel' },
+          reason: { type: 'string', example: 'Beneficiary split adjustment requires compliance review' },
+          flagValue: {},
+        },
+      }),
+      responses: created(ref('CaseFlag')),
+    },
+  },
+  '/caseservice/case/{caseId}/flags/{flagId}': {
+    delete: {
+      tags: ['Case Service'],
+      summary: 'Clear or resolve a compliance flag from claim case',
+      parameters: [idParam('caseId', 'Case Object UUID'), idParam('flagId', 'Flag identifier or flagType')],
+      responses: { '204': { description: 'Flag resolved' } },
+    },
+  },
+  '/caseservice/case/{caseId}/documents': {
+    get: {
+      tags: ['Case Service'],
+      summary: 'List registered documents on claim case',
+      parameters: [idParam('caseId', 'Case Object UUID')],
+      responses: ok({
+        type: 'object',
+        properties: {
+          documents: { type: 'array', items: ref('CaseDocument') },
+        },
+      }),
+    },
+    post: {
+      tags: ['Case Service'],
+      summary: 'Attach document to claim case',
+      parameters: [idParam('caseId', 'Case Object UUID')],
+      requestBody: jsonBody({
+        type: 'object',
+        required: ['document_name'],
+        properties: {
+          document_name: { type: 'string', example: 'certified_death_certificate.pdf' },
+          document_type: { type: 'string', example: 'DEATH_CERTIFICATE' },
+          s3_key: { type: 'string', example: 'claims/2026/04/doc_01.pdf' },
+          required: { type: 'boolean', example: true },
+          status: { type: 'string', example: 'UPLOADED' },
+          type: { type: 'string', example: 'USER_UPLOADED' },
+        },
+      }),
+      responses: created(ref('CaseDocument')),
+    },
+  },
+  '/caseservice/case/{caseId}/documents/{docId}': {
+    delete: {
+      tags: ['Case Service'],
+      summary: 'Remove document from claim case',
+      parameters: [idParam('caseId', 'Case Object UUID'), idParam('docId', 'Document identifier or document_name')],
+      responses: { '204': { description: 'Document deleted' } },
     },
   },
   '/caseservice/list': {

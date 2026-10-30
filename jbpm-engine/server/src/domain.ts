@@ -146,7 +146,7 @@ export interface Instance extends Entity {
 // via a terminate/other branch, aborted, or failed) while this task was still open. Distinct from
 // 'skipped' (an explicit human/API action on the task itself) and 'error' (the task's OWN execution
 // failed) — 'exited' is something that happened to the PROCESS, not to the task.
-export type TaskStatus = 'created' | 'reserved' | 'inprogress' | 'completed' | 'skipped' | 'error' | 'exited' | 'failed';
+export type TaskStatus = 'created' | 'reserved' | 'inprogress' | 'completed' | 'skipped' | 'error' | 'exited' | 'failed' | 'suspended';
 export interface Task extends Entity {
   id: string; tenantId: string; instanceId: string; tokenId: string; nodeId: string;
   name: string; formName?: string; group?: string; assignee?: string;
@@ -205,6 +205,13 @@ export interface ExecutionError extends Entity {
 export interface TaskComment extends Entity {
   id: string; tenantId: string; taskId: string;
   author: string; body: string; at: string;
+}
+
+/** An attachment / file evidence associated with a task (e.g. proof of death, medical records, ID). */
+export interface TaskAttachment extends Entity {
+  id: string; tenantId: string; taskId: string;
+  name: string; mimeType?: string; url?: string; sizeBytes?: number;
+  author: string; at: string;
 }
 
 /** In-app notification. Persisted so the bell survives a reload and "mark read" is real state. */
@@ -282,4 +289,5 @@ export const Collections = {
   instances: 'instances', tasks: 'tasks', timers: 'timers', audit: 'audit',
   users: 'users', groups: 'groups', roles: 'roles',
   errors: 'errors', comments: 'comments', notifications: 'notifications', settings: 'settings',
+  taskAttachments: 'task_attachments',
 } as const;

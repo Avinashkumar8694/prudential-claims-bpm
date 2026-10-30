@@ -250,6 +250,129 @@ export class WorkflowInstanceService {
     return this.bpmInstances.broadcast(name, payload, actor);
   }
 
+  // ---- flags management (L1/L3 compliance flags) ----
+  async getFlags(id: string): Promise<{ caseLevel: any[]; policyLevel: any[]; beneficiaryLevel: any[] }> {
+    const w = await this.get(id);
+    const flags = (w.data as any)?.flags || {};
+    return {
+      caseLevel: flags.caseLevel || [],
+      policyLevel: flags.policyLevel || [],
+      beneficiaryLevel: flags.beneficiaryLevel || [],
+    };
+  }
+
+  async addFlag(id: string, input: { level?: 'caseLevel' | 'policyLevel' | 'beneficiaryLevel'; flagType: string; reason?: string; flagValue?: unknown }, actor: string): Promise<any> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    if (!input.flagType?.trim()) throw validation('flagType is required');
+    const level = input.level || 'caseLevel';
+    const currentFlags = await this.getFlags(id);
+    const flagItem = {
+      id: this.ctx.newId(),
+      flagType: input.flagType.trim(),
+      flagValue: input.flagValue !== undefined ? input.flagValue : true,
+      reason: input.reason || '',
+      raisedAt: this.ctx.clock(),
+      raisedBy: actor,
+    };
+    currentFlags[level].push(flagItem);
+    const nextData = { ...(w.data || {}), flags: currentFlags };
+    const next = { ...w, data: nextData, updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.flagRaised', { flagType: input.flagType, level });
+    return flagItem;
+  }
+
+  async deleteFlag(id: string, flagId: string, actor: string): Promise<void> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    const currentFlags = await this.getFlags(id);
+    let removed = false;
+    for (const lvl of ['caseLevel', 'policyLevel', 'beneficiaryLevel'] as const) {
+      const idx = currentFlags[lvl].findIndex((f: any) => f.id === flagId || f.flagType === flagId);
+      if (idx !== -1) {
+        currentFlags[lvl].splice(idx, 1);
+        removed = true;
+        break;
+      }
+    }
+    if (!removed) throw notFound('Flag');
+    const nextData = { ...(w.data || {}), flags: currentFlags };
+    const next = { ...w, data: nextData, updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.flagCleared', { flagId });
+  }
+
+  // ---- documents management (supporting evidence / POA / certificates) ----
+  async getDocuments(id: string): Promise<any[]> {
+    const w = await this.get(id);
+    return (w.data as any)?.documents || [];
+  }
+
+  async addDocument(id: string, input: { document_name: string; document_type?: string; s3_key?: string; required?: boolean; status?: string; type?: string }, actor: string): Promise<any> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    if (!input.document_name?.trim()) throw validation('document_name is required');
+    const currentDocs = [...((w.data as any)?.documents || [])];
+    const docItem = {
+      id: this.ctx.newId(),
+      document_name: input.document_name.trim(),
+      document_type: input.document_type || 'SUPPORTING',
+      s3_key: input.s3_key || null,
+      required: Boolean(input.required),
+      status: input.status || 'UPLOADED',
+      type: input.type || 'USER_UPLOADED',
+      uploadedAt: this.ctx.clock(),
+      uploadedBy: actor,
+    };
+    currentDocs.push(docItem);
+    const nextData = { ...(w.data || {}), documents: currentDocs };
+    const next = { ...w, data: nextData, updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.documentAdded', { document_name: input.document_name });
+    return docItem;
+  }
+
+  async deleteDocument(id: string, docId: string, actor: string): Promise<void> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    const currentDocs = [...((w.data as any)?.documents || [])];
+    const idx = currentDocs.findIndex((d: any) => d.id === docId || d.document_name === docId);
+    if (idx === -1) throw notFound('Document');
+    currentDocs.splice(idx, 1);
+    const nextData = { ...(w.data || {}), documents: currentDocs };
+    const next = { ...w, data: nextData, updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.documentDeleted', { docId });
+  }
+
+  // ---- dynamic / ad-hoc activities (jBPM dynamic tasks) ----
+  async createDynamicTask(id: string, input: { name: string; group?: string; assignee?: string; priority?: number; dueAt?: string; inputs?: Record<string, unknown> }, actor: string): Promise<Task> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    if (!input.name?.trim()) throw validation('task name is required');
+    const now = this.ctx.clock();
+    const task: Task = {
+      id: this.ctx.newId(),
+      tenantId: this.ctx.tenantId,
+      instanceId: w.piid || w.id,
+      tokenId: this.ctx.newId(),
+      nodeId: 'dynamic_user_task',
+      name: input.name.trim(),
+      group: input.group,
+      assignee: input.assignee,
+      priority: input.priority ?? 5,
+      status: input.assignee ? 'reserved' : 'created',
+      inputs: input.inputs || {},
+      outputs: {},
+      createdAt: now,
+      dueAt: input.dueAt,
+    };
+    await this.ctx.store.repo<Task>(Collections.tasks).put(task);
+    await this.addAudit(id, actor, 'workflowInstance.dynamicTaskCreated', { taskId: task.id, name: task.name });
+    return task;
+  }
+
   private async requirePiid(w: WorkflowInstance): Promise<string> {
     if (!w.piid) throw conflict('this workflow instance has no BPM process instance yet (piid is unset)');
     return w.piid;

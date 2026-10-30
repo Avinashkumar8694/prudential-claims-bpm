@@ -1349,6 +1349,178 @@
             "example": "alice"
           }
         }
+      },
+      "TaskAttachment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "att_01"
+          },
+          "taskId": {
+            "type": "string",
+            "example": "tsk_101"
+          },
+          "name": {
+            "type": "string",
+            "example": "death_certificate.pdf"
+          },
+          "mimeType": {
+            "type": "string",
+            "example": "application/pdf"
+          },
+          "url": {
+            "type": "string",
+            "example": "https://s3.amazonaws.com/claims-docs/cert.pdf"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "example": 1048576
+          },
+          "author": {
+            "type": "string",
+            "example": "john.doe"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "NodeInstance": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "hist_0_start"
+          },
+          "tokenId": {
+            "type": "string",
+            "example": "tok_1"
+          },
+          "nodeId": {
+            "type": "string",
+            "example": "reviewNode"
+          },
+          "nodeName": {
+            "type": "string",
+            "example": "Examiner Review"
+          },
+          "type": {
+            "type": "string",
+            "example": "userTask"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "active",
+              "waiting",
+              "completed"
+            ],
+            "example": "completed"
+          },
+          "enteredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "exitedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "outcome": {
+            "type": "string"
+          }
+        }
+      },
+      "BulkResult": {
+        "type": "object",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "ok": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "CaseFlag": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "flg_01"
+          },
+          "flagType": {
+            "type": "string",
+            "example": "FRAUD_SUSPICION"
+          },
+          "flagValue": {},
+          "reason": {
+            "type": "string",
+            "example": "Address mismatch on claim submission"
+          },
+          "raisedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "raisedBy": {
+            "type": "string",
+            "example": "system"
+          }
+        }
+      },
+      "CaseDocument": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "doc_01"
+          },
+          "document_name": {
+            "type": "string",
+            "example": "certified_death_certificate.pdf"
+          },
+          "document_type": {
+            "type": "string",
+            "example": "DEATH_CERTIFICATE"
+          },
+          "s3_key": {
+            "type": "string",
+            "nullable": true,
+            "example": "claims/docs/cert.pdf"
+          },
+          "required": {
+            "type": "boolean",
+            "example": true
+          },
+          "status": {
+            "type": "string",
+            "example": "UPLOADED"
+          },
+          "type": {
+            "type": "string",
+            "example": "USER_UPLOADED"
+          },
+          "uploadedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "uploadedBy": {
+            "type": "string",
+            "example": "john.examiner"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -4335,6 +4507,246 @@
         }
       }
     },
+    "/instances/{id}/nodes": {
+      "get": {
+        "tags": [
+          "Instances"
+        ],
+        "summary": "List executed and active node instances",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NodeInstance"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/instances/{id}/variables": {
+      "get": {
+        "tags": [
+          "Instances"
+        ],
+        "summary": "Get current variables dictionary of an instance",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Instances"
+        ],
+        "summary": "Edit instance variables inline (audited; refused once the instance has ended)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Instance"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/instances/{id}/variable-history": {
+      "get": {
+        "tags": [
+          "Instances"
+        ],
+        "summary": "Per-variable change history (from the audit trail)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Only this variable"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/VariableChange"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/instances/bulk/abort": {
+      "post": {
+        "tags": [
+          "Instances"
+        ],
+        "summary": "Bulk abort process instances",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "instanceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/instances/bulk/signal": {
+      "post": {
+        "tags": [
+          "Instances"
+        ],
+        "summary": "Bulk signal process instances",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "instanceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tasks": {
       "get": {
         "tags": [
@@ -4394,6 +4806,128 @@
                       }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/bulk/claim": {
+      "post": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Bulk claim tasks",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "taskIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/bulk/release": {
+      "post": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Bulk release tasks",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "taskIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/bulk/complete": {
+      "post": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Bulk complete tasks",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "taskId": {
+                          "type": "string"
+                        },
+                        "outputs": {
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkResult"
                 }
               }
             }
@@ -4474,6 +5008,68 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/inputs": {
+      "get": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Get task input variables",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/outputs": {
+      "get": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Get task output variables",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -4657,6 +5253,68 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/suspend": {
+      "post": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Suspend task (pause work)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/resume": {
+      "post": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Resume task from suspended state",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -5026,6 +5684,131 @@
         }
       }
     },
+    "/tasks/{id}/attachments": {
+      "get": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "List task document attachments",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskAttachment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Add attachment/evidence to task",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "mimeType": {
+                    "type": "string"
+                  },
+                  "url": {
+                    "type": "string"
+                  },
+                  "sizeBytes": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskAttachment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tasks/{id}/attachments/{aid}": {
+      "delete": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Delete a task attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Attachment id"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
     "/tasks/{id}/events": {
       "get": {
         "tags": [
@@ -5055,96 +5838,6 @@
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/AuditEvent"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/instances/{id}/variables": {
-      "put": {
-        "tags": [
-          "Instances"
-        ],
-        "summary": "Edit instance variables inline (audited; refused once the instance has ended)",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Resource id"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "additionalProperties": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Instance"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/instances/{id}/variable-history": {
-      "get": {
-        "tags": [
-          "Instances"
-        ],
-        "summary": "Per-variable change history (from the audit trail)",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Resource id"
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Only this variable"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/VariableChange"
                       }
                     }
                   }
@@ -7982,6 +8675,361 @@
         }
       }
     },
+    "/workflow-instances/{id}/flags": {
+      "get": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "List active and cleared flags for case (caseLevel, policyLevel, beneficiaryLevel)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "caseLevel": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseFlag"
+                      }
+                    },
+                    "policyLevel": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseFlag"
+                      }
+                    },
+                    "beneficiaryLevel": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseFlag"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Add compliance or operational flag to case",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "flagType"
+                ],
+                "properties": {
+                  "flagType": {
+                    "type": "string",
+                    "example": "FRAUD_SUSPICION"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "caseLevel",
+                      "policyLevel",
+                      "beneficiaryLevel"
+                    ],
+                    "example": "caseLevel"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "example": "Claim amount exceeds normal threshold"
+                  },
+                  "flagValue": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseFlag"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/flags/{flagId}": {
+      "delete": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Clear or delete a flag from case",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "flagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Flag identifier or flagType"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Flag cleared"
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/documents": {
+      "get": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "List supporting documents registered for case",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseDocument"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Attach supporting document reference to case",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "document_name"
+                ],
+                "properties": {
+                  "document_name": {
+                    "type": "string",
+                    "example": "death_cert.pdf"
+                  },
+                  "document_type": {
+                    "type": "string",
+                    "example": "DEATH_CERTIFICATE"
+                  },
+                  "s3_key": {
+                    "type": "string",
+                    "example": "claims/2026/04/cert.pdf"
+                  },
+                  "required": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "UPLOADED"
+                  },
+                  "type": {
+                    "type": "string",
+                    "example": "USER_UPLOADED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/documents/{docId}": {
+      "delete": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Remove document reference from case",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Document identifier or document_name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Document removed"
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/dynamic-tasks": {
+      "post": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Create dynamic ad-hoc human task in running case",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Special Investigation Unit Review"
+                  },
+                  "assignee": {
+                    "type": "string",
+                    "example": "examiner1"
+                  },
+                  "group": {
+                    "type": "string",
+                    "example": "fraud_investigators"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "example": 9
+                  },
+                  "dueAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "inputs": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workflow-instances/{id}/signal": {
       "post": {
         "tags": [
@@ -8951,6 +9999,292 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/caseservice/case/{caseId}/flags": {
+      "get": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "List flags on claim case (caseLevel, policyLevel, beneficiaryLevel)",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "caseLevel": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseFlag"
+                      }
+                    },
+                    "policyLevel": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseFlag"
+                      }
+                    },
+                    "beneficiaryLevel": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseFlag"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Raise a compliance or evaluation flag on claim case",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "flagType"
+                ],
+                "properties": {
+                  "flagType": {
+                    "type": "string",
+                    "example": "MANUAL_PAYOUT_OVERRIDE"
+                  },
+                  "level": {
+                    "type": "string",
+                    "enum": [
+                      "caseLevel",
+                      "policyLevel",
+                      "beneficiaryLevel"
+                    ],
+                    "example": "caseLevel"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "example": "Beneficiary split adjustment requires compliance review"
+                  },
+                  "flagValue": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseFlag"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/caseservice/case/{caseId}/flags/{flagId}": {
+      "delete": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Clear or resolve a compliance flag from claim case",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          },
+          {
+            "name": "flagId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Flag identifier or flagType"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Flag resolved"
+          }
+        }
+      }
+    },
+    "/caseservice/case/{caseId}/documents": {
+      "get": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "List registered documents on claim case",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "documents": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CaseDocument"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Attach document to claim case",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "document_name"
+                ],
+                "properties": {
+                  "document_name": {
+                    "type": "string",
+                    "example": "certified_death_certificate.pdf"
+                  },
+                  "document_type": {
+                    "type": "string",
+                    "example": "DEATH_CERTIFICATE"
+                  },
+                  "s3_key": {
+                    "type": "string",
+                    "example": "claims/2026/04/doc_01.pdf"
+                  },
+                  "required": {
+                    "type": "boolean",
+                    "example": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "UPLOADED"
+                  },
+                  "type": {
+                    "type": "string",
+                    "example": "USER_UPLOADED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDocument"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/caseservice/case/{caseId}/documents/{docId}": {
+      "delete": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Remove document from claim case",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          },
+          {
+            "name": "docId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Document identifier or document_name"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Document deleted"
           }
         }
       }

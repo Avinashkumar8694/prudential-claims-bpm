@@ -1,6 +1,6 @@
 // User-task inbox: list/claim/complete. Completing a task resumes the waiting instance token.
 import type { AppContext } from '../../context.ts';
-import { Collections, type AuditEvent, type Deployment, type Group, type Task, type TaskComment, type User } from '../../domain.ts';
+import { Collections, type AuditEvent, type Deployment, type Group, type Task, type TaskAttachment, type TaskComment, type User } from '../../domain.ts';
 import { InstanceService } from '../instances/service.ts';
 import { NotificationService } from '../notifications/service.ts';
 import type { EngineEvent } from '../../engine/execution-engine.ts';
@@ -225,6 +225,33 @@ export class TaskService {
     return t;
   }
 
+  /** jBPM Suspend: pause work on a task (WS-HumanTask suspended state). */
+  async suspend(id: string, user: string): Promise<Task> {
+    const t = await this.get(id);
+    await this.assertOwnable(t, user);
+    await this.assertInstanceActionable(t);
+    if (t.status === 'completed' || t.status === 'skipped' || t.status === 'failed' || t.status === 'exited') {
+      throw conflict(`task already ${t.status}`);
+    }
+    if (t.status === 'suspended') return t;
+    t.status = 'suspended';
+    await this.repo().put(t);
+    await this.ctx.audit({ actor: user, kind: 'task.suspended', instanceId: t.instanceId, taskId: t.id });
+    return t;
+  }
+
+  /** jBPM Resume: unpause a suspended task back to actionable state. */
+  async resume(id: string, user: string): Promise<Task> {
+    const t = await this.get(id);
+    await this.assertOwnable(t, user);
+    await this.assertInstanceActionable(t);
+    if (t.status !== 'suspended') throw conflict(`task is ${t.status}, not suspended`);
+    t.status = t.assignee ? 'reserved' : 'created';
+    await this.repo().put(t);
+    await this.ctx.audit({ actor: user, kind: 'task.resumed', instanceId: t.instanceId, taskId: t.id });
+    return t;
+  }
+
   /** Save partial output data without completing (the Work tab's Save button). */
   async saveOutputs(id: string, outputs: Record<string, unknown>, user: string): Promise<Task> {
     const t = await this.get(id);
@@ -371,5 +398,82 @@ export class TaskService {
     return (await this.ctx.store.repo<AuditEvent>(Collections.audit)
       .query((e) => e.tenantId === this.ctx.tenantId && e.taskId === taskId))
       .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  // ---- attachments / documents ----
+  async listAttachments(taskId: string): Promise<TaskAttachment[]> {
+    await this.get(taskId);
+    return (await this.ctx.store.repo<TaskAttachment>(Collections.taskAttachments).query((a) => a.tenantId === this.ctx.tenantId && a.taskId === taskId))
+      .sort((a, b) => a.at.localeCompare(b.at));
+  }
+
+  async addAttachment(taskId: string, input: { name: string; mimeType?: string; url?: string; sizeBytes?: number }, author: string): Promise<TaskAttachment> {
+    const t = await this.get(taskId);
+    await this.assertOwnable(t, author);
+    if (!input.name?.trim()) throw validation('attachment name is required');
+    const att: TaskAttachment = {
+      id: this.ctx.newId(),
+      tenantId: this.ctx.tenantId,
+      taskId,
+      name: input.name.trim(),
+      mimeType: input.mimeType,
+      url: input.url,
+      sizeBytes: input.sizeBytes,
+      author,
+      at: this.ctx.clock(),
+    };
+    await this.ctx.store.repo<TaskAttachment>(Collections.taskAttachments).put(att);
+    await this.ctx.audit({ actor: author, kind: 'task.attachment.added', instanceId: t.instanceId, taskId, data: { name: att.name } });
+    return att;
+  }
+
+  async deleteAttachment(taskId: string, attachmentId: string, actor: string): Promise<void> {
+    const t = await this.get(taskId);
+    await this.assertOwnable(t, actor);
+    const repo = this.ctx.store.repo<TaskAttachment>(Collections.taskAttachments);
+    const att = await repo.get(attachmentId);
+    if (!att || att.tenantId !== this.ctx.tenantId || att.taskId !== taskId) throw notFound('Attachment');
+    await repo.delete(attachmentId);
+    await this.ctx.audit({ actor, kind: 'task.attachment.deleted', instanceId: t.instanceId, taskId, data: { name: att.name } });
+  }
+
+  // ---- bulk operations ----
+  async claimMany(taskIds: string[], user: string): Promise<Array<{ id: string; ok: boolean; error?: string }>> {
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const id of taskIds) {
+      try {
+        await this.claim(id, user);
+        results.push({ id, ok: true });
+      } catch (err) {
+        results.push({ id, ok: false, error: (err as Error).message });
+      }
+    }
+    return results;
+  }
+
+  async releaseMany(taskIds: string[], user: string): Promise<Array<{ id: string; ok: boolean; error?: string }>> {
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const id of taskIds) {
+      try {
+        await this.release(id, user);
+        results.push({ id, ok: true });
+      } catch (err) {
+        results.push({ id, ok: false, error: (err as Error).message });
+      }
+    }
+    return results;
+  }
+
+  async completeMany(items: Array<{ taskId: string; outputs?: Record<string, unknown> }>, user: string): Promise<Array<{ id: string; ok: boolean; error?: string }>> {
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const item of items) {
+      try {
+        await this.complete(item.taskId, item.outputs || {}, user);
+        results.push({ id: item.taskId, ok: true });
+      } catch (err) {
+        results.push({ id: item.taskId, ok: false, error: (err as Error).message });
+      }
+    }
+    return results;
   }
 }

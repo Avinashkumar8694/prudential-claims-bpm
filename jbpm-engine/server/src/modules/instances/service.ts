@@ -305,4 +305,62 @@ export class InstanceService {
     for (const h of inst.history) counts[h.nodeId] = (counts[h.nodeId] || 0) + 1;
     return { nodes: p?.nodes || [], flows: p?.flows || [], diagram: this.engine.diagramState(inst), counts, status: inst.status };
   }
+
+  /** Detailed list of executed and active node instances (jBPM node instances query). */
+  async nodes(id: string) {
+    const inst = await this.get(id);
+    const dep = await this.deployments.get(inst.deploymentId).catch(() => null);
+    const proc = dep?.engine.processes.find((p) => p.id === inst.processId) || dep?.engine.processes?.[0];
+    const nodeMap = new Map((proc?.nodes || []).map((n) => [n.id, n]));
+    const historyNodes = inst.history.map((h, idx) => ({
+      id: `hist_${idx}_${h.nodeId}`,
+      tokenId: h.tokenId,
+      nodeId: h.nodeId,
+      nodeName: (nodeMap.get(h.nodeId) as any)?.name || h.nodeId,
+      type: h.type || (nodeMap.get(h.nodeId) as any)?.type || 'unknown',
+      state: 'completed' as const,
+      enteredAt: h.enteredAt,
+      exitedAt: h.exitedAt,
+      outcome: h.outcome,
+    }));
+    const activeNodes = inst.tokens.map((t) => ({
+      id: `tok_${t.id}`,
+      tokenId: t.id,
+      nodeId: t.nodeId,
+      nodeName: (nodeMap.get(t.nodeId) as any)?.name || t.nodeId,
+      type: (nodeMap.get(t.nodeId) as any)?.type || 'unknown',
+      state: t.state,
+      enteredAt: t.enteredAt,
+      waitFor: t.waitFor,
+    }));
+    return [...historyNodes, ...activeNodes];
+  }
+
+  /** Bulk abort instances. */
+  async abortMany(ids: string[], actor: string): Promise<Array<{ id: string; ok: boolean; error?: string }>> {
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const id of ids) {
+      try {
+        await this.abort(id, actor);
+        results.push({ id, ok: true });
+      } catch (err) {
+        results.push({ id, ok: false, error: (err as Error).message });
+      }
+    }
+    return results;
+  }
+
+  /** Bulk signal instances. */
+  async signalMany(ids: string[], name: string, payload: unknown, actor: string): Promise<Array<{ id: string; ok: boolean; error?: string }>> {
+    const results: Array<{ id: string; ok: boolean; error?: string }> = [];
+    for (const id of ids) {
+      try {
+        await this.signal(id, name, payload, actor);
+        results.push({ id, ok: true });
+      } catch (err) {
+        results.push({ id, ok: false, error: (err as Error).message });
+      }
+    }
+    return results;
+  }
 }

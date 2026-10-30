@@ -343,3 +343,280 @@ test('Operational & SLA Analytics: /query/analytics/sla-violations and /query/an
   assert.ok(Array.isArray(workload.users));
   assert.ok(Array.isArray(workload.groups));
 });
+
+test('Task Lifecycle (Suspend/Resume), Variables, Attachments and Bulk Operations', async () => {
+  // Start 2 instances
+  const i1Res = await fetch(`${base}/instances`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ deploymentId: depId, processId: 'claims-intake.process', variables: { claimId: 'CLM-101' } }),
+  });
+  assert.strictEqual(i1Res.status, 201);
+  const inst1 = await i1Res.json() as any;
+
+  const i2Res = await fetch(`${base}/instances`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ deploymentId: depId, processId: 'claims-intake.process', variables: { claimId: 'CLM-102' } }),
+  });
+  assert.strictEqual(i2Res.status, 201);
+  const inst2 = await i2Res.json() as any;
+
+  // 1. Instance Nodes Introspection: GET /instances/:id/nodes
+  const nodesRes = await fetch(`${base}/instances/${inst1.id}/nodes`, { headers: authHeaders() });
+  assert.strictEqual(nodesRes.status, 200);
+  const nodesBody = await nodesRes.json() as any;
+  assert.ok(Array.isArray(nodesBody.items));
+  assert.ok(nodesBody.items.some((n: any) => n.nodeId === 'reviewTask'));
+
+  // 2. Instance Variables: GET /instances/:id/variables
+  const varsRes = await fetch(`${base}/instances/${inst1.id}/variables`, { headers: authHeaders() });
+  assert.strictEqual(varsRes.status, 200);
+  const vars = await varsRes.json() as any;
+  assert.strictEqual(vars.claimId, 'CLM-101');
+
+  // Find tasks
+  const tasksRes = await fetch(`${base}/tasks`, { headers: authHeaders() });
+  const allTasks = (await tasksRes.json() as any).items;
+  const t1 = allTasks.find((t: any) => t.instanceId === inst1.id);
+  const t2 = allTasks.find((t: any) => t.instanceId === inst2.id);
+  assert.ok(t1 && t2);
+
+  // 3. Task inputs & outputs: GET /tasks/:id/inputs & outputs
+  const inputsRes = await fetch(`${base}/tasks/${t1.id}/inputs`, { headers: authHeaders() });
+  assert.strictEqual(inputsRes.status, 200);
+  const outputsRes = await fetch(`${base}/tasks/${t1.id}/outputs`, { headers: authHeaders() });
+  assert.strictEqual(outputsRes.status, 200);
+
+  // 4. Bulk Task Claim: POST /tasks/bulk/claim
+  const bulkClaimRes = await fetch(`${base}/tasks/bulk/claim`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ taskIds: [t1.id, t2.id] }),
+  });
+  assert.strictEqual(bulkClaimRes.status, 200);
+  const bulkClaimBody = await bulkClaimRes.json() as any;
+  assert.strictEqual(bulkClaimBody.results.length, 2);
+  assert.ok(bulkClaimBody.results.every((r: any) => r.ok));
+
+  // 5. Task Suspend & Resume: POST /tasks/:id/suspend & resume
+  const suspendRes = await fetch(`${base}/tasks/${t1.id}/suspend`, { method: 'POST', headers: authHeaders() });
+  assert.strictEqual(suspendRes.status, 200);
+  assert.strictEqual((await suspendRes.json() as any).status, 'suspended');
+
+  const resumeRes = await fetch(`${base}/tasks/${t1.id}/resume`, { method: 'POST', headers: authHeaders() });
+  assert.strictEqual(resumeRes.status, 200);
+  assert.strictEqual((await resumeRes.json() as any).status, 'reserved');
+
+  // 6. Task Attachments: POST /tasks/:id/attachments, GET, DELETE
+  const addAttRes = await fetch(`${base}/tasks/${t1.id}/attachments`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      name: 'death_certificate.pdf',
+      mimeType: 'application/pdf',
+      url: 'https://s3.amazonaws.com/pru-claims/cert.pdf',
+      sizeBytes: 204800,
+    }),
+  });
+  assert.strictEqual(addAttRes.status, 201);
+  const attachment = await addAttRes.json() as any;
+  assert.ok(attachment.id);
+  assert.strictEqual(attachment.name, 'death_certificate.pdf');
+
+  const listAttRes = await fetch(`${base}/tasks/${t1.id}/attachments`, { headers: authHeaders() });
+  assert.strictEqual(listAttRes.status, 200);
+  const attList = await listAttRes.json() as any;
+  assert.ok(attList.items.some((a: any) => a.id === attachment.id));
+
+  const delAttRes = await fetch(`${base}/tasks/${t1.id}/attachments/${attachment.id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  assert.strictEqual(delAttRes.status, 204);
+
+  // 7. Bulk Task Release: POST /tasks/bulk/release
+  const bulkRelRes = await fetch(`${base}/tasks/bulk/release`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ taskIds: [t2.id] }),
+  });
+  assert.strictEqual(bulkRelRes.status, 200);
+
+  // 8. Bulk Task Complete: POST /tasks/bulk/complete
+  const bulkCompRes = await fetch(`${base}/tasks/bulk/complete`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ items: [{ taskId: t1.id, outputs: { examinerApproved: true } }] }),
+  });
+  assert.strictEqual(bulkCompRes.status, 200);
+  const bulkCompBody = await bulkCompRes.json() as any;
+  assert.ok(bulkCompBody.results[0]?.ok);
+
+  // 9. Bulk Instance Signal & Abort: POST /instances/bulk/signal & abort
+  const bulkSigRes = await fetch(`${base}/instances/bulk/signal`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ instanceIds: [inst1.id], name: 'DOCUMENT_UPLOADED', payload: { ok: true } }),
+  });
+  assert.strictEqual(bulkSigRes.status, 200);
+
+  const bulkAbortRes = await fetch(`${base}/instances/bulk/abort`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ instanceIds: [inst2.id] }),
+  });
+  assert.strictEqual(bulkAbortRes.status, 200);
+});
+
+test('Case Management Flags, Documents, and Dynamic User Tasks', async () => {
+  // Start workflow instance case
+  const startRes = await fetch(`${base}/workflow-instances`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      workflowName: 'claims-intake-v1',
+      workflowData: { claimNumber: 'CLM-FLAG-TEST' },
+    }),
+  });
+  assert.strictEqual(startRes.status, 201);
+  const c = await startRes.json() as any;
+
+  // 1. Case Flags: POST, GET, DELETE
+  const addFlagRes = await fetch(`${base}/workflow-instances/${c.id}/flags`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      flagType: 'FRAUD_SUSPICION',
+      level: 'caseLevel',
+      reason: 'Cross-border payout destination',
+    }),
+  });
+  assert.strictEqual(addFlagRes.status, 201);
+  const flag = await addFlagRes.json() as any;
+  assert.strictEqual(flag.flagType, 'FRAUD_SUSPICION');
+
+  const getFlagsRes = await fetch(`${base}/workflow-instances/${c.id}/flags`, { headers: authHeaders() });
+  assert.strictEqual(getFlagsRes.status, 200);
+  const flags = await getFlagsRes.json() as any;
+  assert.ok(flags.caseLevel.some((f: any) => f.flagType === 'FRAUD_SUSPICION'));
+
+  const delFlagRes = await fetch(`${base}/workflow-instances/${c.id}/flags/${flag.id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  assert.strictEqual(delFlagRes.status, 204);
+
+  // 2. Case Documents: POST, GET, DELETE
+  const addDocRes = await fetch(`${base}/workflow-instances/${c.id}/documents`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      document_name: 'certified_death_certificate.pdf',
+      document_type: 'DEATH_CERTIFICATE',
+      s3_key: 'claims/docs/cert_1.pdf',
+      required: true,
+    }),
+  });
+  assert.strictEqual(addDocRes.status, 201);
+  const doc = await addDocRes.json() as any;
+  assert.strictEqual(doc.document_name, 'certified_death_certificate.pdf');
+
+  const getDocsRes = await fetch(`${base}/workflow-instances/${c.id}/documents`, { headers: authHeaders() });
+  assert.strictEqual(getDocsRes.status, 200);
+  const docsBody = await getDocsRes.json() as any;
+  assert.ok(docsBody.documents.some((d: any) => d.id === doc.id));
+
+  const delDocRes = await fetch(`${base}/workflow-instances/${c.id}/documents/${doc.id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  assert.strictEqual(delDocRes.status, 204);
+
+  // 3. Dynamic Human Task Creation: POST /workflow-instances/:id/dynamic-tasks
+  const dynTaskRes = await fetch(`${base}/workflow-instances/${c.id}/dynamic-tasks`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      name: 'Ad-hoc Forensic Toxicology Analysis',
+      group: 'investigations',
+      priority: 8,
+      inputs: { sampleReference: 'TOX-9988' },
+    }),
+  });
+  assert.strictEqual(dynTaskRes.status, 201);
+  const dynTask = await dynTaskRes.json() as any;
+  assert.ok(dynTask.id);
+  assert.strictEqual(dynTask.name, 'Ad-hoc Forensic Toxicology Analysis');
+  assert.strictEqual(dynTask.priority, 8);
+});
+
+test('Case Service Flags and Documents Parity', async () => {
+  // Create a Case Object
+  const createRes = await fetch(`${base}/caseservice/case`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      policyNumber: 'POL-CS-555',
+      claimType: 'DEATH',
+      caseStatus: 'PENDING_DEATH',
+    }),
+  });
+  assert.strictEqual(createRes.status, 201);
+  const c = await createRes.json() as any;
+
+  // 1. Add Flag: POST /caseservice/case/:caseId/flags
+  const flagRes = await fetch(`${base}/caseservice/case/${c.caseId}/flags`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      flagType: 'OFAC_SANCTION_MATCH',
+      level: 'beneficiaryLevel',
+      reason: 'Name matches OFAC watchlist SDN list',
+    }),
+  });
+  assert.strictEqual(flagRes.status, 201);
+  const flag = await flagRes.json() as any;
+  assert.strictEqual(flag.flagType, 'OFAC_SANCTION_MATCH');
+
+  // 2. Get Flags: GET /caseservice/case/:caseId/flags
+  const getFlags = await fetch(`${base}/caseservice/case/${c.caseId}/flags`, { headers: authHeaders() });
+  assert.strictEqual(getFlags.status, 200);
+  const flagsData = await getFlags.json() as any;
+  assert.ok(flagsData.beneficiaryLevel.some((f: any) => f.flagType === 'OFAC_SANCTION_MATCH'));
+
+  // 3. Delete Flag: DELETE /caseservice/case/:caseId/flags/:flagId
+  const delFlag = await fetch(`${base}/caseservice/case/${c.caseId}/flags/${flag.id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  assert.strictEqual(delFlag.status, 204);
+
+  // 4. Add Document: POST /caseservice/case/:caseId/documents
+  const docRes = await fetch(`${base}/caseservice/case/${c.caseId}/documents`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      document_name: 'power_of_attorney.pdf',
+      document_type: 'POA',
+      s3_key: 'claims/docs/poa_99.pdf',
+    }),
+  });
+  assert.strictEqual(docRes.status, 201);
+  const doc = await docRes.json() as any;
+  assert.strictEqual(doc.document_name, 'power_of_attorney.pdf');
+
+  // 5. Get Documents: GET /caseservice/case/:caseId/documents
+  const getDocs = await fetch(`${base}/caseservice/case/${c.caseId}/documents`, { headers: authHeaders() });
+  assert.strictEqual(getDocs.status, 200);
+  const docs = await getDocs.json() as any;
+  assert.ok(docs.documents.some((d: any) => d.id === doc.id));
+
+  // 6. Delete Document: DELETE /caseservice/case/:caseId/documents/:docId
+  const delDoc = await fetch(`${base}/caseservice/case/${c.caseId}/documents/${doc.id}`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  assert.strictEqual(delDoc.status, 204);
+});
+

@@ -167,6 +167,127 @@ export function buildCaseServiceRoutes(): Router {
     res.status(204).end();
   }));
 
+  // GET /caseservice/case/:caseId/flags — List compliance and evaluation flags
+  r.get('/caseservice/case/:caseId/flags', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const store = wfStore(req);
+    const w = await store.instances().get(req.params.caseId);
+    if (!w || w.tenantId !== ctx.tenantId) throw notFound('Case Object');
+    const flags = (w.data as any)?.flags || { caseLevel: [], policyLevel: [], beneficiaryLevel: [] };
+    res.json(flags);
+  }));
+
+  // POST /caseservice/case/:caseId/flags — Raise a compliance/evaluation flag
+  r.post('/caseservice/case/:caseId/flags', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const actor = actorOf(req);
+    const store = wfStore(req);
+    const w = await store.instances().get(req.params.caseId);
+    if (!w || w.tenantId !== ctx.tenantId) throw notFound('Case Object');
+
+    const body = req.body || {};
+    if (!body.flagType) throw validation('flagType is required');
+    const level = (body.level as 'caseLevel' | 'policyLevel' | 'beneficiaryLevel') || 'caseLevel';
+    const currentFlags = (w.data as any)?.flags || { caseLevel: [], policyLevel: [], beneficiaryLevel: [] };
+    const now = ctx.clock();
+    const flagItem = {
+      id: ctx.newId(),
+      flagType: body.flagType,
+      flagValue: body.flagValue !== undefined ? body.flagValue : true,
+      reason: body.reason || '',
+      raisedAt: now,
+      raisedBy: actor,
+    };
+    (currentFlags[level] ||= []).push(flagItem);
+
+    const nextData = { ...(w.data || {}), flags: currentFlags };
+    await store.instances().put({ ...w, data: nextData, updatedAt: now, updatedBy: actor });
+    res.status(201).json(flagItem);
+  }));
+
+  // DELETE /caseservice/case/:caseId/flags/:flagId — Resolve / clear a compliance flag
+  r.delete('/caseservice/case/:caseId/flags/:flagId', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const actor = actorOf(req);
+    const store = wfStore(req);
+    const w = await store.instances().get(req.params.caseId);
+    if (!w || w.tenantId !== ctx.tenantId) throw notFound('Case Object');
+
+    const currentFlags = (w.data as any)?.flags || { caseLevel: [], policyLevel: [], beneficiaryLevel: [] };
+    let removed = false;
+    for (const lvl of ['caseLevel', 'policyLevel', 'beneficiaryLevel'] as const) {
+      const arr = (currentFlags as any)[lvl] || [];
+      const idx = arr.findIndex((f: any) => f.id === req.params.flagId || f.flagType === req.params.flagId);
+      if (idx !== -1) {
+        arr.splice(idx, 1);
+        removed = true;
+        break;
+      }
+    }
+    if (!removed) throw notFound('Flag');
+
+    const nextData = { ...(w.data || {}), flags: currentFlags };
+    await store.instances().put({ ...w, data: nextData, updatedAt: ctx.clock(), updatedBy: actor });
+    res.status(204).end();
+  }));
+
+  // GET /caseservice/case/:caseId/documents — List case documents
+  r.get('/caseservice/case/:caseId/documents', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const store = wfStore(req);
+    const w = await store.instances().get(req.params.caseId);
+    if (!w || w.tenantId !== ctx.tenantId) throw notFound('Case Object');
+    res.json({ documents: (w.data as any)?.documents || [] });
+  }));
+
+  // POST /caseservice/case/:caseId/documents — Add / attach document
+  r.post('/caseservice/case/:caseId/documents', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const actor = actorOf(req);
+    const store = wfStore(req);
+    const w = await store.instances().get(req.params.caseId);
+    if (!w || w.tenantId !== ctx.tenantId) throw notFound('Case Object');
+
+    const body = req.body || {};
+    if (!body.document_name) throw validation('document_name is required');
+    const currentDocs = [...((w.data as any)?.documents || [])];
+    const now = ctx.clock();
+    const docItem = {
+      id: ctx.newId(),
+      document_name: body.document_name,
+      document_type: body.document_type || 'POA',
+      s3_key: body.s3_key || null,
+      required: Boolean(body.required),
+      status: body.status || 'UPLOADED',
+      type: body.type || 'USER_UPLOADED',
+      uploadedAt: now,
+      uploadedBy: actor,
+    };
+    currentDocs.push(docItem);
+
+    const nextData = { ...(w.data || {}), documents: currentDocs };
+    await store.instances().put({ ...w, data: nextData, updatedAt: now, updatedBy: actor });
+    res.status(201).json(docItem);
+  }));
+
+  // DELETE /caseservice/case/:caseId/documents/:docId — Remove document
+  r.delete('/caseservice/case/:caseId/documents/:docId', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
+    const ctx = ctxOf(req);
+    const actor = actorOf(req);
+    const store = wfStore(req);
+    const w = await store.instances().get(req.params.caseId);
+    if (!w || w.tenantId !== ctx.tenantId) throw notFound('Case Object');
+
+    const currentDocs = [...((w.data as any)?.documents || [])];
+    const idx = currentDocs.findIndex((d: any) => d.id === req.params.docId || d.document_name === req.params.docId);
+    if (idx === -1) throw notFound('Document');
+    currentDocs.splice(idx, 1);
+
+    const nextData = { ...(w.data || {}), documents: currentDocs };
+    await store.instances().put({ ...w, data: nextData, updatedAt: ctx.clock(), updatedBy: actor });
+    res.status(204).end();
+  }));
+
   // GET /caseservice/list — List claim cases filtered by caseStatus, claimType, policyNumber
   r.get('/caseservice/list', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
     const ctx = ctxOf(req);

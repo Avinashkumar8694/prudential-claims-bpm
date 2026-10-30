@@ -457,13 +457,17 @@ export function buildRoutes(): Router {
   r.get('/instances/:id/diagram-state', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).diagramState(req.params.id))));
   r.get('/instances/:id/graph', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).graph(req.params.id))));
   r.get('/instances/:id/related', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).related(req.params.id))));
+  r.post('/instances/bulk/abort', perm('workflow:run'), asyncHandler(async (req, res) => res.json({ results: await new InstanceService(ctxOf(req), emit).abortMany(req.body?.instanceIds || [], actorOf(req)) })));
+  r.post('/instances/bulk/signal', perm('workflow:run'), asyncHandler(async (req, res) => res.json({ results: await new InstanceService(ctxOf(req), emit).signalMany(req.body?.instanceIds || [], req.body?.name, req.body?.payload, actorOf(req)) })));
   r.post('/instances/:id/signal', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req), emit).signal(req.params.id, req.body?.name, req.body?.payload, actorOf(req)))));
   r.post('/instances/:id/retry', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req), emit).retry(req.params.id, req.body?.nodeId, actorOf(req)))));
   r.post('/instances/:id/suspend', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).suspend(req.params.id, actorOf(req)))));
   r.post('/instances/:id/resume', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).resumeInstance(req.params.id, actorOf(req)))));
   r.post('/instances/:id/abort', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).abort(req.params.id, actorOf(req)))));
   r.put('/instances/:id/variables', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).updateVariables(req.params.id, req.body || {}, actorOf(req)))));
+  r.get('/instances/:id/variables', perm('workflow:view'), asyncHandler(async (req, res) => res.json((await new InstanceService(ctxOf(req)).get(req.params.id)).variables || {})));
   r.get('/instances/:id/variable-history', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new InstanceService(ctxOf(req)).variableHistory(req.params.id, req.query.name as string | undefined) })));
+  r.get('/instances/:id/nodes', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new InstanceService(ctxOf(req)).nodes(req.params.id) })));
   r.post('/signals/:signalName', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req), emit).broadcast(req.params.signalName, req.body?.payload, actorOf(req), req.body?.correlationKey))));
 
   // --- tasks (task-level group/assignee/excludedOwners/businessAdmin checks happen inside TaskService
@@ -476,12 +480,19 @@ export function buildRoutes(): Router {
     const paged = limit != null ? all.slice(offset, offset + limit) : all;
     res.json({ items: paged, total: all.length, hasMore: limit != null ? offset + limit < all.length : false, offset, limit: limit ?? all.length });
   }));
+  r.post('/tasks/bulk/claim', perm('task:manage'), asyncHandler(async (req, res) => res.json({ results: await new TaskService(ctxOf(req)).claimMany(req.body?.taskIds || [], actorOf(req)) })));
+  r.post('/tasks/bulk/release', perm('task:manage'), asyncHandler(async (req, res) => res.json({ results: await new TaskService(ctxOf(req)).releaseMany(req.body?.taskIds || [], actorOf(req)) })));
+  r.post('/tasks/bulk/complete', perm('task:manage'), asyncHandler(async (req, res) => res.json({ results: await new TaskService(ctxOf(req), emit).completeMany(req.body?.items || [], actorOf(req)) })));
   r.get('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).get(req.params.id))));
+  r.get('/tasks/:id/inputs', perm('task:manage'), asyncHandler(async (req, res) => res.json((await new TaskService(ctxOf(req)).get(req.params.id)).inputs || {})));
+  r.get('/tasks/:id/outputs', perm('task:manage'), asyncHandler(async (req, res) => res.json((await new TaskService(ctxOf(req)).get(req.params.id)).outputs || {})));
   r.post('/tasks/:id/claim', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).claim(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/release', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).release(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/complete', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).complete(req.params.id, req.body?.outputs || {}, actorOf(req)))));
   r.post('/tasks/:id/skip', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).skip(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/fail', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).fail(req.params.id, req.body, actorOf(req)))));
+  r.post('/tasks/:id/suspend', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).suspend(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/resume', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).resume(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/start', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).start(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/stop', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).stop(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/save', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).saveOutputs(req.params.id, req.body?.outputs || {}, actorOf(req)))));
@@ -492,6 +503,9 @@ export function buildRoutes(): Router {
   r.get('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).listComments(req.params.id) })));
   r.post('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.status(201).json(await new TaskService(ctxOf(req)).addComment(req.params.id, req.body?.body, actorOf(req)))));
   r.delete('/tasks/:id/comments/:cid', perm('task:manage'), asyncHandler(async (req, res) => { await new TaskService(ctxOf(req)).deleteComment(req.params.id, req.params.cid, actorOf(req)); res.status(204).end(); }));
+  r.get('/tasks/:id/attachments', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).listAttachments(req.params.id) })));
+  r.post('/tasks/:id/attachments', perm('task:manage'), asyncHandler(async (req, res) => res.status(201).json(await new TaskService(ctxOf(req)).addAttachment(req.params.id, req.body || {}, actorOf(req)))));
+  r.delete('/tasks/:id/attachments/:aid', perm('task:manage'), asyncHandler(async (req, res) => { await new TaskService(ctxOf(req)).deleteAttachment(req.params.id, req.params.aid, actorOf(req)); res.status(204).end(); }));
   r.get('/tasks/:id/events', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).events(req.params.id) })));
 
   // --- execution errors (the operational failure queue — see modules/errors/service.ts) ---
