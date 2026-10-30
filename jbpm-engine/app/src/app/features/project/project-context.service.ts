@@ -159,6 +159,8 @@ export class ProjectContextService {
   updateAsset(kind: string, name: string, patch: Record<string, unknown>) { return this.api.updateAsset(this.id, kind, name, patch); }
   duplicateAsset(kind: string, name: string, newName: string) { return this.api.duplicateAsset(this.id, kind, name, newName); }
   testAsset(kind: string, name: string, payload: Record<string, unknown> = {}) { return this.api.testAsset(this.id, kind, name, payload); }
+  getAudit(filter?: { actor?: string; kind?: string; limit?: number; offset?: number }) { return this.api.getWorkflowAudit(this.id, filter); }
+  getAuditFacets() { return this.api.getWorkflowAuditFacets(this.id); }
   async removeAsset(kind: string, name: string, usedBy: number): Promise<void> {
     if (usedBy > 0) { this.toast.error(`"${name}" is referenced by ${usedBy} process node(s) — remove those references first`); return; }
     if (!(await this.modal.confirm({ title: 'Delete asset', message: `Delete "${name}"? This can't be undone.`, confirmLabel: 'Delete', danger: true }))) return;

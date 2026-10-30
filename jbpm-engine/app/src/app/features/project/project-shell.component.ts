@@ -262,7 +262,7 @@ import { IconComponent } from '../../shared/icon.component';
 export class ProjectShellComponent {
   ctx = inject(ProjectContextService);
   tabs = [
-    { path: 'processes', label: 'Processes' }, { path: 'assets', label: 'Assets' }, { path: 'settings', label: 'Settings' },
+    { path: 'processes', label: 'Processes' }, { path: 'assets', label: 'Assets' }, { path: 'audit', label: 'Audit Log' }, { path: 'settings', label: 'Settings' },
   ];
   crumbs = computed(() => [
     { label: 'Projects', link: ['/projects'] },

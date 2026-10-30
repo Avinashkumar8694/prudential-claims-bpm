@@ -3,7 +3,7 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { ApiBase, ApiList } from './api-base';
-import type { Branch, CallableProcess, Catalog, Folder, ImportResult, ValidationResult, Version, Workflow } from '../models';
+import type { AuditEvent, Branch, CallableProcess, Catalog, Folder, ImportResult, ValidationResult, Version, Workflow } from '../models';
 
 @Injectable({ providedIn: 'root' })
 export class WorkflowApiService extends ApiBase {
@@ -79,4 +79,15 @@ export class WorkflowApiService extends ApiBase {
   publish(versionId: string, label?: string): Observable<any> { return this.http.post(`${this.base}/versions/${versionId}/publish`, { label }); }
   validate(versionId: string): Observable<ValidationResult> { return this.http.post<ValidationResult>(`${this.base}/versions/${versionId}/validate`, {}); }
   validateProcess(process: any): Observable<ValidationResult> { return this.http.post<ValidationResult>(`${this.base}/validate`, { process }); }
+
+  // workspace-scoped audit
+  getWorkflowAudit(projectId: string, filter?: { actor?: string; kind?: string; limit?: number; offset?: number }): Observable<{ items: AuditEvent[]; total: number }> {
+    return this.http.get<{ items: AuditEvent[]; total: number }>(`${this.base}/workflows/${projectId}/audit`, { params: this.cleanParams(filter) });
+  }
+  getWorkflowAuditFacets(projectId: string): Observable<{ kinds: string[]; actors: string[] }> {
+    return this.http.get<{ kinds: string[]; actors: string[] }>(`${this.base}/workflows/${projectId}/audit/facets`);
+  }
+  getWorkflowAuditEvent(projectId: string, eventId: string): Observable<AuditEvent> {
+    return this.http.get<AuditEvent>(`${this.base}/workflows/${projectId}/audit/${eventId}`);
+  }
 }

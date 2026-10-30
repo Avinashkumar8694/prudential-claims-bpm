@@ -465,6 +465,31 @@ const paths: Record<string, any> = {
       responses: created({ type: 'object', properties: { kind: { type: 'string' }, name: { type: 'string' } } }),
     },
   },
+  '/workflows/{id}/audit': {
+    get: {
+      tags: ['Workflows'],
+      summary: 'Get audit log events scoped to a specific project / workspace',
+      description: 'Returns the audit trail for this project (assets added/updated/duplicated/removed, processes modified/saved/renamed, deployments, and executions). Requires workflow:view permission.',
+      parameters: [idParam(), q('actor', 'Filter by actor'), q('kind', "Exact kind or prefix ending in '.'"), q('from', 'ISO lower bound'), q('to', 'ISO upper bound'), q('limit', 'Page size'), q('offset', 'Page offset')],
+      responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('AuditEvent') }, total: { type: 'integer' } } }),
+    },
+  },
+  '/workflows/{id}/audit/facets': {
+    get: {
+      tags: ['Workflows'],
+      summary: 'Distinct kinds + actors present in this project’s audit log',
+      parameters: [idParam()],
+      responses: ok({ type: 'object', properties: { kinds: { type: 'array', items: { type: 'string' } }, actors: { type: 'array', items: { type: 'string' } } } }),
+    },
+  },
+  '/workflows/{id}/audit/{eventId}': {
+    get: {
+      tags: ['Workflows'],
+      summary: 'Get a specific audit event scoped to this project',
+      parameters: [idParam(), idParam('eventId', 'Audit event ID')],
+      responses: ok(ref('AuditEvent')),
+    },
+  },
   '/workflows/{id}/branches': {
     get: { tags: ['Versioning'], summary: 'List branches', parameters: [idParam()], responses: ok(listOf('Branch')) },
     post: { tags: ['Versioning'], summary: 'Create a branch', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, fromVersionId: { type: 'string' } } }), responses: created(ref('Branch')) },

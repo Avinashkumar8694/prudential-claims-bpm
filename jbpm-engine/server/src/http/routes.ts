@@ -5,7 +5,8 @@
 // modules/iam/service.ts's DEFAULT_ROLES for what grants what.
 import { Router } from 'express';
 import type { Request } from 'express';
-import { asyncHandler } from '../infra/errors.ts';
+import { asyncHandler, forbidden } from '../infra/errors.ts';
+import { Collections, type Role } from '../domain.ts';
 import type { AppContext } from '../context.ts';
 import { WorkflowService } from '../modules/workflows/service.ts';
 import { FolderService } from '../modules/folders/service.ts';
@@ -231,6 +232,23 @@ export function buildRoutes(): Router {
   r.post('/workflows/:id/assets/:kind/:name/test', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).testAsset(req.params.id, req.params.kind, req.params.name, req.body || {}))));
   r.post('/workflows/:id/assets/:kind/:name/duplicate', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new AssetsService(ctxOf(req)).duplicate(req.params.id, req.params.kind, req.params.name, req.body?.newName, actorOf(req)))));
   r.delete('/workflows/:id/assets/:kind/:name', perm('workflow:edit'), asyncHandler(async (req, res) => { await new AssetsService(ctxOf(req)).remove(req.params.id, req.params.kind, req.params.name, actorOf(req)); res.status(204).end(); }));
+
+  // --- project-scoped audit log (accessible with workflow:view) ---
+  r.get('/workflows/:id/audit', perm('workflow:view'), asyncHandler(async (req, res) => {
+    const { limit, offset, ...rest } = req.query as Record<string, string>;
+    res.json(await new AuditService(ctxOf(req)).list({
+      ...rest,
+      workflowId: req.params.id,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    }));
+  }));
+  r.get('/workflows/:id/audit/facets', perm('workflow:view'), asyncHandler(async (req, res) => {
+    res.json(await new AuditService(ctxOf(req)).facets(req.params.id));
+  }));
+  r.get('/workflows/:id/audit/:eventId', perm('workflow:view'), asyncHandler(async (req, res) => {
+    res.json(await new AuditService(ctxOf(req)).get(req.params.eventId, req.params.id));
+  }));
 
   // --- branches ---
   r.get('/workflows/:id/branches', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new BranchService(ctxOf(req)).listByWorkflow(req.params.id) })));
@@ -533,13 +551,58 @@ export function buildRoutes(): Router {
   r.post('/jobs/:id/trigger', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await timers(req).trigger(req.params.id, actorOf(req)))));
   r.post('/jobs/:id/reschedule', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await timers(req).rescheduleJob(req.params.id, req.body?.dueAt, actorOf(req)))));
 
-  // --- audit log (reads the trail every service writes via ctx.audit) ---
-  r.get('/audit', perm('admin:iam'), asyncHandler(async (req, res) => {
-    const { limit, offset, ...rest } = req.query as Record<string, string>;
-    res.json(await new AuditService(ctxOf(req)).list({ ...rest, limit: limit ? Number(limit) : undefined, offset: offset ? Number(offset) : undefined }));
+  // --- audit log (admin:iam for global system audit, or workflow:view scoped to workflowId) ---
+  r.get('/audit', asyncHandler(async (req, res) => {
+    const userRoles = (req as any).user?.roles || [];
+    const ctx = ctxOf(req);
+    const roles = await ctx.store.repo<Role>(Collections.roles).query((r) => r.tenantId === ctx.tenantId && userRoles.includes(r.name));
+    const perms = roles.flatMap((r) => r.permissions);
+    const isAdmin = perms.includes('*') || perms.includes('admin:iam');
+    const { limit, offset, workflowId, ...rest } = req.query as Record<string, string>;
+
+    if (!isAdmin) {
+      const canViewWf = perms.includes('workflow:view');
+      if (!canViewWf) throw forbidden('missing permission: admin:iam or workflow:view');
+      if (!workflowId) throw forbidden('non-admin users must specify a workflowId to view audit logs');
+    }
+
+    res.json(await new AuditService(ctx).list({
+      ...rest,
+      ...(workflowId ? { workflowId } : {}),
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    }));
   }));
-  r.get('/audit/facets', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new AuditService(ctxOf(req)).facets())));
-  r.get('/audit/:id', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new AuditService(ctxOf(req)).get(req.params.id))));
+  r.get('/audit/facets', asyncHandler(async (req, res) => {
+    const userRoles = (req as any).user?.roles || [];
+    const ctx = ctxOf(req);
+    const roles = await ctx.store.repo<Role>(Collections.roles).query((r) => r.tenantId === ctx.tenantId && userRoles.includes(r.name));
+    const perms = roles.flatMap((r) => r.permissions);
+    const isAdmin = perms.includes('*') || perms.includes('admin:iam');
+    const workflowId = req.query.workflowId as string | undefined;
+
+    if (!isAdmin) {
+      const canViewWf = perms.includes('workflow:view');
+      if (!canViewWf) throw forbidden('missing permission: admin:iam or workflow:view');
+      if (!workflowId) throw forbidden('non-admin users must specify a workflowId to view audit facets');
+    }
+
+    res.json(await new AuditService(ctx).facets(workflowId));
+  }));
+  r.get('/audit/:id', asyncHandler(async (req, res) => {
+    const userRoles = (req as any).user?.roles || [];
+    const ctx = ctxOf(req);
+    const roles = await ctx.store.repo<Role>(Collections.roles).query((r) => r.tenantId === ctx.tenantId && userRoles.includes(r.name));
+    const perms = roles.flatMap((r) => r.permissions);
+    const isAdmin = perms.includes('*') || perms.includes('admin:iam');
+
+    const ev = await new AuditService(ctx).get(req.params.id);
+    if (!isAdmin) {
+      const canViewWf = perms.includes('workflow:view');
+      if (!canViewWf || !ev.workflowId) throw forbidden('missing permission: admin:iam');
+    }
+    res.json(ev);
+  }));
 
   // --- notifications (always scoped to the caller — no cross-user reads) ---
   r.get('/notifications', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).listFor(actorOf(req), { unread: req.query.unread === 'true', limit: req.query.limit ? Number(req.query.limit) : undefined }))));
