@@ -81,6 +81,7 @@ function getJavaReferenceReadme(): string {
 }
 import { resolveWorkflowServiceStore } from '../workflow-service/store/index.ts';
 import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
+import { buildCaseServiceRoutes } from './routes/case-service.ts';
 import { hub } from '../infra/ws-hub.ts';
 import { requirePermission } from './auth-middleware.ts';
 import { rateLimit } from './rate-limit.ts';
@@ -463,6 +464,7 @@ export function buildRoutes(): Router {
   r.post('/instances/:id/abort', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).abort(req.params.id, actorOf(req)))));
   r.put('/instances/:id/variables', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req)).updateVariables(req.params.id, req.body || {}, actorOf(req)))));
   r.get('/instances/:id/variable-history', perm('workflow:view'), asyncHandler(async (req, res) => res.json({ items: await new InstanceService(ctxOf(req)).variableHistory(req.params.id, req.query.name as string | undefined) })));
+  r.post('/signals/:signalName', perm('workflow:run'), asyncHandler(async (req, res) => res.json(await new InstanceService(ctxOf(req), emit).broadcast(req.params.signalName, req.body?.payload, actorOf(req), req.body?.correlationKey))));
 
   // --- tasks (task-level group/assignee/excludedOwners/businessAdmin checks happen inside TaskService
   // itself — see modules/tasks/service.ts — on top of the role-level task:manage gate here) ---
@@ -479,6 +481,7 @@ export function buildRoutes(): Router {
   r.post('/tasks/:id/release', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).release(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/complete', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).complete(req.params.id, req.body?.outputs || {}, actorOf(req)))));
   r.post('/tasks/:id/skip', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).skip(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/fail', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).fail(req.params.id, req.body, actorOf(req)))));
   r.post('/tasks/:id/start', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).start(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/stop', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).stop(req.params.id, actorOf(req)))));
   r.post('/tasks/:id/save', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).saveOutputs(req.params.id, req.body?.outputs || {}, actorOf(req)))));
@@ -554,6 +557,8 @@ export function buildRoutes(): Router {
   r.get('/query/analytics/tasks', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).taskAnalytics(req.query as any))));
   r.get('/query/analytics/processes', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).processAnalytics(req.query as any))));
   r.get('/query/analytics/summary', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).summary(req.query as any))));
+  r.get('/query/analytics/sla-violations', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).slaViolations())));
+  r.get('/query/analytics/workload', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).workload())));
   r.get('/query/jobs', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).jobs(s(req)) })));
 
   // --- IAM: users, groups, roles (admin-only mutation, directory read allowed for task managers) ---
@@ -581,6 +586,9 @@ export function buildRoutes(): Router {
 
   // --- Workflow Instance Management (Case Management) ---
   r.use(buildWorkflowInstanceRoutes());
+
+  // --- Case Service (Consolidated Claim Case API) ---
+  r.use(buildCaseServiceRoutes());
 
   return r;
 }

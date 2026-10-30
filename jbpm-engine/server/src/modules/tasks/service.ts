@@ -184,6 +184,21 @@ export class TaskService {
     return t;
   }
 
+  /** Fail / reject a task with error/fault data — real jBPM's TaskService.fail(): transitions the task
+   *  to failed and raises a TASK_FAILED error to be handled by error boundaries or incident handlers. */
+  async fail(id: string, fault: { message?: string; data?: Record<string, unknown> } | undefined, user: string): Promise<Task> {
+    const t = await this.get(id);
+    await this.assertOwnable(t, user);
+    if (t.status === 'completed' || t.status === 'skipped' || t.status === 'failed') throw conflict(`task already ${t.status}`);
+    await this.assertInstanceActionable(t);
+    t.status = 'failed'; t.completedAt = this.ctx.clock(); t.completedBy = user;
+    if (fault?.data) t.outputs = fault.data;
+    await this.repo().put(t);
+    await this.ctx.audit({ actor: user, kind: 'task.failed', instanceId: t.instanceId, taskId: t.id, nodeId: t.nodeId, data: fault });
+    await this.instances.failToken(t.instanceId, t.tokenId, fault?.message, fault?.data);
+    return t;
+  }
+
   /** jBPM Start: reserved → inprogress (the owner begins working; Work tab shows Save/Complete). */
   async start(id: string, user: string): Promise<Task> {
     const t = await this.get(id);

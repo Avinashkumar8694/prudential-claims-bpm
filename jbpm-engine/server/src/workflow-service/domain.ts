@@ -41,6 +41,10 @@ export interface WorkflowInstance extends WfEntity {
   status: WorkflowInstanceStatus;
   piid: string | null;
   startError?: string;
+  /** Case role assignments: roleName -> array of usernames or group names (e.g. claimant, examiner, approver). */
+  roles?: Record<string, string[]>;
+  /** Case milestones achieved/tracked during case execution. */
+  milestones?: Array<{ id: string; name: string; status: string; achievedAt?: string; achievedBy?: string }>;
   createdAt: string; createdBy: string;
   updatedAt: string; updatedBy: string;
 }

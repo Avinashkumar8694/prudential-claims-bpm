@@ -295,6 +295,75 @@ export class QueryService {
       .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   }
 
+  /** SLA breach and overdue analytics across open tasks and process instances. */
+  async slaViolations() {
+    const now = this.ctx.clock();
+    const tasks = await this.allTasks();
+    const openTasks = tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped' && t.status !== 'error' && t.status !== 'failed' && t.status !== 'exited');
+    const overdueTasks: Task[] = [];
+    const atRiskTasks: Task[] = [];
+    const nowMs = Date.parse(now);
+    const dayMs = 24 * 60 * 60 * 1000;
+
+    for (const t of openTasks) {
+      if (!t.dueAt) continue;
+      const dueMs = Date.parse(t.dueAt);
+      if (dueMs < nowMs) overdueTasks.push(t);
+      else if (dueMs - nowMs <= dayMs) atRiskTasks.push(t);
+    }
+
+    const byGroup = new Map<string, number>();
+    for (const t of overdueTasks) {
+      const g = t.group || 'unassigned';
+      byGroup.set(g, (byGroup.get(g) || 0) + 1);
+    }
+
+    const byPriority = new Map<string, number>();
+    for (const t of overdueTasks) {
+      const p = String(t.priority ?? 0);
+      byPriority.set(p, (byPriority.get(p) || 0) + 1);
+    }
+
+    return {
+      totalOpenTasks: openTasks.length,
+      overdueCount: overdueTasks.length,
+      atRiskCount: atRiskTasks.length,
+      overdueTasks: overdueTasks.map((t) => ({ id: t.id, name: t.name, instanceId: t.instanceId, assignee: t.assignee, group: t.group, dueAt: t.dueAt, priority: t.priority })),
+      atRiskTasks: atRiskTasks.map((t) => ({ id: t.id, name: t.name, instanceId: t.instanceId, assignee: t.assignee, group: t.group, dueAt: t.dueAt, priority: t.priority })),
+      overdueByGroup: Object.fromEntries(byGroup),
+      overdueByPriority: Object.fromEntries(byPriority),
+    };
+  }
+
+  /** Workload distribution across users and examiner groups. */
+  async workload() {
+    const tasks = await this.allTasks();
+    const openTasks = tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped' && t.status !== 'error' && t.status !== 'failed' && t.status !== 'exited');
+    const userMap = new Map<string, { user: string; openTasks: number; inProgress: number; reserved: number }>();
+    const groupMap = new Map<string, { group: string; openTasks: number; unassigned: number }>();
+
+    for (const t of openTasks) {
+      if (t.assignee) {
+        if (!userMap.has(t.assignee)) userMap.set(t.assignee, { user: t.assignee, openTasks: 0, inProgress: 0, reserved: 0 });
+        const u = userMap.get(t.assignee)!;
+        u.openTasks++;
+        if (t.status === 'inprogress') u.inProgress++;
+        if (t.status === 'reserved') u.reserved++;
+      }
+      const g = t.group || 'unassigned';
+      if (!groupMap.has(g)) groupMap.set(g, { group: g, openTasks: 0, unassigned: 0 });
+      const grp = groupMap.get(g)!;
+      grp.openTasks++;
+      if (!t.assignee) grp.unassigned++;
+    }
+
+    return {
+      totalOpen: openTasks.length,
+      users: [...userMap.values()].sort((a, b) => b.openTasks - a.openTasks),
+      groups: [...groupMap.values()].sort((a, b) => b.openTasks - a.openTasks),
+    };
+  }
+
   private countBy<T>(xs: T[], key: (x: T) => string): Record<string, number> {
     const out: Record<string, number> = {};
     for (const x of xs) { const k = key(x); out[k] = (out[k] || 0) + 1; }

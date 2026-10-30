@@ -118,6 +118,13 @@ export class InstanceService {
     return this.recordIfFailed(await this.engine.resumeToken(inst, dep, tokenId, vars));
   }
 
+  /** Fail a waiting token (used by task rejection / failure). */
+  async failToken(id: string, tokenId: string, errorMessage?: string, errorDetails?: Record<string, unknown>): Promise<Instance> {
+    const inst = await this.get(id);
+    const dep = await this.deployments.get(inst.deploymentId);
+    return this.recordIfFailed(await this.engine.failToken(inst, dep, tokenId, errorMessage, errorDetails));
+  }
+
   /** Fire a due timer job (catch timer → resume; boundary timer → activate the boundary). */
   async fireTimer(job: TimerJob): Promise<Instance> {
     const inst = await this.get(job.instanceId);
@@ -157,6 +164,13 @@ export class InstanceService {
     const dep = await this.deployments.get(inst.deploymentId);
     await this.ctx.audit({ actor, kind: 'instance.signaled', workflowId: inst.workflowId, instanceId: id, data: { name } });
     return this.recordIfFailed(await this.engine.signalInstance(inst, dep, name, payload));
+  }
+
+  /** Broadcast a signal/message to all matching running/waiting instances in the tenant and trigger matching signal starts.
+   *  Matches jBPM KIE-Server POST /server/containers/{id}/processes/instances/signal/{signalName}. */
+  async broadcast(name: string, payload: unknown, actor: string, correlationKey?: string): Promise<{ signaled: number }> {
+    await this.ctx.audit({ actor, kind: 'instance.broadcastSignaled', workflowId: '*', data: { name, correlationKey } });
+    return this.engine.broadcastSignal(name, payload, correlationKey);
   }
 
   /** Re-trigger a node (retry a failed node, or replay a node) and continue the flow. Blocked on a

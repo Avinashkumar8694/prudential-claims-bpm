@@ -147,6 +147,109 @@ export class WorkflowInstanceService {
     return next;
   }
 
+  /** Read the case business data dictionary. */
+  async getData(id: string): Promise<Record<string, unknown>> {
+    const w = await this.get(id);
+    return w.data || {};
+  }
+
+  /** Delete a top-level key from the case business data. */
+  async deleteDataKey(id: string, key: string, actor: string): Promise<WorkflowInstance> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    const nextData = { ...(w.data || {}) };
+    delete nextData[key];
+    const def = await this.definitions.get(w.workflowDefinitionId);
+    this.definitions.validateData(def, nextData);
+    const next = { ...w, data: nextData, updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.dataKeyDeleted', { key });
+    return next;
+  }
+
+  /** Explicitly closes a case (case lifecycle completion) with resolution comments. */
+  async close(id: string, resolution: string, actor: string): Promise<WorkflowInstance> {
+    const w = await this.get(id);
+    const next = { ...w, status: 'closed', updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.closed', { resolution: resolution || 'Case closed by user' });
+    return next;
+  }
+
+  /** Reopens a previously closed case. */
+  async reopen(id: string, reason: string, actor: string): Promise<WorkflowInstance> {
+    const w = await this.get(id);
+    const s = (w.status || '').toLowerCase();
+    if (s !== 'closed' && s !== 'settled_and_closed' && s !== 'completed') {
+      throw conflict(`case is ${w.status}; only closed cases can be reopened`);
+    }
+    const next = { ...w, status: 'active', updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.reopened', { reason: reason || 'Case reopened' });
+    return next;
+  }
+
+  /** Case Role Management: read assigned roles. */
+  async getRoles(id: string): Promise<Record<string, string[]>> {
+    const w = await this.get(id);
+    return w.roles || {};
+  }
+
+  /** Case Role Management: assign users/groups to a role. */
+  async setRole(id: string, roleName: string, members: string[], actor: string): Promise<Record<string, string[]>> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    const roles = { ...(w.roles || {}) };
+    roles[roleName] = Array.isArray(members) ? members : [members];
+    const next = { ...w, roles, updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.roleAssigned', { roleName, members });
+    return roles;
+  }
+
+  /** Case Role Management: remove a role assignment. */
+  async deleteRole(id: string, roleName: string, actor: string): Promise<Record<string, string[]>> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    const roles = { ...(w.roles || {}) };
+    delete roles[roleName];
+    const next = { ...w, roles, updatedAt: this.ctx.clock(), updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.roleRemoved', { roleName });
+    return roles;
+  }
+
+  /** Case Milestones: list stages/milestones achieved. */
+  async getMilestones(id: string): Promise<Array<{ id: string; name: string; status: string; achievedAt?: string; achievedBy?: string }>> {
+    const w = await this.get(id);
+    return w.milestones || [];
+  }
+
+  /** Case Milestones: record or achieve a milestone. */
+  async achieveMilestone(id: string, name: string, actor: string): Promise<Array<{ id: string; name: string; status: string; achievedAt?: string; achievedBy?: string }>> {
+    const w = await this.get(id);
+    await this.assertCaseActionable(w);
+    const milestones = [...(w.milestones || [])];
+    const existing = milestones.find((m) => m.name.toLowerCase() === name.toLowerCase());
+    const now = this.ctx.clock();
+    if (existing) {
+      existing.status = 'achieved';
+      existing.achievedAt = now;
+      existing.achievedBy = actor;
+    } else {
+      milestones.push({ id: this.ctx.newId(), name, status: 'achieved', achievedAt: now, achievedBy: actor });
+    }
+    const next = { ...w, milestones, updatedAt: now, updatedBy: actor };
+    await this.repo().put(next);
+    await this.addAudit(id, actor, 'workflowInstance.milestoneAchieved', { milestone: name });
+    return milestones;
+  }
+
+  /** Broadcast a signal across all case/workflow instances. */
+  async broadcastSignal(name: string, payload: unknown, actor: string): Promise<{ signaled: number }> {
+    return this.bpmInstances.broadcast(name, payload, actor);
+  }
+
   private async requirePiid(w: WorkflowInstance): Promise<string> {
     if (!w.piid) throw conflict('this workflow instance has no BPM process instance yet (piid is unset)');
     return w.piid;

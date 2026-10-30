@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Prudential Claims BPM — Internal Core Engine Architecture & API Specification",
+    "title": "Prudential Claims BPM — Engine & Integration API",
     "version": "1.0.0",
-    "description": "Internal developer reference specification for the NodeJS BPM engine architecture, compilation pipeline, sidecar JVM execution, storage layer, and operational subsystems. STRICTLY CONFIDENTIAL & INTERNAL TO ENGINE MAINTAINERS."
+    "description": "## Prudential Claims BPM Workflow & Integration Engine\n\nWelcome to the **Prudential Claims BPM REST & Event Integration API**. This specification covers both developer intake integration and engine management.\n\n### 1. Authentication & API Token Generation\nAll endpoints (except `POST /api/auth/login` and `GET /api/crypto/public-key`) require a valid JWT Bearer token:\n1. **Acquire Token**: Send your credentials to `POST /api/auth/login`:\n   ```json\n   POST /api/auth/login\n   {\n     \"username\": \"admin\",\n     \"password\": \"your-password\"\n   }\n   ```\n2. **Authorize Requests**: Attach the returned token in the HTTP Authorization header:\n   `Authorization: Bearer <token>`\n3. **Browser Direct Access**: When viewing API documentation in a browser, pass `?token=<token>` in the URL.\n\n### 2. Ephemeral In-Transit Cryptography\nFor high-security environments, credentials and sensitive claims variables can be encrypted before transmission using the ephemeral RSA-OAEP public key retrieved from `GET /api/crypto/public-key`.\n\n### 3. Core Integration Workflows\n- **Intake & Starting Workflows**: `POST /api/instances`, `POST /api/workflow-instances`, or `POST /api/caseservice/case`\n- **Inspecting Running Instances**: `GET /api/instances/{id}`, `GET /api/workflow-instances/{id}`, or `GET /api/caseservice/case/{caseId}`\n- **Human Task Workbench**: Query inboxes at `GET /api/tasks`, claim via `POST /api/tasks/{id}/claim`, complete with outputs via `POST /api/tasks/{id}/complete`, or reject/fail via `POST /api/tasks/{id}/fail`\n- **Event Callbacks & Signals**: Deliver targeted signals via `POST /api/instances/{id}/signal` or broadcast signals across all instances via `POST /api/signals/{signalName}`\n- **Case Roles & Milestones**: Manage case role assignments via `PUT /api/workflow-instances/{id}/roles/{roleName}` and track milestones via `GET /api/workflow-instances/{id}/milestones`\n- **SLA & Workload Analytics**: Query SLA breaches and workload distribution via `GET /api/query/analytics/sla-violations` and `GET /api/query/analytics/workload`\n- **Operational Failures & Recovery**: Monitor incidents at `GET /api/errors` and re-trigger execution via `POST /api/instances/{id}/retry`\n\n### 4. Realtime Event Streaming (WebSockets)\nConnect via WebSocket to `ws://<host>/api/ws?token=<token>`. Once connected, subscribe to instance topics:\n```json\n{ \"op\": \"sub\", \"topics\": [\"instance:<instanceId>\"] }\n```\n"
   },
   "servers": [
     {
@@ -17,16 +17,24 @@
       "description": "Authentication, Token Issuance, Users, Roles & Permissions"
     },
     {
-      "name": "Instances",
-      "description": "Process Instance Lifecycle, State Inspection & Signal Resumption"
+      "name": "Signals",
+      "description": "Broadcast and targeted event signals resuming waiting tokens"
     },
     {
-      "name": "Human Tasks",
-      "description": "Task Inbox, Claim, Complete, Delegate & SLA Tracking"
+      "name": "Case Service",
+      "description": "Consolidated Claim Case CRUD APIs matching enterprise claim schema"
     },
     {
       "name": "Workflow Instances",
-      "description": "Business Case Management, Intake, Decisions & Case Notes"
+      "description": "Business Case Management, Intake, Decisions, Roles & Milestones"
+    },
+    {
+      "name": "Human Tasks",
+      "description": "Task Inbox, Claim, Complete, Fail, Delegate & SLA Tracking"
+    },
+    {
+      "name": "Instances",
+      "description": "Process Instance Lifecycle, State Inspection & Signal Resumption"
     },
     {
       "name": "Workflow Definitions",
@@ -35,6 +43,10 @@
     {
       "name": "Workflow Analytics",
       "description": "Turnaround Time (TAT) Metrics & Process Analytics"
+    },
+    {
+      "name": "Query & Analytics",
+      "description": "jBPM-Style Query Catalog, Inboxes, SLA Violations & Workload"
     },
     {
       "name": "Ad-Hoc Query Engine",
@@ -1157,6 +1169,184 @@
           },
           "byAssignee": {
             "type": "object"
+          }
+        }
+      },
+      "SLAViolations": {
+        "type": "object",
+        "properties": {
+          "totalOpenTasks": {
+            "type": "integer",
+            "example": 45
+          },
+          "overdueCount": {
+            "type": "integer",
+            "example": 3
+          },
+          "atRiskCount": {
+            "type": "integer",
+            "example": 7
+          },
+          "overdueTasks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "atRiskTasks": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "overdueByGroup": {
+            "type": "object"
+          },
+          "overdueByPriority": {
+            "type": "object"
+          }
+        }
+      },
+      "WorkloadDistribution": {
+        "type": "object",
+        "properties": {
+          "totalOpen": {
+            "type": "integer",
+            "example": 45
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "CaseObject": {
+        "type": "object",
+        "properties": {
+          "caseId": {
+            "type": "string",
+            "example": "5f3a0937-bdcd-4d8e-be89-7cfc1f3c3a03"
+          },
+          "policyNumber": {
+            "type": "string",
+            "example": "POL-11111"
+          },
+          "claimType": {
+            "type": "string",
+            "example": "DEATH"
+          },
+          "caseStatus": {
+            "type": "string",
+            "example": "PENDING_DEATH"
+          },
+          "dateOfDeath": {
+            "type": "string",
+            "nullable": true,
+            "example": "2025-04-01"
+          },
+          "causeOfDeath": {
+            "type": "string",
+            "nullable": true,
+            "example": "NATURAL"
+          },
+          "placeOfDeath": {
+            "type": "string",
+            "nullable": true,
+            "example": "New York City Hospital"
+          },
+          "examinerResolution": {
+            "type": "string",
+            "nullable": true,
+            "example": "APPROVED"
+          },
+          "examinerComment": {
+            "type": "string",
+            "nullable": true,
+            "example": "Manual review passed."
+          },
+          "interestMethodConfirmed": {
+            "type": "boolean",
+            "example": false
+          },
+          "totalPayoutAmount": {
+            "type": "number",
+            "example": 500000
+          },
+          "jbpmProcessInstanceId": {
+            "type": "string",
+            "nullable": true,
+            "example": "99812"
+          },
+          "claimant": {
+            "type": "object"
+          },
+          "policyDetails": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "beneficiaries": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "taxWithholdings": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "documents": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "flags": {
+            "type": "object"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Milestone": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "mls_01"
+          },
+          "name": {
+            "type": "string",
+            "example": "DOCS_RECEIVED"
+          },
+          "status": {
+            "type": "string",
+            "example": "achieved"
+          },
+          "achievedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "achievedBy": {
+            "type": "string",
+            "example": "alice"
           }
         }
       }
@@ -4430,6 +4620,57 @@
         }
       }
     },
+    "/tasks/{id}/fail": {
+      "post": {
+        "tags": [
+          "Human Tasks"
+        ],
+        "summary": "Fail / reject a task with error details",
+        "description": "Transitions task to failed state and raises a TASK_FAILED error to trigger error boundaries or incident handling.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "example": "Medical report mismatch"
+                  },
+                  "data": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Task"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/tasks/{id}/start": {
       "post": {
         "tags": [
@@ -4905,6 +5146,64 @@
                       "items": {
                         "$ref": "#/components/schemas/VariableChange"
                       }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/signals/{signalName}": {
+      "post": {
+        "tags": [
+          "Signals"
+        ],
+        "summary": "Broadcast signal across all active instances in the tenant",
+        "description": "Broadcasts a signal event by name to all waiting instances (and matching signal start events), optionally constrained by correlationKey.",
+        "parameters": [
+          {
+            "name": "signalName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Signal event name"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "object",
+                    "description": "Signal data payload"
+                  },
+                  "correlationKey": {
+                    "type": "string",
+                    "description": "Optional correlation key filter"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "signaled": {
+                      "type": "integer",
+                      "description": "Number of resumed instances"
                     }
                   }
                 }
@@ -6122,6 +6421,46 @@
         }
       }
     },
+    "/query/analytics/sla-violations": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "SLA breach and overdue analytics across tasks and processes",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SLAViolations"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/workload": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "Workload distribution across users and examiner groups",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkloadDistribution"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/query/jobs": {
       "get": {
         "tags": [
@@ -7069,6 +7408,57 @@
         }
       }
     },
+    "/workflow-instances/signal/{signalName}": {
+      "post": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Broadcast signal across workflow cases",
+        "parameters": [
+          {
+            "name": "signalName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Signal name"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "payload": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "signaled": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workflow-instances/{id}": {
       "get": {
         "tags": [
@@ -7086,6 +7476,100 @@
             "description": "Resource id"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/close": {
+      "post": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Close a case (transition to closed status with resolution)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "resolution": {
+                    "type": "string",
+                    "example": "Settled and closed"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/reopen": {
+      "post": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Reopen a closed case",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "example": "Additional documentation provided"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -7154,6 +7638,35 @@
       }
     },
     "/workflow-instances/{id}/data": {
+      "get": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Get case business data dictionary",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": [
           "Workflow Instances"
@@ -7188,6 +7701,280 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/data/{key}": {
+      "delete": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Delete a key from case business data",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Data attribute key"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowInstance"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/roles": {
+      "get": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Get assigned case roles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roles": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/roles/{roleName}": {
+      "put": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Assign users or groups to a case role",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "roleName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role name (e.g. examiner, approver)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "members": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roles": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Remove a case role assignment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "roleName",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Role name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "roles": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-instances/{id}/milestones": {
+      "get": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "List achieved case milestones",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "milestones": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Milestone"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Workflow Instances"
+        ],
+        "summary": "Achieve or record a case milestone",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "PAS_VALIDATED"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "milestones": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Milestone"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -8009,6 +8796,213 @@
         "responses": {
           "204": {
             "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/caseservice/case": {
+      "post": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Initialize a new consolidated claim case",
+        "description": "Creates a claim case in DRAFT status following the Prudential Claim Case schema specification.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseObject"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "caseId": {
+                      "type": "string"
+                    },
+                    "policyNumber": {
+                      "type": "string"
+                    },
+                    "claimType": {
+                      "type": "string"
+                    },
+                    "caseStatus": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/caseservice/case/{caseId}": {
+      "get": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Retrieve complete consolidated claim case object",
+        "description": "Returns the full Claim Case including claimant, policyDetails, beneficiaries, documents, taxWithholdings, and flags.",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseObject"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Update or patch claim case attributes",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "caseId": {
+                      "type": "string"
+                    },
+                    "caseStatus": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "Archive or soft-delete claim case",
+        "parameters": [
+          {
+            "name": "caseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Case Object UUID"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          }
+        }
+      }
+    },
+    "/caseservice/list": {
+      "get": {
+        "tags": [
+          "Case Service"
+        ],
+        "summary": "List claim cases with filters",
+        "parameters": [
+          {
+            "name": "caseStatus",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by case status (DRAFT, PENDING_DEATH, UNDER_REVIEW, etc.)"
+          },
+          {
+            "name": "claimType",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by claim type (DEATH, TI)"
+          },
+          {
+            "name": "policyNumber",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by policy number"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CaseObject"
+                  }
+                }
+              }
+            }
           }
         }
       }

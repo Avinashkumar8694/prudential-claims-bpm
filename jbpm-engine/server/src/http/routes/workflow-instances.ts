@@ -42,12 +42,32 @@ export function buildWorkflowInstanceRoutes(): Router {
     res.json({ items: await insts(req).list(req.query as any) })));
   r.post('/workflow-instances/search', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
     res.json({ items: await insts(req).search(req.body || {}) })));
+  r.post('/workflow-instances/signal/:signalName', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json(await insts(req).broadcastSignal(req.params.signalName, req.body?.payload, actorOf(req)))));
   r.get('/workflow-instances/:id', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
     res.json(await insts(req).aggregate(req.params.id))));
+  r.post('/workflow-instances/:id/close', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json(await insts(req).close(req.params.id, req.body?.resolution, actorOf(req)))));
+  r.post('/workflow-instances/:id/reopen', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json(await insts(req).reopen(req.params.id, req.body?.reason, actorOf(req)))));
   r.patch('/workflow-instances/:id/status', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
     res.json(await insts(req).updateStatus(req.params.id, req.body?.status, actorOf(req)))));
+  r.get('/workflow-instances/:id/data', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json(await insts(req).getData(req.params.id))));
   r.put('/workflow-instances/:id/data', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
     res.json(await insts(req).updateData(req.params.id, req.body || {}, actorOf(req)))));
+  r.delete('/workflow-instances/:id/data/:key', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json(await insts(req).deleteDataKey(req.params.id, req.params.key, actorOf(req)))));
+  r.get('/workflow-instances/:id/roles', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json({ roles: await insts(req).getRoles(req.params.id) })));
+  r.put('/workflow-instances/:id/roles/:roleName', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json({ roles: await insts(req).setRole(req.params.id, req.params.roleName, req.body?.members || req.body?.users || [], actorOf(req)) })));
+  r.delete('/workflow-instances/:id/roles/:roleName', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json({ roles: await insts(req).deleteRole(req.params.id, req.params.roleName, actorOf(req)) })));
+  r.get('/workflow-instances/:id/milestones', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.json({ milestones: await insts(req).getMilestones(req.params.id) })));
+  r.post('/workflow-instances/:id/milestones', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
+    res.status(201).json({ milestones: await insts(req).achieveMilestone(req.params.id, req.body?.name || req.body?.milestone, actorOf(req)) })));
   r.post('/workflow-instances/:id/signal', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
     res.json(await insts(req).signal(req.params.id, req.body?.name, req.body?.payload, actorOf(req)))));
   r.post('/workflow-instances/:id/tasks/:taskId/decision', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>

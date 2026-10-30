@@ -438,16 +438,27 @@ export class ExecutionEngine {
    *  "PaymentReceived" — without this, one payment webhook would incorrectly resume all N). Signal/
    *  message-START events are never correlation-scoped: a brand-new instance has no correlationKey
    *  yet to match against. */
-  private async broadcast(name: string, correlationValue?: string): Promise<void> {
+  /** Broadcast a signal across all running/waiting instances in the tenant + trigger any matching signal-start events.
+   *  Matches jBPM KIE-Server POST /server/containers/{id}/processes/instances/signal/{signalName}. */
+  async broadcastSignal(name: string, payload?: unknown, correlationValue?: string): Promise<{ signaled: number }> {
     const others = await this.inst().query((i) => i.tenantId === this.ctx.tenantId && (i.status === 'waiting' || i.status === 'running'));
+    let count = 0;
     for (const other of others) {
       if (correlationValue !== undefined && other.correlationKey !== correlationValue) continue;
       const hit = other.tokens.some((t) => t.state === 'waiting' && (t.waitFor?.kind === 'signal' || t.waitFor?.kind === 'message') && t.waitFor?.ref === name);
       if (!hit) continue;
       const dep = await this.deps().get(other.deploymentId);
-      if (dep) await this.signalInstance(other, dep, name);
+      if (dep) {
+        await this.signalInstance(other, dep, name, payload);
+        count++;
+      }
     }
     if (correlationValue === undefined) await this.startTriggeredProcesses(name);
+    return { signaled: count };
+  }
+
+  private async broadcast(name: string, correlationValue?: string): Promise<void> {
+    await this.broadcastSignal(name, undefined, correlationValue);
   }
 
   /** Signal/message-start events: begin a new instance of every active deployment's process whose
@@ -945,6 +956,23 @@ export class ExecutionEngine {
     }
     if (node) for (const t of this.defaultTargets(p, node, inst)) inst.tokens.push({ id: this.ctx.newId(), nodeId: t, state: 'active', enteredAt: this.ctx.clock() });
     inst.status = 'running';
+    return this.runToQuiescence(inst, dep);
+  }
+
+  /** Fail a waiting token (e.g. from TaskService.fail). Raises a TASK_FAILED error into the instance. */
+  async failToken(inst: Instance, dep: Deployment, tokenId: string, errorMessage?: string, errorDetails?: Record<string, unknown>): Promise<Instance> {
+    if (inst.status === 'suspended') throw conflict('instance is suspended');
+    const token = inst.tokens.find((t) => t.id === tokenId);
+    if (!token || token.state !== 'waiting') throw conflict('token is not waiting');
+    await this.cancelTimersForToken(inst, tokenId);
+    const p = this.proc(inst, dep);
+    this.removeHostToken(inst, p, tokenId, token.nodeId);
+    const msg = errorMessage || `Task on node ${token.nodeId} failed`;
+    const handled = await this.raiseError(inst, p, dep, token.nodeId, 'TASK_FAILED', msg, errorDetails);
+    if (!handled) {
+      inst.status = 'failed';
+      inst.error = { nodeId: token.nodeId, message: msg, at: this.ctx.clock() };
+    }
     return this.runToQuiescence(inst, dep);
   }
 

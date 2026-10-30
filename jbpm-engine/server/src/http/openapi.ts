@@ -108,6 +108,61 @@ const schemas = {
       byAssignee: { type: 'object' },
     },
   },
+  SLAViolations: {
+    type: 'object',
+    properties: {
+      totalOpenTasks: { type: 'integer', example: 45 },
+      overdueCount: { type: 'integer', example: 3 },
+      atRiskCount: { type: 'integer', example: 7 },
+      overdueTasks: { type: 'array', items: { type: 'object' } },
+      atRiskTasks: { type: 'array', items: { type: 'object' } },
+      overdueByGroup: { type: 'object' },
+      overdueByPriority: { type: 'object' },
+    },
+  },
+  WorkloadDistribution: {
+    type: 'object',
+    properties: {
+      totalOpen: { type: 'integer', example: 45 },
+      users: { type: 'array', items: { type: 'object' } },
+      groups: { type: 'array', items: { type: 'object' } },
+    },
+  },
+  CaseObject: {
+    type: 'object',
+    properties: {
+      caseId: { type: 'string', example: '5f3a0937-bdcd-4d8e-be89-7cfc1f3c3a03' },
+      policyNumber: { type: 'string', example: 'POL-11111' },
+      claimType: { type: 'string', example: 'DEATH' },
+      caseStatus: { type: 'string', example: 'PENDING_DEATH' },
+      dateOfDeath: { type: 'string', nullable: true, example: '2025-04-01' },
+      causeOfDeath: { type: 'string', nullable: true, example: 'NATURAL' },
+      placeOfDeath: { type: 'string', nullable: true, example: 'New York City Hospital' },
+      examinerResolution: { type: 'string', nullable: true, example: 'APPROVED' },
+      examinerComment: { type: 'string', nullable: true, example: 'Manual review passed.' },
+      interestMethodConfirmed: { type: 'boolean', example: false },
+      totalPayoutAmount: { type: 'number', example: 500000 },
+      jbpmProcessInstanceId: { type: 'string', nullable: true, example: '99812' },
+      claimant: { type: 'object' },
+      policyDetails: { type: 'array', items: { type: 'object' } },
+      beneficiaries: { type: 'array', items: { type: 'object' } },
+      taxWithholdings: { type: 'array', items: { type: 'object' } },
+      documents: { type: 'array', items: { type: 'object' } },
+      flags: { type: 'object' },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  Milestone: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'mls_01' },
+      name: { type: 'string', example: 'DOCS_RECEIVED' },
+      status: { type: 'string', example: 'achieved' },
+      achievedAt: { type: 'string', format: 'date-time' },
+      achievedBy: { type: 'string', example: 'alice' },
+    },
+  },
 };
 
 // ---- paths (grouped by tag) ----
@@ -232,6 +287,16 @@ const paths: Record<string, any> = {
   '/tasks/{id}/release': { post: { tags: ['Human Tasks'], summary: 'Release a task', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/complete': { post: { tags: ['Human Tasks'], summary: 'Complete a task (resumes the instance)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object' } } }), responses: ok(ref('Task')) } },
   '/tasks/{id}/skip': { post: { tags: ['Human Tasks'], summary: 'Skip a task without completing it (only if the node is declared skippable)', parameters: [idParam()], responses: ok(ref('Task')) } },
+  '/tasks/{id}/fail': {
+    post: {
+      tags: ['Human Tasks'],
+      summary: 'Fail / reject a task with error details',
+      description: 'Transitions task to failed state and raises a TASK_FAILED error to trigger error boundaries or incident handling.',
+      parameters: [idParam()],
+      requestBody: jsonBody({ type: 'object', properties: { message: { type: 'string', example: 'Medical report mismatch' }, data: { type: 'object' } } }, false),
+      responses: ok(ref('Task')),
+    },
+  },
   '/tasks/{id}/start': { post: { tags: ['Human Tasks'], summary: 'Start working (reserved → inprogress; starting from Ready implicitly claims)', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/stop': { post: { tags: ['Human Tasks'], summary: 'Stop working (inprogress → reserved, ownership kept)', parameters: [idParam()], responses: ok(ref('Task')) } },
   '/tasks/{id}/save': { post: { tags: ['Human Tasks'], summary: 'Save partial outputs without completing', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object' } } }), responses: ok(ref('Task')) } },
@@ -246,6 +311,16 @@ const paths: Record<string, any> = {
   '/tasks/{id}/events': { get: { tags: ['Human Tasks'], summary: 'Task audit trail (the Logs tab)', parameters: [idParam()], responses: ok(listOf('AuditEvent')) } },
   '/instances/{id}/variables': { put: { tags: ['Instances'], summary: 'Edit instance variables inline (audited; refused once the instance has ended)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', additionalProperties: {} }), responses: ok(ref('Instance')) } },
   '/instances/{id}/variable-history': { get: { tags: ['Instances'], summary: 'Per-variable change history (from the audit trail)', parameters: [idParam(), q('name', 'Only this variable')], responses: ok(listOf('VariableChange')) } },
+  '/signals/{signalName}': {
+    post: {
+      tags: ['Signals'],
+      summary: 'Broadcast signal across all active instances in the tenant',
+      description: 'Broadcasts a signal event by name to all waiting instances (and matching signal start events), optionally constrained by correlationKey.',
+      parameters: [idParam('signalName', 'Signal event name')],
+      requestBody: jsonBody({ type: 'object', properties: { payload: { type: 'object', description: 'Signal data payload' }, correlationKey: { type: 'string', description: 'Optional correlation key filter' } } }, false),
+      responses: ok({ type: 'object', properties: { signaled: { type: 'integer', description: 'Number of resumed instances' } } }),
+    },
+  },
 
   '/errors': { get: { tags: ['Execution Errors'], summary: 'List execution errors (the operational failure queue)', parameters: [q('type', 'Comma-separated: process,task,job,integration'), q('instanceId', 'Filter by instance'), q('taskId', 'Filter by task'), q('jobId', 'Filter by job'), q('workflowId', 'Filter by project'), q('processId', 'Filter by process'), q('acknowledged', 'true / false'), q('from', 'ISO lower bound'), q('to', 'ISO upper bound'), q('limit', 'Page size'), q('offset', 'Page offset')], responses: ok({ type: 'object', properties: { items: { type: 'array', items: ref('ExecutionError') }, total: { type: 'integer' } } }) } },
   '/errors/summary': { get: { tags: ['Execution Errors'], summary: 'Counts for the nav badge / Home KPI', responses: ok({ type: 'object', properties: { total: { type: 'integer' }, unacknowledged: { type: 'integer' }, last24h: { type: 'integer' } } }) } },
@@ -283,6 +358,8 @@ const paths: Record<string, any> = {
   '/query/analytics/tasks': { get: { tags: ['Query & Analytics'], summary: 'Task turn-around-time (by task, by assignee)', responses: ok({ type: 'object' }) } },
   '/query/analytics/processes': { get: { tags: ['Query & Analytics'], summary: 'Process turn-around-time + status mix', responses: ok({ type: 'object' }) } },
   '/query/analytics/summary': { get: { tags: ['Query & Analytics'], summary: 'Dashboard summary counts', responses: ok(ref('Summary')) } },
+  '/query/analytics/sla-violations': { get: { tags: ['Query & Analytics'], summary: 'SLA breach and overdue analytics across tasks and processes', responses: ok(ref('SLAViolations')) } },
+  '/query/analytics/workload': { get: { tags: ['Query & Analytics'], summary: 'Workload distribution across users and examiner groups', responses: ok(ref('WorkloadDistribution')) } },
   '/query/jobs': { get: { tags: ['Query & Analytics'], summary: 'Timer jobs', parameters: [q('status', 'scheduled|fired|cancelled')], responses: ok(listOf('TimerJob')) } },
 
   '/auth/login': { post: { tags: ['IAM'], security: [], summary: 'Log in — issues a JWT (Bearer token) for every other endpoint', requestBody: jsonBody({ type: 'object', properties: { username: { type: 'string' }, password: { type: 'string' } } }), responses: { ...ok({ type: 'object', properties: { token: { type: 'string' }, user: ref('User') } }), '401': { description: 'Invalid credentials', content: { 'application/json': { schema: ref('Error') } } } } } },
@@ -329,14 +406,56 @@ const paths: Record<string, any> = {
   '/workflow-instances/search': {
     post: { tags: ['Workflow Instances'], summary: 'Advanced search across cases, status, and payload data', requestBody: jsonBody({ type: 'object', properties: { definitionId: { type: 'string' }, status: { type: 'string' }, dataFilter: { type: 'object' }, limit: { type: 'integer' } } }), responses: ok(listOf('WorkflowInstance')) },
   },
+  '/workflow-instances/signal/{signalName}': {
+    post: {
+      tags: ['Workflow Instances'],
+      summary: 'Broadcast signal across workflow cases',
+      parameters: [idParam('signalName', 'Signal name')],
+      requestBody: jsonBody({ type: 'object', properties: { payload: { type: 'object' } } }, false),
+      responses: ok({ type: 'object', properties: { signaled: { type: 'integer' } } }),
+    },
+  },
   '/workflow-instances/{id}': {
     get: { tags: ['Workflow Instances'], summary: 'Get aggregated case details with tasks, history, and variables', parameters: [idParam()], responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/close': {
+    post: {
+      tags: ['Workflow Instances'],
+      summary: 'Close a case (transition to closed status with resolution)',
+      parameters: [idParam()],
+      requestBody: jsonBody({ type: 'object', properties: { resolution: { type: 'string', example: 'Settled and closed' } } }, false),
+      responses: ok(ref('WorkflowInstance')),
+    },
+  },
+  '/workflow-instances/{id}/reopen': {
+    post: {
+      tags: ['Workflow Instances'],
+      summary: 'Reopen a closed case',
+      parameters: [idParam()],
+      requestBody: jsonBody({ type: 'object', properties: { reason: { type: 'string', example: 'Additional documentation provided' } } }, false),
+      responses: ok(ref('WorkflowInstance')),
+    },
   },
   '/workflow-instances/{id}/status': {
     patch: { tags: ['Workflow Instances'], summary: 'Update workflow instance case status', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { status: { type: 'string', enum: ['initiated', 'active', 'completed', 'aborted', 'failed'] } } }), responses: ok(ref('WorkflowInstance')) },
   },
   '/workflow-instances/{id}/data': {
+    get: { tags: ['Workflow Instances'], summary: 'Get case business data dictionary', parameters: [idParam()], responses: ok({ type: 'object' }) },
     put: { tags: ['Workflow Instances'], summary: 'Update case business data payload', parameters: [idParam()], requestBody: jsonBody({ type: 'object', additionalProperties: {} }), responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/data/{key}': {
+    delete: { tags: ['Workflow Instances'], summary: 'Delete a key from case business data', parameters: [idParam(), idParam('key', 'Data attribute key')], responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/roles': {
+    get: { tags: ['Workflow Instances'], summary: 'Get assigned case roles', parameters: [idParam()], responses: ok({ type: 'object', properties: { roles: { type: 'object' } } }) },
+  },
+  '/workflow-instances/{id}/roles/{roleName}': {
+    put: { tags: ['Workflow Instances'], summary: 'Assign users or groups to a case role', parameters: [idParam(), idParam('roleName', 'Role name (e.g. examiner, approver)')], requestBody: jsonBody({ type: 'object', properties: { members: { type: 'array', items: { type: 'string' } } } }), responses: ok({ type: 'object', properties: { roles: { type: 'object' } } }) },
+    delete: { tags: ['Workflow Instances'], summary: 'Remove a case role assignment', parameters: [idParam(), idParam('roleName', 'Role name')], responses: ok({ type: 'object', properties: { roles: { type: 'object' } } }) },
+  },
+  '/workflow-instances/{id}/milestones': {
+    get: { tags: ['Workflow Instances'], summary: 'List achieved case milestones', parameters: [idParam()], responses: ok({ type: 'object', properties: { milestones: { type: 'array', items: ref('Milestone') } } }) },
+    post: { tags: ['Workflow Instances'], summary: 'Achieve or record a case milestone', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string', example: 'PAS_VALIDATED' } } }), responses: created({ type: 'object', properties: { milestones: { type: 'array', items: ref('Milestone') } } }) },
   },
   '/workflow-instances/{id}/signal': {
     post: { tags: ['Workflow Instances'], summary: 'Deliver business signal to workflow instance', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string', example: 'DOCUMENTS_RECEIVED' }, payload: { type: 'object', example: { docCount: 3, verified: true } } } }), responses: ok(ref('WorkflowInstance')) },
@@ -396,6 +515,47 @@ const paths: Record<string, any> = {
   '/analytics/queries/{id}': {
     delete: { tags: ['Ad-Hoc Query Engine'], summary: 'Delete a saved query', parameters: [idParam()], responses: { '204': { description: 'Deleted' } } },
   },
+
+  // ---- Case Service (Consolidated Claim Case APIs) ----
+  '/caseservice/case': {
+    post: {
+      tags: ['Case Service'],
+      summary: 'Initialize a new consolidated claim case',
+      description: 'Creates a claim case in DRAFT status following the Prudential Claim Case schema specification.',
+      requestBody: jsonBody(ref('CaseObject')),
+      responses: created({ type: 'object', properties: { caseId: { type: 'string' }, policyNumber: { type: 'string' }, claimType: { type: 'string' }, caseStatus: { type: 'string' }, createdAt: { type: 'string' }, updatedAt: { type: 'string' } } }),
+    },
+  },
+  '/caseservice/case/{caseId}': {
+    get: {
+      tags: ['Case Service'],
+      summary: 'Retrieve complete consolidated claim case object',
+      description: 'Returns the full Claim Case including claimant, policyDetails, beneficiaries, documents, taxWithholdings, and flags.',
+      parameters: [idParam('caseId', 'Case Object UUID')],
+      responses: ok(ref('CaseObject')),
+    },
+    put: {
+      tags: ['Case Service'],
+      summary: 'Update or patch claim case attributes',
+      parameters: [idParam('caseId', 'Case Object UUID')],
+      requestBody: jsonBody({ type: 'object' }),
+      responses: ok({ type: 'object', properties: { caseId: { type: 'string' }, caseStatus: { type: 'string' }, updatedAt: { type: 'string' } } }),
+    },
+    delete: {
+      tags: ['Case Service'],
+      summary: 'Archive or soft-delete claim case',
+      parameters: [idParam('caseId', 'Case Object UUID')],
+      responses: { '204': { description: 'Deleted' } },
+    },
+  },
+  '/caseservice/list': {
+    get: {
+      tags: ['Case Service'],
+      summary: 'List claim cases with filters',
+      parameters: [q('caseStatus', 'Filter by case status (DRAFT, PENDING_DEATH, UNDER_REVIEW, etc.)'), q('claimType', 'Filter by claim type (DEATH, TI)'), q('policyNumber', 'Filter by policy number')],
+      responses: ok({ type: 'array', items: ref('CaseObject') }),
+    },
+  },
 };
 
 export const openapiSpec = {
@@ -425,10 +585,12 @@ All endpoints (except \`POST /api/auth/login\` and \`GET /api/crypto/public-key\
 For high-security environments, credentials and sensitive claims variables can be encrypted before transmission using the ephemeral RSA-OAEP public key retrieved from \`GET /api/crypto/public-key\`.
 
 ### 3. Core Integration Workflows
-- **Intake & Starting Workflows**: \`POST /api/instances\` or \`POST /api/workflow-instances\`
-- **Inspecting Running Instances**: \`GET /api/instances/{id}\` and diagram progress at \`GET /api/instances/{id}/diagram-state\`
-- **Human Task Workbench**: Query inboxes at \`GET /api/tasks\`, claim via \`POST /api/tasks/{id}/claim\`, and complete with outputs via \`POST /api/tasks/{id}/complete\`
-- **Event Callbacks & Signals**: Deliver asynchronous external signals via \`POST /api/instances/{id}/signal\`
+- **Intake & Starting Workflows**: \`POST /api/instances\`, \`POST /api/workflow-instances\`, or \`POST /api/caseservice/case\`
+- **Inspecting Running Instances**: \`GET /api/instances/{id}\`, \`GET /api/workflow-instances/{id}\`, or \`GET /api/caseservice/case/{caseId}\`
+- **Human Task Workbench**: Query inboxes at \`GET /api/tasks\`, claim via \`POST /api/tasks/{id}/claim\`, complete with outputs via \`POST /api/tasks/{id}/complete\`, or reject/fail via \`POST /api/tasks/{id}/fail\`
+- **Event Callbacks & Signals**: Deliver targeted signals via \`POST /api/instances/{id}/signal\` or broadcast signals across all instances via \`POST /api/signals/{signalName}\`
+- **Case Roles & Milestones**: Manage case role assignments via \`PUT /api/workflow-instances/{id}/roles/{roleName}\` and track milestones via \`GET /api/workflow-instances/{id}/milestones\`
+- **SLA & Workload Analytics**: Query SLA breaches and workload distribution via \`GET /api/query/analytics/sla-violations\` and \`GET /api/query/analytics/workload\`
 - **Operational Failures & Recovery**: Monitor incidents at \`GET /api/errors\` and re-trigger execution via \`POST /api/instances/{id}/retry\`
 
 ### 4. Realtime Event Streaming (WebSockets)
@@ -441,11 +603,14 @@ Connect via WebSocket to \`ws://<host>/api/ws?token=<token>\`. Once connected, s
   servers: [{ url: '/api', description: 'This server' }],
   tags: [
     { name: 'IAM', description: 'Authentication, Token Issuance, Users, Roles & Permissions' },
+    { name: 'Signals', description: 'Broadcast and targeted event signals resuming waiting tokens' },
+    { name: 'Case Service', description: 'Consolidated Claim Case CRUD APIs matching enterprise claim schema' },
+    { name: 'Workflow Instances', description: 'Business Case Management, Intake, Decisions, Roles & Milestones' },
+    { name: 'Human Tasks', description: 'Task Inbox, Claim, Complete, Fail, Delegate & SLA Tracking' },
     { name: 'Instances', description: 'Process Instance Lifecycle, State Inspection & Signal Resumption' },
-    { name: 'Human Tasks', description: 'Task Inbox, Claim, Complete, Delegate & SLA Tracking' },
-    { name: 'Workflow Instances', description: 'Business Case Management, Intake, Decisions & Case Notes' },
     { name: 'Workflow Definitions', description: 'Stable Definition to Deployment Bindings' },
     { name: 'Workflow Analytics', description: 'Turnaround Time (TAT) Metrics & Process Analytics' },
+    { name: 'Query & Analytics', description: 'jBPM-Style Query Catalog, Inboxes, SLA Violations & Workload' },
     { name: 'Ad-Hoc Query Engine', description: 'Multi-Tenant Data Projection & Saved Queries' },
     { name: 'Projects', description: 'Workflow Projects, Folders & Scoped Permissions' },
     { name: 'Processes', description: 'Process Graph Modeling & Definition Storage' },

@@ -146,7 +146,7 @@ export interface Instance extends Entity {
 // via a terminate/other branch, aborted, or failed) while this task was still open. Distinct from
 // 'skipped' (an explicit human/API action on the task itself) and 'error' (the task's OWN execution
 // failed) — 'exited' is something that happened to the PROCESS, not to the task.
-export type TaskStatus = 'created' | 'reserved' | 'inprogress' | 'completed' | 'skipped' | 'error' | 'exited';
+export type TaskStatus = 'created' | 'reserved' | 'inprogress' | 'completed' | 'skipped' | 'error' | 'exited' | 'failed';
 export interface Task extends Entity {
   id: string; tenantId: string; instanceId: string; tokenId: string; nodeId: string;
   name: string; formName?: string; group?: string; assignee?: string;
