@@ -310,6 +310,15 @@ export class ExecutionEngine {
         }
       }
       vars['errorRepaired'] = true;
+      if (child.variables['errorHandlerAction'] === 'retry') {
+        Object.assign(parent.variables, vars);
+        delete parent.error;
+        this.removeToken(parent, token.id);
+        parent.tokens.push({ id: this.ctx.newId(), nodeId: token.nodeId, state: 'active', enteredAt: this.ctx.clock() });
+        parent.status = 'running';
+        await this.runToQuiescence(parent, pdep);
+        return;
+      }
     }
     await this.resumeToken(parent, pdep, token.id, vars);
   }
@@ -672,11 +681,19 @@ export class ExecutionEngine {
     let targetOutputMappings: Record<string, string> | undefined;
 
     if (geh.rules && geh.rules.length > 0) {
-      // 1. Exact match by error code or HTTP status
-      let matched = geh.rules.find((r) => r.errorType === code || (details?.httpStatus && String(details.httpStatus) === r.errorType));
+      // 1. Exact or comma-separated match by error code or HTTP status
+      let matched = geh.rules.find((r) => {
+        const types = (r.errorType || '').split(',').map((t) => t.trim().toUpperCase());
+        if (types.includes(code.toUpperCase())) return true;
+        if (details?.httpStatus && types.includes(String(details.httpStatus))) return true;
+        return false;
+      });
       // 2. Fallback to '*' or 'DEFAULT' or 'ANY'
       if (!matched) {
-        matched = geh.rules.find((r) => r.errorType === '*' || r.errorType?.toUpperCase() === 'DEFAULT' || r.errorType?.toUpperCase() === 'ANY');
+        matched = geh.rules.find((r) => {
+          const types = (r.errorType || '').split(',').map((t) => t.trim().toUpperCase());
+          return types.includes('*') || types.includes('DEFAULT') || types.includes('ANY');
+        });
       }
       if (!matched || !matched.processId) {
         return false;

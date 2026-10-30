@@ -15,7 +15,7 @@ function createMockApp(): AppContext {
   let idCounter = 1;
   const fixedNow = new Date('2026-10-30T10:00:00.000Z');
 
-  return {
+  const app = {
     tenantId: 'pru-tenant',
     actor: 'tester',
     clock: () => fixedNow.toISOString(),
@@ -34,6 +34,10 @@ function createMockApp(): AppContext {
       }),
     },
   } as unknown as AppContext;
+
+  // Pre-seed allowlist so 127.0.0.1 fails instantly with ECONNREFUSED instead of DNS timeout
+  getCollection('settings').set('system', { id: 'system', tenantId: 'pru-tenant', outboundAllowlist: ['127.0.0.1'] });
+  return app;
 }
 
 test('Multi-Type Global Error Handlers: Routes SERVICE_ERROR to api-error-handler and SCRIPT_ERROR to script-error-handler', async () => {
@@ -54,7 +58,7 @@ test('Multi-Type Global Error Handlers: Routes SERVICE_ERROR to api-error-handle
             id: 'rest_task',
             type: 'http',
             name: 'Call Core API',
-            url: 'http://example-down-domain-9999.invalid/api',
+            url: 'http://127.0.0.1:59999/down-endpoint',
             method: 'POST',
             throwError: true,
           },
@@ -372,7 +376,7 @@ test('Multi-Type Global Error Handlers: Local Boundary takes precedence over Mul
             id: 'risky_rest',
             type: 'http',
             name: 'Risky REST Task',
-            url: 'http://example-down-domain-9999.invalid/api',
+            url: 'http://127.0.0.1:59999/down-endpoint',
             method: 'POST',
             throwError: true,
           },
@@ -468,4 +472,118 @@ test('Multi-Type Global Error Handlers: Local Boundary takes precedence over Mul
   assert.equal(inst.variables['handledGlobally'], undefined);
   assert.equal(inst.status, 'completed');
 });
+
+test('Multi-Type Global Error Handlers: Comma-separated error types and asynchronous retry resolution', async () => {
+  const app = createMockApp();
+
+  let attempt = 0;
+  const project: EngineProject = {
+    schemaVersion: 1,
+    id: 'proj_async_retry',
+    name: 'Async Retry Project',
+    processes: [
+      {
+        id: 'flaky-service-process',
+        name: 'Flaky Service Flow',
+        nodes: [
+          { id: 'start', type: 'start' },
+          {
+            id: 'flaky_script',
+            type: 'script',
+            code: `
+              const current = Number(kcontext.getVariable("retries") || 0);
+              if (current < 1) {
+                throw new Error("Temporary service outage 503");
+              }
+              kcontext.setVariable("flakySuccess", true);
+            `,
+          },
+          { id: 'end', type: 'end' },
+        ],
+        flows: [
+          { id: 'f1', from: 'start', to: 'flaky_script' },
+          { id: 'f2', from: 'flaky_script', to: 'end' },
+        ],
+      },
+      {
+        id: 'backoff-retry-handler',
+        name: 'Backoff Retry Handler',
+        nodes: [
+          { id: 's_retry', type: 'start' },
+          {
+            id: 'scr_retry',
+            type: 'script',
+            code: `
+              const current = Number(kcontext.getVariable("retries") || 0);
+              kcontext.setVariable("retries", current + 1);
+              kcontext.setVariable("errorHandlerAction", "retry");
+            `,
+          },
+          { id: 'e_retry', type: 'end' },
+        ],
+        flows: [
+          { id: 'fr1', from: 's_retry', to: 'scr_retry' },
+          { id: 'fr2', from: 'scr_retry', to: 'e_retry' },
+        ],
+      },
+    ],
+  };
+
+  const dep: Deployment = {
+    id: 'dep_async_retry',
+    tenantId: app.tenantId,
+    workflowId: 'wf_async_retry',
+    versionId: 'ver_1',
+    branchId: 'br_main',
+    engine: project,
+    env: {},
+    tags: ['test'],
+    status: 'active',
+    environment: 'test',
+    deployedAt: app.clock(),
+    deployedBy: 'tester',
+    globalErrorHandler: {
+      enabled: true,
+      rules: [
+        {
+          id: 'rule_multi_code',
+          errorType: 'SCRIPT_ERROR, 503, SERVICE_ERROR', // comma-separated codes!
+          processId: 'backoff-retry-handler',
+          strategy: 'repair-and-resume',
+          outputMappings: {
+            retries: 'retries',
+          },
+        },
+      ],
+    },
+  };
+
+  await app.store.repo<Deployment>('deployments').put(dep);
+  const resolveCalled = async (pid: string) => ({ dep, processId: pid });
+  const engine = new ExecutionEngine(app, () => {}, resolveCalled);
+
+  const inst: Instance = {
+    id: 'inst_retry_test',
+    tenantId: app.tenantId,
+    deploymentId: dep.id,
+    workflowId: dep.workflowId,
+    processId: 'flaky-service-process',
+    status: 'running',
+    variables: { retries: 0 },
+    tokens: [{ id: 'tok_start', nodeId: 'start', state: 'active', enteredAt: app.clock() }],
+    history: [],
+    startedAt: app.clock(),
+    startedBy: 'tester',
+  };
+  await app.store.repo<Instance>('instances').put(inst);
+
+  await engine.runToQuiescence(inst, dep);
+
+  // Attempt 0 failed -> backoff-retry-handler matched via comma-separated list 'SCRIPT_ERROR, 503, SERVICE_ERROR'
+  // -> requested retry with retries = 1 -> node flaky_script executed second time with retries = 1 -> succeeded!
+  assert.equal(inst.variables['retries'], 1);
+  assert.equal(inst.variables['flakySuccess'], true);
+  assert.equal(inst.status, 'completed');
+});
+
 
