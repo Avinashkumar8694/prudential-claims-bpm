@@ -294,9 +294,20 @@ export class ExecutionEngine {
     // mapChildOutputs in nodes/index.ts's CHILD_OUTPUT_MAPPERS (same logic the sync-completion path uses).
     const mapper = callNode ? CHILD_OUTPUT_MAPPERS[callNode.type as string] : undefined;
     const vars = mapper ? mapper(callNode, child) : {};
-    if (child.isErrorHandler && pdep.globalErrorHandler?.outputMappings) {
-      for (const [targetVar, sourceVar] of Object.entries(pdep.globalErrorHandler.outputMappings)) {
-        if (child.variables[sourceVar] !== undefined) vars[targetVar] = child.variables[sourceVar];
+    if (child.isErrorHandler && pdep.globalErrorHandler) {
+      let mappings = pdep.globalErrorHandler.outputMappings;
+      if (pdep.globalErrorHandler.rules) {
+        const matched = pdep.globalErrorHandler.rules.find((r) => r.processId === child.processId);
+        if (matched?.outputMappings) mappings = matched.outputMappings;
+      }
+      if (mappings) {
+        for (const [targetVar, sourceVar] of Object.entries(mappings)) {
+          if (child.variables[sourceVar] !== undefined) {
+            vars[targetVar] = child.variables[sourceVar];
+          } else if (child.variables[targetVar] !== undefined) {
+            vars[sourceVar] = child.variables[targetVar];
+          }
+        }
       }
       vars['errorRepaired'] = true;
     }
@@ -638,7 +649,7 @@ export class ExecutionEngine {
     // TIER 3 & 4: Project Global Error Handler
     // If no local or process catch handled it, check if the project has a global error handler configured.
     const geh = dep.globalErrorHandler;
-    if (!geh || !geh.enabled || !geh.processId) {
+    if (!geh || !geh.enabled) {
       return false;
     }
 
@@ -656,21 +667,45 @@ export class ExecutionEngine {
       return false;
     }
 
-    // Error filter check
-    if (geh.filter && geh.filter.length > 0) {
-      const filterMatches = geh.filter.some((f) => {
-        if (f === '*' || f.toUpperCase() === 'ANY') return true;
-        if (f === code) return true;
-        if (details?.httpStatus && String(details.httpStatus) === f) return true;
-        return false;
-      });
-      if (!filterMatches) {
+    let targetProcessId: string | undefined;
+    let targetStrategy: 'spawn' | 'repair-and-resume' | 'compensate-and-abort' = 'repair-and-resume';
+    let targetOutputMappings: Record<string, string> | undefined;
+
+    if (geh.rules && geh.rules.length > 0) {
+      // 1. Exact match by error code or HTTP status
+      let matched = geh.rules.find((r) => r.errorType === code || (details?.httpStatus && String(details.httpStatus) === r.errorType));
+      // 2. Fallback to '*' or 'DEFAULT' or 'ANY'
+      if (!matched) {
+        matched = geh.rules.find((r) => r.errorType === '*' || r.errorType?.toUpperCase() === 'DEFAULT' || r.errorType?.toUpperCase() === 'ANY');
+      }
+      if (!matched || !matched.processId) {
         return false;
       }
+      targetProcessId = matched.processId;
+      targetStrategy = matched.strategy || 'repair-and-resume';
+      targetOutputMappings = matched.outputMappings;
+    } else if (geh.processId) {
+      // Legacy single process configuration
+      if (geh.filter && geh.filter.length > 0) {
+        const filterMatches = geh.filter.some((f) => {
+          if (f === '*' || f.toUpperCase() === 'ANY') return true;
+          if (f === code) return true;
+          if (details?.httpStatus && String(details.httpStatus) === f) return true;
+          return false;
+        });
+        if (!filterMatches) {
+          return false;
+        }
+      }
+      targetProcessId = geh.processId;
+      targetStrategy = geh.strategy || 'repair-and-resume';
+      targetOutputMappings = geh.outputMappings;
+    } else {
+      return false;
     }
 
     // Resolve the error handler process definition
-    const errorProc = dep.engine.processes.find((pr) => pr.id === geh.processId);
+    const errorProc = dep.engine.processes.find((pr) => pr.id === targetProcessId);
     if (!errorProc) {
       return false;
     }
@@ -716,7 +751,7 @@ export class ExecutionEngine {
       tenantId: inst.tenantId,
       deploymentId: inst.deploymentId,
       workflowId: inst.workflowId,
-      processId: geh.processId,
+      processId: targetProcessId,
       status: 'running',
       variables: handlerVars,
       tokens: [{ id: this.ctx.newId(), nodeId: startNode.id!, state: 'active', enteredAt: this.ctx.clock() }],
@@ -733,15 +768,17 @@ export class ExecutionEngine {
     await this.runToQuiescence(handlerInst, dep);
     await this.inst().put(handlerInst);
 
-    const strategy = geh.strategy || 'repair-and-resume';
+    const strategy = targetStrategy || 'repair-and-resume';
 
     if (strategy === 'repair-and-resume') {
       if (handlerInst.status === 'completed') {
         // Apply output mappings
-        if (geh.outputMappings && Object.keys(geh.outputMappings).length > 0) {
-          for (const [errVar, targetVar] of Object.entries(geh.outputMappings)) {
-            if (errVar in handlerInst.variables) {
-              inst.variables[targetVar] = handlerInst.variables[errVar];
+        if (targetOutputMappings && Object.keys(targetOutputMappings).length > 0) {
+          for (const [k1, k2] of Object.entries(targetOutputMappings)) {
+            if (k1 in handlerInst.variables) {
+              inst.variables[k2] = handlerInst.variables[k1];
+            } else if (k2 in handlerInst.variables) {
+              inst.variables[k1] = handlerInst.variables[k2];
             }
           }
         } else {
@@ -772,13 +809,13 @@ export class ExecutionEngine {
         return true;
       } else {
         // Handler did not complete successfully (e.g. failed or aborted)
-        inst.error = { nodeId: failingNodeId, message: `Global error handler (${geh.processId}) failed: ${handlerInst.error?.message || handlerInst.status}`, at: this.ctx.clock() };
+        inst.error = { nodeId: failingNodeId, message: `Global error handler (${targetProcessId}) failed: ${handlerInst.error?.message || handlerInst.status}`, at: this.ctx.clock() };
         return false;
       }
     } else if (strategy === 'compensate-and-abort') {
       inst.status = 'aborted';
       inst.endedAt = this.ctx.clock();
-      inst.error = { nodeId: failingNodeId, message: `Compensated and aborted by global error handler (${geh.processId})`, at: this.ctx.clock() };
+      inst.error = { nodeId: failingNodeId, message: `Compensated and aborted by global error handler (${targetProcessId})`, at: this.ctx.clock() };
       return true;
     } else {
       // strategy === 'spawn' (fire-and-forget incident process)

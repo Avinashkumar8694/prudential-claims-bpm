@@ -209,9 +209,43 @@ When the Project Global Error Handler process is spawned, it receives the follow
 
 ---
 
-## 4. Global Error Handler Strategies & Variable Mapping
+## 4. Multi-Type Global Error Handlers & Variable Mapping
 
-In **Project Settings** (`ProjectSettingsComponent`), projects can choose from three resolution strategies:
+In enterprise BPM, a single catch-all dropdown is insufficient because different failure domains demand different operational responses. In standard BPMN, business processes remain completely clean on canvas (e.g. `Start → Risky → End Normal`) without artificial error nodes.
+
+In **Project Settings** (`ProjectSettingsComponent`), projects configure **Error Handlers by Error Type**:
+
+```mermaid
+flowchart TD
+    subgraph Engine["Execution Engine (Runtime Failure)"]
+        Fail["Node Failure Occurs"] --> CheckLocal{"Tier 1: Local Boundary on Node?"}
+        CheckLocal -- "Yes" --> LocalHandler["Execute Local Catch on Canvas"]
+        CheckLocal -- "No" --> RouteRules{"Tier 4: Match Project Rules by Type"}
+    end
+
+    subgraph ProjectRules["Project Settings: Error Handler Mappings"]
+        RouteRules -- "Matches 'SERVICE_ERROR'" --> H1["Process: api-error-handler"]
+        RouteRules -- "Matches 'SCRIPT_ERROR'" --> H2["Process: script-error-handler"]
+        RouteRules -- "Matches 'RULE_ERROR'" --> H3["Process: underwriter-fallback"]
+        RouteRules -- "Matches 'TASK_ERROR'" --> H4["Process: task-escalation-handler"]
+        RouteRules -- "Fallback to '*'" --> H5["Process: default-error-handler"]
+    end
+
+    H1 & H2 & H3 & H4 & H5 --> ExecHandler["Execute Designated Error Process"]
+```
+
+### Pre-Configured Error Types:
+- **`SERVICE_ERROR`**: REST API failures, HTTP 5xx/4xx, network timeouts, or WorkItemHandler exceptions (`WorkItemHandlerRuntimeException`).
+- **`SCRIPT_ERROR`**: JavaScript sandbox exceptions, syntax errors, or Java runtime crashes.
+- **`RULE_ERROR`**: DMN decision table missing references, scorecard calculation faults, or Drools fact evaluation errors.
+- **`TASK_ERROR`**: Human task deadline expirations, assignment failures, or SLA violations.
+- **`*` (Catch-All / Default)**: Any unhandled exception not matched by a specific rule.
+- **`Custom Code`**: Any arbitrary BPMN error code or specific HTTP status code (e.g. `503`, `PAYMENT_GATEWAY_TIMEOUT`).
+
+For each configured rule, administrators select:
+1. **Target Error Handler Process**: A standalone BPMN process in the project.
+2. **Resolution Strategy**: `repair-and-resume`, `compensate-and-abort`, or `spawn`.
+3. **Output Variable Mappings**: Key-value table mapping error process outputs into the target instance before resumption.
 
 ### Strategy 1: `repair-and-resume` (Recommended)
 Used when the error handler can fix the fault (e.g., refreshing an expired OAuth token, fetching a cached fallback, or alerting an operator for parameter correction).

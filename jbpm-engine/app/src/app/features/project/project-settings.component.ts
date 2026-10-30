@@ -53,72 +53,106 @@ import { IconComponent } from '../../shared/icon.component';
     </div>
 
     <!-- PROJECT GLOBAL ERROR HANDLER SECTION -->
-    <h3 class="sec-h">Project Global Error Handler</h3>
+    <h3 class="sec-h">Project Global Error Handlers (by Error Type)</h3>
     <p class="hint">
-      Configures project-level global error interception. Local boundary error events attached to nodes
-      <strong>always execute first</strong>. If an error is unhandled locally or explicitly rethrown, it bubbles up
-      to this Project Global Error Handler. A built-in circuit breaker ensures loop recursion is capped at 1.
+      Configures project-level global error routing. In standard BPMN, business processes remain clean on canvas
+      without artificial error nodes. Local boundary error events on tasks <strong>always execute first</strong>.
+      Unhandled errors automatically route to the designated handler process based on their error type.
     </p>
 
     <div class="setrow checkrow">
       <label class="toggle-lbl">
         <input type="checkbox" [checked]="ctx.globalErrorHandler().enabled" (change)="toggleGlobalHandler($event)" />
-        <span>Enable Project Global Error Handler</span>
+        <span>Enable Project Global Error Handling</span>
       </label>
-      <small>When enabled, unhandled process node exceptions route to the designated error process.</small>
+      <small>When enabled, unhandled process errors route to their matching handler process below.</small>
     </div>
 
     @if (ctx.globalErrorHandler().enabled) {
-      <div class="setrow">
-        <label>Error Handler Process</label>
-        <select [ngModel]="ctx.globalErrorHandler().processId" (ngModelChange)="setHandlerProcess($event)">
-          <option value="">-- Select error handler process --</option>
-          @for (p of ctx.processes(); track p.id) {
-            <option [value]="p.id">{{ p.name }} ({{ p.id }})</option>
-          }
-        </select>
-        <small>The BPMN process in this project that runs when an unhandled error occurs.</small>
-      </div>
+      @if (ruleList().length === 0) {
+        <div class="empty-state">
+          <div class="es-icon"><app-icon name="alert-triangle" [size]="24" /></div>
+          <h3>No error handler rules configured yet</h3>
+          <p>Add a rule below to route specific error types (e.g. REST/HTTP 5xx, Script crashes, or * for default) to dedicated error processes.</p>
+        </div>
+      } @else {
+        <div class="rules-container">
+          @for (r of ruleList(); track r.id; let idx = $index) {
+            <div class="rule-card">
+              <div class="rule-header">
+                <span class="rule-badge">Rule #{{ idx + 1 }}</span>
+                <span class="rule-title">{{ getRuleSummary(r) }}</span>
+                <button class="x" (click)="rmRule(idx)" title="Remove this rule" aria-label="Remove rule">
+                  <app-icon name="close" [size]="13" />
+                </button>
+              </div>
 
-      <div class="setrow">
-        <label>Resolution Strategy</label>
-        <select [ngModel]="ctx.globalErrorHandler().strategy || 'repair-and-resume'" (ngModelChange)="setStrategy($event)">
-          <option value="repair-and-resume">Repair and Resume (Apply output mappings & continue/retry)</option>
-          <option value="compensate-and-abort">Compensate and Abort (Run compensation/cleanup & abort)</option>
-          <option value="spawn">Spawn Incident Process (Fire-and-forget notification flow)</option>
-        </select>
-        <small>
-          <strong>Repair and Resume:</strong> Merges output variables back to the failing instance and continues (or retries if <code>errorHandlerAction="retry"</code>).<br />
-          <strong>Compensate and Abort:</strong> Executes error handler cleanup, then marks original instance as aborted.
-        </small>
-      </div>
+              <div class="rule-body">
+                <div class="setrow">
+                  <label>Error Type / Category</label>
+                  <select [ngModel]="isStandardType(r.errorType) ? r.errorType : 'CUSTOM'" (ngModelChange)="onTypeChange(r, $event)">
+                    <option value="SERVICE_ERROR">SERVICE_ERROR (REST, HTTP 5xx, WorkItem, Timeout)</option>
+                    <option value="SCRIPT_ERROR">SCRIPT_ERROR (JavaScript Sandbox, Java Runtime)</option>
+                    <option value="RULE_ERROR">RULE_ERROR (DMN Decision Tables, Scorecards, Rules)</option>
+                    <option value="TASK_ERROR">TASK_ERROR (Human Task Deadline, Assignment Failure)</option>
+                    <option value="*">* (Catch-All / Default for any unhandled exception)</option>
+                    <option value="CUSTOM">Custom Error Code / HTTP Status...</option>
+                  </select>
+                  @if (!isStandardType(r.errorType)) {
+                    <input style="margin-top: 4px;" placeholder="e.g. 503, 500, or PAYMENT_GATEWAY_TIMEOUT" [(ngModel)]="r.errorType" />
+                  }
+                  <small>The category or exact code of error to intercept.</small>
+                </div>
 
-      <div class="setrow">
-        <label>Error Codes Filter (comma-separated)</label>
-        <input [ngModel]="filterText" (ngModelChange)="setFilterText($event)" placeholder="* or SERVICE_ERROR, SCRIPT_ERROR, 500" />
-        <small>Use <code>*</code> to intercept all errors, or specify exact error codes / HTTP statuses.</small>
-      </div>
+                <div class="setrow">
+                  <label>Handler Process</label>
+                  <select [(ngModel)]="r.processId">
+                    <option value="">-- Select error handler process --</option>
+                    @for (p of ctx.processes(); track p.id) {
+                      <option [value]="p.id">{{ p.name }} ({{ p.id }})</option>
+                    }
+                  </select>
+                  <small>The standalone BPMN process in this project that handles this error.</small>
+                </div>
 
-      @if ((ctx.globalErrorHandler().strategy || 'repair-and-resume') === 'repair-and-resume') {
-        <div class="setrow">
-          <label>Variable Output Mappings (Error Process Output &rarr; Target Instance Var)</label>
-          <small>Map variables computed by the error handler back into the original instance before resuming.</small>
-          @for (m of outputMappingList(); track $index) {
-            <div class="vrow">
-              <input placeholder="Error Process Var" [(ngModel)]="m.errVar" (blur)="syncMappings()" />
-              <span class="arr">&rarr;</span>
-              <input placeholder="Target Instance Var" [(ngModel)]="m.targetVar" (blur)="syncMappings()" />
-              <button class="x" (click)="rmMapping($index)"><app-icon name="close" [size]="13" /></button>
+                <div class="setrow">
+                  <label>Resolution Strategy</label>
+                  <select [(ngModel)]="r.strategy">
+                    <option value="repair-and-resume">Repair and Resume (Apply output mappings & continue/retry)</option>
+                    <option value="compensate-and-abort">Compensate and Abort (Run cleanup & abort instance)</option>
+                    <option value="spawn">Spawn Incident Process (Fire-and-forget notification flow)</option>
+                  </select>
+                </div>
+
+                @if (r.strategy === 'repair-and-resume') {
+                  <div class="setrow">
+                    <div class="mapping-header">
+                      <label>Output Variable Mappings (Error Process Output &rarr; Target Instance Var)</label>
+                      <button class="btn-link" (click)="addRuleMapping(r)">+ add mapping</button>
+                    </div>
+                    @if (r.outputMappings.length === 0) {
+                      <small style="font-style: italic;">No variable mappings. Repaired variables will merge directly.</small>
+                    } @else {
+                      @for (m of r.outputMappings; track $index; let mIdx = $index) {
+                        <div class="vrow">
+                          <input placeholder="Error Process Var" [(ngModel)]="m.errVar" />
+                          <span class="arr">&rarr;</span>
+                          <input placeholder="Target Instance Var" [(ngModel)]="m.targetVar" />
+                          <button class="x" (click)="rmRuleMapping(r, mIdx)"><app-icon name="close" [size]="13" /></button>
+                        </div>
+                      }
+                    }
+                  </div>
+                }
+              </div>
             </div>
           }
-          <div class="row">
-            <button class="add" (click)="addMapping()">+ add output mapping</button>
-          </div>
         </div>
       }
 
       <div class="row" style="margin-top: 14px;">
-        <button class="btn primary" (click)="saveGlobalHandler()">Save Global Error Handler</button>
+        <button class="add" (click)="addRule()">+ add error handler for type</button>
+        <button class="btn primary" (click)="saveGlobalHandler()">Save Global Error Handlers</button>
       </div>
     }
 
@@ -172,65 +206,127 @@ import { IconComponent } from '../../shared/icon.component';
     .empty-state { padding: 24px; border: 1px dashed var(--border); border-radius: 12px; text-align: center; max-width: 580px; margin-bottom: 12px; background: rgba(255,255,255,0.01); }
     .empty-state h3 { font-size: 14px; margin: 8px 0 4px; }
     .empty-state p { color: var(--muted); font-size: 12px; margin: 0; }
+    .rules-container { display: flex; flex-direction: column; gap: 14px; max-width: 680px; margin-bottom: 12px; }
+    .rule-card { border: 1px solid var(--border); border-radius: 10px; background: rgba(255,255,255,0.02); padding: 16px; }
+    .rule-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    .rule-badge { background: var(--accent, #6366f1); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+    .rule-title { font-size: 13px; font-weight: 600; color: var(--text, #f1f5f9); flex: 1; }
+    .btn-link { background: none; border: none; color: var(--accent, #6366f1); font-size: 12px; font-weight: 600; cursor: pointer; padding: 0; }
+    .mapping-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
   `],
 })
 export class ProjectSettingsComponent {
   ctx = inject(ProjectContextService);
 
-  get filterText(): string {
-    return (this.ctx.globalErrorHandler().filter || ['*']).join(', ');
-  }
+  ruleList = signal<{
+    id: string;
+    errorType: string;
+    processId: string;
+    strategy: 'repair-and-resume' | 'compensate-and-abort' | 'spawn';
+    outputMappings: { errVar: string; targetVar: string }[];
+  }[]>([]);
 
-  setFilterText(val: string) {
-    const arr = val.split(',').map((s) => s.trim()).filter(Boolean);
-    this.ctx.updateGlobalErrorHandler({ filter: arr.length ? arr : ['*'] });
-  }
-
-  outputMappingList = signal<{ errVar: string; targetVar: string }[]>([]);
+  private standardTypes = ['SERVICE_ERROR', 'SCRIPT_ERROR', 'RULE_ERROR', 'TASK_ERROR', '*'];
 
   constructor() {
     effect(() => {
-      const mappings = this.ctx.globalErrorHandler().outputMappings || {};
-      this.outputMappingList.set(Object.entries(mappings).map(([errVar, targetVar]) => ({ errVar, targetVar })));
+      const geh = this.ctx.globalErrorHandler();
+      if (geh.rules && geh.rules.length > 0) {
+        this.ruleList.set(geh.rules.map((r) => ({
+          id: r.id || `r_${Math.random().toString(36).slice(2, 8)}`,
+          errorType: r.errorType,
+          processId: r.processId,
+          strategy: r.strategy || 'repair-and-resume',
+          outputMappings: Object.entries(r.outputMappings || {}).map(([errVar, targetVar]) => ({ errVar, targetVar })),
+        })));
+      } else if (geh.processId) {
+        // Migrate legacy single-process config into rule list
+        this.ruleList.set([{
+          id: `r_legacy`,
+          errorType: (geh.filter && geh.filter[0]) || '*',
+          processId: geh.processId,
+          strategy: geh.strategy || 'repair-and-resume',
+          outputMappings: Object.entries(geh.outputMappings || {}).map(([errVar, targetVar]) => ({ errVar, targetVar })),
+        }]);
+      } else {
+        this.ruleList.set([]);
+      }
     }, { allowSignalWrites: true });
+  }
+
+  isStandardType(t: string): boolean {
+    return this.standardTypes.includes(t);
+  }
+
+  onTypeChange(r: any, val: string) {
+    if (val === 'CUSTOM') {
+      r.errorType = r.errorType && !this.isStandardType(r.errorType) ? r.errorType : '';
+    } else {
+      r.errorType = val;
+    }
+  }
+
+  getRuleSummary(r: any): string {
+    const proc = this.ctx.processes().find((p) => p.id === r.processId);
+    const procLabel = proc ? proc.name : (r.processId ? r.processId : 'No process selected');
+    const typeLabel = r.errorType || 'Custom';
+    return `${typeLabel} → ${procLabel}`;
   }
 
   toggleGlobalHandler(event: Event) {
     const checked = (event.target as HTMLInputElement).checked;
     this.ctx.updateGlobalErrorHandler({ enabled: checked });
-  }
-
-  setHandlerProcess(processId: string) {
-    this.ctx.updateGlobalErrorHandler({ processId: processId || undefined });
-  }
-
-  setStrategy(strategy: any) {
-    this.ctx.updateGlobalErrorHandler({ strategy });
-  }
-
-  addMapping() {
-    this.outputMappingList.set([...this.outputMappingList(), { errVar: '', targetVar: '' }]);
-  }
-
-  rmMapping(i: number) {
-    const list = [...this.outputMappingList()];
-    list.splice(i, 1);
-    this.outputMappingList.set(list);
-    this.syncMappings();
-  }
-
-  syncMappings() {
-    const map: Record<string, string> = {};
-    for (const item of this.outputMappingList()) {
-      if (item.errVar.trim() && item.targetVar.trim()) {
-        map[item.errVar.trim()] = item.targetVar.trim();
-      }
+    if (checked && this.ruleList().length === 0) {
+      this.addRule();
     }
-    this.ctx.updateGlobalErrorHandler({ outputMappings: map });
+  }
+
+  addRule() {
+    const newRule = {
+      id: `rule_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      errorType: 'SERVICE_ERROR',
+      processId: this.ctx.processes()[0]?.id || '',
+      strategy: 'repair-and-resume' as const,
+      outputMappings: [],
+    };
+    this.ruleList.set([...this.ruleList(), newRule]);
+  }
+
+  rmRule(idx: number) {
+    const list = [...this.ruleList()];
+    list.splice(idx, 1);
+    this.ruleList.set(list);
+  }
+
+  addRuleMapping(r: any) {
+    r.outputMappings.push({ errVar: '', targetVar: '' });
+  }
+
+  rmRuleMapping(r: any, mIdx: number) {
+    r.outputMappings.splice(mIdx, 1);
   }
 
   saveGlobalHandler() {
-    this.syncMappings();
+    const rules = this.ruleList().map((r) => {
+      const map: Record<string, string> = {};
+      for (const m of r.outputMappings) {
+        if (m.errVar.trim() && m.targetVar.trim()) {
+          map[m.errVar.trim()] = m.targetVar.trim();
+        }
+      }
+      return {
+        id: r.id,
+        errorType: r.errorType.trim() || '*',
+        processId: r.processId,
+        strategy: r.strategy,
+        outputMappings: map,
+      };
+    });
+
+    this.ctx.updateGlobalErrorHandler({
+      enabled: this.ctx.globalErrorHandler().enabled,
+      rules,
+    });
     this.ctx.saveGlobalErrorHandler();
   }
 }

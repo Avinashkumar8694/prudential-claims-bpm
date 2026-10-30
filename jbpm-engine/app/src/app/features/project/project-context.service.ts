@@ -42,7 +42,7 @@ export class ProjectContextService {
   assetKinds = signal<{ key: string; label: string; nameField: string }[]>([]);
   vars = signal<{ name: string; type: string }[]>([]);
   envList = signal<{ key: string; value: string }[]>([]);
-  globalErrorHandler = signal<GlobalErrorHandlerConfig>({ enabled: false, strategy: 'repair-and-resume', filter: ['*'] });
+  globalErrorHandler = signal<GlobalErrorHandlerConfig>({ enabled: false, rules: [] });
   name = ''; description = ''; baseUrl = '';
   instanceCreationMode: 'both' | 'case-only' | 'process-only' | '' = '';
   exportDenial = signal<JbpmExportDenial | null>(null);
@@ -55,7 +55,7 @@ export class ProjectContextService {
       this.vars.set([...(w.variables || [])]);
       const envRecord = w.env || {};
       this.envList.set(Object.entries(envRecord).map(([key, value]) => ({ key, value })));
-      this.globalErrorHandler.set(w.globalErrorHandler || { enabled: false, strategy: 'repair-and-resume', filter: ['*'] });
+      this.globalErrorHandler.set(w.globalErrorHandler || { enabled: false, rules: [] });
     });
     this.loadProcesses();
     this.loadAssets();

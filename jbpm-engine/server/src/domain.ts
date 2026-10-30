@@ -6,17 +6,29 @@ export interface Audited { createdAt: string; createdBy: string; updatedAt: stri
 
 export interface WorkflowPermission { role: string; actions: ('view' | 'edit' | 'deploy' | 'run' | 'admin')[]; }
 
-export interface GlobalErrorHandlerConfig {
-  enabled: boolean;
-  /** Process ID in this project that executes as the global error handler */
-  processId?: string;
+export interface GlobalErrorHandlerRule {
+  id: string;
+  /** Error type/code: 'SERVICE_ERROR' | 'SCRIPT_ERROR' | 'RULE_ERROR' | 'TASK_ERROR' | '*' | custom code */
+  errorType: string;
+  /** Process ID in this project that executes to handle this error type */
+  processId: string;
   /** Resolution strategy when error occurs */
-  strategy?: 'spawn' | 'repair-and-resume' | 'compensate-and-abort';
+  strategy: 'spawn' | 'repair-and-resume' | 'compensate-and-abort';
   /** Mapping from error process output variable to original instance variable */
   outputMappings?: Record<string, string>;
-  /** Error codes to intercept (e.g. ['*'] or ['SERVICE_ERROR', 'SCRIPT_ERROR']) */
-  filter?: string[];
   /** Whether unhandled errors inside the error handler process rethrow to system log */
+  rethrowOnFailure?: boolean;
+}
+
+export interface GlobalErrorHandlerConfig {
+  enabled: boolean;
+  /** Configured error handler rules by error type */
+  rules?: GlobalErrorHandlerRule[];
+  /** Legacy single-process fallback (kept for backward compatibility) */
+  processId?: string;
+  strategy?: 'spawn' | 'repair-and-resume' | 'compensate-and-abort';
+  outputMappings?: Record<string, string>;
+  filter?: string[];
   rethrowOnFailure?: boolean;
 }
 

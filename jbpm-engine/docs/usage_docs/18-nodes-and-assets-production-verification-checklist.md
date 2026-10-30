@@ -37,7 +37,7 @@ flowchart LR
 - **Concurrent Invocations**: 100 simultaneous complex parallel workflow instances (`Promise.all`).
 - **Total Execution Time**: **~450ms** across all 100 multi-branch processes (~222 instances/sec).
 - **Correctness**: 100% mathematical consistency across all instances (zero variable corruption, zero race conditions, zero orphaned tokens).
-- **Total Passing Tests**: **258/258** across the complete server engine test suite.
+- **Total Passing Tests**: **261/261** across the complete server engine test suite.
 
 ---
 
@@ -145,5 +145,5 @@ flowchart TD
 - **Authentic Project Parity**: Verified against imported Prudential `policy_system` project (`policy_system_node_project.json`) confirming local boundary error handler takes precedence and unhandled errors bubble to global handler with async support.
 - **Concurrency & Stress**: Verified with 100 concurrent parallel workflow executions completing in under 450ms (~222 instances/sec).
 - **Zero Token Leaks**: All tokens cleanly resolved, terminated, or parked in waiting states.
-- **Engine Test Suite**: 258/258 passing tests.
+- **Engine Test Suite**: 261/261 passing tests.
 - **Angular Frontend App**: Builds cleanly with zero compiler errors.

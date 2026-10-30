@@ -1,8 +1,18 @@
 // Client-side mirrors of the server domain (docs/04-data-model.md). Kept intentionally loose.
 export interface EngineVar { name: string; type: string; }
 
+export interface GlobalErrorHandlerRule {
+  id: string;
+  errorType: string;
+  processId: string;
+  strategy: 'spawn' | 'repair-and-resume' | 'compensate-and-abort';
+  outputMappings?: Record<string, string>;
+  rethrowOnFailure?: boolean;
+}
+
 export interface GlobalErrorHandlerConfig {
   enabled: boolean;
+  rules?: GlobalErrorHandlerRule[];
   processId?: string;
   strategy?: 'spawn' | 'repair-and-resume' | 'compensate-and-abort';
   outputMappings?: Record<string, string>;
