@@ -56,7 +56,7 @@ export class ExecutionEngine {
   private incoming(p: EngineProcess, nodeId: string): EngineFlow[] { return p.flows.filter((f) => f.to === nodeId); }
 
   // ---- lifecycle ----
-  async start(dep: Deployment, variables: Record<string, unknown>, actor: string, opts: { processId?: string; correlationKey?: string } = {}): Promise<Instance> {
+  async start(dep: Deployment, variables: Record<string, unknown>, actor: string, opts: { processId?: string; correlationKey?: string; parentInstanceId?: string; isErrorHandler?: boolean } = {}): Promise<Instance> {
     const p = this.pick(dep, opts.processId);
     const startNode = p.nodes.find((n) => n.type === 'start') || p.nodes[0];
     if (!startNode) throw new Error('process has no start node');
@@ -68,6 +68,8 @@ export class ExecutionEngine {
       correlationKey: opts.correlationKey, status: 'running', variables: { ...seed, ...variables },
       tokens: [{ id: this.ctx.newId(), nodeId: startNode.id!, state: 'active', enteredAt: now }],
       history: [], startedAt: now, startedBy: actor,
+      parentInstanceId: opts.parentInstanceId,
+      isErrorHandler: opts.isErrorHandler,
     };
     this.emit({ kind: 'instance.started', instanceId: inst.id });
     // Every instance is created here — a direct start, a scheduled/cron start, a call-activity or
@@ -292,6 +294,12 @@ export class ExecutionEngine {
     // mapChildOutputs in nodes/index.ts's CHILD_OUTPUT_MAPPERS (same logic the sync-completion path uses).
     const mapper = callNode ? CHILD_OUTPUT_MAPPERS[callNode.type as string] : undefined;
     const vars = mapper ? mapper(callNode, child) : {};
+    if (child.isErrorHandler && pdep.globalErrorHandler?.outputMappings) {
+      for (const [targetVar, sourceVar] of Object.entries(pdep.globalErrorHandler.outputMappings)) {
+        if (child.variables[sourceVar] !== undefined) vars[targetVar] = child.variables[sourceVar];
+      }
+      vars['errorRepaired'] = true;
+    }
     await this.resumeToken(parent, pdep, token.id, vars);
   }
 
@@ -717,6 +725,7 @@ export class ExecutionEngine {
       startedBy: inst.startedBy || 'system',
       isErrorHandler: true, // CIRCUIT BREAKER
       handlingInstanceId: inst.id,
+      parentInstanceId: inst.id,
     };
 
     await this.inst().put(handlerInst);
@@ -757,6 +766,10 @@ export class ExecutionEngine {
           }
         }
         return true; // Successfully repaired and resumed!
+      } else if (handlerInst.status === 'waiting') {
+        // Global error handler parked on a wait (e.g. IT admin review task or backoff timer)
+        inst.tokens.push({ id: this.ctx.newId(), nodeId: failingNodeId, state: 'waiting', waitFor: { kind: 'child', ref: handlerInst.id }, enteredAt: this.ctx.clock() });
+        return true;
       } else {
         // Handler did not complete successfully (e.g. failed or aborted)
         inst.error = { nodeId: failingNodeId, message: `Global error handler (${geh.processId}) failed: ${handlerInst.error?.message || handlerInst.status}`, at: this.ctx.clock() };

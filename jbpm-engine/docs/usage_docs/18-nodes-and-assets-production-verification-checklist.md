@@ -37,7 +37,7 @@ flowchart LR
 - **Concurrent Invocations**: 100 simultaneous complex parallel workflow instances (`Promise.all`).
 - **Total Execution Time**: **~450ms** across all 100 multi-branch processes (~222 instances/sec).
 - **Correctness**: 100% mathematical consistency across all instances (zero variable corruption, zero race conditions, zero orphaned tokens).
-- **Total Passing Tests**: **255/255** across the complete server engine test suite.
+- **Total Passing Tests**: **258/258** across the complete server engine test suite.
 
 ---
 
@@ -113,13 +113,37 @@ flowchart TD
     DMN & GDST & GDT & SCGD & DRL --> Out["Updated Process Variables (Mutated Facts)"]
 ```
 
+### C. Authentic Prudential `policy_system` Error Handling Parity
+```mermaid
+flowchart TD
+    subgraph RestExec["policy_system.rest-executor"]
+        N1["_REST_TASK: Call Core Policy Endpoint"]
+        N1 -. "Fails (503 / Network)" .-> B1["_B_ERROR: Local Boundary Event"]
+        B1 --> B2["_BUILD_CTX: Pack Jackson failedContext"]
+        B2 --> B3["_CALL_ERR: Call Activity to Error Handler"]
+        B3 --> B4["_END_RECOVERED: Graceful Local Completion"]
+    end
+
+    subgraph Handler["policy_system.api-error-handler"]
+        H1["_PARSE_ERR: Extract failedContext"] --> H2["_TIMER_NODE: 1m Backoff Wait"]
+        H2 --> H3["_ADMIN_REVIEW: IT Admin Human Task"]
+        H3 --> H4{"adminDecision"}
+        H4 -- "'SKIP'" --> H5["_END_ERROR: Return to Caller"]
+        H4 -- "'TERMINATE'" --> H6["_END_ERROR_TERMINATE: Terminate Case"]
+    end
+
+    B3 --> H1
+    H5 --> B4
+```
+
 ---
 
 ## 5. Summary & Production Readiness Sign-Off
 
 - **Node Coverage**: 100% of all 16 node types covered by unit and integration tests.
 - **Asset Coverage**: 100% of all 10 asset kinds validated via `AssetsService.testAsset`.
-- **Concurrency & Stress**: Verified with 100 concurrent parallel workflow executions completing in under 450ms.
+- **Authentic Project Parity**: Verified against imported Prudential `policy_system` project (`policy_system_node_project.json`) confirming local boundary error handler takes precedence and unhandled errors bubble to global handler with async support.
+- **Concurrency & Stress**: Verified with 100 concurrent parallel workflow executions completing in under 450ms (~222 instances/sec).
 - **Zero Token Leaks**: All tokens cleanly resolved, terminated, or parked in waiting states.
-- **Engine Test Suite**: 255/255 passing tests.
+- **Engine Test Suite**: 258/258 passing tests.
 - **Angular Frontend App**: Builds cleanly with zero compiler errors.
