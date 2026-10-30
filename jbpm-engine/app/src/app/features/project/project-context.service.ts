@@ -4,7 +4,7 @@ import { WorkflowApiService } from '../../core/api/workflow-api.service';
 import { DeploymentApiService } from '../../core/api/deployment-api.service';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
-import type { Workflow, GlobalErrorHandlerConfig } from '../../core/models';
+import type { Workflow, GlobalErrorHandlerConfig, Problem } from '../../core/models';
 
 export interface JbpmExportDenialIssue {
   processId: string;
@@ -22,6 +22,13 @@ export interface JbpmExportDenial {
   projectName: string;
   message: string;
   issues: JbpmExportDenialIssue[];
+}
+
+export interface ValidationDenial {
+  action: 'build' | 'deploy';
+  projectName: string;
+  message: string;
+  problems: Problem[];
 }
 
 // Route-scoped (provided by ProjectShellComponent, one instance per project) — shared by every section
@@ -46,6 +53,7 @@ export class ProjectContextService {
   name = ''; description = ''; baseUrl = '';
   instanceCreationMode: 'both' | 'case-only' | 'process-only' | 'none' | '' = '';
   exportDenial = signal<JbpmExportDenial | null>(null);
+  validationDenial = signal<ValidationDenial | null>(null);
   isJbpmCompatible = signal<boolean>(false);
 
   constructor() {
@@ -216,6 +224,11 @@ export class ProjectContextService {
   closeExportDenial() {
     this.exportDenial.set(null);
   }
+
+  closeValidationDenial() {
+    this.validationDenial.set(null);
+  }
+
   /** "Build" alone (jBPM's compile-without-deploy): publishes the head draft into an immutable
    *  version but doesn't push it to a runtime environment. */
   build() {
@@ -225,19 +238,32 @@ export class ProjectContextService {
       if (!head) { this.toast.error('Nothing to build — no draft changes since the last version.'); return; }
       this.api.publish(head.id, 'ui').subscribe({
         next: (p: any) => this.toast.success(`Built v${p.published.number}.`),
-        error: (e) => this.toast.error('Cannot build: ' + (e?.error?.error?.message || 'validation failed') + '\n' + ((e?.error?.error?.details || []).map((d: any) => '• ' + d.message).join('\n'))),
+        error: (e) => {
+          const probs: Problem[] = e?.error?.error?.details || [];
+          if (probs.length > 0) {
+            this.validationDenial.set({
+              action: 'build',
+              projectName: w.name,
+              message: e?.error?.error?.message || 'Project contains validation errors that prevent building.',
+              problems: probs,
+            });
+          } else {
+            this.toast.error('Cannot build: ' + (e?.error?.error?.message || 'validation failed'));
+          }
+        },
       });
     });
   }
   deployProject(
     opts: { environment: string; versionLabel?: string; activate: boolean } = { environment: 'prod', activate: true },
-    onDone?: (dep: any) => void
+    onDone?: (dep: any) => void,
+    onError?: (err: any) => void
   ) {
     const w = this.wf(); if (!w) return;
     this.api.listVersions(w.defaultBranchId).subscribe({
       next: (vs) => {
         const head = vs.filter((v) => v.state === 'draft').at(-1) || vs.at(-1);
-        if (!head) { this.toast.error('No project version available to deploy.'); return; }
+        if (!head) { this.toast.error('No project version available to deploy.'); onError?.('No draft'); return; }
 
         const proceedWithDeployment = (versionId: string, versionNumber: number | string) => {
           this.deploymentApi.deploy(versionId, { environment: opts.environment, activate: opts.activate }).subscribe({
@@ -245,20 +271,49 @@ export class ProjectContextService {
               this.toast.success(`Deployed project "${w.name}" v${versionNumber} to ${opts.environment}.`);
               if (onDone) onDone(dep);
             },
-            error: (e) => this.toast.error('Deploy failed: ' + (e?.error?.error?.message || 'unknown error')),
+            error: (e) => {
+              const probs: Problem[] = e?.error?.error?.details || [];
+              if (probs.length > 0) {
+                this.validationDenial.set({
+                  action: 'deploy',
+                  projectName: w.name,
+                  message: e?.error?.error?.message || 'Project contains validation errors that prevent deployment.',
+                  problems: probs,
+                });
+              } else {
+                this.toast.error('Deploy failed: ' + (e?.error?.error?.message || 'unknown error'));
+              }
+              onError?.(e);
+            },
           });
         };
 
         if (head.state === 'draft') {
           this.api.publish(head.id, opts.versionLabel?.trim() || undefined).subscribe({
             next: (p: any) => proceedWithDeployment(p.published.id, p.published.number),
-            error: (e) => this.toast.error('Cannot build/publish snapshot: ' + (e?.error?.error?.message || 'validation failed') + '\n' + ((e?.error?.error?.details || []).map((d: any) => '• ' + d.message).join('\n'))),
+            error: (e) => {
+              const probs: Problem[] = e?.error?.error?.details || [];
+              if (probs.length > 0) {
+                this.validationDenial.set({
+                  action: 'deploy',
+                  projectName: w.name,
+                  message: e?.error?.error?.message || 'Cannot build snapshot before deploy: validation errors found.',
+                  problems: probs,
+                });
+              } else {
+                this.toast.error('Cannot build/publish snapshot: ' + (e?.error?.error?.message || 'validation failed'));
+              }
+              onError?.(e);
+            },
           });
         } else {
           proceedWithDeployment(head.id, head.number);
         }
       },
-      error: () => this.toast.error('Failed to load project versions'),
+      error: (e) => {
+        this.toast.error('Failed to load project versions');
+        onError?.(e);
+      },
     });
   }
 }

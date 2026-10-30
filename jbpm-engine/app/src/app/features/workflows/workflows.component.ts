@@ -6,7 +6,7 @@ import { WorkflowApiService } from '../../core/api/workflow-api.service';
 import { BreadcrumbComponent, Crumb } from '../../shared/breadcrumb.component';
 import { ToastService } from '../../shared/toast.service';
 import { ModalService } from '../../shared/modal.service';
-import type { Folder, ImportResult, Workflow } from '../../core/models';
+import type { Folder, ImportResult, Workflow, Problem } from '../../core/models';
 import { IconComponent } from '../../shared/icon.component';
 
 type Selection = 'all' | 'unfiled' | string;
@@ -86,9 +86,10 @@ type Selection = 'all' | 'unfiled' | string;
                 </div>
 
                 @if (w.validationSummary?.hasErrors) {
-                  <div class="wf-danger-indicator" [title]="workflowProblemTooltip(w)">
+                  <div class="wf-danger-indicator" role="button" tabindex="0" (click)="openProblemsModal(w, $event)" [title]="workflowProblemTooltip(w)">
                     <app-icon name="alert-triangle" [size]="12" />
                     <span>{{ w.validationSummary?.errorCount }} issue{{ (w.validationSummary?.errorCount || 0) > 1 ? 's' : '' }} (Deploy Blocked)</span>
+                    <span class="wf-danger-view">Details →</span>
                   </div>
                 }
 
@@ -104,6 +105,60 @@ type Selection = 'all' | 'unfiled' | string;
           </div>
         }
       </div>
+
+      @if (activeProblemsModal(); as modal) {
+        <div class="modal-bg" (click)="closeProblemsModal()">
+          <div class="modal denial-modal" (click)="$event.stopPropagation()">
+            <div class="modal-h denial-h">
+              <span class="denial-ic"><app-icon name="alert-triangle" [size]="18" /></span>
+              <div class="denial-titles">
+                <span class="denial-title">{{ modal.title }}</span>
+                <span class="denial-sub">{{ modal.subtitle }}</span>
+              </div>
+              <span class="spacer"></span>
+              <button class="x" (click)="closeProblemsModal()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+            </div>
+            <div class="modal-body denial-body">
+              <div class="denial-banner">
+                <p><strong>Deployment Integrity Policy:</strong> Projects with validation errors cannot be built or deployed to prevent runtime failures. Each issue below must be addressed in the process designer before deployment can succeed.</p>
+              </div>
+
+              <div class="issues-hdr">
+                <span>Validation Issues ({{ modal.problems.length }})</span>
+              </div>
+
+              <div class="denial-issues-list">
+                @for (p of modal.problems; track $index) {
+                  <div class="issue-card code">
+                    <div class="issue-head">
+                      <span class="issue-badge code">{{ p.rule }}</span>
+                      @if (p.processName || p.processId) {
+                        <span class="issue-loc">Process: <strong>{{ p.processName || p.processId }}</strong></span>
+                      }
+                      @if (p.nodeName || p.nodeId) {
+                        <span class="issue-loc">Node: <strong>{{ p.nodeName || p.nodeId }}</strong></span>
+                      }
+                      @if (p.flowId) {
+                        <span class="issue-loc">Sequence Flow: <strong>{{ p.flowId }}</strong></span>
+                      }
+                    </div>
+                    <div class="issue-msg">{{ p.message }}</div>
+                    @if (p.remedy) {
+                      <div class="issue-remedy"><span class="remedy-lbl">Resolution Fix:</span> {{ p.remedy }}</div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn" (click)="closeProblemsModal()">Close</button>
+              @if (modal.projectId) {
+                <a class="btn primary" [routerLink]="['/projects', modal.projectId]" (click)="closeProblemsModal()">Open Designer to Fix →</a>
+              }
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -172,7 +227,17 @@ type Selection = 'all' | 'unfiled' | string;
       background: rgba(239, 68, 68, 0.12); color: #ef4444;
       border: 1px solid rgba(239, 68, 68, 0.25);
       border-radius: 6px; padding: 4px 8px; font-size: 11px;
-      font-weight: 700; margin: 4px 0;
+      font-weight: 700; margin: 4px 0; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    }
+    .wf-danger-indicator:hover {
+      background: rgba(239, 68, 68, 0.22);
+      border-color: rgba(239, 68, 68, 0.45);
+    }
+    .wf-danger-view {
+      margin-left: 4px;
+      font-weight: 600;
+      opacity: 0.85;
+      text-decoration: underline;
     }
     .btn-danger-outline {
       border: 1px solid rgba(239, 68, 68, 0.4) !important;
@@ -182,6 +247,31 @@ type Selection = 'all' | 'unfiled' | string;
     .btn-danger-outline:hover {
       background: rgba(239, 68, 68, 0.15) !important;
     }
+
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: grid; place-items: center; z-index: 100; backdrop-filter: blur(2px); }
+    .modal.denial-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; width: 680px; max-width: 92vw; max-height: 88vh; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
+    .modal-h.denial-h { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+    .denial-ic { width: 36px; height: 36px; border-radius: 10px; background: #fee2e2; color: #dc2626; display: grid; place-items: center; flex-shrink: 0; }
+    .denial-titles { display: flex; flex-direction: column; gap: 2px; }
+    .denial-title { font-weight: 700; font-size: 16px; color: var(--text); }
+    .denial-sub { font-size: 12.5px; color: var(--muted); }
+    .modal-h .x { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 6px; }
+    .modal-h .x:hover { background: var(--surface-2); color: var(--text); }
+    .modal-body.denial-body { padding: 18px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .denial-banner { background: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; padding: 12px 14px; font-size: 12.5px; color: #9b2c2c; line-height: 1.45; }
+    .denial-banner strong { color: #742a2a; }
+    .issues-hdr { font-size: 13px; font-weight: 700; color: var(--text); display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+    .denial-issues-list { display: flex; flex-direction: column; gap: 10px; }
+    .issue-card { border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; background: var(--surface-2); display: flex; flex-direction: column; gap: 6px; border-left: 4px solid var(--border-strong); }
+    .issue-card.code { border-left-color: #ef4444; }
+    .issue-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
+    .issue-badge { padding: 2px 7px; border-radius: 999px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; background: #fee2e2; color: #dc2626; }
+    .issue-loc { color: var(--muted); }
+    .issue-loc strong { color: var(--text); }
+    .issue-msg { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; }
+    .issue-remedy { font-size: 12px; color: var(--muted); background: var(--surface); padding: 6px 10px; border-radius: 6px; border: 1px dashed var(--border); }
+    .remedy-lbl { font-weight: 600; color: var(--text-secondary); }
+    .modal-footer { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; background: var(--surface); border-radius: 0 0 14px 14px; }
   `],
 })
 export class WorkflowsComponent {
@@ -195,6 +285,23 @@ export class WorkflowsComponent {
   newFolderName = '';
   selected = signal<Selection>('all');
   openMenu = signal<string | null>(null);
+  activeProblemsModal = signal<{ title: string; subtitle?: string; problems: Problem[]; projectId?: string } | null>(null);
+
+  openProblemsModal(w: Workflow, ev: Event) {
+    ev.stopPropagation();
+    ev.preventDefault();
+    const problems = w.validationSummary?.problems || [];
+    this.activeProblemsModal.set({
+      title: `Validation Issues: ${w.name}`,
+      subtitle: `Project contains ${problems.length} issue${problems.length === 1 ? '' : 's'} preventing compilation and deployment.`,
+      problems,
+      projectId: w.id,
+    });
+  }
+
+  closeProblemsModal() {
+    this.activeProblemsModal.set(null);
+  }
 
   flatFolders = computed(() => {
     const byParent = new Map<string | null, Folder[]>();
@@ -248,7 +355,11 @@ export class WorkflowsComponent {
   workflowProblemTooltip(w: Workflow): string {
     const problems = w.validationSummary?.problems || [];
     if (!problems.length) return 'Validation errors found in draft processes';
-    return problems.map((p) => `[${p.severity.toUpperCase()}] ${p.rule}: ${p.message}`).join('\n');
+    return problems.map((p) => {
+      const loc = [p.processName || p.processId, p.nodeName || p.nodeId].filter(Boolean).join(' -> ');
+      const fix = p.remedy ? `\n  Fix: ${p.remedy}` : '';
+      return `[${p.severity.toUpperCase()}] ${loc ? `(${loc}) ` : ''}${p.message}${fix}`;
+    }).join('\n\n');
   }
 
   create() {
@@ -334,7 +445,19 @@ export class WorkflowsComponent {
     if (!files) { this.toast.error('Not a valid exported project JSON or .bpmn file'); return; }
     this.api.importAndDeployJbpm(files, file.name.replace(/\.(json|bpmn2?|xml)$/i, ''), env || 'prod').subscribe({
       next: (r) => { this.toast.success(this.importSummary(r, 'Imported') + ` Deployed to "${env || 'prod'}".`); this.reload(); },
-      error: (e) => this.toast.error('Import & deploy failed: ' + (e?.error?.error?.message || 'invalid project')),
+      error: (e) => {
+        const probs: Problem[] = e?.error?.error?.details || [];
+        if (probs.length > 0) {
+          this.activeProblemsModal.set({
+            title: 'Import & Deploy Validation Failure',
+            subtitle: e?.error?.error?.message || 'Imported project contains validation errors that must be resolved before deployment.',
+            problems: probs,
+          });
+        } else {
+          this.toast.error('Import & deploy failed: ' + (e?.error?.error?.message || 'invalid project'));
+        }
+        this.reload();
+      },
     });
   }
 }

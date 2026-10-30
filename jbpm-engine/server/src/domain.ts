@@ -1,6 +1,7 @@
 // Domain entities — see docs/04-data-model.md. Persisted via Repository<T>.
 import type { EngineProject, EngineVar } from './sdk/index.ts';
 import type { Entity } from './store/repository.ts';
+import type { Problem } from './modules/validation/rules.ts';
 
 export interface Audited { createdAt: string; createdBy: string; updatedAt: string; updatedBy: string; }
 
@@ -36,7 +37,7 @@ export interface WorkflowValidationSummary {
   hasErrors: boolean;
   errorCount: number;
   warningCount: number;
-  problems?: { rule: string; severity: string; message: string; nodeId?: string; flowId?: string }[];
+  problems?: Problem[];
 }
 
 export interface Workflow extends Entity, Audited {

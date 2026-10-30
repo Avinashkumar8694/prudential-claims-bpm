@@ -24,7 +24,7 @@ export interface WorkflowValidationSummary {
   hasErrors: boolean;
   errorCount: number;
   warningCount: number;
-  problems?: { rule: string; severity: string; message: string; nodeId?: string; flowId?: string }[];
+  problems?: Problem[];
 }
 
 export interface Workflow {
@@ -115,7 +115,17 @@ export interface Catalog {
  *  'processRef' widget's picker and, once one is chosen, the 'called' variable-source suggestions. */
 export interface CallableProcess { id: string; name: string; workflowId: string; workflowName: string; environment: string; vars: { name: string; type?: string }[]; }
 
-export interface Problem { rule: string; severity: 'error' | 'warning'; message: string; nodeId?: string; flowId?: string; }
+export interface Problem {
+  rule: string;
+  severity: 'error' | 'warning';
+  message: string;
+  nodeId?: string;
+  nodeName?: string;
+  flowId?: string;
+  processId?: string;
+  processName?: string;
+  remedy?: string;
+}
 export interface ValidationResult { ok: boolean; errors: Problem[]; warnings: Problem[]; problems: Problem[]; }
 
 export interface ImportResult {

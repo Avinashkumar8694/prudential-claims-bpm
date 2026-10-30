@@ -768,15 +768,15 @@ export class ProcessCanvasComponent implements OnChanges {
   nodeProblemTooltip(id: string): string {
     const probs = this.problems().filter((p) => p.nodeId === id);
     if (!probs.length) return '';
-    return probs.map((p) => `[${p.severity.toUpperCase()}] ${p.rule}: ${p.message}`).join('\n');
+    return probs.map((p) => `[${p.severity.toUpperCase()}] ${p.rule}: ${p.message}${p.remedy ? '\n💡 Fix: ' + p.remedy : ''}`).join('\n\n');
   }
 
   nodeTooltip(n: CNode): string {
     const base = `${this.typeLabel(n)}${n.name ? ': ' + n.name : ''}`;
     const probs = this.problems().filter((p) => p.nodeId === n.id);
     if (!probs.length) return base;
-    const probSummary = probs.map((p) => `• [${p.severity.toUpperCase()}] ${p.message}`).join('\n');
-    return `${base}\n\nIssues:\n${probSummary}`;
+    const probSummary = probs.map((p) => `• [${p.severity.toUpperCase()}] ${p.message}${p.remedy ? '\n  💡 Fix: ' + p.remedy : ''}`).join('\n');
+    return `${base}\n\nValidation Issues:\n${probSummary}`;
   }
 
   openNodeProblems(id: string) {
@@ -1246,7 +1246,17 @@ export class ProcessCanvasComponent implements OnChanges {
   validate() {
     this.api.validateProcess(this.buildProcess()).subscribe((r) => {
       this.problems.set(r.problems);
-      this.toast[r.ok ? 'success' : 'error'](r.ok ? 'Process is valid' : `${r.errors.length} error(s) — see the problems panel`);
+      const panel = this.problemsPanel();
+      if (!r.ok && panel) {
+        panel.collapsed.set(false);
+      }
+      if (r.ok) {
+        this.toast.success('Process is valid and ready for build & deployment.');
+      } else {
+        const firstErr = r.errors[0];
+        const remedyText = firstErr?.remedy ? `\n💡 Fix: ${firstErr.remedy}` : '';
+        this.toast.error(`${r.errors.length} validation error(s) found:\n${firstErr?.message}${remedyText}`);
+      }
     });
   }
 

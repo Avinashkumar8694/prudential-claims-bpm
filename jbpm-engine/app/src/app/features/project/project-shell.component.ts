@@ -160,6 +160,57 @@ import { IconComponent } from '../../shared/icon.component';
           </div>
         </div>
       }
+
+      @if (ctx.validationDenial(); as denial) {
+        <div class="modal-bg" (click)="ctx.closeValidationDenial()">
+          <div class="modal denial-modal" (click)="$event.stopPropagation()">
+            <div class="modal-h denial-h">
+              <span class="denial-ic"><app-icon name="alert-triangle" [size]="18" /></span>
+              <div class="denial-titles">
+                <span class="denial-title">Validation Blocker: Cannot {{ denial.action === 'build' ? 'Build' : 'Deploy' }} Project</span>
+                <span class="denial-sub">Project "{{ denial.projectName }}" has {{ denial.problems.length }} validation {{ denial.problems.length === 1 ? 'error' : 'errors' }} that must be resolved</span>
+              </div>
+              <span class="spacer"></span>
+              <button class="x" (click)="ctx.closeValidationDenial()" aria-label="Close"><app-icon name="close" [size]="15" /></button>
+            </div>
+            <div class="modal-body denial-body">
+              <div class="denial-banner">
+                <p><strong>Deployment Integrity Policy:</strong> Workflow projects cannot be compiled, versioned, or deployed with active validation errors. Review the diagnostic breakdown below and apply each recommended fix in the process designer before proceeding.</p>
+              </div>
+
+              <div class="issues-hdr">
+                <span>Validation Errors ({{ denial.problems.length }})</span>
+              </div>
+
+              <div class="denial-issues-list">
+                @for (p of denial.problems; track $index) {
+                  <div class="issue-card code">
+                    <div class="issue-head">
+                      <span class="issue-badge code">{{ p.rule }}</span>
+                      @if (p.processName || p.processId) {
+                        <span class="issue-loc">Process: <strong>{{ p.processName || p.processId }}</strong></span>
+                      }
+                      @if (p.nodeName || p.nodeId) {
+                        <span class="issue-loc">Node: <strong>{{ p.nodeName || p.nodeId }}</strong></span>
+                      }
+                      @if (p.flowId) {
+                        <span class="issue-loc">Sequence Flow: <strong>{{ p.flowId }}</strong></span>
+                      }
+                    </div>
+                    <div class="issue-msg">{{ p.message }}</div>
+                    @if (p.remedy) {
+                      <div class="issue-remedy"><span class="remedy-lbl">Resolution Fix:</span> {{ p.remedy }}</div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn" (click)="ctx.closeValidationDenial()">Dismiss</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -243,6 +294,9 @@ export class ProjectShellComponent {
         environment: this.deployEnv,
         versionLabel: this.deployLabel,
         activate: this.deployActivate,
+      },
+      () => {
+        this.closeDeployModal();
       },
       () => {
         this.closeDeployModal();
