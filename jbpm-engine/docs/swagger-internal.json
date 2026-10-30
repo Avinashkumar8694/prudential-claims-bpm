@@ -3436,6 +3436,83 @@
         }
       }
     },
+    "/workflows/{id}/assets/{kind}/{name}/duplicate": {
+      "post": {
+        "tags": [
+          "Assets"
+        ],
+        "summary": "Duplicate an asset within a project",
+        "description": "Clones an existing project asset (DMN decision, DRL ruleset, data type, scorecard, decision tree, form, etc.) with a new unique name in the current project.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Resource id"
+          },
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Asset kind key"
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Source asset name"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "newName"
+                ],
+                "properties": {
+                  "newName": {
+                    "type": "string",
+                    "example": "CreditRiskModel_Copy"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/workflows/{id}/branches": {
       "get": {
         "tags": [

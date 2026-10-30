@@ -455,6 +455,16 @@ const paths: Record<string, any> = {
   '/workflows/{id}/assets/{kind}/{name}/test': {
     post: { tags: ['Assets'], summary: 'Execute, simulate, or test an asset according to its purpose', parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Asset name')], requestBody: jsonBody({ type: 'object' }, false), responses: ok({ type: 'object' }) },
   },
+  '/workflows/{id}/assets/{kind}/{name}/duplicate': {
+    post: {
+      tags: ['Assets'],
+      summary: 'Duplicate an asset within a project',
+      description: 'Clones an existing project asset (DMN decision, DRL ruleset, data type, scorecard, decision tree, form, etc.) with a new unique name in the current project.',
+      parameters: [idParam(), idParam('kind', 'Asset kind key'), idParam('name', 'Source asset name')],
+      requestBody: jsonBody({ type: 'object', required: ['newName'], properties: { newName: { type: 'string', example: 'CreditRiskModel_Copy' } } }),
+      responses: created({ type: 'object', properties: { kind: { type: 'string' }, name: { type: 'string' } } }),
+    },
+  },
   '/workflows/{id}/branches': {
     get: { tags: ['Versioning'], summary: 'List branches', parameters: [idParam()], responses: ok(listOf('Branch')) },
     post: { tags: ['Versioning'], summary: 'Create a branch', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, fromVersionId: { type: 'string' } } }), responses: created(ref('Branch')) },

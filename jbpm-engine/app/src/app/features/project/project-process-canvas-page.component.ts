@@ -27,6 +27,14 @@ import { IconComponent } from '../../shared/icon.component';
         <button class="btn ghost" (click)="canvas()?.openVars()">Variables ({{ canvas()?.procVars()?.length || 0 }})</button>
         <button class="btn ghost" (click)="canvas()?.openCheatSheet()" title="View JavaScript & Flow Variables Cheat Sheet"><app-icon name="code" [size]="14" /> JS Cheat Sheet</button>
         <button class="icon-btn" (click)="canvas()?.autoLayout()" title="Auto-layout">▦</button>
+        <span class="divider"></span>
+        <button class="btn ghost" (click)="canvas()?.copySelected()" [disabled]="!canvas()?.selNode()" title="Copy selected node (Ctrl+C / Cmd+C)">
+          <app-icon name="copy" [size]="14" /> Copy
+        </button>
+        <button class="btn ghost" (click)="canvas()?.pasteNode()" [disabled]="!canvas()?.hasClipboard()" title="Paste node in this project (Ctrl+V / Cmd+V)">
+          <app-icon name="copy" [size]="14" /> Paste
+          @if (canvas()?.clipboardNodeName(); as cname) { <span class="clip-badge" [title]="'Copied: ' + cname">1</span> }
+        </button>
         <span class="spacer"></span>
         <button class="btn" (click)="canvas()?.run()">▷ Run</button>
         <button class="btn" (click)="canvas()?.validate()">
@@ -51,6 +59,7 @@ import { IconComponent } from '../../shared/icon.component';
     .divider { width: 1px; height: 20px; background: var(--border); }
     .icon-btn { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; cursor: pointer; color: var(--muted); font-size: 13px; }
     .icon-btn:hover { background: var(--surface-2); color: var(--text); }
+    .clip-badge { background: var(--primary); color: #fff; border-radius: 999px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 4px; }
     .canvas-body { flex: 1; min-height: 0; }
   `],
 })

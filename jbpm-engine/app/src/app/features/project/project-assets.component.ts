@@ -160,6 +160,7 @@ interface AssetRow {
                         <div class="rowmenu card">
                           <button class="mrow" (click)="openDetail(a); menuFor.set(null)"><app-icon name="file" [size]="13" /> Open</button>
                           <button class="mrow" (click)="rename(a); menuFor.set(null)"><app-icon name="edit" [size]="13" /> Rename</button>
+                          <button class="mrow" (click)="duplicateAsset(a); menuFor.set(null)"><app-icon name="copy" [size]="13" /> Duplicate</button>
                           <button class="mrow danger" [disabled]="a.usedBy > 0" [title]="a.usedBy > 0 ? 'Referenced by ' + a.usedBy + ' node(s)' : ''" (click)="ctx.removeAsset(a.kind, a.name, a.usedBy); menuFor.set(null)"><app-icon name="trash" [size]="13" /> Delete</button>
                         </div>
                       }
@@ -253,6 +254,7 @@ interface AssetRow {
               <div class="row actionrow">
                 <button class="btn primary sm" (click)="saveDetail()">Save</button>
                 <button class="btn sm" (click)="rename(d.row)">Rename</button>
+                <button class="btn sm" (click)="duplicateAsset(d.row)"><app-icon name="copy" [size]="12" /> Duplicate</button>
                 <button class="btn sm danger" [disabled]="d.row.usedBy > 0" [title]="d.row.usedBy > 0 ? 'Referenced by ' + d.row.usedBy + ' node(s)' : ''" (click)="deleteFromDetail(d.row)">Delete</button>
               </div>
             } @else {
@@ -937,6 +939,23 @@ export class ProjectAssetsComponent implements OnInit {
     this.ctx.updateAsset(row.kind, row.name, { [nameField]: next.trim() }).subscribe({
       next: () => { this.toast.success('Renamed'); this.closeDetail(); this.ctx.loadAssets(); },
       error: (e) => this.toast.error(e?.error?.error?.message || 'Rename failed'),
+    });
+  }
+
+  async duplicateAsset(row: AssetRow) {
+    this.menuFor.set(null);
+    const next = await this.modal.prompt({
+      title: `Duplicate ${row.kindLabel}`,
+      initialValue: `${row.name}_Copy`,
+    });
+    if (!next || !next.trim() || next.trim() === row.name) return;
+    const newName = next.trim();
+    this.ctx.duplicateAsset(row.kind, row.name, newName).subscribe({
+      next: () => {
+        this.toast.success(`Duplicated "${row.name}" as "${newName}"`);
+        this.ctx.loadAssets();
+      },
+      error: (e: any) => this.toast.error(e?.error?.error?.message || 'Failed to duplicate asset'),
     });
   }
 

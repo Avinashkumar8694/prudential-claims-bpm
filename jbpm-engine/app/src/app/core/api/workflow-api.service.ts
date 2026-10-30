@@ -65,6 +65,9 @@ export class WorkflowApiService extends ApiBase {
   testAsset(projectId: string, kind: string, name: string, payload: Record<string, unknown> = {}): Observable<any> {
     return this.http.post<any>(`${this.base}/workflows/${projectId}/assets/${kind}/${encodeURIComponent(name)}/test`, payload);
   }
+  duplicateAsset(projectId: string, kind: string, name: string, newName: string): Observable<{ kind: string; name: string }> {
+    return this.http.post<any>(`${this.base}/workflows/${projectId}/assets/${kind}/${encodeURIComponent(name)}/duplicate`, { newName });
+  }
   deleteAsset(projectId: string, kind: string, name: string): Observable<void> {
     return this.http.delete<void>(`${this.base}/workflows/${projectId}/assets/${kind}/${encodeURIComponent(name)}`);
   }

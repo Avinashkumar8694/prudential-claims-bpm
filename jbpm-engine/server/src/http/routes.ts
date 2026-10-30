@@ -229,6 +229,7 @@ export function buildRoutes(): Router {
   r.get('/workflows/:id/assets/:kind/:name', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).get(req.params.id, req.params.kind, req.params.name))));
   r.patch('/workflows/:id/assets/:kind/:name', perm('workflow:edit'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).update(req.params.id, req.params.kind, req.params.name, req.body || {}, actorOf(req)))));
   r.post('/workflows/:id/assets/:kind/:name/test', perm('workflow:view'), asyncHandler(async (req, res) => res.json(await new AssetsService(ctxOf(req)).testAsset(req.params.id, req.params.kind, req.params.name, req.body || {}))));
+  r.post('/workflows/:id/assets/:kind/:name/duplicate', perm('workflow:edit'), asyncHandler(async (req, res) => res.status(201).json(await new AssetsService(ctxOf(req)).duplicate(req.params.id, req.params.kind, req.params.name, req.body?.newName, actorOf(req)))));
   r.delete('/workflows/:id/assets/:kind/:name', perm('workflow:edit'), asyncHandler(async (req, res) => { await new AssetsService(ctxOf(req)).remove(req.params.id, req.params.kind, req.params.name, actorOf(req)); res.status(204).end(); }));
 
   // --- branches ---

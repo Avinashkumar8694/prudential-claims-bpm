@@ -123,6 +123,8 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                     @if (hasErr(n.id) || !isSupported(n.type)) {
                       <button class="nreplace" (pointerdown)="$event.stopPropagation()" (click)="replaceNode(n.id)" title="Replace with a fresh node from palette (preserves connections)" aria-label="Replace node"><app-icon name="refresh" [size]="11" /></button>
                     }
+                    <button class="ndup" (pointerdown)="$event.stopPropagation()" (click)="duplicateNode($event, n)" title="Duplicate node in this project (Ctrl+D / Cmd+D)" aria-label="Duplicate node"><app-icon name="plus" [size]="12" /></button>
+                    <button class="ncopy" (pointerdown)="$event.stopPropagation()" (click)="copyNode($event, n)" title="Copy node (Ctrl+C / Cmd+C)" aria-label="Copy node"><app-icon name="copy" [size]="12" /></button>
                     <button class="ndel" (pointerdown)="$event.stopPropagation()" (click)="del($event, n)" title="Delete" aria-label="Delete node"><app-icon name="trash" [size]="13" /></button>
                   }
                 </div>
@@ -578,9 +580,13 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     .m-tab-btn { border: none; background: transparent; font-size: 12px; font-weight: 500; color: var(--muted); padding: 4px 10px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
     .m-tab-btn.active { background: var(--surface); color: var(--text-strong); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
     .docs-scroll-pane { padding: 18px 24px; overflow-y: auto; flex: 1; background: var(--surface); }
-    .ninfo { position: absolute; top: -12px; right: 22px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--primary, #3b82f6); display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
+    .ncopy { position: absolute; top: -12px; right: 22px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
+    .ncopy:hover { background: var(--surface-2); color: var(--primary); border-color: var(--primary); }
+    .ndup { position: absolute; top: -12px; right: 50px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
+    .ndup:hover { background: var(--surface-2); color: var(--primary); border-color: var(--primary); }
+    .ninfo { position: absolute; top: -12px; right: 78px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--primary, #3b82f6); display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
     .ninfo:hover { background: var(--primary-50, #eff6ff); border-color: var(--primary); }
-    .nreplace { position: absolute; top: -12px; right: 50px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.4); background: #fef2f2; color: #dc2626; display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
+    .nreplace { position: absolute; top: -12px; right: 106px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.4); background: #fef2f2; color: #dc2626; display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
     .nreplace:hover { background: #fee2e2; border-color: #dc2626; }
     .node-err-banner {
       display: flex; gap: 12px; align-items: flex-start;
@@ -638,6 +644,11 @@ export class ProcessCanvasComponent implements OnChanges {
   editingEdge = signal<CEdge | null>(null);
   nodeModalTab = signal<'props' | 'docs'>('props');
   viewingDocs = signal<{ engineType: string; label: string; content: string } | null>(null);
+
+  private readonly CLIPBOARD_PREFIX = 'pru_bpm_canvas_clipboard_';
+  projectClipboard = signal<CNode | null>(null);
+  clipboardNodeName = computed(() => this.projectClipboard()?.name || this.projectClipboard()?.id);
+  hasClipboard = computed(() => this.projectClipboard() !== null);
 
   readmeFor(type: string): string {
     return this.catalog()?.readmes?.[type] || 'No documentation available for this node.';
@@ -904,6 +915,7 @@ export class ProcessCanvasComponent implements OnChanges {
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['processId'] || changes['workflowId']) {
+      this.refreshProjectClipboard();
       this.selNode.set(null); this.selEdge.set(null); this.editingNode.set(null); this.editingEdge.set(null);
       this.zoom.set(1); this.panMode.set(false); this.addPopoverFor.set(null);
       if (!this.catalog()) this.api.catalog().subscribe((c) => this.catalog.set(c));
@@ -1082,6 +1094,152 @@ export class ProcessCanvasComponent implements OnChanges {
     }
     this.drag = null;
     if (this.linkFrom() && this.linkMoved) { this.linkFrom.set(null); this.linkMoved = false; }
+  }
+
+  // ---- Project-scoped Copy / Paste / Duplicate ----
+  refreshProjectClipboard() {
+    if (!this.workflowId) {
+      this.projectClipboard.set(null);
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem(this.CLIPBOARD_PREFIX + this.workflowId);
+      if (raw) {
+        const payload = JSON.parse(raw);
+        if (payload && payload.workflowId === this.workflowId && payload.node) {
+          this.projectClipboard.set(payload.node);
+          return;
+        }
+      }
+    } catch {}
+    this.projectClipboard.set(null);
+  }
+
+  copySelected() {
+    const n = this.selNode();
+    if (n) this.copyNode(undefined, n);
+  }
+
+  copyNode(ev?: Event, n?: CNode) {
+    if (ev) ev.stopPropagation();
+    const target = n || this.selNode();
+    if (!target) return;
+    const payload = {
+      workflowId: this.workflowId,
+      sourceProcessId: this.processId,
+      node: JSON.parse(JSON.stringify(target)),
+      copiedAt: new Date().toISOString(),
+    };
+    try {
+      sessionStorage.setItem(this.CLIPBOARD_PREFIX + this.workflowId, JSON.stringify(payload));
+    } catch {}
+    this.projectClipboard.set(payload.node);
+    this.toast.success(`Copied "${target.name || target.id}" to project clipboard`);
+  }
+
+  canPaste(): boolean {
+    return this.hasClipboard();
+  }
+
+  pasteNode() {
+    let payload: { workflowId: string; node: CNode } | null = null;
+    try {
+      const raw = sessionStorage.getItem(this.CLIPBOARD_PREFIX + this.workflowId);
+      if (raw) payload = JSON.parse(raw);
+    } catch {}
+
+    if (!payload || payload.workflowId !== this.workflowId || !payload.node) {
+      this.toast.error('Nothing copied to clipboard for this project. Select a node and press Ctrl+C / Cmd+C first.');
+      return;
+    }
+
+    const base = payload.node;
+    const baseType = base.type || 'task';
+    let newId = `${baseType}_${++this.idc}`;
+    while (this.nodes().some((x) => x.id === newId)) {
+      newId = `${baseType}_${++this.idc}`;
+    }
+
+    let newX = (base.x || 100) + 40;
+    let newY = (base.y || 100) + 40;
+    while (this.nodes().some((n) => Math.abs(n.x - newX) < 15 && Math.abs(n.y - newY) < 15)) {
+      newX += 30;
+      newY += 30;
+    }
+
+    const newNode: CNode = {
+      ...JSON.parse(JSON.stringify(base)),
+      id: newId,
+      name: base.name ? `${base.name} (Copy)` : newId,
+      x: newX,
+      y: newY,
+    };
+
+    this.nodes.set([...this.nodes(), newNode]);
+    this.selNode.set(newNode);
+    this.selEdge.set(null);
+    this.markDirty();
+    this.toast.success(`Pasted "${newNode.name}" into canvas`);
+  }
+
+  duplicateNode(ev?: Event, n?: CNode) {
+    if (ev) ev.stopPropagation();
+    const target = n || this.selNode();
+    if (!target) return;
+    this.copyNode(undefined, target);
+    this.pasteNode();
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(ev: KeyboardEvent) {
+    const activeEl = document.activeElement as HTMLElement | null;
+    if (activeEl) {
+      const tag = activeEl.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || activeEl.isContentEditable) {
+        return;
+      }
+    }
+
+    const isMod = ev.ctrlKey || ev.metaKey;
+
+    // Ctrl+C / Cmd+C -> Copy
+    if (isMod && (ev.key === 'c' || ev.key === 'C')) {
+      if (this.selNode()) {
+        ev.preventDefault();
+        this.copySelected();
+      }
+      return;
+    }
+
+    // Ctrl+V / Cmd+V -> Paste
+    if (isMod && (ev.key === 'v' || ev.key === 'V')) {
+      if (this.canPaste()) {
+        ev.preventDefault();
+        this.pasteNode();
+      }
+      return;
+    }
+
+    // Ctrl+D / Cmd+D -> Duplicate
+    if (isMod && (ev.key === 'd' || ev.key === 'D')) {
+      if (this.selNode()) {
+        ev.preventDefault();
+        this.duplicateNode(undefined, this.selNode()!);
+      }
+      return;
+    }
+
+    // Delete or Backspace -> Delete selected node or edge
+    if (ev.key === 'Delete' || ev.key === 'Backspace') {
+      if (this.selNode()) {
+        ev.preventDefault();
+        this.del(ev, this.selNode()!);
+      } else if (this.selEdge()) {
+        ev.preventDefault();
+        this.delEdge(this.selEdge()!);
+      }
+      return;
+    }
   }
 
   /** Screen (clientX/Y) → logical canvas coordinates, correcting for the CSS `zoom` on `.zoomlayer`

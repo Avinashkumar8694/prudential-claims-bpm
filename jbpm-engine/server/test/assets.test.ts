@@ -98,3 +98,27 @@ test('AssetsService.testAsset validates form submission against form fields', as
   assert.strictEqual(invalidRes.valid, false);
   assert.strictEqual(invalidRes.errors.length, 1);
 });
+
+test('AssetsService.duplicate: clones asset within project with new name', async () => {
+  const ctx = newCtx();
+  const wf = await new WorkflowService(ctx).create({ name: 'Claims' }, 'a');
+  const assets = new AssetsService(ctx);
+
+  await assets.add(wf.id, 'decisions', 'Eligibility', 'a');
+  const dupRes = await assets.duplicate(wf.id, 'decisions', 'Eligibility', 'Eligibility_V2', 'a');
+  assert.strictEqual(dupRes.kind, 'decisions');
+  assert.strictEqual(dupRes.name, 'Eligibility_V2');
+
+  const { assets: byKind } = await assets.list(wf.id);
+  assert.strictEqual(byKind.decisions.length, 2);
+  assert(byKind.decisions.some((d) => d.name === 'Eligibility'));
+  assert(byKind.decisions.some((d) => d.name === 'Eligibility_V2'));
+
+  // Verify DMN model content was properly cloned and namespace updated
+  const original = await assets.get(wf.id, 'decisions', 'Eligibility');
+  const cloned = await assets.get(wf.id, 'decisions', 'Eligibility_V2');
+  assert.strictEqual(cloned.asset.name, 'Eligibility_V2');
+  assert.strictEqual(cloned.asset.decisions[0].name, 'Eligibility_V2');
+  assert.deepStrictEqual(cloned.asset.decisions[0].rules, original.asset.decisions[0].rules);
+  assert(cloned.asset.namespace.includes('eligibility-v2'));
+});
