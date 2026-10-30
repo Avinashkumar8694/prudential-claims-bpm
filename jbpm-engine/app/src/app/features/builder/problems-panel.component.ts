@@ -43,7 +43,19 @@ import { IconComponent } from '../../shared/icon.component';
                   </div>
                 }
               </div>
-              <span class="jump-pill">Jump to node &rarr;</span>
+              <div class="p-actions">
+                <button type="button" class="jump-pill" (click)="pick.emit(p.nodeId || p.flowId || '')">Jump to node &rarr;</button>
+                @if (p.nodeId) {
+                  <button type="button" class="replace-pill" (click)="$event.stopPropagation(); replace.emit(p.nodeId)" title="Replace this node with a fresh node from palette, keeping connections">
+                    <app-icon name="refresh" [size]="11" /> Replace Node
+                  </button>
+                  @if (hasLifecycle(p)) {
+                    <button type="button" class="clear-pill" (click)="$event.stopPropagation(); clearActions.emit(p.nodeId)" title="Clear unresolvable onEntry/onExit lifecycle scripts">
+                      Clear Actions
+                    </button>
+                  }
+                }
+              </div>
             </div>
           }
         </div>
@@ -71,8 +83,21 @@ import { IconComponent } from '../../shared/icon.component';
     .msg { font-weight: 500; color: inherit; }
     .rule { color: var(--muted); font-size: 11.5px; font-family: ui-monospace, Menlo, monospace; background: rgba(255,255,255,0.03); padding: 1px 5px; border-radius: 4px; }
     .premedy { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--primary); background: rgba(99,102,241,0.07); padding: 3px 8px; border-radius: 5px; width: fit-content; }
-    .jump-pill { font-size: 11px; font-weight: 600; color: var(--muted); flex-shrink: 0; margin-top: 2px; }
-    .prow:hover .jump-pill { color: var(--primary); }
+    .p-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-top: 2px; }
+    .jump-pill { font-size: 11px; font-weight: 600; color: var(--muted); border: none; background: transparent; cursor: pointer; padding: 2px 4px; }
+    .jump-pill:hover { color: var(--primary); text-decoration: underline; }
+    .replace-pill {
+      display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+      color: var(--primary); background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: 5px; padding: 3px 7px; cursor: pointer; transition: all .15s ease;
+    }
+    .replace-pill:hover { background: var(--primary); color: #fff; }
+    .clear-pill {
+      display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600;
+      color: #ef4444; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2);
+      border-radius: 5px; padding: 3px 7px; cursor: pointer; transition: all .15s ease;
+    }
+    .clear-pill:hover { background: #ef4444; color: #fff; }
   `],
 })
 export class ProblemsPanelComponent {
@@ -80,5 +105,12 @@ export class ProblemsPanelComponent {
   @Input() errorCount = 0;
   @Input() warnCount = 0;
   @Output() pick = new EventEmitter<string>();
+  @Output() replace = new EventEmitter<string>();
+  @Output() clearActions = new EventEmitter<string>();
   collapsed = signal(true);
+
+  hasLifecycle(p: Problem): boolean {
+    const m = p.message || '';
+    return m.includes('onEntry') || m.includes('onExit');
+  }
 }

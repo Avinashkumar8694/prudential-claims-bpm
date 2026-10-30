@@ -111,6 +111,9 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                   @if (hasOut(n.type)) { <span class="port out" title="Drag to a target node to connect" (pointerdown)="startLink($event, n)" (click)="$event.stopPropagation()"></span> }
                   @if (selNode()?.id===n.id) {
                     <button class="ninfo" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); openDocsFor(n.type, labelFor(n))" title="Documentation & Scenarios" aria-label="View node documentation"><app-icon name="info" [size]="12" /></button>
+                    @if (hasErr(n.id)) {
+                      <button class="nreplace" (pointerdown)="$event.stopPropagation()" (click)="replaceNode(n.id)" title="Replace with a fresh node from palette (preserves connections)" aria-label="Replace node"><app-icon name="refresh" [size]="11" /></button>
+                    }
                     <button class="ndel" (pointerdown)="$event.stopPropagation()" (click)="del($event, n)" title="Delete" aria-label="Delete node"><app-icon name="trash" [size]="13" /></button>
                   }
                 </div>
@@ -176,7 +179,7 @@ const COL_W = NW + 100, ROW_H = NH + 46;
         </main>
       </div>
 
-      <app-problems-panel [problems]="problems()" [errorCount]="errorCount()" [warnCount]="warnCount()" (pick)="pickProblem($event)"></app-problems-panel>
+      <app-problems-panel [problems]="problems()" [errorCount]="errorCount()" [warnCount]="warnCount()" (pick)="pickProblem($event)" (replace)="replaceNode($event)" (clearActions)="clearNodeLifecycleActions($event)"></app-problems-panel>
 
       @if (editingNode(); as n) {
         <div class="modal-bg" (click)="closeNodeEditor()">
@@ -193,9 +196,33 @@ const COL_W = NW + 100, ROW_H = NH + 46;
             </div>
             @if (nodeModalTab() === 'props') {
               <div class="modal-body">
+                @if (hasErr(n.id)) {
+                  <div class="node-err-banner">
+                    <app-icon name="alert-triangle" [size]="18" />
+                    <div class="node-err-body">
+                      <div class="node-err-msg"><strong>Validation Issue:</strong> {{ getErrorForNode(n.id)?.message }}</div>
+                      @if (getErrorForNode(n.id)?.remedy) {
+                        <div class="node-err-remedy"><strong>Recommendation:</strong> {{ getErrorForNode(n.id)?.remedy }}</div>
+                      }
+                    </div>
+                    <div class="node-err-actions">
+                      <button type="button" class="btn sm btn-node-replace" (click)="replaceNode(n.id)" title="Replace with a fresh node from palette, keeping connections">
+                        <app-icon name="refresh" [size]="12" /> Replace Node
+                      </button>
+                      @if (n['onEntry'] || n['onExit']) {
+                        <button type="button" class="btn sm" (click)="clearNodeLifecycleActions(n.id)">Clear Lifecycle Actions</button>
+                      }
+                    </div>
+                  </div>
+                }
                 <label class="fld"><span>Node ID</span><input [value]="n.id" disabled /></label>
                 <app-properties-panel [node]="n" [allNodes]="nodes()" [sections]="schemaFor(n.type)" [assets]="assets" [ownVars]="procVars()" [callableProcesses]="callableProcesses()" [cheatSheetContent]="cheatSheetContent()" [javaReferenceContent]="javaReferenceContent()" (changed)="markDirty()" (openCheatSheet)="openCheatSheet($event)"></app-properties-panel>
-                <button class="btn danger full" (click)="del($event, n); closeNodeEditor()">Delete node</button>
+                <div class="node-editor-footer-actions">
+                  <button type="button" class="btn outline" (click)="replaceNode(n.id)" title="Reset or replace this node with a fresh node of the same type">
+                    <app-icon name="refresh" [size]="12" /> Replace with Fresh Node
+                  </button>
+                  <button class="btn danger" (click)="del($event, n); closeNodeEditor()">Delete node</button>
+                </div>
               </div>
             } @else {
               <div class="modal-body docs-scroll-pane">
@@ -528,6 +555,20 @@ const COL_W = NW + 100, ROW_H = NH + 46;
     .docs-scroll-pane { padding: 18px 24px; overflow-y: auto; flex: 1; background: var(--surface); }
     .ninfo { position: absolute; top: -12px; right: 22px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--primary, #3b82f6); display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
     .ninfo:hover { background: var(--primary-50, #eff6ff); border-color: var(--primary); }
+    .nreplace { position: absolute; top: -12px; right: 50px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.4); background: #fef2f2; color: #dc2626; display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow-card); z-index: 6; }
+    .nreplace:hover { background: #fee2e2; border-color: #dc2626; }
+    .node-err-banner {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: #fef2f2; border: 1.5px solid #fca5a5; border-radius: 9px;
+      padding: 12px 14px; margin-bottom: 14px; color: #991b1b;
+    }
+    .node-err-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.45; }
+    .node-err-msg { color: #7f1d1d; }
+    .node-err-remedy { color: #991b1b; }
+    .node-err-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    .btn-node-replace { background: #dc2626 !important; color: #fff !important; border: none !important; }
+    .btn-node-replace:hover { background: #b91c1c !important; }
+    .node-editor-footer-actions { display: flex; gap: 8px; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
     .modal-h { display: flex; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 700; }
     .modal-h .chip.sm { width: 24px; height: 24px; border-radius: 7px; color: #fff; display: grid; place-items: center; font-size: 12px; }
     .modal-h .x { border: none; background: transparent; font-size: 16px; cursor: pointer; color: var(--muted); }
@@ -763,6 +804,47 @@ export class ProcessCanvasComponent implements OnChanges {
     if (n) { this.selNode.set(n); this.selEdge.set(null); return; }
     const e = this.edges().find((x) => x.id === id);
     if (e) { this.selEdge.set(e.id); this.selNode.set(null); }
+  }
+
+  getErrorForNode(id: string): Problem | undefined {
+    return this.problems().find((p) => p.nodeId === id && p.severity === 'error') || this.problems().find((p) => p.nodeId === id);
+  }
+
+  replaceNode(nodeId: string) {
+    const current = this.nodes().find((n) => n.id === nodeId);
+    if (!current) return;
+    const spec = this.catalog()?.nodes.find((s) => s.engineType === current.type);
+    const defaults = spec?.defaults ? JSON.parse(JSON.stringify(spec.defaults)) : { type: current.type };
+    const freshNode: CNode = {
+      ...defaults,
+      id: current.id, // Preserves sequence flow connections!
+      type: current.type,
+      name: current.name || spec?.label || current.type,
+      x: current.x,
+      y: current.y,
+    };
+    this.nodes.set(this.nodes().map((n) => (n.id === nodeId ? freshNode : n)));
+    if (this.selNode()?.id === nodeId) this.selNode.set(freshNode);
+    if (this.editingNode()?.id === nodeId) this.editingNode.set(freshNode);
+    this.markDirty();
+    this.toast.success(`Replaced "${current.name || current.type}" with a fresh node.`);
+    this.validate();
+  }
+
+  clearNodeLifecycleActions(nodeId: string) {
+    const current = this.nodes().find((n) => n.id === nodeId);
+    if (!current) return;
+    const updated: CNode = { ...current };
+    delete updated['onEntry'];
+    delete updated['onEntryLang'];
+    delete updated['onExit'];
+    delete updated['onExitLang'];
+    this.nodes.set(this.nodes().map((n) => (n.id === nodeId ? updated : n)));
+    if (this.selNode()?.id === nodeId) this.selNode.set(updated);
+    if (this.editingNode()?.id === nodeId) this.editingNode.set(updated);
+    this.markDirty();
+    this.toast.success(`Cleared lifecycle actions on "${current.name || current.type}".`);
+    this.validate();
   }
 
   nodeProblemTooltip(id: string): string {

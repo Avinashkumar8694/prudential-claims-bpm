@@ -40,7 +40,8 @@ export const REMEDIES: Record<string, string> = {
   'usertask-assignment': 'Assign a candidate group or actor to this user task in properties.',
   'condition-lang': 'Set flow condition language to "js" or "java".',
   'node-name': 'Provide a descriptive name for this activity in properties.',
-  'java-support': 'Review and fix Java syntax errors, missing symbols, or unsupported threading APIs in the script.',
+  'java-support': 'Review and fix Java syntax errors. Recommendation: Replace this node with a fresh node from the palette if internal code cannot be resolved.',
+  'unsupported-construct': 'Recommendation: Replace this unsupported construct with a standard BPMN 2.0 Task, Gateway, or Sub-process from the palette.',
 };
 
 export interface GraphCtx {
@@ -375,18 +376,36 @@ export const RULES: Rule[] = [
         for (const n of nodes) {
           const a = n as any;
           if (n.type === 'script' && a.lang === 'java' && a.code) {
-            check(String(a.code), false, varTypes, (msg) => P('java-support', 'error', `Script "${label(n)}": ${msg}`, { nodeId: n.id }));
+            check(String(a.code), false, varTypes, (msg) => {
+              const remedy = msg.includes('cannot find symbol') || msg.includes('does not exist') || msg.includes('package')
+                ? 'The script references external Java classes or symbols not available in this environment. Recommendation: Replace this node with a fresh node from the palette, or rewrite the script in JavaScript.'
+                : 'Review and fix Java syntax errors. Recommendation: Replace this node with a fresh node from the palette if internal code cannot be resolved.';
+              return P('java-support', 'error', `Script "${label(n)}": ${msg}`, { nodeId: n.id, remedy });
+            });
           }
           if (n.type === 'http' && a.lang === 'java' && a.exitScript) {
-            check(String(a.exitScript), false, httpVarTypes, (msg) => P('java-support', 'error', `Exit script "${label(n)}": ${msg}`, { nodeId: n.id }));
+            check(String(a.exitScript), false, httpVarTypes, (msg) => P('java-support', 'error', `Exit script "${label(n)}": ${msg}`, {
+              nodeId: n.id,
+              remedy: 'Review exit script Java syntax or replace this service task with a fresh node from the palette.'
+            }));
           }
           // onEntry/onExit — real jBPM's generic action-hook mechanism, attachable to any activity
           // (userTask/businessRuleTask/sendTask/receiveTask/manualTask/subProcess/call/forEach/
           // workItem — see execution-engine.ts's runLifecycle). Skipped for 'http', whose onEntry/
           // onExit is the separate, already-checked exitScript mechanism above.
           if (n.type !== 'http') {
-            if (a.onEntry && a.onEntryLang === 'java') check(String(a.onEntry), false, varTypes, (msg) => P('java-support', 'error', `onEntry "${label(n)}": ${msg}`, { nodeId: n.id }));
-            if (a.onExit && a.onExitLang === 'java') check(String(a.onExit), false, varTypes, (msg) => P('java-support', 'error', `onExit "${label(n)}": ${msg}`, { nodeId: n.id }));
+            if (a.onEntry && a.onEntryLang === 'java') {
+              check(String(a.onEntry), false, varTypes, (msg) => P('java-support', 'error', `onEntry "${label(n)}": ${msg}`, {
+                nodeId: n.id,
+                remedy: 'This node contains internal onEntry Java actions from an imported model that failed compilation. Recommendation: Replace this node with a fresh node from the palette, or clear its internal actions in properties.'
+              }));
+            }
+            if (a.onExit && a.onExitLang === 'java') {
+              check(String(a.onExit), false, varTypes, (msg) => P('java-support', 'error', `onExit "${label(n)}": ${msg}`, {
+                nodeId: n.id,
+                remedy: 'This node contains internal onExit Java actions from an imported model that failed compilation. Recommendation: Replace this node with a fresh node from the palette, or clear its internal actions in properties.'
+              }));
+            }
           }
           if (Array.isArray(a.nodes)) walk(a.nodes, a.flows || []);
         }

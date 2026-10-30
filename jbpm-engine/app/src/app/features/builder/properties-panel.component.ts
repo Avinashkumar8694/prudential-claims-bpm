@@ -155,6 +155,42 @@ import { CodeEditorComponent } from '../../shared/code-editor.component';
         }
       </div>
     }
+
+    @if (hasLifecycleActions() || isActivityOrTask()) {
+      <div class="sec">
+        <div class="sec-h lifecycle-h">
+          <span>Lifecycle Actions (On Entry / On Exit)</span>
+          @if (hasLifecycleActions()) {
+            <button type="button" class="clear-actions-btn" (click)="clearAllLifecycleActions()" title="Clear onEntry and onExit actions">Clear Actions</button>
+          }
+        </div>
+        @if (hasLifecycleActions()) {
+          <small class="lifecycle-note">
+            These scripts execute when entering or exiting this node. If imported Java code cannot be compiled or referenced, clear these actions or replace this node.
+          </small>
+        }
+        <div class="fld">
+          <div class="lifecycle-header">
+            <label>On-Entry Script</label>
+            <select class="lang-select" [ngModel]="val('onEntryLang') || 'java'" (ngModelChange)="set('onEntryLang', $event)">
+              <option value="java">Java</option>
+              <option value="js">JavaScript</option>
+            </select>
+          </div>
+          <textarea rows="2" class="mono" [ngModel]="val('onEntry')" (ngModelChange)="set('onEntry', $event)" placeholder="// Statements executed when entering this node"></textarea>
+        </div>
+        <div class="fld">
+          <div class="lifecycle-header">
+            <label>On-Exit Script</label>
+            <select class="lang-select" [ngModel]="val('onExitLang') || 'java'" (ngModelChange)="set('onExitLang', $event)">
+              <option value="java">Java</option>
+              <option value="js">JavaScript</option>
+            </select>
+          </div>
+          <textarea rows="2" class="mono" [ngModel]="val('onExit')" (ngModelChange)="set('onExit', $event)" placeholder="// Statements executed when completing this node"></textarea>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     .sec { margin-bottom: 4px; }
@@ -184,6 +220,13 @@ import { CodeEditorComponent } from '../../shared/code-editor.component';
     .all { padding: 8px 10px; background: var(--primary-50); border-radius: 8px; margin-bottom: 8px; }
     .nodesel { display: flex; flex-direction: column; gap: 5px; max-height: 200px; overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
     .nodesel em { color: var(--muted); font-style: normal; font-size: 12px; }
+    .lifecycle-h { display: flex; align-items: center; justify-content: space-between; }
+    .clear-actions-btn { font-size: 11px; padding: 2px 7px; border: 1px solid var(--border); background: var(--surface-2); color: #ef4444; border-radius: 5px; cursor: pointer; }
+    .clear-actions-btn:hover { background: rgba(239,68,68,0.1); border-color: #ef4444; }
+    .lifecycle-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .lifecycle-header label { margin-bottom: 0; }
+    .lang-select { width: auto; font-size: 11px; padding: 2px 6px; }
+    .lifecycle-note { color: var(--muted); margin-bottom: 8px; font-size: 11.5px; }
   `],
 })
 export class PropertiesPanelComponent implements OnChanges {
@@ -207,6 +250,23 @@ export class PropertiesPanelComponent implements OnChanges {
   kv: Record<string, { k: string; v: string }[]> = {};
   sl: Record<string, string[]> = {};
   errorCodes = ['SCRIPT_ERROR', 'SERVICE_ERROR', 'RULE_ERROR', 'CALL_ERROR', 'RUNTIME_ERROR'];
+
+  hasLifecycleActions(): boolean {
+    return !!(this.node?.onEntry || this.node?.onExit);
+  }
+
+  isActivityOrTask(): boolean {
+    return this.node && ['userTask', 'manual', 'rule', 'call', 'send', 'receive', 'forEach', 'workItem', 'subprocess'].includes(this.node.type);
+  }
+
+  clearAllLifecycleActions() {
+    if (!this.node) return;
+    delete this.node.onEntry;
+    delete this.node.onEntryLang;
+    delete this.node.onExit;
+    delete this.node.onExitLang;
+    this.changed.emit();
+  }
 
   assetNames(kind: string | undefined): string[] { return kind ? (this.assets[kind] || []).map((a) => a.name) : []; }
 
