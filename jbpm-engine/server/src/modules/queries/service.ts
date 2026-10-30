@@ -3,14 +3,31 @@
 // inboxes, tasks completed by a user, related tasks, referenced signals, and TAT (turn-around-time)
 // analytics for tasks and process instances. Everything is tenant-scoped and derived from the store.
 import type { AppContext } from '../../context.ts';
-import { Collections, type Instance, type Task, type Deployment, type TimerJob, type AuditEvent } from '../../domain.ts';
+import { Collections, type Instance, type Task, type Deployment, type TimerJob, type AuditEvent, type Workflow } from '../../domain.ts';
 
 type DurStats = { count: number; avgMs: number; minMs: number; maxMs: number };
+export type AdvancedDurStats = DurStats & { p50Ms: number; p95Ms: number };
 const durationMs = (from?: string, to?: string) => (from && to ? Math.max(0, Date.parse(to) - Date.parse(from)) : undefined);
 function stats(values: number[]): DurStats {
   if (!values.length) return { count: 0, avgMs: 0, minMs: 0, maxMs: 0 };
   const sum = values.reduce((a, b) => a + b, 0);
   return { count: values.length, avgMs: Math.round(sum / values.length), minMs: Math.min(...values), maxMs: Math.max(...values) };
+}
+
+function advancedStats(values: number[]): AdvancedDurStats {
+  if (!values.length) return { count: 0, avgMs: 0, minMs: 0, maxMs: 0, p50Ms: 0, p95Ms: 0 };
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = sorted.reduce((a, b) => a + b, 0);
+  const p50 = sorted[Math.floor(sorted.length * 0.50)];
+  const p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+  return {
+    count: sorted.length,
+    avgMs: Math.round(sum / sorted.length),
+    minMs: sorted[0],
+    maxMs: sorted[sorted.length - 1],
+    p50Ms: p50,
+    p95Ms: p95,
+  };
 }
 
 function parseBound(val?: string, endOfDay = false): string | undefined {
@@ -28,6 +45,7 @@ export class QueryService {
   private D() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
   private J() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
   private A() { return this.ctx.store.repo<AuditEvent>(Collections.audit); }
+  private W() { return this.ctx.store.repo<Workflow>(Collections.workflows); }
   private mine<T extends { tenantId: string }>(xs: T[]) { return xs.filter((x) => x.tenantId === this.ctx.tenantId); }
   private allInstances() { return this.I().query((i) => i.tenantId === this.ctx.tenantId); }
   private allTasks() { return this.T().query((t) => t.tenantId === this.ctx.tenantId); }
@@ -130,15 +148,19 @@ export class QueryService {
 
   // ---- analytics / TAT ----
   /** Task turn-around-time grouped by task name, plus a per-assignee completed breakdown and SLA stats. */
-  async taskAnalytics(opts?: { since?: string; from?: string; to?: string; processId?: string }) {
+  async taskAnalytics(opts?: { since?: string; from?: string; to?: string; processId?: string; workflowId?: string }) {
     let tasks = await this.allTasks();
     const fromBound = parseBound(opts?.from || opts?.since, false);
     const toBound = parseBound(opts?.to, true);
     if (fromBound) tasks = tasks.filter((t) => t.createdAt >= fromBound);
     if (toBound) tasks = tasks.filter((t) => t.createdAt <= toBound);
-    if (opts?.processId) {
+    if (opts?.processId || opts?.workflowId) {
       const insts = await this.allInstances();
-      const pInstIds = new Set(insts.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId).map((i) => i.id));
+      const pInstIds = new Set(insts.filter((i) => {
+        if (opts.processId && i.processId !== opts.processId && i.workflowId !== opts.processId) return false;
+        if (opts.workflowId && i.workflowId !== opts.workflowId) return false;
+        return true;
+      }).map((i) => i.id));
       tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
     }
     const byName = new Map<string, number[]>();
@@ -185,13 +207,14 @@ export class QueryService {
     };
   }
   /** Process-instance turn-around-time grouped by process definition, plus a status mix, daily throughput and failure rate. */
-  async processAnalytics(opts?: { since?: string; from?: string; to?: string; processId?: string; days?: number }) {
+  async processAnalytics(opts?: { since?: string; from?: string; to?: string; processId?: string; workflowId?: string; days?: number }) {
     let instances = await this.allInstances();
     const fromBound = parseBound(opts?.from || opts?.since, false);
     const toBound = parseBound(opts?.to, true);
     if (fromBound) instances = instances.filter((i) => i.startedAt >= fromBound);
     if (toBound) instances = instances.filter((i) => i.startedAt <= toBound);
     if (opts?.processId) instances = instances.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId);
+    if (opts?.workflowId) instances = instances.filter((i) => i.workflowId === opts.workflowId);
 
     const byProc = new Map<string, number[]>();
     let failedCount = 0;
@@ -262,7 +285,7 @@ export class QueryService {
     };
   }
   /** Dashboard counts across instances, tasks, deployments and jobs. */
-  async summary(opts?: { since?: string; from?: string; to?: string; processId?: string }) {
+  async summary(opts?: { since?: string; from?: string; to?: string; processId?: string; workflowId?: string }) {
     let instances = await this.allInstances();
     let tasks = await this.allTasks();
     const fromBound = parseBound(opts?.from || opts?.since, false);
@@ -275,8 +298,12 @@ export class QueryService {
       instances = instances.filter((i) => i.startedAt <= toBound);
       tasks = tasks.filter((t) => t.createdAt <= toBound);
     }
-    if (opts?.processId) {
-      instances = instances.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId);
+    if (opts?.processId || opts?.workflowId) {
+      instances = instances.filter((i) => {
+        if (opts.processId && i.processId !== opts.processId && i.workflowId !== opts.processId) return false;
+        if (opts.workflowId && i.workflowId !== opts.workflowId) return false;
+        return true;
+      });
       const instIds = new Set(instances.map((i) => i.id));
       tasks = tasks.filter((t) => instIds.has(t.instanceId));
     }
@@ -296,9 +323,14 @@ export class QueryService {
   }
 
   /** SLA breach and overdue analytics across open tasks and process instances. */
-  async slaViolations() {
+  async slaViolations(opts?: { workflowId?: string }) {
     const now = this.ctx.clock();
-    const tasks = await this.allTasks();
+    let tasks = await this.allTasks();
+    if (opts?.workflowId) {
+      const insts = await this.allInstances();
+      const pInstIds = new Set(insts.filter((i) => i.workflowId === opts.workflowId).map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
     const openTasks = tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped' && t.status !== 'error' && t.status !== 'failed' && t.status !== 'exited');
     const overdueTasks: Task[] = [];
     const atRiskTasks: Task[] = [];
@@ -336,8 +368,13 @@ export class QueryService {
   }
 
   /** Workload distribution across users and examiner groups. */
-  async workload() {
-    const tasks = await this.allTasks();
+  async workload(opts?: { workflowId?: string }) {
+    let tasks = await this.allTasks();
+    if (opts?.workflowId) {
+      const insts = await this.allInstances();
+      const pInstIds = new Set(insts.filter((i) => i.workflowId === opts.workflowId).map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
     const openTasks = tasks.filter((t) => t.status !== 'completed' && t.status !== 'skipped' && t.status !== 'error' && t.status !== 'failed' && t.status !== 'exited');
     const userMap = new Map<string, { user: string; openTasks: number; inProgress: number; reserved: number }>();
     const groupMap = new Map<string, { group: string; openTasks: number; unassigned: number }>();
@@ -362,6 +399,516 @@ export class QueryService {
       users: [...userMap.values()].sort((a, b) => b.openTasks - a.openTasks),
       groups: [...groupMap.values()].sort((a, b) => b.openTasks - a.openTasks),
     };
+  }
+
+  /** Project-level rollup analytics: completed tasks, instances, and TAT for a single project or across all projects in the tenant. */
+  async projectAnalytics(opts?: { workflowId?: string; from?: string; to?: string; since?: string }) {
+    let instances = await this.allInstances();
+    let tasks = await this.allTasks();
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) {
+      instances = instances.filter((i) => i.startedAt >= fromBound);
+      tasks = tasks.filter((t) => t.createdAt >= fromBound);
+    }
+    if (toBound) {
+      instances = instances.filter((i) => i.startedAt <= toBound);
+      tasks = tasks.filter((t) => t.createdAt <= toBound);
+    }
+
+    const workflows = await this.W().query((w) => w.tenantId === this.ctx.tenantId);
+    const wfNameMap = new Map<string, string>();
+    for (const w of workflows) {
+      wfNameMap.set(w.id, w.name || w.key);
+      wfNameMap.set(w.key, w.name || w.key);
+    }
+
+    const projectKeys = new Set<string>();
+    for (const i of instances) {
+      if (i.workflowId) projectKeys.add(i.workflowId);
+    }
+    for (const w of workflows) {
+      projectKeys.add(w.id);
+    }
+
+    if (opts?.workflowId) {
+      instances = instances.filter((i) => i.workflowId === opts.workflowId);
+      const instIds = new Set(instances.map((i) => i.id));
+      tasks = tasks.filter((t) => instIds.has(t.instanceId));
+      projectKeys.clear();
+      projectKeys.add(opts.workflowId);
+    }
+
+    const now = Date.now();
+    const byProject: any[] = [];
+
+    for (const pKey of projectKeys) {
+      const pInsts = instances.filter((i) => i.workflowId === pKey);
+      const pInstIds = new Set(pInsts.map((i) => i.id));
+      const pTasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+
+      const instDurations: number[] = [];
+      let completedInsts = 0;
+      let failedInsts = 0;
+      let activeInsts = 0;
+
+      for (const i of pInsts) {
+        if (i.status === 'completed') {
+          completedInsts++;
+          const d = durationMs(i.startedAt, i.endedAt);
+          if (d != null) instDurations.push(d);
+        } else if (i.status === 'failed') {
+          failedInsts++;
+        } else if (i.status === 'running' || i.status === 'waiting') {
+          activeInsts++;
+        }
+      }
+
+      const taskDurations: number[] = [];
+      let completedTasks = 0;
+      let inProgressTasks = 0;
+      let reservedTasks = 0;
+      let overdueTasks = 0;
+      let totalWithDue = 0;
+      let onTimeTasks = 0;
+
+      for (const t of pTasks) {
+        if (t.status === 'completed') {
+          completedTasks++;
+          const d = durationMs(t.createdAt, t.completedAt);
+          if (d != null) taskDurations.push(d);
+        } else if (t.status === 'inprogress') {
+          inProgressTasks++;
+        } else if (t.status === 'reserved' || t.status === 'created') {
+          reservedTasks++;
+        }
+
+        if (t.dueAt) {
+          totalWithDue++;
+          const dueTime = Date.parse(t.dueAt);
+          if (t.status === 'completed') {
+            const compTime = t.completedAt ? Date.parse(t.completedAt) : now;
+            if (compTime <= dueTime) onTimeTasks++;
+            else overdueTasks++;
+          } else {
+            if (now > dueTime) overdueTasks++;
+            else onTimeTasks++;
+          }
+        }
+      }
+
+      const openTasks = inProgressTasks + reservedTasks;
+      const successRate = pInsts.length > 0 ? Math.round((completedInsts / pInsts.length) * 100) : 100;
+      const complianceRate = totalWithDue > 0 ? Math.round((onTimeTasks / totalWithDue) * 100) : 100;
+
+      byProject.push({
+        workflowId: pKey,
+        name: wfNameMap.get(pKey) || pKey,
+        instances: {
+          total: pInsts.length,
+          active: activeInsts,
+          completed: completedInsts,
+          failed: failedInsts,
+          successRate,
+        },
+        tasks: {
+          total: pTasks.length,
+          completed: completedTasks,
+          open: openTasks,
+          inProgress: inProgressTasks,
+          reserved: reservedTasks,
+          overdue: overdueTasks,
+        },
+        instanceTat: stats(instDurations),
+        taskTat: stats(taskDurations),
+        sla: { totalWithDue, onTime: onTimeTasks, overdue: overdueTasks, complianceRate },
+      });
+    }
+
+    const allInstDurations = instances.filter((i) => i.status === 'completed').map((i) => durationMs(i.startedAt, i.endedAt)).filter((d): d is number => d != null);
+    const allTaskDurations = tasks.filter((t) => t.status === 'completed').map((t) => durationMs(t.createdAt, t.completedAt)).filter((d): d is number => d != null);
+    const totalCompletedTasks = tasks.filter((t) => t.status === 'completed').length;
+    const totalOpenTasks = tasks.filter((t) => t.status === 'inprogress' || t.status === 'reserved' || t.status === 'created').length;
+    let totalDue = 0;
+    let totalOnTime = 0;
+    let totalOverdue = 0;
+    for (const t of tasks) {
+      if (t.dueAt) {
+        totalDue++;
+        const dueTime = Date.parse(t.dueAt);
+        if (t.status === 'completed') {
+          const compTime = t.completedAt ? Date.parse(t.completedAt) : now;
+          if (compTime <= dueTime) totalOnTime++;
+          else totalOverdue++;
+        } else {
+          if (now > dueTime) totalOverdue++;
+          else totalOnTime++;
+        }
+      }
+    }
+
+    return {
+      summary: {
+        totalProjects: projectKeys.size,
+        totalInstances: instances.length,
+        activeInstances: instances.filter((i) => i.status === 'running' || i.status === 'waiting').length,
+        completedInstances: instances.filter((i) => i.status === 'completed').length,
+        failedInstances: instances.filter((i) => i.status === 'failed').length,
+        totalTasks: tasks.length,
+        completedTasks: totalCompletedTasks,
+        openTasks: totalOpenTasks,
+        overdueTasks: totalOverdue,
+        instanceTat: stats(allInstDurations),
+        taskTat: stats(allTaskDurations),
+        sla: { totalWithDue: totalDue, onTime: totalOnTime, overdue: totalOverdue, complianceRate: totalDue > 0 ? Math.round((totalOnTime / totalDue) * 100) : 100 },
+      },
+      byProject: byProject.sort((a, b) => b.instances.total - a.instances.total),
+    };
+  }
+
+  /** Per-user productivity and TAT analytics across tasks, with per-task-definition breakdown. */
+  async userAnalytics(opts?: { user?: string; workflowId?: string; group?: string; from?: string; to?: string; since?: string }) {
+    let tasks = await this.allTasks();
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) tasks = tasks.filter((t) => t.createdAt >= fromBound);
+    if (toBound) tasks = tasks.filter((t) => t.createdAt <= toBound);
+    if (opts?.group) tasks = tasks.filter((t) => t.group === opts.group);
+
+    if (opts?.workflowId) {
+      const insts = await this.allInstances();
+      const pInstIds = new Set(insts.filter((i) => i.workflowId === opts.workflowId).map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
+
+    const now = Date.now();
+    const userTaskMap = new Map<string, Task[]>();
+
+    for (const t of tasks) {
+      const u = t.completedBy || t.assignee;
+      if (!u) continue;
+      if (opts?.user && u !== opts.user) continue;
+      (userTaskMap.get(u) || userTaskMap.set(u, []).get(u)!).push(t);
+    }
+
+    if (opts?.user && !userTaskMap.has(opts.user)) {
+      userTaskMap.set(opts.user, []);
+    }
+
+    const result = [...userTaskMap].map(([user, uTasks]) => {
+      const completed = uTasks.filter((t) => t.status === 'completed');
+      const active = uTasks.filter((t) => t.status === 'inprogress' || t.status === 'reserved');
+      const durations = completed.map((t) => durationMs(t.createdAt, t.completedAt)).filter((d): d is number => d != null);
+
+      let totalWithDue = 0;
+      let onTime = 0;
+      let overdue = 0;
+      for (const t of uTasks) {
+        if (t.dueAt) {
+          totalWithDue++;
+          const dueTime = Date.parse(t.dueAt);
+          if (t.status === 'completed') {
+            const compTime = t.completedAt ? Date.parse(t.completedAt) : now;
+            if (compTime <= dueTime) onTime++;
+            else overdue++;
+          } else {
+            if (now > dueTime) overdue++;
+            else onTime++;
+          }
+        }
+      }
+
+      const byTaskMap = new Map<string, number[]>();
+      for (const t of completed) {
+        const d = durationMs(t.createdAt, t.completedAt);
+        if (d != null) {
+          (byTaskMap.get(t.name) || byTaskMap.set(t.name, []).get(t.name)!).push(d);
+        }
+      }
+
+      return {
+        user,
+        tasksCompleted: completed.length,
+        tasksActive: active.length,
+        tasksTotal: uTasks.length,
+        byStatus: this.countBy(uTasks, (t) => t.status),
+        tat: advancedStats(durations),
+        sla: { totalWithDue, onTime, overdue, complianceRate: totalWithDue > 0 ? Math.round((onTime / totalWithDue) * 100) : 100 },
+        byTaskName: [...byTaskMap].map(([taskName, durs]) => ({ taskName, ...stats(durs) })),
+      };
+    }).sort((a, b) => b.tasksCompleted - a.tasksCompleted);
+
+    return opts?.user ? (result[0] || { user: opts.user, tasksCompleted: 0, tasksActive: 0, tasksTotal: 0, byStatus: {}, tat: advancedStats([]), sla: { totalWithDue: 0, onTime: 0, overdue: 0, complianceRate: 100 }, byTaskName: [] }) : result;
+  }
+
+  /** Per-group / queue backlog, completion, and TAT analytics. */
+  async groupAnalytics(opts?: { group?: string; workflowId?: string; from?: string; to?: string; since?: string }) {
+    let tasks = await this.allTasks();
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) tasks = tasks.filter((t) => t.createdAt >= fromBound);
+    if (toBound) tasks = tasks.filter((t) => t.createdAt <= toBound);
+
+    if (opts?.workflowId) {
+      const insts = await this.allInstances();
+      const pInstIds = new Set(insts.filter((i) => i.workflowId === opts.workflowId).map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
+
+    const now = Date.now();
+    const groupTaskMap = new Map<string, Task[]>();
+
+    for (const t of tasks) {
+      const g = t.group || 'unassigned';
+      if (opts?.group && g !== opts.group) continue;
+      (groupTaskMap.get(g) || groupTaskMap.set(g, []).get(g)!).push(t);
+    }
+
+    if (opts?.group && !groupTaskMap.has(opts.group)) {
+      groupTaskMap.set(opts.group, []);
+    }
+
+    const result = [...groupTaskMap].map(([group, gTasks]) => {
+      const completed = gTasks.filter((t) => t.status === 'completed');
+      const open = gTasks.filter((t) => t.status === 'inprogress' || t.status === 'reserved' || t.status === 'created');
+      const unassigned = open.filter((t) => !t.assignee);
+      const inProgress = open.filter((t) => t.status === 'inprogress');
+      const durations = completed.map((t) => durationMs(t.createdAt, t.completedAt)).filter((d): d is number => d != null);
+
+      let totalWithDue = 0;
+      let onTime = 0;
+      let overdue = 0;
+      for (const t of gTasks) {
+        if (t.dueAt) {
+          totalWithDue++;
+          const dueTime = Date.parse(t.dueAt);
+          if (t.status === 'completed') {
+            const compTime = t.completedAt ? Date.parse(t.completedAt) : now;
+            if (compTime <= dueTime) onTime++;
+            else overdue++;
+          } else {
+            if (now > dueTime) overdue++;
+            else onTime++;
+          }
+        }
+      }
+
+      const byUserMap = new Map<string, number[]>();
+      for (const t of completed) {
+        const u = t.completedBy || t.assignee || 'unassigned';
+        const d = durationMs(t.createdAt, t.completedAt);
+        if (d != null) {
+          (byUserMap.get(u) || byUserMap.set(u, []).get(u)!).push(d);
+        }
+      }
+
+      const byTaskMap = new Map<string, number[]>();
+      for (const t of completed) {
+        const d = durationMs(t.createdAt, t.completedAt);
+        if (d != null) {
+          (byTaskMap.get(t.name) || byTaskMap.set(t.name, []).get(t.name)!).push(d);
+        }
+      }
+
+      return {
+        group,
+        tasksTotal: gTasks.length,
+        tasksCompleted: completed.length,
+        tasksOpen: open.length,
+        tasksUnassigned: unassigned.length,
+        tasksInProgress: inProgress.length,
+        tat: advancedStats(durations),
+        sla: { totalWithDue, onTime, overdue, complianceRate: totalWithDue > 0 ? Math.round((onTime / totalWithDue) * 100) : 100 },
+        byUser: [...byUserMap].map(([user, durs]) => ({ user, ...stats(durs) })),
+        byTaskName: [...byTaskMap].map(([taskName, durs]) => ({ taskName, ...stats(durs) })),
+      };
+    }).sort((a, b) => b.tasksTotal - a.tasksTotal);
+
+    return opts?.group ? (result[0] || { group: opts.group, tasksTotal: 0, tasksCompleted: 0, tasksOpen: 0, tasksUnassigned: 0, tasksInProgress: 0, tat: advancedStats([]), sla: { totalWithDue: 0, onTime: 0, overdue: 0, complianceRate: 100 }, byUser: [], byTaskName: [] }) : result;
+  }
+
+  /** Per-task-definition metrics across processes: overall TAT, SLA compliance, plus average TAT per user and per group. */
+  async taskDefinitionsAnalytics(opts?: { workflowId?: string; processId?: string; from?: string; to?: string; since?: string }) {
+    let instances = await this.allInstances();
+    let tasks = await this.allTasks();
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) tasks = tasks.filter((t) => t.createdAt >= fromBound);
+    if (toBound) tasks = tasks.filter((t) => t.createdAt <= toBound);
+
+    const instMap = new Map(instances.map((i) => [i.id, i]));
+    if (opts?.workflowId) {
+      instances = instances.filter((i) => i.workflowId === opts.workflowId);
+      const pInstIds = new Set(instances.map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
+    if (opts?.processId) {
+      instances = instances.filter((i) => i.processId === opts.processId || i.workflowId === opts.processId);
+      const pInstIds = new Set(instances.map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
+
+    const now = Date.now();
+    const byTask = new Map<string, Task[]>();
+
+    for (const t of tasks) {
+      (byTask.get(t.name) || byTask.set(t.name, []).get(t.name)!).push(t);
+    }
+
+    return [...byTask].map(([taskName, tList]) => {
+      const completed = tList.filter((t) => t.status === 'completed');
+      const open = tList.filter((t) => t.status === 'inprogress' || t.status === 'reserved' || t.status === 'created');
+      const failed = tList.filter((t) => t.status === 'failed' || t.status === 'error');
+      const durations = completed.map((t) => durationMs(t.createdAt, t.completedAt)).filter((d): d is number => d != null);
+
+      let totalWithDue = 0;
+      let onTime = 0;
+      let overdue = 0;
+      for (const t of tList) {
+        if (t.dueAt) {
+          totalWithDue++;
+          const dueTime = Date.parse(t.dueAt);
+          if (t.status === 'completed') {
+            const compTime = t.completedAt ? Date.parse(t.completedAt) : now;
+            if (compTime <= dueTime) onTime++;
+            else overdue++;
+          } else {
+            if (now > dueTime) overdue++;
+            else onTime++;
+          }
+        }
+      }
+
+      const byUserMap = new Map<string, number[]>();
+      for (const t of completed) {
+        const u = t.completedBy || t.assignee;
+        if (u) {
+          const d = durationMs(t.createdAt, t.completedAt);
+          if (d != null) (byUserMap.get(u) || byUserMap.set(u, []).get(u)!).push(d);
+        }
+      }
+
+      const byGroupMap = new Map<string, number[]>();
+      for (const t of completed) {
+        const g = t.group || 'unassigned';
+        const d = durationMs(t.createdAt, t.completedAt);
+        if (d != null) (byGroupMap.get(g) || byGroupMap.set(g, []).get(g)!).push(d);
+      }
+
+      const sampleInst = tList[0] ? instMap.get(tList[0].instanceId) : undefined;
+
+      return {
+        taskName,
+        processId: sampleInst?.processId,
+        workflowId: sampleInst?.workflowId,
+        totalCount: tList.length,
+        completedCount: completed.length,
+        openCount: open.length,
+        failedCount: failed.length,
+        tat: advancedStats(durations),
+        sla: { totalWithDue, onTime, overdue, complianceRate: totalWithDue > 0 ? Math.round((onTime / totalWithDue) * 100) : 100 },
+        byAssignee: [...byUserMap].map(([user, durs]) => ({ user, ...stats(durs) })),
+        byGroup: [...byGroupMap].map(([group, durs]) => ({ group, ...stats(durs) })),
+      };
+    }).sort((a, b) => b.totalCount - a.totalCount);
+  }
+
+  /** Per-process-definition analytics: cycle time TAT, success rate, and human task volume. */
+  async processDefinitionsAnalytics(opts?: { workflowId?: string; from?: string; to?: string; since?: string }) {
+    let instances = await this.allInstances();
+    let tasks = await this.allTasks();
+    const fromBound = parseBound(opts?.from || opts?.since, false);
+    const toBound = parseBound(opts?.to, true);
+    if (fromBound) {
+      instances = instances.filter((i) => i.startedAt >= fromBound);
+      tasks = tasks.filter((t) => t.createdAt >= fromBound);
+    }
+    if (toBound) {
+      instances = instances.filter((i) => i.startedAt <= toBound);
+      tasks = tasks.filter((t) => t.createdAt <= toBound);
+    }
+    if (opts?.workflowId) {
+      instances = instances.filter((i) => i.workflowId === opts.workflowId);
+      const pInstIds = new Set(instances.map((i) => i.id));
+      tasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+    }
+
+    const activeDeps = await this.D().query((d) => d.tenantId === this.ctx.tenantId && d.status === 'active');
+    const procDefsMap = new Map<string, { processId: string; name: string; workflowId: string; package?: string; deploymentId: string; version?: string }>();
+
+    for (const dep of activeDeps) {
+      for (const p of dep.engine?.processes || []) {
+        procDefsMap.set(p.id, {
+          processId: p.id,
+          name: (p as any).name || p.id,
+          workflowId: dep.workflowId,
+          package: (p as any).package,
+          deploymentId: dep.id,
+          version: dep.versionLabel || (dep.versionNumber != null ? `v${dep.versionNumber}` : undefined),
+        });
+      }
+    }
+
+    for (const i of instances) {
+      const pid = i.processId || i.workflowId;
+      if (pid && !procDefsMap.has(pid)) {
+        procDefsMap.set(pid, {
+          processId: pid,
+          name: pid,
+          workflowId: i.workflowId,
+          deploymentId: i.deploymentId,
+        });
+      }
+    }
+
+    const now = Date.now();
+    return [...procDefsMap.values()].map((meta) => {
+      const pInsts = instances.filter((i) => i.processId === meta.processId || (i.workflowId === meta.processId && !i.processId));
+      const pInstIds = new Set(pInsts.map((i) => i.id));
+      const pTasks = tasks.filter((t) => pInstIds.has(t.instanceId));
+
+      const completedInsts = pInsts.filter((i) => i.status === 'completed');
+      const runningInsts = pInsts.filter((i) => i.status === 'running' || i.status === 'waiting');
+      const failedInsts = pInsts.filter((i) => i.status === 'failed');
+      const abortedInsts = pInsts.filter((i) => i.status === 'aborted');
+      const durations = completedInsts.map((i) => durationMs(i.startedAt, i.endedAt)).filter((d): d is number => d != null);
+
+      const tasksCompleted = pTasks.filter((t) => t.status === 'completed').length;
+      let totalWithDue = 0;
+      let onTime = 0;
+      let overdue = 0;
+      for (const t of pTasks) {
+        if (t.dueAt) {
+          totalWithDue++;
+          const dueTime = Date.parse(t.dueAt);
+          if (t.status === 'completed') {
+            const compTime = t.completedAt ? Date.parse(t.completedAt) : now;
+            if (compTime <= dueTime) onTime++;
+            else overdue++;
+          } else {
+            if (now > dueTime) overdue++;
+            else onTime++;
+          }
+        }
+      }
+
+      return {
+        ...meta,
+        instances: {
+          total: pInsts.length,
+          running: runningInsts.length,
+          completed: completedInsts.length,
+          failed: failedInsts.length,
+          aborted: abortedInsts.length,
+          successRate: pInsts.length > 0 ? Math.round((completedInsts.length / pInsts.length) * 100) : 100,
+        },
+        tat: advancedStats(durations),
+        totalTasks: pTasks.length,
+        tasksCompleted,
+        avgTasksPerInstance: pInsts.length > 0 ? Number((pTasks.length / pInsts.length).toFixed(1)) : 0,
+        sla: { totalWithDue, onTime, overdue, complianceRate: totalWithDue > 0 ? Math.round((onTime / totalWithDue) * 100) : 100 },
+      };
+    }).sort((a, b) => b.instances.total - a.instances.total);
   }
 
   private countBy<T>(xs: T[], key: (x: T) => string): Record<string, number> {

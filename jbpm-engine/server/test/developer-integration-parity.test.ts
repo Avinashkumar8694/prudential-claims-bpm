@@ -342,6 +342,48 @@ test('Operational & SLA Analytics: /query/analytics/sla-violations and /query/an
   assert.strictEqual(typeof workload.totalOpen, 'number');
   assert.ok(Array.isArray(workload.users));
   assert.ok(Array.isArray(workload.groups));
+
+  // 1. Projects analytics: GET /query/analytics/projects
+  const projRes = await fetch(`${base}/query/analytics/projects`, { headers: authHeaders() });
+  assert.strictEqual(projRes.status, 200);
+  const proj = await projRes.json() as any;
+  assert.ok(proj.summary);
+  assert.strictEqual(typeof proj.summary.totalProjects, 'number');
+  assert.ok(Array.isArray(proj.byProject));
+
+  // 2. Users analytics: GET /query/analytics/users and /users/:user
+  const usersRes = await fetch(`${base}/query/analytics/users`, { headers: authHeaders() });
+  assert.strictEqual(usersRes.status, 200);
+  const usersList = await usersRes.json() as any;
+  assert.ok(Array.isArray(usersList.items));
+
+  const adminUserRes = await fetch(`${base}/query/analytics/users/admin`, { headers: authHeaders() });
+  assert.strictEqual(adminUserRes.status, 200);
+  const adminStats = await adminUserRes.json() as any;
+  assert.strictEqual(adminStats.user, 'admin');
+
+  // 3. Groups analytics: GET /query/analytics/groups and /groups/:group
+  const groupsRes = await fetch(`${base}/query/analytics/groups`, { headers: authHeaders() });
+  assert.strictEqual(groupsRes.status, 200);
+  const groupsList = await groupsRes.json() as any;
+  assert.ok(Array.isArray(groupsList.items));
+
+  const unassignedGroupRes = await fetch(`${base}/query/analytics/groups/unassigned`, { headers: authHeaders() });
+  assert.strictEqual(unassignedGroupRes.status, 200);
+  const unassignedStats = await unassignedGroupRes.json() as any;
+  assert.strictEqual(unassignedStats.group, 'unassigned');
+
+  // 4. Task definitions analytics: GET /query/analytics/task-definitions
+  const taskDefsRes = await fetch(`${base}/query/analytics/task-definitions`, { headers: authHeaders() });
+  assert.strictEqual(taskDefsRes.status, 200);
+  const taskDefsList = await taskDefsRes.json() as any;
+  assert.ok(Array.isArray(taskDefsList.items));
+
+  // 5. Process definitions analytics: GET /query/analytics/process-definitions
+  const procDefsRes = await fetch(`${base}/query/analytics/process-definitions`, { headers: authHeaders() });
+  assert.strictEqual(procDefsRes.status, 200);
+  const procDefsList = await procDefsRes.json() as any;
+  assert.ok(Array.isArray(procDefsList.items));
 });
 
 test('Task Lifecycle (Suspend/Resume), Variables, Attachments and Bulk Operations', async () => {

@@ -571,8 +571,15 @@ export function buildRoutes(): Router {
   r.get('/query/analytics/tasks', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).taskAnalytics(req.query as any))));
   r.get('/query/analytics/processes', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).processAnalytics(req.query as any))));
   r.get('/query/analytics/summary', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).summary(req.query as any))));
-  r.get('/query/analytics/sla-violations', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).slaViolations())));
-  r.get('/query/analytics/workload', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).workload())));
+  r.get('/query/analytics/sla-violations', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).slaViolations(req.query as any))));
+  r.get('/query/analytics/workload', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).workload(req.query as any))));
+  r.get('/query/analytics/projects', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).projectAnalytics(req.query as any))));
+  r.get('/query/analytics/users', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).userAnalytics(req.query as any) })));
+  r.get('/query/analytics/users/:user', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).userAnalytics({ ...(req.query as any), user: req.params.user }))));
+  r.get('/query/analytics/groups', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).groupAnalytics(req.query as any) })));
+  r.get('/query/analytics/groups/:group', perm('query:read'), asyncHandler(async (req, res) => res.json(await q(req).groupAnalytics({ ...(req.query as any), group: req.params.group }))));
+  r.get('/query/analytics/task-definitions', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).taskDefinitionsAnalytics(req.query as any) })));
+  r.get('/query/analytics/process-definitions', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).processDefinitionsAnalytics(req.query as any) })));
   r.get('/query/jobs', perm('query:read'), asyncHandler(async (req, res) => res.json({ items: await q(req).jobs(s(req)) })));
 
   // --- IAM: users, groups, roles (admin-only mutation, directory read allowed for task managers) ---

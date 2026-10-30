@@ -1228,6 +1228,388 @@
           }
         }
       },
+      "ProjectAnalytics": {
+        "type": "object",
+        "properties": {
+          "summary": {
+            "type": "object",
+            "properties": {
+              "totalProjects": {
+                "type": "integer",
+                "example": 4
+              },
+              "totalInstances": {
+                "type": "integer",
+                "example": 120
+              },
+              "activeInstances": {
+                "type": "integer",
+                "example": 15
+              },
+              "completedInstances": {
+                "type": "integer",
+                "example": 100
+              },
+              "failedInstances": {
+                "type": "integer",
+                "example": 5
+              },
+              "totalTasks": {
+                "type": "integer",
+                "example": 250
+              },
+              "completedTasks": {
+                "type": "integer",
+                "example": 210
+              },
+              "openTasks": {
+                "type": "integer",
+                "example": 35
+              },
+              "overdueTasks": {
+                "type": "integer",
+                "example": 5
+              },
+              "instanceTat": {
+                "type": "object"
+              },
+              "taskTat": {
+                "type": "object"
+              },
+              "sla": {
+                "type": "object"
+              }
+            }
+          },
+          "byProject": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "workflowId": {
+                  "type": "string",
+                  "example": "claims-intake"
+                },
+                "name": {
+                  "type": "string",
+                  "example": "Claims Intake"
+                },
+                "instances": {
+                  "type": "object"
+                },
+                "tasks": {
+                  "type": "object"
+                },
+                "instanceTat": {
+                  "type": "object"
+                },
+                "taskTat": {
+                  "type": "object"
+                },
+                "sla": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      },
+      "UserAnalytics": {
+        "type": "object",
+        "properties": {
+          "user": {
+            "type": "string",
+            "example": "john.examiner"
+          },
+          "tasksCompleted": {
+            "type": "integer",
+            "example": 48
+          },
+          "tasksActive": {
+            "type": "integer",
+            "example": 3
+          },
+          "tasksTotal": {
+            "type": "integer",
+            "example": 51
+          },
+          "byStatus": {
+            "type": "object"
+          },
+          "tat": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "example": 48
+              },
+              "avgMs": {
+                "type": "integer",
+                "example": 45000
+              },
+              "minMs": {
+                "type": "integer",
+                "example": 12000
+              },
+              "maxMs": {
+                "type": "integer",
+                "example": 120000
+              },
+              "p50Ms": {
+                "type": "integer",
+                "example": 42000
+              },
+              "p95Ms": {
+                "type": "integer",
+                "example": 98000
+              }
+            }
+          },
+          "sla": {
+            "type": "object",
+            "properties": {
+              "totalWithDue": {
+                "type": "integer",
+                "example": 48
+              },
+              "onTime": {
+                "type": "integer",
+                "example": 46
+              },
+              "overdue": {
+                "type": "integer",
+                "example": 2
+              },
+              "complianceRate": {
+                "type": "integer",
+                "example": 96
+              }
+            }
+          },
+          "byTaskName": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "taskName": {
+                  "type": "string",
+                  "example": "Examiner Review"
+                },
+                "count": {
+                  "type": "integer",
+                  "example": 30
+                },
+                "avgMs": {
+                  "type": "integer",
+                  "example": 42000
+                }
+              }
+            }
+          }
+        }
+      },
+      "GroupAnalytics": {
+        "type": "object",
+        "properties": {
+          "group": {
+            "type": "string",
+            "example": "examiners"
+          },
+          "tasksTotal": {
+            "type": "integer",
+            "example": 85
+          },
+          "tasksCompleted": {
+            "type": "integer",
+            "example": 70
+          },
+          "tasksOpen": {
+            "type": "integer",
+            "example": 15
+          },
+          "tasksUnassigned": {
+            "type": "integer",
+            "example": 5
+          },
+          "tasksInProgress": {
+            "type": "integer",
+            "example": 10
+          },
+          "tat": {
+            "type": "object"
+          },
+          "sla": {
+            "type": "object"
+          },
+          "byUser": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "byTaskName": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "TaskDefinitionAnalytics": {
+        "type": "object",
+        "properties": {
+          "taskName": {
+            "type": "string",
+            "example": "Examiner Review"
+          },
+          "processId": {
+            "type": "string",
+            "example": "claims-intake.process"
+          },
+          "workflowId": {
+            "type": "string",
+            "example": "claims-intake"
+          },
+          "totalCount": {
+            "type": "integer",
+            "example": 120
+          },
+          "completedCount": {
+            "type": "integer",
+            "example": 105
+          },
+          "openCount": {
+            "type": "integer",
+            "example": 15
+          },
+          "failedCount": {
+            "type": "integer",
+            "example": 0
+          },
+          "tat": {
+            "type": "object"
+          },
+          "sla": {
+            "type": "object"
+          },
+          "byAssignee": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "user": {
+                  "type": "string",
+                  "example": "alice"
+                },
+                "count": {
+                  "type": "integer",
+                  "example": 40
+                },
+                "avgMs": {
+                  "type": "integer",
+                  "example": 38000
+                }
+              }
+            }
+          },
+          "byGroup": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "group": {
+                  "type": "string",
+                  "example": "examiners"
+                },
+                "count": {
+                  "type": "integer",
+                  "example": 105
+                },
+                "avgMs": {
+                  "type": "integer",
+                  "example": 41000
+                }
+              }
+            }
+          }
+        }
+      },
+      "ProcessDefinitionAnalytics": {
+        "type": "object",
+        "properties": {
+          "processId": {
+            "type": "string",
+            "example": "claims-intake.process"
+          },
+          "name": {
+            "type": "string",
+            "example": "Claims Intake"
+          },
+          "workflowId": {
+            "type": "string",
+            "example": "claims-intake"
+          },
+          "package": {
+            "type": "string",
+            "example": "com.prudential.claims"
+          },
+          "deploymentId": {
+            "type": "string",
+            "example": "dep_101"
+          },
+          "version": {
+            "type": "string",
+            "example": "v1"
+          },
+          "instances": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer",
+                "example": 80
+              },
+              "running": {
+                "type": "integer",
+                "example": 10
+              },
+              "completed": {
+                "type": "integer",
+                "example": 68
+              },
+              "failed": {
+                "type": "integer",
+                "example": 2
+              },
+              "aborted": {
+                "type": "integer",
+                "example": 0
+              },
+              "successRate": {
+                "type": "integer",
+                "example": 97
+              }
+            }
+          },
+          "tat": {
+            "type": "object"
+          },
+          "totalTasks": {
+            "type": "integer",
+            "example": 160
+          },
+          "tasksCompleted": {
+            "type": "integer",
+            "example": 140
+          },
+          "avgTasksPerInstance": {
+            "type": "number",
+            "example": 2
+          },
+          "sla": {
+            "type": "object"
+          }
+        }
+      },
       "CaseObject": {
         "type": "object",
         "properties": {
@@ -7060,6 +7442,53 @@
           "Query & Analytics"
         ],
         "summary": "Task turn-around-time (by task, by assignee)",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "processId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by process definition ID"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative lower bound"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -7080,6 +7509,53 @@
           "Query & Analytics"
         ],
         "summary": "Process turn-around-time + status mix",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "processId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by process definition ID"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Number of days for daily throughput"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -7100,6 +7576,44 @@
           "Query & Analytics"
         ],
         "summary": "Dashboard summary counts",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "processId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by process definition ID"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -7120,6 +7634,17 @@
           "Query & Analytics"
         ],
         "summary": "SLA breach and overdue analytics across tasks and processes",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -7140,6 +7665,17 @@
           "Query & Analytics"
         ],
         "summary": "Workload distribution across users and examiner groups",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -7147,6 +7683,435 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WorkloadDistribution"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/projects": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "Project-level rollup analytics (instances, completed tasks, and TAT across projects)",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative lower bound"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAnalytics"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/users": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "User performance and productivity analytics (completed tasks, active workload, and TAT)",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by group"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserAnalytics"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/users/{user}": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "Detailed performance analytics for a specific user",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Username"
+          },
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by group"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserAnalytics"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/groups": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "Group / queue analytics (completed tasks, open backlog, unassigned tasks, and TAT)",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/GroupAnalytics"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/groups/{group}": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "Detailed performance analytics for a specific group/queue",
+        "parameters": [
+          {
+            "name": "group",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Group name"
+          },
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupAnalytics"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/task-definitions": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "Task definitions analytics: total runs, completions, TAT, and TAT per user / group",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "processId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by process definition ID"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskDefinitionAnalytics"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/query/analytics/process-definitions": {
+      "get": {
+        "tags": [
+          "Query & Analytics"
+        ],
+        "summary": "Process definitions analytics: cycle time TAT, success rate, and human task volume",
+        "parameters": [
+          {
+            "name": "workflowId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by project/workflowId"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO lower bound"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO upper bound"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ProcessDefinitionAnalytics"
+                      }
+                    }
+                  }
                 }
               }
             }
