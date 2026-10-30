@@ -76,7 +76,8 @@ const COL_W = NW + 100, ROW_H = NH + 46;
               @for (n of nodes(); track n.id) {
                 <div class="node" [attr.id]="'node-' + n.id" [class.sel]="selNode()?.id===n.id" [class.linking]="linkFrom()===n.id"
                      [class.droptarget]="linkFrom() && linkFrom()!==n.id && hasIn(n.type)"
-                     [class.has-err]="hasErr(n.id)" [class.has-warn]="!hasErr(n.id) && hasWarn(n.id)"
+                     [class.has-err]="hasErr(n.id) || !isSupported(n.type)" [class.has-warn]="!hasErr(n.id) && isSupported(n.type) && hasWarn(n.id)"
+                     [class.node-unsupported]="!isSupported(n.type)"
                      [class.node-circle]="isCircle(n.type)"
                      [class.node-diamond]="isDiamond(n.type)"
                      [class.node-rectangle]="isRectangle(n.type)"
@@ -88,8 +89,13 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                      [title]="nodeTooltip(n)"
                      (pointerdown)="startDrag($event, n)" (pointerup)="onNodePointerUp($event, n)"
                      (click)="selectNode($event, n)" (dblclick)="$event.stopPropagation(); openNodeEditor(n)">
-                  @if (hasErr(n.id)) { <span class="nmark err" [title]="nodeProblemTooltip(n.id)" (click)="$event.stopPropagation(); openNodeProblems(n.id)">!</span> }
-                  @else if (hasWarn(n.id)) { <span class="nmark warn" [title]="nodeProblemTooltip(n.id)" (click)="$event.stopPropagation(); openNodeProblems(n.id)">!</span> }
+                  @if (!isSupported(n.type)) {
+                    <span class="nmark err" title="Unsupported construct: click to view recommendations" (click)="$event.stopPropagation(); openNodeProblems(n.id)">!</span>
+                  } @else if (hasErr(n.id)) {
+                    <span class="nmark err" [title]="nodeProblemTooltip(n.id)" (click)="$event.stopPropagation(); openNodeProblems(n.id)">!</span>
+                  } @else if (hasWarn(n.id)) {
+                    <span class="nmark warn" [title]="nodeProblemTooltip(n.id)" (click)="$event.stopPropagation(); openNodeProblems(n.id)">!</span>
+                  }
                   @if (hasIn(n.type)) { <span class="port in" title="Incoming"></span> }
 
                   @if (isCircle(n.type)) {
@@ -104,14 +110,17 @@ const COL_W = NW + 100, ROW_H = NH + 46;
                     <div class="ntitle diamond-label">{{ n.name || labelFor(n) }}</div>
                   } @else {
                     <span class="chip" [style.background]="visual(n.type).color"><app-icon [name]="visual(n.type).icon" [size]="13" /></span>
-                    <div class="ntitle">{{ n.name || labelFor(n) }}</div>
+                    <div class="ntitle">
+                      @if (!isSupported(n.type)) { <span class="unsupp-tag">[UNSUPPORTED]</span> }
+                      {{ n.name || labelFor(n) }}
+                    </div>
                     @if (n.type === 'call') { <span class="call-badge" title="Call Activity / Sub-process">[+]</span> }
                   }
 
                   @if (hasOut(n.type)) { <span class="port out" title="Drag to a target node to connect" (pointerdown)="startLink($event, n)" (click)="$event.stopPropagation()"></span> }
                   @if (selNode()?.id===n.id) {
                     <button class="ninfo" (pointerdown)="$event.stopPropagation()" (click)="$event.stopPropagation(); openDocsFor(n.type, labelFor(n))" title="Documentation & Scenarios" aria-label="View node documentation"><app-icon name="info" [size]="12" /></button>
-                    @if (hasErr(n.id)) {
+                    @if (hasErr(n.id) || !isSupported(n.type)) {
                       <button class="nreplace" (pointerdown)="$event.stopPropagation()" (click)="replaceNode(n.id)" title="Replace with a fresh node from palette (preserves connections)" aria-label="Replace node"><app-icon name="refresh" [size]="11" /></button>
                     }
                     <button class="ndel" (pointerdown)="$event.stopPropagation()" (click)="del($event, n)" title="Delete" aria-label="Delete node"><app-icon name="trash" [size]="13" /></button>
@@ -494,6 +503,22 @@ const COL_W = NW + 100, ROW_H = NH + 46;
       pointer-events: none;
     }
 
+    .node.node-unsupported {
+      border: 2px dashed #ef4444 !important;
+      background: #fff5f5 !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+    }
+    .unsupp-tag {
+      font-size: 10px;
+      font-weight: 800;
+      color: #dc2626;
+      background: #fee2e2;
+      padding: 1px 5px;
+      border-radius: 4px;
+      margin-right: 4px;
+      display: inline-block;
+    }
+
     .nmark { position: absolute; top: -9px; left: -9px; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #fff; box-shadow: var(--shadow-card); z-index: 6; }
     .nmark.err { background: var(--red); cursor: pointer; animation: danger-pulse 2s infinite ease-in-out; }
     .nmark.warn { background: #d97706; cursor: pointer; }
@@ -813,13 +838,18 @@ export class ProcessCanvasComponent implements OnChanges {
   replaceNode(nodeId: string) {
     const current = this.nodes().find((n) => n.id === nodeId);
     if (!current) return;
-    const spec = this.catalog()?.nodes.find((s) => s.engineType === current.type);
-    const defaults = spec?.defaults ? JSON.parse(JSON.stringify(spec.defaults)) : { type: current.type };
+    let targetType = current.type;
+    let spec = this.catalog()?.nodes.find((s) => s.engineType === targetType);
+    if (!spec || !this.isSupported(targetType)) {
+      targetType = 'script';
+      spec = this.catalog()?.nodes.find((s) => s.engineType === 'script');
+    }
+    const defaults = spec?.defaults ? JSON.parse(JSON.stringify(spec.defaults)) : { type: targetType, code: '// Replaced unsupported construct\nkcontext.setVariable("replaced", true);' };
     const freshNode: CNode = {
       ...defaults,
       id: current.id, // Preserves sequence flow connections!
-      type: current.type,
-      name: current.name || spec?.label || current.type,
+      type: targetType,
+      name: current.name || spec?.label || targetType,
       x: current.x,
       y: current.y,
     };
@@ -827,7 +857,7 @@ export class ProcessCanvasComponent implements OnChanges {
     if (this.selNode()?.id === nodeId) this.selNode.set(freshNode);
     if (this.editingNode()?.id === nodeId) this.editingNode.set(freshNode);
     this.markDirty();
-    this.toast.success(`Replaced "${current.name || current.type}" with a fresh node.`);
+    this.toast.success(`Replaced "${current.name || current.type}" with a fresh ${targetType} task.`);
     this.validate();
   }
 
@@ -854,6 +884,9 @@ export class ProcessCanvasComponent implements OnChanges {
   }
 
   nodeTooltip(n: CNode): string {
+    if (!this.isSupported(n.type)) {
+      return `[UNSUPPORTED CONSTRUCT] "${n.name || n.id}" (${n.type}) is not supported by the execution engine.\n💡 Recommendation: Click the refresh icon to replace this node with a supported task from the palette.`;
+    }
     const base = `${this.typeLabel(n)}${n.name ? ': ' + n.name : ''}`;
     const probs = this.problems().filter((p) => p.nodeId === n.id);
     if (!probs.length) return base;
@@ -939,6 +972,10 @@ export class ProcessCanvasComponent implements OnChanges {
     const key = ev.dataTransfer?.getData('text/plain');
     const spec = this.catalog()?.nodes.find((s) => s.key === key);
     if (!spec) return;
+    if (!this.isSupported(spec.engineType)) {
+      this.toast.error(`Node type "${spec.engineType}" is not supported by the execution engine`);
+      return;
+    }
     const { x: px, y: py } = this.toLocal(ev.clientX, ev.clientY);
     const node: CNode = { id: this.newId(spec.engineType), ...(spec.defaults as any), name: (spec.defaults as any).name || spec.label, x: Math.max(10, Math.round(px)), y: Math.max(10, Math.round(py)) };
     this.nodes.set([...this.nodes(), node]);
@@ -949,6 +986,10 @@ export class ProcessCanvasComponent implements OnChanges {
 
   /** Click-to-add fallback (works even where native HTML5 drag doesn't). */
   addFromPalette(spec: NodeSpec) {
+    if (!this.isSupported(spec.engineType)) {
+      this.toast.error(`Node type "${spec.engineType}" is not supported by the execution engine`);
+      return;
+    }
     const sel = this.selNode();
     const x = sel ? sel.x + 220 : 100 + (this.nodes().length % 4) * 220;
     const y = sel ? sel.y : 100 + Math.floor(this.nodes().length / 4) * 120;
@@ -960,6 +1001,7 @@ export class ProcessCanvasComponent implements OnChanges {
 
   // ---- inline "+" add: append (and connect) a node straight from an existing one ----
   canAddFrom(n: CNode): boolean {
+    if (!this.isSupported(n.type)) return false;
     if (!this.hasOut(n.type)) return false;
     const p = this.portsFor(n.type);
     const outCount = this.edges().filter((e) => e.from === n.id).length;
@@ -1100,12 +1142,31 @@ export class ProcessCanvasComponent implements OnChanges {
   }
   // per-node config from the backend catalog (single source of truth for ports + property schema)
   portsFor(type: string) { return this.catalog()?.ports?.[type] || {}; }
-  hasIn(type: string) { return this.portsFor(type).maxIn !== 0; }    // input port unless maxIn is 0
-  hasOut(type: string) { return this.portsFor(type).maxOut !== 0; }  // output port unless maxOut is 0
+  isSupported(type: string): boolean {
+    if (!type) return false;
+    const cat = this.catalog();
+    if (!cat) return true; // loading fallback
+    return Boolean(cat.ports && cat.ports[type]);
+  }
+  hasIn(type: string) {
+    if (!this.isSupported(type)) return false;
+    return this.portsFor(type).maxIn !== 0;
+  }
+  hasOut(type: string) {
+    if (!this.isSupported(type)) return false;
+    return this.portsFor(type).maxOut !== 0;
+  }
   schemaFor(type: string) { return this.catalog()?.schemas?.[type] || []; }
 
   /** Connection validity from each node type's declared ports + cardinality (matches the backend). */
   canConnect(from: CNode, to: CNode): { ok: boolean; reason?: string } {
+    if (from.id === to.id) return { ok: false, reason: 'Self-connecting loop is not permitted on a single node' };
+    if (!this.isSupported(from.type)) {
+      return { ok: false, reason: `Node "${from.name || from.id}" (${from.type}) is an unsupported construct and cannot connect to other nodes. Recommendation: Replace with a supported task from the palette.` };
+    }
+    if (!this.isSupported(to.type)) {
+      return { ok: false, reason: `Node "${to.name || to.id}" (${to.type}) is an unsupported construct and cannot receive incoming connections. Recommendation: Replace with a supported task from the palette.` };
+    }
     const fp = this.portsFor(from.type), tp = this.portsFor(to.type);
     if (fp.maxOut === 0) return { ok: false, reason: `A ${from.type} has no outgoing connection` };
     if (tp.maxIn === 0) return { ok: false, reason: `A ${to.type} has no incoming connection` };

@@ -11,6 +11,18 @@ import { CodeEditorComponent } from '../../shared/code-editor.component';
   standalone: true,
   imports: [IconComponent, FormsModule, CodeEditorComponent],
   template: `
+    @if (sections.length === 0) {
+      <div class="unsupported-box">
+        <div class="unsupported-hdr">
+          <span class="unsupported-ic"><app-icon name="alert-triangle" [size]="18" /></span>
+          <strong>Unsupported Construct: {{ node?.type || 'unknown' }}</strong>
+        </div>
+        <p class="unsupported-desc">This construct type is not supported by the execution engine and cannot be configured or executed directly.</p>
+        <div class="unsupported-fix">
+          <strong>Recommendation:</strong> Use "Replace Node" to replace this construct with a standard Task (Script, REST Service, User Task), Gateway, or Sub-process from the palette.
+        </div>
+      </div>
+    }
     @for (sec of sections; track sec.title) {
       <div class="sec">
         <div class="sec-h">{{ sec.title }}</div>
@@ -193,6 +205,16 @@ import { CodeEditorComponent } from '../../shared/code-editor.component';
     }
   `,
   styles: [`
+    .unsupported-box {
+      border: 1px solid #fed7d7; background: #fff5f5; border-radius: 10px; padding: 14px 16px;
+      margin: 10px 0 16px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .unsupported-hdr { display: flex; align-items: center; gap: 8px; color: #9b2c2c; font-size: 13.5px; }
+    .unsupported-ic { color: #dc2626; display: grid; place-items: center; }
+    .unsupported-desc { font-size: 12.5px; color: #742a2a; margin: 0; line-height: 1.45; }
+    .unsupported-fix { font-size: 12px; color: #9b2c2c; background: #fee2e2; border-radius: 6px; padding: 8px 10px; border: 1px dashed #fca5a5; }
+    .unsupported-fix strong { color: #742a2a; }
+
     .sec { margin-bottom: 4px; }
     .sec-h { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 14px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--border); }
     .fld { margin-bottom: 12px; } .fld > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
