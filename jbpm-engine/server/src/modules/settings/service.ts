@@ -38,11 +38,12 @@ export class SettingsService {
   constructor(private ctx: AppContext) {}
   private repo() { return this.ctx.store.repo<SystemSettings>(Collections.settings); }
 
-  async get(): Promise<SystemSettings> {
+  async get(isAdmin = true): Promise<SystemSettings> {
     const existing = await this.repo().get('system');
     if (existing && existing.tenantId === this.ctx.tenantId) {
       return {
         ...existing,
+        outboundAllowlist: isAdmin ? existing.outboundAllowlist : (existing.outboundAllowlist ? '***' : ''),
         smtpPasswordConfigured: Boolean(existing.smtpPassword),
         smtpPassword: existing.smtpPassword ? '••••••••' : undefined,
       };

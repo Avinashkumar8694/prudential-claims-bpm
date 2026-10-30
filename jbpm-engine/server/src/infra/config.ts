@@ -46,6 +46,13 @@ export interface Config {
 }
 
 const env = process.env;
+const isProd = env.NODE_ENV === 'production';
+const defaultJwtSecret = 'dev-insecure-secret-change-me';
+
+if (isProd && (!env.JWT_SECRET || env.JWT_SECRET === defaultJwtSecret)) {
+  throw new Error('FATAL SECURITY ERROR: JWT_SECRET must be explicitly configured with a strong secret in production mode (NODE_ENV=production).');
+}
+
 export const config: Config = {
   port: Number(env.PORT || 4000),
   dataDir: env.DATA_DIR || path.resolve(process.cwd(), '.data'),

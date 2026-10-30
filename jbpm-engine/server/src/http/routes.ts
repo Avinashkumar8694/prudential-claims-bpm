@@ -509,7 +509,11 @@ export function buildRoutes(): Router {
   r.post('/notifications/:id/read', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).markRead(req.params.id, actorOf(req)))));
 
   // --- system settings (singleton; readable by anyone signed in, writable by admins) ---
-  r.get('/settings/system', asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).get())));
+  r.get('/settings/system', asyncHandler(async (req, res) => {
+    const user = (req as any).user;
+    const isAdmin = Boolean(user && user.roles && (user.roles.includes('admin') || user.roles.includes('*')));
+    res.json(await new SettingsService(ctxOf(req)).get(isAdmin));
+  }));
   r.put('/settings/system', perm('admin:iam'), asyncHandler(async (req, res) => {
     const patch = { ...(req.body || {}) };
     if (patch.smtpPassword) patch.smtpPassword = decryptInTransit(patch.smtpPassword);

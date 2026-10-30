@@ -211,12 +211,29 @@ export class MarkdownViewerComponent implements OnInit, OnChanges, AfterViewInit
       // Pre-process markdown to format callouts & code blocks
       const processed = this.preprocessMarkdown(this.content);
       const parsed = marked.parse(processed, { async: false }) as string;
-      this.renderedHtml = this.sanitizer.bypassSecurityTrustHtml(parsed);
+      const clean = this.sanitizeHtml(parsed);
+      this.renderedHtml = this.sanitizer.bypassSecurityTrustHtml(clean);
 
       setTimeout(() => this.renderMermaidDiagrams(), 50);
     } catch (e) {
-      this.renderedHtml = this.sanitizer.bypassSecurityTrustHtml(`<pre>${this.content}</pre>`);
+      const clean = this.sanitizeHtml(`<pre>${this.content}</pre>`);
+      this.renderedHtml = this.sanitizer.bypassSecurityTrustHtml(clean);
     }
+  }
+
+  private sanitizeHtml(html: string): string {
+    if (!html) return '';
+    return html
+      // Strip dangerous executable tags
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script\s*>/gi, '')
+      .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe\s*>/gi, '')
+      .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object\s*>/gi, '')
+      .replace(/<embed\b[^>]*>/gi, '')
+      .replace(/<form\b[^<]*(?:(?!<\/form>)<[^<]*)*<\/form\s*>/gi, '')
+      // Strip inline event handlers (onerror, onload, onclick, onmouseover, etc.)
+      .replace(/\s+on[a-zA-Z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      // Neutralize javascript: and vbscript: URIs
+      .replace(/\b(href|src|action)\s*=\s*(?:"(?:javascript|vbscript):[^"]*"|'(?:javascript|vbscript):[^']*')/gi, '$1="#"');
   }
 
   private preprocessMarkdown(md: string): string {

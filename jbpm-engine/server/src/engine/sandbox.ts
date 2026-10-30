@@ -92,10 +92,17 @@ function buildKcontext(vars: Record<string, unknown>, info: KContextInfo, action
     signalEvent: (type: string, event?: unknown) => { actions.push({ kind: 'signal', type, payload: event, targetInstanceId: selfId }); },
   };
   const nodeInstance = { getId: () => info.nodeInstanceId ?? '', getNodeId: () => info.nodeId ?? '', getNodeName: () => info.nodeName ?? '' };
+  const SENSITIVE_HOST_ENV = new Set([
+    'JWT_SECRET', 'ADMIN_INITIAL_PASSWORD', 'SECRETS_ENCRYPTION_PRIVATE_KEY', 'SECRETS_ENCRYPTION_PUBLIC_KEY',
+    'PG_URL', 'DATABASE_URL', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'NODE_AUTH_TOKEN', 'PRIVATE_KEY'
+  ]);
   const envMap: Record<string, any> = { ...(info.env || {}) };
   const environment = {
     ...envMap,
-    get: (k: string) => envMap[k] ?? process.env[k] ?? null,
+    get: (k: string) => {
+      if (!k || SENSITIVE_HOST_ENV.has(k.toUpperCase())) return null;
+      return envMap[k] ?? null;
+    },
     set: (k: string, v: unknown) => { envMap[k] = v; if (info.env) info.env[k] = String(v); },
   };
   const kieRuntime = {

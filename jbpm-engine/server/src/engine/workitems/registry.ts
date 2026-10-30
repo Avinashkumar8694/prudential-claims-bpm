@@ -2,6 +2,7 @@
 // the Node equivalent of jBPM WorkItemHandlers. Each returns result data mapped back to variables.
 // External handlers (Email/SMS/DB/Rest) call service URLs or simulate when not configured.
 import vm from 'node:vm';
+import { assertOutboundAllowed } from '../../infra/outbound-guard.ts';
 
 export type WorkItemHandler = (params: Record<string, unknown>, env: Record<string, string>) => Promise<Record<string, unknown>>;
 
@@ -45,6 +46,15 @@ export const WORKITEM_HANDLERS: Record<string, WorkItemHandler> = {
       } else if (url.includes('.svc.cluster.local')) {
         url = url.replace(/^https?:\/\/[^/]+/, base);
       }
+    }
+
+    // SSRF Guard: prevent calls to private, link-local, loopback, or cloud-metadata endpoints unless allowlisted
+    if (/^https?:\/\//i.test(url)) {
+      const dynamicAllowlist = [
+        ...(env['OUTBOUND_ALLOWLIST'] ? env['OUTBOUND_ALLOWLIST'].split(',').map((s) => s.trim()) : []),
+        ...(baseUrl ? [new URL(baseUrl).hostname] : []),
+      ];
+      await assertOutboundAllowed(url, dynamicAllowlist);
     }
 
     const method = String(p['Method'] || p['method'] || 'POST').toUpperCase();

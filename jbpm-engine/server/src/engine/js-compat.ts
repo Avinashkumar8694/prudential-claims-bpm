@@ -586,6 +586,11 @@ export function installJsCompat(sandbox: Record<string, unknown>): void {
     },
   };
 
+  const SENSITIVE_HOST_ENV = new Set([
+    'JWT_SECRET', 'ADMIN_INITIAL_PASSWORD', 'SECRETS_ENCRYPTION_PRIVATE_KEY', 'SECRETS_ENCRYPTION_PUBLIC_KEY',
+    'PG_URL', 'DATABASE_URL', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'NODE_AUTH_TOKEN', 'PRIVATE_KEY'
+  ]);
+
   sandbox.System = {
     out: {
       println: (...args: unknown[]) => ((sandbox.console as any)?.log || console.log)(...args),
@@ -596,14 +601,16 @@ export function installJsCompat(sandbox: Record<string, unknown>): void {
       if (!k) {
         return envObj[''] ?? envObj['BASE_URL'] ?? envObj['INTEGRATION_LAYER_URL'] ?? null;
       }
-      return envObj[k] ?? process.env[k] ?? null;
+      if (SENSITIVE_HOST_ENV.has(k.toUpperCase())) return null;
+      return envObj[k] ?? null;
     },
     getProperty: (k: string) => {
       const envObj = (sandbox.env as Record<string, string>) || {};
       if (!k) {
         return envObj[''] ?? envObj['BASE_URL'] ?? envObj['INTEGRATION_LAYER_URL'] ?? null;
       }
-      return envObj[k] ?? process.env[k] ?? null;
+      if (SENSITIVE_HOST_ENV.has(k.toUpperCase())) return null;
+      return envObj[k] ?? null;
     },
     currentTimeMillis: () => Date.now(),
   };
