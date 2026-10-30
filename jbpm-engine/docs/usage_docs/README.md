@@ -26,6 +26,7 @@ the engine itself; read this folder if you're *running* or *using* it.
 | 15 | [JavaScript & Flow Variables Cheat Sheet](15-javascript-and-flow-variables-cheatsheet.md) | Complete reference: sandbox globals, bare variables, `vars`, `instance` API, condition expressions, HTTP exit scripts, and data mappings |
 | 16 | [Java & Imported Script Reference Manual](16-java-and-imported-script-reference.md) | JVM sidecar execution, `kcontext` API, Jackson JSON parsing, collections, and Java condition expressions for imported jBPM projects |
 | 17 | [Hierarchical Error Handling & Environment Variables Guide](17-error-handling-and-environment-guide.md) | 4-tier error resolution hierarchy, local boundary vs. project global error handler, repair-and-resume strategies, circuit breakers, and project environment variables (`env`) |
+| 18 | [Nodes & Assets Production Verification Checklist](18-nodes-and-assets-production-verification-checklist.md) | Exhaustive verification checklist for all 16 BPMN node types and 10 asset kinds, edge-case coverage, and high-concurrency stress performance report |
 
 ## Reference
 
