@@ -591,8 +591,20 @@ export function installJsCompat(sandbox: Record<string, unknown>): void {
       println: (...args: unknown[]) => ((sandbox.console as any)?.log || console.log)(...args),
       print: (...args: unknown[]) => ((sandbox.console as any)?.log || console.log)(...args),
     },
-    getenv: (k: string) => ((sandbox.env as Record<string, string>)?.[k] || process.env[k] || ''),
-    getProperty: (k: string) => ((sandbox.env as Record<string, string>)?.[k] || process.env[k] || ''),
+    getenv: (k: string) => {
+      const envObj = (sandbox.env as Record<string, string>) || {};
+      if (!k) {
+        return envObj[''] ?? envObj['BASE_URL'] ?? envObj['INTEGRATION_LAYER_URL'] ?? null;
+      }
+      return envObj[k] ?? process.env[k] ?? null;
+    },
+    getProperty: (k: string) => {
+      const envObj = (sandbox.env as Record<string, string>) || {};
+      if (!k) {
+        return envObj[''] ?? envObj['BASE_URL'] ?? envObj['INTEGRATION_LAYER_URL'] ?? null;
+      }
+      return envObj[k] ?? process.env[k] ?? null;
+    },
     currentTimeMillis: () => Date.now(),
   };
 }
