@@ -70,6 +70,7 @@ export const routes: Routes = [
         loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent) },
+      { path: 'integration-guide', loadComponent: () => import('./features/integration-guide/integration-guide.component').then((m) => m.IntegrationGuideComponent) },
       // Workflow Instance Management (Case Management)
       {
         path: 'workflow-management',

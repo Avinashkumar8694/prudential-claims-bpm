@@ -9,7 +9,9 @@ import type { AppContext } from '../context.ts';
 
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.header('authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : undefined;
+  const token = header.startsWith('Bearer ')
+    ? header.slice(7)
+    : (typeof req.query?.token === 'string' ? req.query.token : undefined);
   if (!token) return next(authRequired());
   try {
     const claims = verifyToken(token);

@@ -39,6 +39,75 @@ const schemas = {
   VariableChange: { type: 'object', properties: { name: { type: 'string' }, from: {}, to: {}, at: { type: 'string' }, actor: { type: 'string' } } },
   Group: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' } } },
   Role: { type: 'object', properties: { id: { type: 'string' }, name: { type: 'string' }, permissions: { type: 'array', items: { type: 'string' } } } },
+  WorkflowDefinition: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'def_claims_assessment' },
+      name: { type: 'string', example: 'System Claim Assessment' },
+      workflowId: { type: 'string', example: 'wf_pru_claims' },
+      deploymentId: { type: 'string', example: 'dep_prod_v1' },
+      active: { type: 'boolean', example: true },
+      schema: { type: 'object' },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  WorkflowInstance: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'case_clm_99214' },
+      workflowDefinitionId: { type: 'string', example: 'def_claims_assessment' },
+      status: { type: 'string', enum: ['initiated', 'active', 'completed', 'aborted', 'failed'], example: 'active' },
+      workflowData: { type: 'object', example: { claimId: 'CLM-99214', claimAmount: 50000, claimantName: 'John Doe', policyNumber: 'POL-3321' } },
+      correlationKey: { type: 'string', example: 'POL-3321-CLM-99214' },
+      currentTasks: { type: 'array', items: { type: 'string' } },
+      history: { type: 'array', items: { type: 'object' } },
+      piid: { type: 'string', example: 'inst_882194' },
+      createdAt: { type: 'string', format: 'date-time' },
+      updatedAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  WorkflowComment: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'cmt_102' },
+      workflowInstanceId: { type: 'string', example: 'case_clm_99214' },
+      author: { type: 'string', example: 'alice' },
+      body: { type: 'string', example: 'Verified medical report and beneficiary ID documents.' },
+      createdAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  WorkflowAudit: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'aud_501' },
+      workflowInstanceId: { type: 'string', example: 'case_clm_99214' },
+      actor: { type: 'string', example: 'bob' },
+      kind: { type: 'string', example: 'workflowInstance.status_updated' },
+      data: { type: 'object' },
+      at: { type: 'string', format: 'date-time' },
+    },
+  },
+  SavedQuery: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', example: 'qry_pending_high_value' },
+      name: { type: 'string', example: 'High-Value Pending Claims' },
+      query: { type: 'object', example: { collection: 'instances', filter: { status: 'waiting', 'variables.claimAmount': { $gte: 25000 } } } },
+      author: { type: 'string', example: 'admin' },
+      createdAt: { type: 'string', format: 'date-time' },
+    },
+  },
+  TATReport: {
+    type: 'object',
+    properties: {
+      count: { type: 'integer', example: 142 },
+      avgHours: { type: 'number', example: 18.4 },
+      minHours: { type: 'number', example: 1.2 },
+      maxHours: { type: 'number', example: 72.0 },
+      byAssignee: { type: 'object' },
+    },
+  },
 };
 
 // ---- paths (grouped by tag) ----
@@ -241,21 +310,155 @@ const paths: Record<string, any> = {
     patch: { tags: ['IAM'], summary: 'Replace a role’s permissions (admin; the built-in "admin" role is immutable)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { permissions: { type: 'array', items: { type: 'string' } } } }), responses: ok(ref('Role')) },
     delete: { tags: ['IAM'], summary: 'Delete a role (admin; the built-in "admin" role cannot be deleted)', parameters: [idParam()], responses: { '204': { description: 'Deleted' } } },
   },
+
+  // ---- Workflow Definitions (Case Definitions) ----
+  '/workflow-definitions': {
+    get: { tags: ['Workflow Definitions'], summary: 'List registered workflow definitions', responses: ok(listOf('WorkflowDefinition')) },
+    post: { tags: ['Workflow Definitions'], summary: 'Register a workflow definition mapping (admin)', requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string', example: 'System Claim Assessment' }, workflowId: { type: 'string', example: 'wf_pru_claims' }, deploymentId: { type: 'string', example: 'dep_prod_v1' }, schema: { type: 'object' } } }), responses: created(ref('WorkflowDefinition')) },
+  },
+  '/workflow-definitions/{id}': {
+    get: { tags: ['Workflow Definitions'], summary: 'Get a workflow definition by id', parameters: [idParam()], responses: ok(ref('WorkflowDefinition')) },
+    patch: { tags: ['Workflow Definitions'], summary: 'Update a workflow definition (admin)', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string' }, deploymentId: { type: 'string' }, active: { type: 'boolean' }, schema: { type: 'object' } } }), responses: ok(ref('WorkflowDefinition')) },
+  },
+
+  // ---- Workflow Instances (Cases) ----
+  '/workflow-instances': {
+    get: { tags: ['Workflow Instances'], summary: 'List business workflow instances (cases)', parameters: [q('definitionId', 'Filter by workflow definition ID'), q('status', 'initiated|active|completed|aborted|failed'), q('correlationKey', 'Business key / policy number'), q('limit', 'Max results (default 50)'), q('offset', 'Pagination offset')], responses: ok(listOf('WorkflowInstance')) },
+    post: { tags: ['Workflow Instances'], summary: 'Start a new business workflow instance (Case)', requestBody: jsonBody({ type: 'object', properties: { definitionId: { type: 'string', example: 'def_claims_assessment' }, workflowData: { type: 'object', example: { claimId: 'CLM-99214', claimAmount: 50000, claimantName: 'John Doe', policyNumber: 'POL-3321' } }, correlationKey: { type: 'string', example: 'POL-3321-CLM-99214' } } }), responses: created(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/search': {
+    post: { tags: ['Workflow Instances'], summary: 'Advanced search across cases, status, and payload data', requestBody: jsonBody({ type: 'object', properties: { definitionId: { type: 'string' }, status: { type: 'string' }, dataFilter: { type: 'object' }, limit: { type: 'integer' } } }), responses: ok(listOf('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}': {
+    get: { tags: ['Workflow Instances'], summary: 'Get aggregated case details with tasks, history, and variables', parameters: [idParam()], responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/status': {
+    patch: { tags: ['Workflow Instances'], summary: 'Update workflow instance case status', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { status: { type: 'string', enum: ['initiated', 'active', 'completed', 'aborted', 'failed'] } } }), responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/data': {
+    put: { tags: ['Workflow Instances'], summary: 'Update case business data payload', parameters: [idParam()], requestBody: jsonBody({ type: 'object', additionalProperties: {} }), responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/signal': {
+    post: { tags: ['Workflow Instances'], summary: 'Deliver business signal to workflow instance', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string', example: 'DOCUMENTS_RECEIVED' }, payload: { type: 'object', example: { docCount: 3, verified: true } } } }), responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/tasks/{taskId}/decision': {
+    post: { tags: ['Workflow Instances'], summary: 'Submit case task decision outputs (claim approval/rejection)', parameters: [idParam(), idParam('taskId', 'Human task id')], requestBody: jsonBody({ type: 'object', properties: { outputs: { type: 'object', example: { approved: true, payoutAmount: 50000, remarks: 'Verified policy coverage' } } } }), responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/delegate': {
+    post: { tags: ['Workflow Instances'], summary: 'Delegate case or task to another user', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { to: { type: 'string', example: 'senior_assessor' }, taskId: { type: 'string' } } }), responses: ok(ref('WorkflowInstance')) },
+  },
+  '/workflow-instances/{id}/tasks': {
+    get: { tags: ['Workflow Instances'], summary: 'List tasks linked to this workflow instance', parameters: [idParam()], responses: ok(listOf('Task')) },
+  },
+  '/workflow-instances/{id}/signals': {
+    get: { tags: ['Workflow Instances'], summary: 'List expected signals for this workflow instance', parameters: [idParam()], responses: ok({ type: 'array', items: { type: 'string' } }) },
+  },
+  '/workflow-instances/{id}/comments': {
+    get: { tags: ['Workflow Instances'], summary: 'List case notes and comments', parameters: [idParam()], responses: ok(listOf('WorkflowComment')) },
+    post: { tags: ['Workflow Instances'], summary: 'Add a case note or comment', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { body: { type: 'string', example: 'Reviewed medical examination and verified beneficiary status.' } } }), responses: created(ref('WorkflowComment')) },
+  },
+  '/workflow-instances/{id}/comments/{commentId}': {
+    delete: { tags: ['Workflow Instances'], summary: 'Delete a case comment', parameters: [idParam(), idParam('commentId', 'Comment id')], responses: { '204': { description: 'Deleted' } } },
+  },
+  '/workflow-instances/{id}/audits': {
+    get: { tags: ['Workflow Instances'], summary: 'List case audit history', parameters: [idParam()], responses: ok(listOf('WorkflowAudit')) },
+    post: { tags: ['Workflow Instances'], summary: 'Record manual case audit note or event', parameters: [idParam()], requestBody: jsonBody({ type: 'object', properties: { kind: { type: 'string', example: 'workflowInstance.manual_review' }, data: { type: 'object' } } }), responses: created(ref('WorkflowAudit')) },
+  },
+  '/workflow-instances/{id}/audits/{auditId}': {
+    delete: { tags: ['Workflow Instances'], summary: 'Delete an audit record (admin)', parameters: [idParam(), idParam('auditId', 'Audit entry id')], responses: { '204': { description: 'Deleted' } } },
+  },
+
+  // ---- Workflow Analytics ----
+  '/workflow-analytics/summary': {
+    get: { tags: ['Workflow Analytics'], summary: 'Get overall workflow execution metrics', parameters: [q('from', 'ISO start date'), q('to', 'ISO end date')], responses: ok(ref('Summary')) },
+  },
+  '/workflow-analytics/tat': {
+    get: { tags: ['Workflow Analytics'], summary: 'Turnaround time (TAT) metrics across processes and human tasks', parameters: [q('from', 'ISO start date'), q('to', 'ISO end date'), q('definitionId', 'Filter by workflow definition')], responses: ok(ref('TATReport')) },
+  },
+  '/workflow-instances/{id}/tasks/{taskId}/ownership-timeline': {
+    get: { tags: ['Workflow Analytics'], summary: 'Task claim/delegate ownership duration timeline', parameters: [idParam(), idParam('taskId', 'Task id')], responses: ok({ type: 'array', items: { type: 'object' } }) },
+  },
+  '/analytics/tasks-and-processes/{piid}': {
+    get: { tags: ['Workflow Analytics'], summary: 'Linked process instance tasks and timeline by process instance id', parameters: [idParam('piid', 'Process instance ID (PIID)')], responses: ok({ type: 'object' }) },
+  },
+
+  // ---- Ad-Hoc Query Engine ----
+  '/analytics/query/run': {
+    post: { tags: ['Ad-Hoc Query Engine'], summary: 'Execute ad-hoc query with tenant isolation and projection', requestBody: jsonBody({ type: 'object', properties: { collection: { type: 'string', example: 'instances' }, filter: { type: 'object', example: { status: 'waiting' } }, select: { type: 'array', items: { type: 'string' } }, limit: { type: 'integer', example: 50 } } }), responses: ok({ type: 'object', properties: { items: { type: 'array', items: {} }, count: { type: 'integer' } } }) },
+  },
+  '/analytics/queries': {
+    get: { tags: ['Ad-Hoc Query Engine'], summary: 'List saved queries for the caller', responses: ok(listOf('SavedQuery')) },
+    post: { tags: ['Ad-Hoc Query Engine'], summary: 'Save a reusable query', requestBody: jsonBody({ type: 'object', properties: { name: { type: 'string', example: 'High-Value Claims' }, query: { type: 'object' } } }), responses: created(ref('SavedQuery')) },
+  },
+  '/analytics/queries/{id}/run': {
+    post: { tags: ['Ad-Hoc Query Engine'], summary: 'Run a saved query by id', parameters: [idParam()], responses: ok({ type: 'object' }) },
+  },
+  '/analytics/queries/{id}': {
+    delete: { tags: ['Ad-Hoc Query Engine'], summary: 'Delete a saved query', parameters: [idParam()], responses: { '204': { description: 'Deleted' } } },
+  },
 };
 
 export const openapiSpec = {
   openapi: '3.0.3',
   info: {
-    title: 'BPM Workflow Engine API',
-    version: '0.1.0',
-    description: 'Node-native BPM engine REST API — authoring, versioning, deployment lifecycle, runtime process instances, human tasks, KIE-Server-style query & analytics, and IAM (users/groups/roles). `POST /auth/login` issues a JWT; send it as `Authorization: Bearer <token>` on every other request. Each route requires a permission granted by one of the caller’s roles — see `DEFAULT_ROLES` in modules/iam/service.ts.',
+    title: 'Prudential Claims BPM — Engine & Integration API',
+    version: '1.0.0',
+    description: `## Prudential Claims BPM Workflow & Integration Engine
+
+Welcome to the **Prudential Claims BPM REST & Event Integration API**. This specification covers both developer intake integration and engine management.
+
+### 1. Authentication & API Token Generation
+All endpoints (except \`POST /api/auth/login\` and \`GET /api/crypto/public-key\`) require a valid JWT Bearer token:
+1. **Acquire Token**: Send your credentials to \`POST /api/auth/login\`:
+   \`\`\`json
+   POST /api/auth/login
+   {
+     "username": "admin",
+     "password": "your-password"
+   }
+   \`\`\`
+2. **Authorize Requests**: Attach the returned token in the HTTP Authorization header:
+   \`Authorization: Bearer <token>\`
+3. **Browser Direct Access**: When viewing API documentation in a browser, pass \`?token=<token>\` in the URL.
+
+### 2. Ephemeral In-Transit Cryptography
+For high-security environments, credentials and sensitive claims variables can be encrypted before transmission using the ephemeral RSA-OAEP public key retrieved from \`GET /api/crypto/public-key\`.
+
+### 3. Core Integration Workflows
+- **Intake & Starting Workflows**: \`POST /api/instances\` or \`POST /api/workflow-instances\`
+- **Inspecting Running Instances**: \`GET /api/instances/{id}\` and diagram progress at \`GET /api/instances/{id}/diagram-state\`
+- **Human Task Workbench**: Query inboxes at \`GET /api/tasks\`, claim via \`POST /api/tasks/{id}/claim\`, and complete with outputs via \`POST /api/tasks/{id}/complete\`
+- **Event Callbacks & Signals**: Deliver asynchronous external signals via \`POST /api/instances/{id}/signal\`
+- **Operational Failures & Recovery**: Monitor incidents at \`GET /api/errors\` and re-trigger execution via \`POST /api/instances/{id}/retry\`
+
+### 4. Realtime Event Streaming (WebSockets)
+Connect via WebSocket to \`ws://<host>/api/ws?token=<token>\`. Once connected, subscribe to instance topics:
+\`\`\`json
+{ "op": "sub", "topics": ["instance:<instanceId>"] }
+\`\`\`
+`,
   },
   servers: [{ url: '/api', description: 'This server' }],
   tags: [
-    { name: 'Catalog' }, { name: 'Authoring' }, { name: 'Projects' }, { name: 'Processes' }, { name: 'Assets' },
-    { name: 'Versioning' }, { name: 'Deployments' }, { name: 'Instances' }, { name: 'Human Tasks' },
-    { name: 'Execution Errors' }, { name: 'Jobs & Timers' }, { name: 'Notifications' }, { name: 'Governance' },
-    { name: 'Query & Analytics' }, { name: 'Import/Export' }, { name: 'IAM' },
+    { name: 'IAM', description: 'Authentication, Token Issuance, Users, Roles & Permissions' },
+    { name: 'Instances', description: 'Process Instance Lifecycle, State Inspection & Signal Resumption' },
+    { name: 'Human Tasks', description: 'Task Inbox, Claim, Complete, Delegate & SLA Tracking' },
+    { name: 'Workflow Instances', description: 'Business Case Management, Intake, Decisions & Case Notes' },
+    { name: 'Workflow Definitions', description: 'Stable Definition to Deployment Bindings' },
+    { name: 'Workflow Analytics', description: 'Turnaround Time (TAT) Metrics & Process Analytics' },
+    { name: 'Ad-Hoc Query Engine', description: 'Multi-Tenant Data Projection & Saved Queries' },
+    { name: 'Projects', description: 'Workflow Projects, Folders & Scoped Permissions' },
+    { name: 'Processes', description: 'Process Graph Modeling & Definition Storage' },
+    { name: 'Assets', description: 'DMN Decision Tables, DRL Rulesets, Forms & Scorecards' },
+    { name: 'Deployments', description: 'Environment Deployments, Rollbacks & Snapshots' },
+    { name: 'Versioning', description: 'Drafts, Published Versions & Semantic Diffs' },
+    { name: 'Authoring', description: 'BPMN Diagram Graph Validation & Diagnostics' },
+    { name: 'Execution Errors', description: 'Operational Incident Queue & Error Retries' },
+    { name: 'Jobs & Timers', description: 'Durable Asynchronous Timers & Scheduling' },
+    { name: 'Catalog', description: 'Node Specifications, Property Schemas & Ports' },
+    { name: 'Governance', description: 'Audit Forensics & Enterprise System Settings' },
+    { name: 'Notifications', description: 'In-App Operational Alerts & Reminders' },
+    { name: 'Import/Export', description: 'jBPM KJAR Archives & Portable Engine JSON Packages' },
   ],
   components: {
     schemas,
@@ -265,21 +468,76 @@ export const openapiSpec = {
   paths,
 };
 
-/** Minimal self-contained Swagger UI page (loads the swagger-ui assets from a CDN). */
+/** Self-contained Swagger UI page with session token persistence and request interceptor. */
 export const swaggerHtml = `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>BPM Engine API — Swagger UI</title>
+  <title>Prudential Claims BPM — Developer Integration API</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css" />
-  <style> body { margin: 0; } .topbar { display: none; } </style>
+  <style>
+    body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #fafafa; }
+    .topbar { display: none; }
+    .auth-banner {
+      background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+      color: #ffffff;
+      padding: 16px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.25);
+    }
+    .auth-banner h1 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+    .auth-banner p { margin: 4px 0 0; font-size: 12.5px; opacity: 0.92; }
+    .auth-badge {
+      background: rgba(255, 255, 255, 0.22);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      backdrop-filter: blur(4px);
+    }
+    .swagger-ui .info { margin: 25px 0 20px 0; }
+    .swagger-ui .info .title { font-size: 28px; color: #1e293b; }
+    .swagger-ui .info .description { font-size: 14px; line-height: 1.6; color: #475569; }
+  </style>
 </head>
 <body>
+  <div class="auth-banner">
+    <div>
+      <h1>Prudential Claims BPM — Developer Integration API</h1>
+      <p>Interactive OpenAPI 3.0 Documentation for External Systems, Portals, and Claim Integrations</p>
+    </div>
+    <div class="auth-badge" id="session-badge">Authenticated Session</div>
+  </div>
   <div id="swagger-ui"></div>
   <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
-    window.ui = SwaggerUIBundle({ url: 'openapi.json', dom_id: '#swagger-ui', deepLinking: true, docExpansion: 'none', filter: true });
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token') || localStorage.getItem('token') || '';
+    if (!token) {
+      const badge = document.getElementById('session-badge');
+      badge.textContent = 'Unauthenticated (Bearer Required)';
+      badge.style.background = '#ef4444';
+    }
+
+    const specUrl = token ? ('openapi.json?token=' + encodeURIComponent(token)) : 'openapi.json';
+
+    window.ui = SwaggerUIBundle({
+      url: specUrl,
+      dom_id: '#swagger-ui',
+      deepLinking: true,
+      docExpansion: 'list',
+      filter: true,
+      persistAuthorization: true,
+      requestInterceptor: (req) => {
+        if (token && !req.headers['Authorization']) {
+          req.headers['Authorization'] = 'Bearer ' + token;
+        }
+        return req;
+      }
+    });
   </script>
 </body>
 </html>`;

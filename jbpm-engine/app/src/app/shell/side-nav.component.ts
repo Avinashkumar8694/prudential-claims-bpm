@@ -187,6 +187,7 @@ export class SideNavComponent {
       g.push({ label: 'Audit Log', icon: 'list', link: '/audit' });
     }
     if (this.auth.hasPermission('workflowInstance:admin')) g.push({ label: 'Workflow Definitions', icon: 'puzzle', link: '/workflow-management' });
+    g.push({ label: 'Integration Guide', icon: 'terminal', link: '/integration-guide' });
     g.push({ label: 'Settings', icon: 'settings', link: '/settings' });
     return g;
   });
