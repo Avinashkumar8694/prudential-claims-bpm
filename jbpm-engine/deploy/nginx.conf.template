@@ -1,0 +1,36 @@
+# Rendered at start-up by the nginx image (envsubst): only ${UPSTREAM} is substituted, nginx variables stay as written.
+gzip on;
+gzip_types text/css application/javascript application/json image/svg+xml;
+
+map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+
+server {
+  listen 80 default_server;
+  root /srv/app;
+  resolver 127.0.0.11 valid=10s ipv6=off;       # Docker's DNS: the engine is looked up per request, so a recreated engine is found without restarting this container
+  client_max_body_size 25m;                      # deployments and jBPM imports can be large
+
+  location = /healthz { default_type text/plain; return 200 "ok\n"; }
+
+  location /api/ {
+    set $engine http://${UPSTREAM};
+    proxy_pass $engine;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+    proxy_read_timeout 120s;
+  }
+  location /ws {
+    set $engine http://${UPSTREAM};
+    proxy_pass $engine;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_read_timeout 3600s;
+  }
+
+  location ~* \.(js|css|woff2?|svg|png|ico)$ { add_header Cache-Control "public, max-age=31536000, immutable"; try_files $uri =404; }
+  location / { add_header Cache-Control "no-cache"; try_files $uri /index.html; }   # the app owns its page addresses
+}

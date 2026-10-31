@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.7
+#
+# Orkestr web: the Angular app (workflow builder + operations console) served by nginx, which also proxies /api and /ws to the engine.
+#
+# BUILD CONTEXT = the repository root:
+#     docker build -f jbpm-engine/Dockerfile.web -t orkestr-web .
+#
+# Runtime: nginx :80. UPSTREAM (default engine:4000) is the engine API address; no setting is baked into the bundle (it calls /api on its own origin).
+ARG NODE_VERSION=22
+
+FROM node:${NODE_VERSION}-bookworm AS build
+WORKDIR /build
+COPY jbpm-engine/package.json jbpm-engine/package-lock.json ./
+COPY jbpm-engine/server/package.json ./server/
+COPY jbpm-engine/app/package.json ./app/
+# the server depends on the local SDK (file:../../bpmn-sdk): its manifest must be resolvable for the lockfile, the app itself does not use it
+COPY bpmn-sdk/package.json ../bpmn-sdk/package.json
+RUN npm ci --workspace app --include-workspace-root --ignore-scripts --no-audit --no-fund
+COPY jbpm-engine/app ./app
+RUN npm run build --workspace app && ls app/dist/app/browser/index.html
+
+FROM nginx:1.27-alpine
+RUN apk add --no-cache curl
+COPY --from=build /build/app/dist/app/browser /srv/app
+COPY jbpm-engine/deploy/nginx.conf.template /etc/nginx/templates/orkestr.conf.template
+RUN rm -f /etc/nginx/conf.d/default.conf
+ENV UPSTREAM=engine:4000
+EXPOSE 80
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
+  CMD curl -fsS http://127.0.0.1/healthz >/dev/null || exit 1
