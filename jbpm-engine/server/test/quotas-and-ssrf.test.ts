@@ -146,3 +146,10 @@ test('HTTP service task: an ABSOLUTE url to a private/link-local address is SSRF
   assert.strictEqual((inst.variables['errorInfo'] as any).code, 'SSRF_BLOCKED');
   assert.ok(inst.history.some((h) => h.nodeId === 'rec'));
 });
+
+test('production bundle safety: workflow-service store factory has no runtime require of a .ts file (breaks in the tsup bundle)', async () => {
+  const fs = await import('node:fs');
+  const src = fs.readFileSync(new URL('../src/workflow-service/store/index.ts', import.meta.url), 'utf8');
+  assert.ok(!/createRequire|\breq\(['"]\.\//.test(src), 'use a static import so the bundler includes pg-store');
+  assert.match(src, /import \{ WorkflowServicePgStore \} from '\.\/pg-store\.ts'/);
+});
