@@ -14,6 +14,7 @@ import { oidc } from '../src/infra/oidc.ts';
 import { IamService } from '../src/modules/iam/service.ts';
 import { TenantService } from '../src/modules/tenants/service.ts';
 import { signToken } from '../src/infra/auth.ts';
+import { PLATFORM_ADMIN_EMAIL } from '../src/infra/config.ts';
 import { authorizeWsTenant, canSubscribe } from '../src/infra/ws-auth.ts';
 import { Collections, type Instance, type TenantMember } from '../src/domain.ts';
 
@@ -212,13 +213,30 @@ test('roles map to permissions inside a brand-new workspace (no Role rows needed
   assert.ok(profile.data.member.permissions.includes('workflow:edit'), 'UI profile reflects the role');
 });
 
-test('a platform admin (system_admin membership) can enter any workspace and the platform view', async () => {
-  await addMember({ tenantId: config.defaultTenant, userId: 'sub-root', email: 'root@example.com', role: 'system_admin', permissions: ['*'] });
-  const root = bearer({ sub: 'sub-root', email: 'root@example.com' });
+test('the platform admin email is seeded as system_admin, and it is the ONLY platform admin', async () => {
+  const seeded = (await store.repo<TenantMember>(Collections.tenantMembers).query((m) => m.email === PLATFORM_ADMIN_EMAIL))[0];
+  assert.strictEqual(seeded.role, 'system_admin');
+  assert.strictEqual(seeded.tenantId, config.defaultTenant);
+
   const gamma = (await store.repo<any>(Collections.tenants).query((t: any) => t.slug === 'gamma'))[0];
+  const root = bearer({ sub: 'sub-root', email: PLATFORM_ADMIN_EMAIL });
   assert.strictEqual((await get('/workflows', root, gamma.id)).status, 200);
   assert.strictEqual((await get('/workflows', root, 'all')).status, 200);
   assert.strictEqual((await get('/system/stats', root)).status, 200);
+
+  // a system_admin ROLE on someone else's membership, the first member, and the local admin confer nothing platform-wide
+  await addMember({ tenantId: config.defaultTenant, userId: 'sub-fake', email: 'fake@example.com', role: 'system_admin', permissions: ['*'] });
+  const fake = bearer({ sub: 'sub-fake', email: 'fake@example.com' });
+  assert.strictEqual((await get('/workflows', fake, gamma.id)).status, 403);
+  assert.strictEqual((await get('/workflows', fake, 'all')).status, 403);
+  assert.strictEqual((await get('/system/stats', fake)).status, 403);
+  const localAdmin = await (await post('/auth/login', { username: 'admin', password: 'bootstrap-pw-123' })).json() as any;
+  assert.strictEqual((await get('/workflows', localAdmin.token, gamma.id)).status, 403);
+  assert.strictEqual((await get('/system/stats', localAdmin.token)).status, 403);
+  assert.strictEqual((await get('/workflows', localAdmin.token)).status, 200, 'local admin still works in the default workspace');
+  // an unverified email never counts
+  const unverified = jwt.sign({ sub: 'sub-x', email: PLATFORM_ADMIN_EMAIL, email_verified: false }, privateKey, { algorithm: 'RS256', keyid: 'k1', issuer: idpUrl, audience: CLIENT_ID });
+  assert.strictEqual((await get('/system/stats', unverified)).status, 403);
 });
 
 test('SSO workspace signup needs a sign-in and ignores a free-text owner email', async () => {

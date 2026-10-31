@@ -11,7 +11,7 @@ import {
 import { conflict, forbidden, notFound, validation } from '../../infra/errors.ts';
 import { config } from '../../infra/config.ts';
 import { DEFAULT_ROLES } from '../iam/service.ts';
-import { isPlatformAdmin, membershipsOf, type Identity } from './identity.ts';
+import { ensurePlatformAdmin, isPlatformAdmin, membershipsOf, type Identity } from './identity.ts';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const RESERVED_SLUGS = new Set([
@@ -413,7 +413,7 @@ export class TenantService {
         tenantId: defaultTenantId,
         userId: 'admin',
         email: 'admin@local',
-        role: 'system_admin',
+        role: 'owner',
         status: 'active',
         displayName: 'System Admin',
         permissions: ['*'],
@@ -421,6 +421,9 @@ export class TenantService {
         lastActiveAt: this.ctx.clock(),
       });
     }
+
+    // The one platform administrator (config.platformAdminEmail) is always seeded as system_admin
+    await ensurePlatformAdmin(this.ctx.store, this.ctx.clock(), () => this.ctx.newId());
 
     // Seed public plans
     const plans = await this.planRepo().query(() => true);

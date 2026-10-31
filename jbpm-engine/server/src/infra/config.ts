@@ -37,8 +37,8 @@ export interface Config {
   dashboardUrl: string;
   /** POST /auth/login (local username+password, HS256). Always on in dev; set AUTH_LOCAL_LOGIN=false to disable. */
   localLogin: boolean;
-  /** email of the platform administrator bootstrapped as system_admin of the default workspace (matched on the verified OIDC email). */
-  platformAdminEmail?: string;
+  /** the ONE platform administrator (system_admin everywhere). Fixed in code, deliberately not configurable. */
+  platformAdminEmail: string;
 }
 
 export interface OidcConfig {
@@ -52,6 +52,8 @@ export interface OidcConfig {
 }
 
 const env = process.env;
+/** The only system administrator. Always granted, never anyone else — not the first member, not the local `admin`. */
+export const PLATFORM_ADMIN_EMAIL = 'arjunkumargupta108@gmail.com';
 const isProduction = env.NODE_ENV === 'production';
 const csv = (v?: string) => (v || '').split(',').map((h) => h.trim()).filter(Boolean);
 const pick = (...names: string[]) => names.map((n) => env[n]?.trim()).find(Boolean);
@@ -88,7 +90,7 @@ export const config: Config = {
   },
   dashboardUrl: (env.DASHBOARD_URL || env.APP_ORIGIN || 'http://localhost:4200').replace(/\/+$/, ''),
   localLogin: env.AUTH_LOCAL_LOGIN !== 'false',
-  platformAdminEmail: env.PLATFORM_ADMIN_EMAIL?.trim().toLowerCase() || undefined,
+  platformAdminEmail: PLATFORM_ADMIN_EMAIL,
 };
 
 /** Refuse to boot in production on insecure defaults (same posture as zero-payment-ms's settings validation). */

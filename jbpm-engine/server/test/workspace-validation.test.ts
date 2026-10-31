@@ -133,14 +133,14 @@ test('workspace access validation: members allowed, non-members blocked with 403
   });
   assert.strictEqual(badWsAccess.status, 403);
 
-  // System admin can access Alice's workspace for platform support
+  // The local `admin` is NOT a platform admin (only the fixed platform-admin email is — see oidc-sso.test.ts)
   const adminAccess = await fetch(`${base}/workflows`, {
     headers: { Authorization: `Bearer ${adminToken}`, 'x-tenant-id': aliceTenant.id },
   });
-  assert.strictEqual(adminAccess.status, 200);
+  assert.strictEqual(adminAccess.status, 403);
 });
 
-test('workspace analytics: scoped per tenant; system admin has full analytics', async () => {
+test('workspace analytics: scoped per tenant; only the platform admin has platform-wide scope', async () => {
   const aliceToken = await login('alice@example.com');
   const adminToken = await login('admin', 'bootstrap-pw-123');
 
@@ -159,13 +159,11 @@ test('workspace analytics: scoped per tenant; system admin has full analytics', 
   });
   assert.strictEqual(aliceAllScope.status, 403);
 
-  // System admin can query platform-wide scope (x-tenant-id: all) -> 200 OK
+  // the local admin has no platform-wide scope either
   const adminAllScope = await fetch(`${base}/query/analytics/summary`, {
     headers: { Authorization: `Bearer ${adminToken}`, 'x-tenant-id': 'all' },
   });
-  assert.strictEqual(adminAllScope.status, 200);
-  const adminSummary = (await adminAllScope.json() as any);
-  assert.ok(adminSummary.instances.total >= 0);
+  assert.strictEqual(adminAllScope.status, 403);
 
   // Alice cannot access dedicated GET /system/stats -> 403 Forbidden
   const aliceSystemStats = await fetch(`${base}/system/stats`, {
@@ -173,15 +171,9 @@ test('workspace analytics: scoped per tenant; system admin has full analytics', 
   });
   assert.strictEqual(aliceSystemStats.status, 403);
 
-  // System admin gets full platform system stats -> 200 OK
+  // ...nor /system/stats (platform admin positive paths: oidc-sso.test.ts)
   const adminSystemStats = await fetch(`${base}/system/stats`, {
     headers: { Authorization: `Bearer ${adminToken}` },
   });
-  assert.strictEqual(adminSystemStats.status, 200);
-  const statsBody = (await adminSystemStats.json() as any).data;
-  assert.ok(statsBody.totalTenants >= 1);
-  assert.ok(statsBody.activeTenants >= 1);
-  assert.ok(statsBody.totalMembers >= 1);
-  assert.ok(statsBody.engine !== undefined);
-  assert.ok(Array.isArray(statsBody.tenantsByPlan));
+  assert.strictEqual(adminSystemStats.status, 403);
 });

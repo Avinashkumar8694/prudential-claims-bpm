@@ -26,7 +26,6 @@ Configuration lives in two layers: **environment variables** (deployment-time, r
 | `OIDC_CLOCK_TOLERANCE_SEC` | `30` | Clock skew allowed when checking `exp`/`nbf` |
 | `DASHBOARD_URL` | `APP_ORIGIN`, else `http://localhost:4200` | Where the SSO callback and logout send the browser (post-logout URI must be registered: `https://orkestr.fabrixly.com`, `http://localhost:4200`, `http://localhost:4000`) |
 | `AUTH_LOCAL_LOGIN` | `true` | Set `false` to disable `POST /auth/login` and HS256 tokens once SSO is the only way in |
-| `PLATFORM_ADMIN_EMAIL` | *(unset)* | Bootstrapped as `system_admin` of the default workspace; bound to the person's identity on their first verified SSO sign-in |
 | `NODE_ENV` | — | `production` makes start-up refuse a default `JWT_SECRET`/`ADMIN_INITIAL_PASSWORD` and a non-https issuer |
 | `JAVA_SIDECAR_CLASSPATH` | `<repo>/java-runtime/out` | Compiled classes for the Java script sidecar |
 | `JAVA_SIDECAR_STARTUP_TIMEOUT_MS` | `10000` | How long to wait for the sidecar JVM to report ready at boot |

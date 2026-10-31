@@ -23,11 +23,6 @@ export function isPlaceholderUserId(m: Pick<TenantMember, 'userId' | 'email'>): 
   return !m.userId || m.userId.startsWith('pending:') || (!!m.email && lower(m.userId) === lower(m.email));
 }
 
-/** Platform administrator by local-IAM role (never derivable from an OIDC token). */
-export function isLocalAdmin(id: Identity): boolean {
-  return id.source !== 'oidc' && (id.username === 'admin' || (Array.isArray(id.roles) && id.roles.includes('admin')));
-}
-
 export function memberMatches(m: TenantMember, id: Identity): boolean {
   if (m.userId === id.sub) return true;
   if (id.source === 'oidc') return false;
@@ -63,19 +58,22 @@ export async function membershipsOf(store: Store, id: Identity): Promise<TenantM
   return store.repo<TenantMember>(Collections.tenantMembers).query((m) => memberMatches(m, id));
 }
 
-export async function isPlatformAdmin(store: Store, id: Identity, memberships?: TenantMember[]): Promise<boolean> {
-  if (isLocalAdmin(id)) return true;
-  const ms = memberships ?? await membershipsOf(store, id);
-  return ms.some((m) => m.role === 'system_admin' && m.status === 'active');
+/** The single platform administrator is config.platformAdminEmail — nobody else is one, whatever their role,
+ *  membership or local-IAM role says. An OIDC caller counts when that email is VERIFIED on their token. */
+export async function isPlatformAdmin(_store: Store, id: Identity, _memberships?: TenantMember[]): Promise<boolean> {
+  return id.source === 'oidc' && id.emailVerified === true && lower(id.email) === config.platformAdminEmail;
 }
 
-/** Idempotent start-up bootstrap: PLATFORM_ADMIN_EMAIL becomes system_admin of the default workspace on first verified sign-in. */
+/** Idempotent start-up bootstrap: the platform admin is always a system_admin member of the default workspace
+ *  (bound to their identity on first verified sign-in); a lower role on that seat is corrected. */
 export async function ensurePlatformAdmin(store: Store, now: string, newId: () => string): Promise<void> {
   const email = config.platformAdminEmail;
-  if (!email) return;
   const repo = store.repo<TenantMember>(Collections.tenantMembers);
   const existing = await repo.query((m) => m.tenantId === config.defaultTenant && lower(m.email) === email);
-  if (existing.length) return;
+  if (existing.length) {
+    for (const m of existing) if (m.role !== 'system_admin' || m.status !== 'active') { m.role = 'system_admin'; m.status = 'active'; m.permissions = ['*']; await repo.put(m); }
+    return;
+  }
   await repo.put({
     id: newId(), tenantId: config.defaultTenant, userId: `pending:${email}`, email, role: 'system_admin',
     status: 'active', displayName: 'Platform Administrator', permissions: ['*'], joinedAt: now,
