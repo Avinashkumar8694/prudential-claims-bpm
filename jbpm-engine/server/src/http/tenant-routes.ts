@@ -3,9 +3,10 @@ import { Router, type Request } from 'express';
 import { asyncHandler } from '../infra/errors.ts';
 import type { AppContext } from '../context.ts';
 import { TenantService } from '../modules/tenants/service.ts';
+import { TeamService } from '../modules/tenants/team.ts';
 import { requireAuth } from './auth-middleware.ts';
 import { verifyBearer, type JwtClaims } from '../infra/auth.ts';
-import { authRequired, forbidden } from '../infra/errors.ts';
+import { authRequired, forbidden, notFound } from '../infra/errors.ts';
 import { isPlatformAdmin } from '../modules/tenants/identity.ts';
 import { oidc } from '../infra/oidc.ts';
 import { rateLimit } from './rate-limit.ts';
@@ -46,11 +47,25 @@ export function buildPublicTenantRoutes(): Router {
     res.json({ success: true, data: plans });
   }));
 
+  // Public: what an invitation is for (token only — the accept page renders this before sign-in)
+  r.get('/team/invitations/:token', asyncHandler(async (req, res) => {
+    const info = await TeamService.lookup(ctxOf(req), req.params.token);
+    if (!info) throw notFound('Invitation');
+    res.json({ success: true, data: info });
+  }));
+
   return r;
 }
 
 export function buildTenantRoutes(): Router {
   const r = Router();
+
+  // POST /api/team/invitations/accept - the signed-in invitee presents the single-use token (identity only: no membership yet)
+  r.post('/team/invitations/accept', requireAuth, asyncHandler(async (req, res) => {
+    const claims = (req as any).user as JwtClaims;
+    const m = await TeamService.accept(ctxOf(req), String(req.body?.token || ''), claims);
+    res.json({ success: true, data: { tenantId: m.tenantId, role: m.role } });
+  }));
 
   // GET /api/me/tenants - list of workspaces the authenticated user belongs to
   r.get('/me/tenants', requireAuth, asyncHandler(async (req, res) => {

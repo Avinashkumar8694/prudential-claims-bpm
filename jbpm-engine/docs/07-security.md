@@ -35,6 +35,19 @@
   workspace's own `Role` rows, falling back to `DEFAULT_ROLES`. WebSockets are bound to one workspace
   and can only subscribe to that workspace's instances; the timer scheduler fires per workspace.
   Production start-up refuses weak defaults (`assertProductionConfig`).
+- **Team management** (same model as `zero-payment-ms`'s TeamService; `modules/tenants/team.ts`,
+  `http/team-routes.ts`, UI at `/team`): exactly one **owner** per workspace, **admins**, and role-based
+  members (built-in roles + the workspace's own `Role` rows). `POST /team/members/invite` (`team:invite`)
+  creates an `invited` seat with a single-use 7-day token (stored hashed; there is no mail transport, so the
+  link is returned to the inviter). The invitee signs in and `POST /team/invitations/accept`s — their
+  *verified* email must equal the invited one. `canManage`: nobody manages themselves, nobody touches the
+  owner except via `POST /team/ownership/transfer` (owner only, to an active member; the old owner becomes
+  admin), admins cannot manage or mint admins, the platform-admin seat is untouchable, `POST /team/leave`
+  for everyone but the owner. Permissions: `team:read` (all roles), `team:invite`, `team:manage` (owner/admin).
+- **Verification**: `test/rbac-matrix.test.ts` runs every route × every role × every scope (no token,
+  non-member, suspended, other workspace, `all`, local admin) and checks the UI's permission list equals
+  the server's; `test/tenant-isolation.test.ts` probes every id-addressed route with another workspace's
+  ids; `test/team.test.ts` and `test/oidc-sso.test.ts` cover team rules and SSO.
 - **AuthZ**: RBAC with roles `admin`, `author`, `release`, `operator`, `worker`, `viewer`, seeded on
   first boot (`modules/iam/service.ts`'s `DEFAULT_ROLES`) — each a named `Role` row carrying a
   `permissions: string[]` list (real, editable rows, not a hardcoded enum). Every route declares its

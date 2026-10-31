@@ -43,10 +43,10 @@ export async function claimMemberships(store: Store, id: Identity): Promise<void
 
   const repo = store.repo<TenantMember>(Collections.tenantMembers);
   const email = lower(id.email);
-  const claimable = await repo.query((m) => lower(m.email) === email && m.status !== 'suspended' && m.userId !== id.sub && isPlaceholderUserId(m));
+  const claimable = await repo.query((m) => lower(m.email) === email && m.status !== 'suspended' && m.userId !== id.sub && isPlaceholderUserId(m) && !(m.invitationExpiresAt && m.invitationExpiresAt < new Date().toISOString()));
   for (const m of claimable) {
     m.userId = id.sub;
-    if (m.status === 'invited') m.status = 'active';
+    if (m.status === 'invited') { m.status = 'active'; m.invitationTokenHash = null; m.invitationExpiresAt = null; }
     m.lastActiveAt = new Date().toISOString();
     await repo.put(m);
     logger.info('membership bound to verified identity', { tenantId: m.tenantId, memberId: m.id, userId: id.sub });

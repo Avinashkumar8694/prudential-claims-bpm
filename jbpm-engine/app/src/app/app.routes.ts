@@ -6,6 +6,7 @@ export const routes: Routes = [
   { path: '', pathMatch: 'full', loadComponent: () => import('./features/landing/root-gate.component').then((m) => m.RootGateComponent) },
   { path: 'login', loadComponent: () => import('./features/auth/login-page.component').then((m) => m.LoginPageComponent) },
   { path: 'auth/callback', loadComponent: () => import('./features/auth/sso-callback.component').then((m) => m.SsoCallbackComponent) },
+  { path: 'accept-invite', loadComponent: () => import('./features/team/accept-invite.component').then((m) => m.AcceptInviteComponent) },
   { path: 'no-workspace', loadComponent: () => import('./features/tenant/no-workspace.component').then((m) => m.NoWorkspaceComponent) },
   {
     path: '',
@@ -63,6 +64,7 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/admin-shell.component').then((m) => m.AdminShellComponent),
         loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },
+      { path: 'team', canActivate: [permissionGuard('team:read')], loadComponent: () => import('./features/team/team-page.component').then((m) => m.TeamPageComponent) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent) },
       // Workflow Instance Management (Case Management)
       {

@@ -253,6 +253,10 @@ export interface TenantMember extends Entity {
   permissions?: string[];
   joinedAt: string;
   lastActiveAt?: string;
+  /** invitation tracking (status 'invited'): who invited, SHA-256 of the single-use token, and its expiry */
+  invitedBy?: string;
+  invitationTokenHash?: string | null;
+  invitationExpiresAt?: string | null;
 }
 
 export interface PublicPlanContactConfig {

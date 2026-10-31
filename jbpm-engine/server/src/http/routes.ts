@@ -29,6 +29,7 @@ import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { openapiSpec, swaggerHtml } from './openapi.ts';
 import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
+import { buildTeamRoutes } from './team-routes.ts';
 import { hub } from '../infra/ws-hub.ts';
 import { requirePermission } from './auth-middleware.ts';
 import { rateLimit } from './rate-limit.ts';
@@ -292,6 +293,7 @@ export function buildRoutes(): Router {
 
   // --- Workflow Instance Management (Case Management) ---
   r.use(buildWorkflowInstanceRoutes());
+  r.use(buildTeamRoutes());   // workspace members, invitations, ownership
 
   return r;
 }
