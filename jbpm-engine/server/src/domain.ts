@@ -183,7 +183,15 @@ export interface SystemSettings extends Entity {
    *  unaffected until an admin opts in). Enforced at the point of creation, not retroactively. */
   maxActiveInstances?: number;   // top-level (root) instances concurrently running/waiting
   maxActiveTimers?: number;      // scheduled TimerJobs (boundary/catch timers) at once
-  maxConcurrentScripts?: number; // script-task/exit-script executions running at this instant
+  maxConcurrentScripts?: number; // DEPRECATED alias of scriptPoolSize (0 = platform default)
+  /** what happens when maxConcurrentScripts executions are already running: 'queue' (wait, bounded) or 'reject'
+   *  (QUOTA_EXCEEDED immediately). Unset = the SCRIPT_OVERFLOW_MODE env default. */
+  scriptOverflowMode?: 'queue' | 'reject';
+  /** requested script parallelism = isolate-pool size (memory ≈ size × 64 MB worst case). `maxConcurrentScripts` is its
+   *  deprecated alias. Always clamped by the platform caps (modules/platform/limits.ts). */
+  scriptPoolSize?: number;
+  /** how many script executions may wait when all isolates are busy (queue mode); clamped by the platform cap. */
+  scriptQueueMax?: number;
   updatedAt?: string; updatedBy?: string;
 }
 

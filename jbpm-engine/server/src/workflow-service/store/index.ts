@@ -5,10 +5,7 @@ import type { Store } from '../../store/repository.ts';
 import { config } from '../../infra/config.ts';
 import type { WorkflowServiceStore } from './types.ts';
 import { GenericWorkflowServiceStore } from './generic-store.ts';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-
-const req = createRequire(fileURLToPath(import.meta.url));
+import { WorkflowServicePgStore } from './pg-store.ts';
 
 // Keyed by the underlying generic Store instance (not a bare singleton) so that every test file's own
 // fresh `new MemoryStore()` transparently gets its own fresh, fully isolated wrapper — no manual
@@ -23,7 +20,6 @@ let pgCached: WorkflowServiceStore | undefined;
 export function resolveWorkflowServiceStore(genericStore: Store): WorkflowServiceStore {
   if (config.store === 'pg' && config.pgUrl) {
     if (!pgCached) {
-      const { WorkflowServicePgStore } = req('./pg-store.ts');
       pgCached = new WorkflowServicePgStore(config.pgUrl);
     }
     return pgCached!;

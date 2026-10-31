@@ -1,6 +1,7 @@
 // Shared helpers for building the kcontext-facing data (declared variable types, active node
 // instances, process/instance metadata) from a HandlerCtx — used identically by script/http/gateway
 // handlers so these three don't drift out of sync with each other over time.
+import { effectiveLimitsFor } from '../../modules/platform/limits.ts';
 import type { HandlerCtx } from './types.ts';
 import type { ActiveNodeInstance } from '../java-sidecar.ts';
 import type { EngineNode } from '../../sdk/index.ts';
@@ -38,7 +39,7 @@ export function activeNodeInstancesOf(c: HandlerCtx): ActiveNodeInstance[] {
  *  see sandbox.ts's KContextInfo for what each field backs. */
 export function kcontextInfoOf(c: HandlerCtx) {
   return {
-    env: c.dep.env, instanceId: c.inst.id, nodeInstanceId: c.tokenId, nodeId: c.node.id, nodeName: c.node.name,
+    tenantId: c.app.tenantId, env: c.dep.env, instanceId: c.inst.id, nodeInstanceId: c.tokenId, nodeId: c.node.id, nodeName: c.node.name,
     processId: c.proc.id, processName: c.proc.name, correlationKey: c.inst.correlationKey,
     parentInstanceId: c.inst.parentInstanceId, state: c.inst.status, activeNodeInstances: activeNodeInstancesOf(c),
   };
@@ -48,4 +49,15 @@ export function kcontextInfoOf(c: HandlerCtx) {
  *  execution — see sandbox.ts's ScriptOpts.onAction. */
 export function onActionOf(c: HandlerCtx) {
   return { broadcast: c.broadcast, signal: c.signal, abort: c.abort };
+}
+
+/** the workspace's effective script limits (platform caps ∩ workspace settings, see modules/platform/limits.ts) for the
+ *  isolate pool (js) and the java admission cap — read per execution so a change applies to the very next run. */
+export async function scriptLimitsOf(c: HandlerCtx): Promise<{ maxConcurrentScripts: number; scriptQueueMax: number; scriptOverflowMode: 'queue' | 'reject'; javaMaxConcurrent: number | undefined }> {
+  const { effective, caps, settings } = await effectiveLimitsFor(c.app);
+  const asked = settings.scriptPoolSize || settings.maxConcurrentScripts;
+  return {
+    maxConcurrentScripts: effective.scriptPoolSize, scriptQueueMax: effective.scriptQueueMax, scriptOverflowMode: effective.scriptOverflowMode,
+    javaMaxConcurrent: asked ? Math.min(asked, caps.scriptPoolMaxSize) : undefined,
+  };
 }

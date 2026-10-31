@@ -14,7 +14,6 @@ import { Collections, type Tenant } from './domain.ts';
 import { ensurePlatformAdmin } from './modules/tenants/identity.ts';
 
 assertProductionConfig();   // refuse to boot in production on insecure defaults
-if (config.isProduction) logger.warn('script sandbox is node:vm (NOT a security boundary): do not let untrusted tenants author js scripts until it is replaced by an isolated runtime — see docs/07-security.md');
 
 const { app, store } = createApp();
 const server = http.createServer(app);

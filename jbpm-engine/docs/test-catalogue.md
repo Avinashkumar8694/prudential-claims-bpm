@@ -79,7 +79,10 @@ Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 | EXE-90…92 | quotas per workspace (no bleed), sandbox infinite loop & direct globals, 25 concurrent starts | ✅ |
 | EXE-95/96 | other workspace can neither see nor drive any of it; analytics per workspace | ✅ |
 | EXE-97 | case management: definition/instance roles, isolation, no audit on non-existent case | ✅ |
-| EXE-91b | **sandbox escape via constructor chains** | ⛔ TODO (critical) |
+| PLIM-1…7 | platform-governed limits: every `/api/platform/*` route 403 for all workspace roles/local admin/other SSO user, 200 only for the platform admin; escalation closed (above-cap, 0=unlimited, platform-only keys → 422); min-chain resolution; per-workspace override + mode lock; live pool resize without dropping queued work; validation; audit entries; usage endpoint | ✅ |
+| POOL-7…11 | overflow mode: reject (2000-burst, limit 50 → exactly 50 run/1950 refused instantly), queue (all 2000 ok, ≤50 concurrent), small queue/short wait errors, effective concurrency + workspace-over-env + invalid value, mixed-mode workspaces, pool healthy after reject burst | ✅ |
+| POOL-1…6 | isolate pool: no state leak between scripts/tenants, 2000-burst bounded, queue overflow/timeout, recycle on timeout/OOM, idle eviction, fair under a global ceiling | ✅ |
+| EXE-91b | **sandbox escape via constructor chains** | ✅ |
 | engine-*.test.ts | 30 files of engine semantics (cascades, compensation, messaging, DMN import, java sidecar…) | ✅ (java needs JDK) |
 
 ## 6. Hostile input, headers, audit, config — `enterprise-edge.test.ts`
@@ -87,9 +90,8 @@ SEC-01 mass assignment · SEC-02 prototype pollution · SEC-03 malformed bodies 
 SEC-05 security headers & CORS preflight · SEC-07 no secrets in responses · AUD-01 audit trail scoped per workspace · CFG-01 landing/sign-in render from public endpoints only. ✅
 
 ## 7. Gaps — stated plainly
-1. ⛔ **Script sandbox is not a security boundary** (`node:vm` with live host objects). EXE-91b reproduces host `process` access. In a multi-tenant deployment any user who can author a script task can run code on the server. Needs `isolated-vm` or a locked-down worker/container. Until then do not let untrusted tenants author `js` scripts (a startup warning is logged in production).
-2. ⛔ No browser-driven end-to-end tests of the Angular screens (verified manually: login, team page, invite). The permission *logic* behind the UI is covered by the parity test in `rbac-matrix`.
-3. ⛔ No load / soak / failover tests; rate limiting and WebSocket hub are single-process in-memory.
-4. ⛔ Postgres store (`test:pg`) is not exercised by this suite.
-5. ⛔ Real SMTP and real Identity Server round-trips are not automated (fakes/capture are).
-6. 🟡 Task *group* membership is enforced only for IAM-provisioned users; workspace members (SSO) are authorised by role, not by task group.
+1. ⛔ No browser-driven end-to-end tests of the Angular screens (verified manually: login, team page, invite). The permission *logic* behind the UI is covered by the parity test in `rbac-matrix`.
+2. ⛔ No load / soak / failover tests; rate limiting and WebSocket hub are single-process in-memory.
+3. ⛔ Postgres store (`test:pg`) is not exercised by this suite.
+4. ⛔ Real SMTP and real Identity Server round-trips are not automated (fakes/capture are).
+5. 🟡 Task *group* membership is enforced only for IAM-provisioned users; workspace members (SSO) are authorised by role, not by task group.

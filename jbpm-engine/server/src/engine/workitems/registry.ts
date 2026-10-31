@@ -1,9 +1,9 @@
 // Work-item handler framework — pluggable executors for operation tasks (Email/SMS/DB/Compute/Log/Rest),
 // the Node equivalent of jBPM WorkItemHandlers. Each returns result data mapped back to variables.
 // External handlers (Email/SMS/DB/Rest) call service URLs or simulate when not configured.
-import vm from 'node:vm';
+import { evalExpression } from '../sandbox.ts';
 
-export type WorkItemHandler = (params: Record<string, unknown>, env: Record<string, string>) => Promise<Record<string, unknown>>;
+export type WorkItemHandler = (params: Record<string, unknown>, env: Record<string, string>, ctx?: { tenantId?: string }) => Promise<Record<string, unknown>>;
 
 async function callService(url: string, params: Record<string, unknown>): Promise<Record<string, unknown>> {
   const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) });
@@ -16,12 +16,10 @@ export const WORKITEM_HANDLERS: Record<string, WorkItemHandler> = {
   // record only (audit/logging)
   Log: async (p) => ({ logged: true, message: p['message'] ?? p }),
   // evaluate a JS expression with params in scope → { result }
-  Compute: async (p) => {
+  Compute: async (p, _env, ctx) => {
     const expr = String(p['expression'] ?? p['expr'] ?? '');
     if (!expr) return { result: undefined };
-    const sandbox: Record<string, unknown> = { ...p };
-    vm.createContext(sandbox);
-    return { result: vm.runInContext(`(${expr})`, sandbox, { timeout: 1000 }) };
+    return { result: await evalExpression(expr, p, 1000, ctx?.tenantId) };
   },
   // external side-effects — call the configured service, else simulate
   Email: async (p, env) => (env['EMAIL_SERVICE_URL'] ? { ...(await callService(env['EMAIL_SERVICE_URL'], p)), sent: true } : { sent: true, simulated: true, to: p['to'] }),

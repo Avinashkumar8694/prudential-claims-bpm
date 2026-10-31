@@ -24,7 +24,7 @@ export const handler: NodeHandler = async (c) => {
     }
   }
   try {
-    const result = await h(params, env);
+    const result = await h(params, env, { tenantId: c.app.tenantId });
     const vars: Record<string, unknown> = {};
     for (const [varName, key] of Object.entries(n.resultTo || {})) vars[varName] = (result as any)[String(key)];
     return { vars, outcome: `workitem:${n.handler}` };

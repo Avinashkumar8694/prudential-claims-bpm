@@ -74,8 +74,8 @@ Resume = load instance → place event → re-enter the step loop → persist.
 
 ## 6. Scripts & expressions (safety)
 
-- `js` scripts and flow conditions run in a **sandbox** (`node:vm` context, or `isolated-vm` for
-  prod-grade isolation) with only a `kcontext`/vars shim, no `require`, no globals, a CPU/time budget.
+- `js` scripts and flow conditions run in a **sandbox** (a fresh `isolated-vm` V8 isolate per execution —
+  real isolation) with only a `kcontext`/vars shim, no `require`, no globals, a CPU/time budget.
 - `java` scripts and flow conditions **also execute** — sent to a persistent JVM sidecar process
   (`jbpm-engine/java-runtime/`) that compiles and runs the exact script text with a real `kcontext`
   binding (real Java, not a JavaScript transpile). A publish-time validator (`java-support` rule)

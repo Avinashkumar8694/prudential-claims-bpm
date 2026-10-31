@@ -1,10 +1,11 @@
 // Token-based interpreter over the SDK engine JSON. See docs/08-execution-engine.md.
 // Deterministic core (clock/newId injected). Persists the instance after runToQuiescence.
+import { effectiveLimitsFor } from '../modules/platform/limits.ts';
 import type { AppContext } from '../context.ts';
 import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.ts';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
 import { NODE_HANDLERS, CHILD_OUTPUT_MAPPERS, buildMultiInstanceResult, type HandlerCtx, type HandlerResult } from './nodes/index.ts';
-import { varTypesOf, kcontextInfoOf, onActionOf } from './nodes/kcontext-info.ts';
+import { varTypesOf, kcontextInfoOf, onActionOf, scriptLimitsOf } from './nodes/kcontext-info.ts';
 // Aliased (not `boundary`) since fireBoundary()'s own parameter below is already named `boundary`.
 import * as boundaryHandler from './nodes/boundary/handler.ts';
 import { computeDue } from './duration.ts';
@@ -504,7 +505,7 @@ export class ExecutionEngine {
   /** `cycle` (boundary timers only — see call site) lets TimerService reschedule this job for its next
    *  occurrence after firing, instead of the one-shot behavior every other timer kind wants. */
   private async scheduleTimer(inst: Instance, tokenId: string, nodeId: string, dueAt: string, cycle?: string) {
-    const { maxActiveTimers } = await new SettingsService(this.ctx).get();
+    const { maxActiveTimers } = (await effectiveLimitsFor(this.ctx)).effective;
     if (maxActiveTimers) {
       const active = await this.timerRepo().query((t) => t.tenantId === this.ctx.tenantId && t.status === 'scheduled');
       if (active.length >= maxActiveTimers) {
@@ -636,7 +637,7 @@ export class ExecutionEngine {
     const lang = (node as any)[`${kind}Lang`] as string | undefined;
     try {
       await runScript(text, c.inst.variables, config.scriptTimeoutMs, {
-        ...kcontextInfoOf(c), lang, varTypes: varTypesOf(c), onAction: onActionOf(c),
+        ...kcontextInfoOf(c), ...(await scriptLimitsOf(c)), lang, varTypes: varTypesOf(c), onAction: onActionOf(c),
       });
       return undefined;
     } catch (e) {

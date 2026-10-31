@@ -1,4 +1,5 @@
 // Process-instance lifecycle: start against a resolved deployment, query, inspect, resume.
+import { effectiveLimitsFor } from '../platform/limits.ts';
 import type { AppContext } from '../../context.ts';
 import { Collections, type AuditEvent, type Deployment, type Instance, type TimerJob } from '../../domain.ts';
 import { ExecutionEngine, type EngineEvent } from '../../engine/execution-engine.ts';
@@ -33,7 +34,7 @@ export class InstanceService {
    *  independently gated since they aren't independently "started" via this API either; they're a
    *  direct consequence of a parent that already passed this same check. */
   private async assertInstanceQuota(): Promise<void> {
-    const { maxActiveInstances } = await new SettingsService(this.ctx).get();
+    const { maxActiveInstances } = (await effectiveLimitsFor(this.ctx)).effective;
     if (!maxActiveInstances) return;
     const active = await this.repo().query((i) =>
       i.tenantId === this.ctx.tenantId && !i.parentInstanceId && (i.status === 'running' || i.status === 'waiting'));
