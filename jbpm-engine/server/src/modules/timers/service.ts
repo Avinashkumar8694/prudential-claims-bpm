@@ -3,49 +3,94 @@
 import type { AppContext } from '../../context.ts';
 import { Collections, type TimerJob } from '../../domain.ts';
 import { InstanceService } from '../instances/service.ts';
+import { SettingsService } from '../settings/service.ts';
 import type { EngineEvent } from '../../engine/execution-engine.ts';
 import { computeDue, parseCycleRepeatCount } from '../../engine/duration.ts';
 import { notFound, conflict, validation } from '../../infra/errors.ts';
+import { config } from '../../infra/config.ts';
+import { logger } from '../../infra/logger.ts';
 
 export class TimerService {
   private instances: InstanceService;
+  private isTicking = false;
   constructor(private ctx: AppContext, emit: (e: EngineEvent) => void = () => {}) {
     this.instances = new InstanceService(ctx, emit);
   }
   private repo() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
 
-  /** Fire every scheduled timer due at or before `nowIso`; returns the number fired. */
-  async tick(nowIso: string): Promise<number> {
-    const due = await this.repo().query((t) => t.status === 'scheduled' && t.dueAt <= nowIso);
-    let fired = 0;
-    for (const job of due) {
-      // Don't fire (or consume) a timer whose instance is suspended — leave it scheduled to fire on resume.
-      if (job.kind !== 'start') {
-        const inst = await this.instances.get(job.instanceId).catch(() => null);
-        if (inst && inst.status === 'suspended') continue;
-      }
-      job.status = 'fired'; job.fired += 1;
-      await this.repo().put(job);
-      fired++;
-      try {
-        if (job.kind === 'start') {
-          // reschedule the next occurrence in `finally`, not only on success — a single failed firing
-          // (deployment archived, or now a quota rejection) must not permanently kill a recurring
-          // cron/cycle start; it should just skip this occurrence and try again next time.
-          try { await this.instances.startScheduled(job); }
-          finally { if (job.cycle) await this.reschedule(job, nowIso); }
-        } else {
-          const inst = await this.instances.fireTimer(job);
-          // A non-interrupting boundary timer doesn't remove its host token — if it's also declared
-          // with a cycle, that means "keep pinging every period" (e.g. an SLA reminder), so reschedule
-          // for the next occurrence. An interrupting boundary (or a plain catch-timer, which always
-          // consumes its own wait) removes the token, so this naturally stops recurring on its own —
-          // no separate "which kind was this" check needed.
-          if (job.cycle && inst.tokens.some((t) => t.id === job.tokenId)) await this.reschedule(job, nowIso);
-        }
-      } catch { /* token gone / instance finished / deployment inactive — ignore */ }
+  /** Fire scheduled timers due at or before `nowIso` in bounded batches. Returns the number fired.
+   *  Supports pure Active-Active multi-replica execution with concurrent competing consumers:
+   *  Replicas claim disjoint slices of due timers via SKIP LOCKED without global lock contention,
+   *  while in-flight self-throttling prevents overlapping runs within a single replica. */
+  async tick(nowIso: string, batchSize?: number): Promise<number> {
+    if (this.isTicking) {
+      logger.warn('Timer tick still running from previous interval — skipping overlapping tick');
+      return 0;
     }
-    return fired;
+    this.isTicking = true;
+
+    try {
+      const store = this.ctx.store as any;
+      let limit = batchSize;
+      if (!limit) {
+        const settings = await new SettingsService(this.ctx).get().catch(() => null);
+        limit = settings?.timerBatchSize || config.timerBatchSize;
+      }
+      let due: TimerJob[];
+
+      if (typeof store.claimDueTimers === 'function') {
+        // Atomic claim (SKIP LOCKED on Postgres / atomic slice on file/memory store):
+        // Automatically marks status='fired' so no other replica can pick up these exact jobs.
+        due = await store.claimDueTimers(this.ctx.tenantId, nowIso, limit);
+      } else {
+        // Fallback for custom stores without atomic claim
+        const allDue = await this.repo().query((t) =>
+          (!this.ctx.tenantId || this.ctx.tenantId === '*' || t.tenantId === this.ctx.tenantId) &&
+          t.status === 'scheduled' &&
+          t.dueAt <= nowIso,
+        );
+        due = allDue.slice(0, limit);
+        for (const job of due) {
+          job.status = 'fired';
+          job.fired = (job.fired || 0) + 1;
+          await this.repo().put(job);
+        }
+      }
+
+      let fired = 0;
+      for (const job of due) {
+        // Don't fire (or consume) a timer whose instance is suspended — restore it to scheduled.
+        if (job.kind !== 'start') {
+          const inst = await this.instances.get(job.instanceId).catch(() => null);
+          if (inst && inst.status === 'suspended') {
+            job.status = 'scheduled';
+            await this.repo().put(job);
+            continue;
+          }
+        }
+        fired++;
+        try {
+          if (job.kind === 'start') {
+            // reschedule the next occurrence in `finally`, not only on success — a single failed firing
+            // (deployment archived, or now a quota rejection) must not permanently kill a recurring
+            // cron/cycle start; it should just skip this occurrence and try again next time.
+            try { await this.instances.startScheduled(job); }
+            finally { if (job.cycle) await this.reschedule(job, nowIso); }
+          } else {
+            const inst = await this.instances.fireTimer(job);
+            // A non-interrupting boundary timer doesn't remove its host token — if it's also declared
+            // with a cycle, that means "keep pinging every period" (e.g. an SLA reminder), so reschedule
+            // for the next occurrence. An interrupting boundary (or a plain catch-timer, which always
+            // consumes its own wait) removes the token, so this naturally stops recurring on its own —
+            // no separate "which kind was this" check needed.
+            if (job.cycle && inst.tokens.some((t) => t.id === job.tokenId)) await this.reschedule(job, nowIso);
+          }
+        } catch { /* token gone / instance finished / deployment inactive — ignore */ }
+      }
+      return fired;
+    } finally {
+      this.isTicking = false;
+    }
   }
 
   // --- Jobs & Timers screen ---

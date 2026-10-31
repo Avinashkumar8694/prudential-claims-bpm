@@ -9,7 +9,9 @@ import type { AppContext } from '../context.ts';
 
 export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const header = req.header('authorization') || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : undefined;
+  const token = header.startsWith('Bearer ')
+    ? header.slice(7)
+    : (typeof req.query?.token === 'string' ? req.query.token : undefined);
   if (!token) return next(authRequired());
   try {
     const claims = verifyToken(token);
@@ -27,7 +29,7 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
  *  collection (see modules/iam/service.ts's DEFAULT_ROLES for the seeded set), same as
  *  IamService.authorize() — kept separate since this one is Express-shaped (middleware, not a promise
  *  the caller awaits directly) and has no reason to depend on the rest of IamService. */
-export function requirePermission(action: string) {
+export function requirePermission(...actions: string[]) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
       const user = (req as any).user as { roles: string[] } | undefined;
@@ -35,7 +37,8 @@ export function requirePermission(action: string) {
       const ctx = (req as any).ctx as AppContext;
       const roles = await ctx.store.repo<Role>(Collections.roles).query((r) => r.tenantId === ctx.tenantId && user.roles.includes(r.name));
       const perms = roles.flatMap((r) => r.permissions);
-      if (!permissionGrants(perms, action)) throw forbidden(`missing permission: ${action}`);
+      const allowed = actions.some((action) => permissionGrants(perms, action));
+      if (!allowed) throw forbidden(`missing permission: ${actions.join(' or ')}`);
       next();
     } catch (e) { next(e); }
   };

@@ -21,6 +21,19 @@ export function makeContext(opts: { store: Store; tenantId: string; clock?: Cloc
     newId,
     tenantId: opts.tenantId,
     audit: async (e) => {
+      try {
+        const settings = await opts.store.repo<any>(Collections.settings).get('system');
+        const level = settings?.historyAuditLevel || 'full';
+        if (level === 'minimal') {
+          const allowed = ['instance.started', 'instance.aborted', 'instance.failed', 'deployment.activated', 'deployment.undeployed', 'settings.updated', 'user.', 'role.', 'group.', 'error.'];
+          if (!allowed.some((prefix) => e.kind.startsWith(prefix) || e.kind === prefix)) return;
+        } else if (level === 'activity') {
+          const skipped = ['instance.variables.updated', 'task.reminded', 'job.rescheduled'];
+          if (skipped.includes(e.kind)) return;
+        }
+      } catch {
+        // If settings read fails, continue to record audit event
+      }
       const ev: AuditEvent = { id: newId(), tenantId: opts.tenantId, at: clock(), ...e };
       await opts.store.repo<AuditEvent>(Collections.audit).put(ev);
     },

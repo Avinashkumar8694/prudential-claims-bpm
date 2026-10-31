@@ -15,6 +15,7 @@ function jsonPath(obj: any, path: string): unknown {
 
 export const handler: NodeHandler = async (c) => {
   const n = c.node;
+  const settings = await new SettingsService(c.app).get();
   const baseUrl = (c.dep.env && c.dep.env['INTEGRATION_LAYER_URL']) || config.integrationBaseUrl;
   const isAbsolute = /^https?:\/\//.test(n.url || '');
   const url = isAbsolute ? n.url : `${baseUrl}${n.url || ''}`;
@@ -24,16 +25,45 @@ export const handler: NodeHandler = async (c) => {
   // only an author-supplied ABSOLUTE url is SSRF-gated — see outbound-guard.ts's own doc comment for
   // why the relative/baseUrl path (operator-configured, trusted) is deliberately left alone.
   if (isAbsolute) {
-    try { await assertOutboundAllowed(url); }
-    catch (e) { return { error: (e as Error).message, errorCode: 'SSRF_BLOCKED' }; }
+    try { await assertOutboundAllowed(url, settings.outboundAllowlist); }
+    catch (e) {
+      if (n.throwError === false || n.handleResponseErrors === false) {
+        const errorVar = n.errorVar || 'serviceError';
+        return { vars: { [errorVar]: { url, method, error: (e as Error).message, errorCode: 'SSRF_BLOCKED' } }, outcome: 'SSRF blocked (soft-failure)' };
+      }
+      return { error: (e as Error).message, errorCode: 'SSRF_BLOCKED' };
+    }
   }
+  const httpTimeout = (settings.httpTimeoutSeconds && settings.httpTimeoutSeconds > 0) ? settings.httpTimeoutSeconds : 10;
   try {
     const res = await fetch(url, {
       method,
       headers: { 'content-type': 'application/json', ...(n.headers || {}) },
       ...(method === 'GET' || method === 'HEAD' ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(httpTimeout * 1000),
     });
-    if (!res.ok) return { error: `HTTP ${res.status} from ${url}`, errorCode: 'SERVICE_ERROR' };
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      let errJson: any;
+      try { errJson = errText ? JSON.parse(errText) : undefined; } catch { errJson = errText; }
+      const details: Record<string, unknown> = {
+        httpStatus: res.status,
+        statusText: res.statusText,
+        url,
+        method,
+        responseBody: errJson ?? errText,
+        headers: Object.fromEntries(res.headers.entries()),
+      };
+      if (n.throwError === false || n.handleResponseErrors === false) {
+        const errorVar = n.errorVar || 'serviceError';
+        return { vars: { [errorVar]: details }, outcome: `HTTP ${res.status} (soft-failure)` };
+      }
+      return {
+        error: `HTTP ${res.status} from ${url}${errText ? ': ' + errText.slice(0, 300) : ''}`,
+        errorCode: 'SERVICE_ERROR',
+        errorDetails: details,
+      };
+    }
     const text = await res.text();
     let json: any; try { json = text ? JSON.parse(text) : undefined; } catch { json = text; }
     const vars: Record<string, unknown> = {};
@@ -47,8 +77,9 @@ export const handler: NodeHandler = async (c) => {
       // as String on top of whatever's actually declared for this process.
       const varTypes: Record<string, string> = { resPayload: 'String', ...varTypesOf(c) };
       try {
-        const { maxConcurrentScripts } = await new SettingsService(c.app).get();
-        await runScript(String(n.exitScript), scriptVars, config.scriptTimeoutMs, {
+        const maxConcurrentScripts = settings.maxConcurrentScripts;
+        const scriptTimeout = (settings.scriptTimeoutSeconds && settings.scriptTimeoutSeconds > 0) ? settings.scriptTimeoutSeconds * 1000 : config.scriptTimeoutMs;
+        await runScript(String(n.exitScript), scriptVars, scriptTimeout, {
           ...kcontextInfoOf(c), lang: n.lang, varTypes, onAction: onActionOf(c),
           tenantId: c.app.tenantId, maxConcurrentScripts,
         });
@@ -56,11 +87,16 @@ export const handler: NodeHandler = async (c) => {
         Object.assign(vars, scriptVars);
       } catch (e) {
         const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'SCRIPT_ERROR';
-        return { error: `exitScript failed: ${(e as Error).message}`, errorCode: code };
+        return { error: `exitScript failed: ${(e as Error).message}`, errorCode: code, errorDetails: { lang: n.lang, error: (e as Error).message } };
       }
     }
     return { vars, outcome: `HTTP ${res.status}` };
   } catch (e) {
-    return { error: `service call failed: ${(e as Error).message}`, errorCode: 'SERVICE_ERROR' };
+    const details = { url, method, error: (e as Error).message };
+    if (n.throwError === false || n.handleResponseErrors === false) {
+      const errorVar = n.errorVar || 'serviceError';
+      return { vars: { [errorVar]: details }, outcome: 'Service call failed (soft-failure)' };
+    }
+    return { error: `service call failed: ${(e as Error).message}`, errorCode: 'SERVICE_ERROR', errorDetails: details };
   }
 };

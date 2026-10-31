@@ -11,16 +11,28 @@ export const handler: NodeHandler = async (c) => {
   if (n.lang && n.lang !== 'js' && n.lang !== 'java') return { outcome: 'skipped-nonjs' };
   const vars = { ...c.inst.variables };
   const logs: string[] = [];
-  const { maxConcurrentScripts } = await new SettingsService(c.app).get();
+  const settings = await new SettingsService(c.app).get();
+  const maxConcurrentScripts = settings.maxConcurrentScripts;
+  const timeoutMs = (settings.scriptTimeoutSeconds && settings.scriptTimeoutSeconds > 0)
+    ? settings.scriptTimeoutSeconds * 1000
+    : config.scriptTimeoutMs;
   try {
-    await runScript(n.code || '', vars, config.scriptTimeoutMs, {
+    await runScript(n.code || '', vars, timeoutMs, {
       ...kcontextInfoOf(c), log: (line) => logs.push(line), lang: n.lang,
       varTypes: varTypesOf(c), onAction: onActionOf(c),
       tenantId: c.app.tenantId, maxConcurrentScripts,
     });
   } catch (e) {
     const code = (e as { code?: string }).code === 'QUOTA_EXCEEDED' ? 'QUOTA_EXCEEDED' : 'SCRIPT_ERROR';
-    return { error: `script failed: ${(e as Error).message}`, errorCode: code };
+    return {
+      error: `script failed: ${(e as Error).message}`,
+      errorCode: code,
+      errorDetails: {
+        lang: n.lang || 'js',
+        message: (e as Error).message,
+        stack: (e as Error).stack,
+      },
+    };
   }
   return { vars, ...(logs.length ? { outcome: logs.join('\n') } : {}) };
 };

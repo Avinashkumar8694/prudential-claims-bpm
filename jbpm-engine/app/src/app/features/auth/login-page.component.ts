@@ -11,7 +11,7 @@ import { IconComponent } from '../../shared/icon.component';
   template: `
     <div class="wrap">
       <form class="card login" (ngSubmit)="submit()">
-        <div class="brand"><span class="logo"><app-icon name="zap" [size]="18" /></span><span class="brand-name">jBPM Engine</span></div>
+        <div class="brand"><span class="logo"><app-icon name="zap" [size]="18" /></span><span class="brand-name">Workflow Engine</span></div>
         <h1>Sign in</h1>
         <label>
           Username

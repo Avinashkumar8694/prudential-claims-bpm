@@ -92,10 +92,17 @@ function buildKcontext(vars: Record<string, unknown>, info: KContextInfo, action
     signalEvent: (type: string, event?: unknown) => { actions.push({ kind: 'signal', type, payload: event, targetInstanceId: selfId }); },
   };
   const nodeInstance = { getId: () => info.nodeInstanceId ?? '', getNodeId: () => info.nodeId ?? '', getNodeName: () => info.nodeName ?? '' };
+  const SENSITIVE_HOST_ENV = new Set([
+    'JWT_SECRET', 'ADMIN_INITIAL_PASSWORD', 'SECRETS_ENCRYPTION_PRIVATE_KEY', 'SECRETS_ENCRYPTION_PUBLIC_KEY',
+    'PG_URL', 'DATABASE_URL', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'NODE_AUTH_TOKEN', 'PRIVATE_KEY'
+  ]);
   const envMap: Record<string, any> = { ...(info.env || {}) };
   const environment = {
     ...envMap,
-    get: (k: string) => envMap[k] ?? process.env[k] ?? null,
+    get: (k: string) => {
+      if (!k || SENSITIVE_HOST_ENV.has(k.toUpperCase())) return null;
+      return envMap[k] ?? null;
+    },
     set: (k: string, v: unknown) => { envMap[k] = v; if (info.env) info.env[k] = String(v); },
   };
   const kieRuntime = {
@@ -139,6 +146,17 @@ function buildInstanceGlobal(vars: Record<string, unknown>, info: KContextInfo, 
     state: info.state ?? 'running',
     variables: vars,
     activeNodes: (info.activeNodeInstances || []).map((n) => ({ id: n.id, nodeId: n.nodeId, name: n.nodeName ?? '' })),
+    getVariable: (n: string) => vars[n],
+    setVariable: (n: string, v: unknown) => { vars[n] = v; },
+    hasVariable: (n: string) => Object.prototype.hasOwnProperty.call(vars, n),
+    getNodeInstances: () => (info.activeNodeInstances || []).map((n) => ({
+      getId: () => n.id,
+      getNodeId: () => n.nodeId,
+      getNodeName: () => n.nodeName ?? '',
+      id: n.id,
+      nodeId: n.nodeId,
+      name: n.nodeName ?? '',
+    })),
     signal: (type: string, payload?: unknown) => { actions.push({ kind: 'signal', type, payload, targetInstanceId: selfId }); },
     signalOther: (targetInstanceId: string, type: string, payload?: unknown) => { actions.push({ kind: 'signal', type, payload, targetInstanceId }); },
     broadcast: (type: string, payload?: unknown) => { actions.push({ kind: 'signal', type, payload }); },
@@ -150,7 +168,17 @@ function buildInstanceGlobal(vars: Record<string, unknown>, info: KContextInfo, 
 /** read-only twin of `kcontext.getNodeInstance()` — `id` is the node *instance* (token) id, `nodeId`
  *  the node *definition* id, matching the same distinction `kcontext.getNodeInstance()` makes. */
 function buildNodeGlobal(info: KContextInfo) {
-  return { id: info.nodeInstanceId ?? '', nodeId: info.nodeId ?? '', name: info.nodeName ?? '' };
+  const token = info.nodeInstanceId ?? '';
+  const defId = info.nodeId ?? '';
+  const name = info.nodeName ?? '';
+  return {
+    id: token,
+    nodeId: defId,
+    name,
+    getId: () => token,
+    getNodeId: () => defId,
+    getNodeName: () => name,
+  };
 }
 
 /** resolves queued signal/abort actions against the real engine, via the callbacks HandlerCtx already
@@ -233,6 +261,15 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
     node: buildNodeGlobal(opts),
     env: { ...(opts.env || {}) },
     console: { log: (...a: unknown[]) => log(a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ')) },
+    getVariable: (k: string) => vars[k],
+    setVariable: (k: string, v: unknown) => { vars[k] = v; },
+    instanceId: opts.instanceId == null ? '' : String(opts.instanceId),
+    processId: opts.processId ?? '',
+    processName: opts.processName ?? '',
+    correlationKey: opts.correlationKey ?? '',
+    parentInstanceId: opts.parentInstanceId ?? '',
+    currentNodeId: opts.nodeId ?? '',
+    currentNodeName: opts.nodeName ?? '',
   };
   installJsCompat(sandbox);
   vm.createContext(sandbox);
@@ -267,7 +304,8 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
 }
 
 const RESERVED_SANDBOX_KEYS = new Set([
-  'kcontext', 'vars', 'instance', 'node', 'env', 'console',
+  'kcontext', 'vars', 'instance', 'node', 'env', 'console', 'getVariable', 'setVariable',
+  'instanceId', 'processId', 'processName', 'correlationKey', 'parentInstanceId', 'currentNodeId', 'currentNodeName',
   'Java', 'java', 'System', 'KieFunctions', 'org', 'com', 'makeJacksonNode',
   'Boolean', 'String', 'Number', 'Object', 'Array', 'Integer', 'Long', 'Double', 'Float',
   'Error', 'Date', 'Math', 'JSON', 'RegExp', 'Map', 'Set', 'Promise', 'Function',
@@ -321,6 +359,14 @@ export async function evalCondition(expr: string | undefined, lang: string | und
     instance: buildInstanceGlobal(vars, ctx, actions),
     node: buildNodeGlobal(ctx),
     env: { ...(ctx.env || {}) },
+    getVariable: (k: string) => vars[k],
+    instanceId: ctx.instanceId == null ? '' : String(ctx.instanceId),
+    processId: ctx.processId ?? '',
+    processName: ctx.processName ?? '',
+    correlationKey: ctx.correlationKey ?? '',
+    parentInstanceId: ctx.parentInstanceId ?? '',
+    currentNodeId: ctx.nodeId ?? '',
+    currentNodeName: ctx.nodeName ?? '',
   };
   installJsCompat(sandbox);
   vm.createContext(sandbox);

@@ -215,10 +215,12 @@ export function installRealmPrototypes(target: any): void {
       if (o == null) return false;
       return this.valueOf() === (typeof o.valueOf === 'function' ? o.valueOf() : o);
     });
-    def(target.Object.prototype, 'path', function (this: any, k: string) {
-      const v = (this && typeof this === 'object') ? this[k] : undefined;
-      return makeJacksonNode(v);
-    });
+    if (target !== globalThis) {
+      def(target.Object.prototype, 'path', function (this: any, k: string) {
+        const v = (this && typeof this === 'object') ? this[k] : undefined;
+        return makeJacksonNode(v);
+      });
+    }
     def(target.Object.prototype, 'has', function (this: any, k: string) {
       return this && typeof this === 'object' && Object.prototype.hasOwnProperty.call(this, k);
     });
@@ -521,7 +523,36 @@ export function installJsCompat(sandbox: Record<string, unknown>): void {
     },
     isNull: (a: unknown) => a == null,
     notNull: (a: unknown) => a != null,
-    isEmpty: (a: unknown) => a == null || String(a).trim() === '',
+    isEmpty: (a: unknown) => {
+      if (a == null) return true;
+      if (typeof a === 'string') return a.trim() === '';
+      if (Array.isArray(a)) return a.length === 0;
+      if (typeof a === 'object') return Object.keys(a).length === 0;
+      return false;
+    },
+    contains: (container: unknown, value: unknown) => {
+      if (container == null) return false;
+      if (Array.isArray(container)) return container.includes(value);
+      if (typeof (container as any).contains === 'function') return (container as any).contains(value);
+      if (typeof container === 'string') return container.includes(String(value));
+      return false;
+    },
+    startsWith: (str: unknown, prefix: unknown) => {
+      if (str == null || prefix == null) return false;
+      return String(str).startsWith(String(prefix));
+    },
+    endsWith: (str: unknown, suffix: unknown) => {
+      if (str == null || suffix == null) return false;
+      return String(str).endsWith(String(suffix));
+    },
+    greaterThan: (a: any, b: any) => Number(a) > Number(b),
+    greaterOrEqualThan: (a: any, b: any) => Number(a) >= Number(b),
+    lessThan: (a: any, b: any) => Number(a) < Number(b),
+    lessOrEqualThan: (a: any, b: any) => Number(a) <= Number(b),
+    between: (val: any, min: any, max: any) => {
+      const n = Number(val);
+      return n >= Number(min) && n <= Number(max);
+    },
   };
 
   sandbox.org = {
@@ -555,13 +586,32 @@ export function installJsCompat(sandbox: Record<string, unknown>): void {
     },
   };
 
+  const SENSITIVE_HOST_ENV = new Set([
+    'JWT_SECRET', 'ADMIN_INITIAL_PASSWORD', 'SECRETS_ENCRYPTION_PRIVATE_KEY', 'SECRETS_ENCRYPTION_PUBLIC_KEY',
+    'PG_URL', 'DATABASE_URL', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSION_TOKEN', 'NODE_AUTH_TOKEN', 'PRIVATE_KEY'
+  ]);
+
   sandbox.System = {
     out: {
       println: (...args: unknown[]) => ((sandbox.console as any)?.log || console.log)(...args),
       print: (...args: unknown[]) => ((sandbox.console as any)?.log || console.log)(...args),
     },
-    getenv: (k: string) => ((sandbox.env as Record<string, string>)?.[k] || process.env[k] || ''),
-    getProperty: (k: string) => ((sandbox.env as Record<string, string>)?.[k] || process.env[k] || ''),
+    getenv: (k: string) => {
+      const envObj = (sandbox.env as Record<string, string>) || {};
+      if (!k) {
+        return envObj[''] ?? envObj['BASE_URL'] ?? envObj['INTEGRATION_LAYER_URL'] ?? null;
+      }
+      if (SENSITIVE_HOST_ENV.has(k.toUpperCase())) return null;
+      return envObj[k] ?? null;
+    },
+    getProperty: (k: string) => {
+      const envObj = (sandbox.env as Record<string, string>) || {};
+      if (!k) {
+        return envObj[''] ?? envObj['BASE_URL'] ?? envObj['INTEGRATION_LAYER_URL'] ?? null;
+      }
+      if (SENSITIVE_HOST_ENV.has(k.toUpperCase())) return null;
+      return envObj[k] ?? null;
+    },
     currentTimeMillis: () => Date.now(),
   };
 }
