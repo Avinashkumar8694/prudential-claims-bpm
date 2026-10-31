@@ -21,7 +21,9 @@ import { IamService } from '../modules/iam/service.ts';
 import { ErrorService } from '../modules/errors/service.ts';
 import { AuditService } from '../modules/audit/service.ts';
 import { NotificationService } from '../modules/notifications/service.ts';
+import { effectiveLimitsFor } from '../modules/platform/limits.ts';
 import { SettingsService } from '../modules/settings/service.ts';
+import { planUsageFor } from '../modules/plans/plans.ts';
 import { TimerService } from '../modules/timers/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
 import { exportKjar, validateJbpmExport } from '../modules/export/service.ts';
@@ -29,6 +31,7 @@ import { ImportService } from '../modules/import/service.ts';
 import { ValidationService } from '../modules/validation/service.ts';
 import { openapiSpec, swaggerHtml } from './openapi.ts';
 import { buildWorkflowInstanceRoutes } from './routes/workflow-instances.ts';
+import { buildTeamRoutes } from './team-routes.ts';
 import { hub } from '../infra/ws-hub.ts';
 import { requirePermission } from './auth-middleware.ts';
 import { rateLimit } from './rate-limit.ts';
@@ -37,6 +40,13 @@ const ctxOf = (req: Request): AppContext => (req as any).ctx;
 const actorOf = (req: Request): string => (req as any).actor;
 const emit = hub.engineEmit;
 const perm = requirePermission;
+/** TaskService for this request; workspace owners/admins and the platform admin may act on tasks held by others. */
+const taskSvc = (req: Request, e?: (ev: any) => void) => {
+  const svc = new TaskService(ctxOf(req), e);
+  const a = (req as any).access as { platformAdmin?: boolean; member?: { role: string } } | undefined;
+  svc.adminOverride = !!a && (!!a.platformAdmin || a.member?.role === 'owner' || a.member?.role === 'admin');
+  return svc;
+};
 // per-user (post-auth) limits on the routes most likely to be hammered by a runaway script or abused
 // for DoS — starting instances (cheapest to spam, so the tightest per-second ceiling), and the
 // heavier deploy/import operations (already permission-gated, but still worth bounding).
@@ -201,23 +211,23 @@ export function buildRoutes(): Router {
 
   // --- tasks (task-level group/assignee/excludedOwners/businessAdmin checks happen inside TaskService
   // itself — see modules/tasks/service.ts — on top of the role-level task:manage gate here) ---
-  r.get('/tasks', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).list({ ...req.query as any, overdue: req.query.overdue === 'true' }) })));
-  r.get('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).get(req.params.id))));
-  r.post('/tasks/:id/claim', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).claim(req.params.id, actorOf(req)))));
-  r.post('/tasks/:id/release', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).release(req.params.id, actorOf(req)))));
-  r.post('/tasks/:id/complete', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).complete(req.params.id, req.body?.outputs || {}, actorOf(req)))));
-  r.post('/tasks/:id/skip', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req), emit).skip(req.params.id, actorOf(req)))));
-  r.post('/tasks/:id/start', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).start(req.params.id, actorOf(req)))));
-  r.post('/tasks/:id/stop', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).stop(req.params.id, actorOf(req)))));
-  r.post('/tasks/:id/save', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).saveOutputs(req.params.id, req.body?.outputs || {}, actorOf(req)))));
-  r.post('/tasks/:id/delegate', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).delegate(req.params.id, req.body?.to, actorOf(req)))));
-  r.post('/tasks/:id/forward', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).forward(req.params.id, { user: req.body?.user, group: req.body?.group }, actorOf(req)))));
-  r.post('/tasks/:id/remind', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).remind(req.params.id, actorOf(req)))));
-  r.patch('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await new TaskService(ctxOf(req)).update(req.params.id, { priority: req.body?.priority, dueAt: req.body?.dueAt }, actorOf(req)))));
-  r.get('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).listComments(req.params.id) })));
-  r.post('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.status(201).json(await new TaskService(ctxOf(req)).addComment(req.params.id, req.body?.body, actorOf(req)))));
-  r.delete('/tasks/:id/comments/:cid', perm('task:manage'), asyncHandler(async (req, res) => { await new TaskService(ctxOf(req)).deleteComment(req.params.id, req.params.cid, actorOf(req)); res.status(204).end(); }));
-  r.get('/tasks/:id/events', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await new TaskService(ctxOf(req)).events(req.params.id) })));
+  r.get('/tasks', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await taskSvc(req).list({ ...req.query as any, overdue: req.query.overdue === 'true' }) })));
+  r.get('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).get(req.params.id))));
+  r.post('/tasks/:id/claim', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).claim(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/release', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).release(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/complete', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req, emit).complete(req.params.id, req.body?.outputs || {}, actorOf(req)))));
+  r.post('/tasks/:id/skip', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req, emit).skip(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/start', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).start(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/stop', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).stop(req.params.id, actorOf(req)))));
+  r.post('/tasks/:id/save', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).saveOutputs(req.params.id, req.body?.outputs || {}, actorOf(req)))));
+  r.post('/tasks/:id/delegate', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).delegate(req.params.id, req.body?.to, actorOf(req)))));
+  r.post('/tasks/:id/forward', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).forward(req.params.id, { user: req.body?.user, group: req.body?.group }, actorOf(req)))));
+  r.post('/tasks/:id/remind', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).remind(req.params.id, actorOf(req)))));
+  r.patch('/tasks/:id', perm('task:manage'), asyncHandler(async (req, res) => res.json(await taskSvc(req).update(req.params.id, { priority: req.body?.priority, dueAt: req.body?.dueAt }, actorOf(req)))));
+  r.get('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await taskSvc(req).listComments(req.params.id) })));
+  r.post('/tasks/:id/comments', perm('task:manage'), asyncHandler(async (req, res) => res.status(201).json(await taskSvc(req).addComment(req.params.id, req.body?.body, actorOf(req)))));
+  r.delete('/tasks/:id/comments/:cid', perm('task:manage'), asyncHandler(async (req, res) => { await taskSvc(req).deleteComment(req.params.id, req.params.cid, actorOf(req)); res.status(204).end(); }));
+  r.get('/tasks/:id/events', perm('task:manage'), asyncHandler(async (req, res) => res.json({ items: await taskSvc(req).events(req.params.id) })));
 
   // --- execution errors (the operational failure queue — see modules/errors/service.ts) ---
   const errs = (req: Request) => new ErrorService(ctxOf(req));
@@ -256,7 +266,20 @@ export function buildRoutes(): Router {
   r.post('/notifications/:id/read', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).markRead(req.params.id, actorOf(req)))));
 
   // --- system settings (singleton; readable by anyone signed in, writable by admins) ---
-  r.get('/settings/system', asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).get())));
+  // `effective*` = what the script pool actually applies (quota/default clamped by SCRIPT_POOL_MAX_SIZE; workspace
+  // mode vs the SCRIPT_OVERFLOW_MODE env default) — so operators can see the real limit, not just the setting.
+  // the workspace's plan, its limits and what it has used (every member may look; the platform admin edits plans)
+  r.get('/plan/usage', perm('team:read'), asyncHandler(async (req, res) => res.json(await planUsageFor(ctxOf(req)))));
+  r.get('/settings/system', asyncHandler(async (req, res) => {
+    const s = await new SettingsService(ctxOf(req)).get();
+    const { effective, caps } = await effectiveLimitsFor(ctxOf(req));
+    res.json({
+      ...s,
+      effectiveScriptConcurrency: effective.scriptPoolSize, effectiveScriptOverflowMode: effective.scriptOverflowMode,
+      effectiveLimits: effective,   // what is really applied (read-only)
+      limitCaps: caps,              // what this workspace may not exceed (set by the platform administrator)
+    });
+  }));
   r.put('/settings/system', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).update(req.body || {}, actorOf(req)))));
 
   // --- query / task-admin / analytics (jBPM KIE-Server-style; see docs/17) ---
@@ -292,6 +315,7 @@ export function buildRoutes(): Router {
 
   // --- Workflow Instance Management (Case Management) ---
   r.use(buildWorkflowInstanceRoutes());
+  r.use(buildTeamRoutes());   // workspace members, invitations, ownership
 
   return r;
 }

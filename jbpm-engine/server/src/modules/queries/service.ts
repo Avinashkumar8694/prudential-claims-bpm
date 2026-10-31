@@ -20,14 +20,15 @@ export class QueryService {
   private D() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
   private J() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
   private A() { return this.ctx.store.repo<AuditEvent>(Collections.audit); }
-  private mine<T extends { tenantId: string }>(xs: T[]) { return xs.filter((x) => x.tenantId === this.ctx.tenantId); }
-  private allInstances() { return this.I().query((i) => i.tenantId === this.ctx.tenantId); }
-  private allTasks() { return this.T().query((t) => t.tenantId === this.ctx.tenantId); }
+  private isAll() { return this.ctx.tenantId === 'all' || this.ctx.tenantId === '*'; }
+  private mine<T extends { tenantId: string }>(xs: T[]) { return this.isAll() ? xs : xs.filter((x) => x.tenantId === this.ctx.tenantId); }
+  private allInstances() { return this.isAll() ? this.I().query(() => true) : this.I().query((i) => i.tenantId === this.ctx.tenantId); }
+  private allTasks() { return this.isAll() ? this.T().query(() => true) : this.T().query((t) => t.tenantId === this.ctx.tenantId); }
 
   // ---- process definitions (across active deployments) ----
   /** Every process definition currently deployed & active, with live instance stats (jBPM def catalog). */
   async processDefinitions() {
-    const active = await this.D().query((d) => d.tenantId === this.ctx.tenantId && d.status === 'active');
+    const active = await this.D().query((d) => (this.isAll() || d.tenantId === this.ctx.tenantId) && d.status === 'active');
     const instances = await this.allInstances();
     const defs: any[] = [];
     for (const dep of active) {
@@ -156,8 +157,13 @@ export class QueryService {
   }
   /** Dashboard counts across instances, tasks, deployments and jobs. */
   async summary() {
-    const [instances, tasks, deployments, jobs] = [await this.allInstances(), await this.allTasks(),
-      await this.D().query((d) => d.tenantId === this.ctx.tenantId), await this.J().query((j) => j.tenantId === this.ctx.tenantId)];
+    const isAll = this.isAll();
+    const [instances, tasks, deployments, jobs] = [
+      await this.allInstances(),
+      await this.allTasks(),
+      await this.D().query((d) => isAll || d.tenantId === this.ctx.tenantId),
+      await this.J().query((j) => isAll || j.tenantId === this.ctx.tenantId),
+    ];
     return {
       instances: { total: instances.length, byStatus: this.countBy(instances, (i) => i.status) },
       tasks: { total: tasks.length, byStatus: this.countBy(tasks, (t) => t.status) },
@@ -167,7 +173,7 @@ export class QueryService {
   }
   /** Scheduled/fired timer jobs (jBPM "jobs" admin list). */
   async jobs(status?: string) {
-    return (await this.J().query((j) => j.tenantId === this.ctx.tenantId && (!status || j.status === status)))
+    return (await this.J().query((j) => (this.isAll() || j.tenantId === this.ctx.tenantId) && (!status || j.status === status)))
       .sort((a, b) => a.dueAt.localeCompare(b.dueAt));
   }
 

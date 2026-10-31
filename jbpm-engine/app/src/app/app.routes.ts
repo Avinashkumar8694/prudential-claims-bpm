@@ -1,15 +1,23 @@
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
-import { authGuard, permissionGuard } from './core/auth/auth.guard';
+import { TenantService } from './core/tenant/tenant.service';
+import { authGuard, guestGuard, permissionGuard } from './core/auth/auth.guard';
+import { tenantGuard } from './core/tenant/tenant.guard';
 
 export const routes: Routes = [
-  { path: 'login', loadComponent: () => import('./features/auth/login-page.component').then((m) => m.LoginPageComponent) },
+  { path: '', pathMatch: 'full', loadComponent: () => import('./features/landing/root-gate.component').then((m) => m.RootGateComponent) },
+  { path: 'login', canActivate: [guestGuard], loadComponent: () => import('./features/auth/login-page.component').then((m) => m.LoginPageComponent) },
+  { path: 'register', canActivate: [guestGuard], loadComponent: () => import('./features/auth/register-page.component').then((m) => m.RegisterPageComponent) },
+  { path: 'forgot-password', canActivate: [guestGuard], loadComponent: () => import('./features/auth/forgot-password.component').then((m) => m.ForgotPasswordComponent) },
+  { path: 'reset-password', canActivate: [guestGuard], loadComponent: () => import('./features/auth/reset-password.component').then((m) => m.ResetPasswordComponent) },
+  { path: 'verify-email', loadComponent: () => import('./features/auth/verify-email.component').then((m) => m.VerifyEmailComponent) },
+  { path: 'auth/callback', loadComponent: () => import('./features/auth/sso-callback.component').then((m) => m.SsoCallbackComponent) },
+  { path: 'accept-invite', loadComponent: () => import('./features/team/accept-invite.component').then((m) => m.AcceptInviteComponent) },
+  { path: 'no-workspace', loadComponent: () => import('./features/tenant/no-workspace.component').then((m) => m.NoWorkspaceComponent) },
   {
     path: '',
-    canActivate: [authGuard],
+    canActivate: [authGuard, tenantGuard],
     children: [
-      // Home is the landing page, not the project grid: a project grid is the *builder's* view, while
-      // an operator or process owner logging in wants their work and the system's health first.
-      { path: '', redirectTo: 'home', pathMatch: 'full' },
       { path: 'home', loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent) },
       { path: 'projects', loadComponent: () => import('./features/workflows/workflows.component').then((m) => m.WorkflowsComponent) },
       {
@@ -23,7 +31,8 @@ export const routes: Routes = [
           { path: 'processes', loadComponent: () => import('./features/project/project-processes.component').then((m) => m.ProjectProcessesComponent) },
           { path: 'processes/:pid', loadComponent: () => import('./features/project/project-process-canvas-page.component').then((m) => m.ProjectProcessCanvasPageComponent) },
           { path: 'assets', loadComponent: () => import('./features/project/project-assets.component').then((m) => m.ProjectAssetsComponent) },
-          { path: 'settings', loadComponent: () => import('./features/project/project-settings.component').then((m) => m.ProjectSettingsComponent) },
+          { path: 'platform-limits', canActivate: [() => inject(TenantService).isSystemAdmin()], loadComponent: () => import('./features/settings/platform-limits.component').then((m) => m.PlatformLimitsComponent) },
+      { path: 'settings', loadComponent: () => import('./features/project/project-settings.component').then((m) => m.ProjectSettingsComponent) },
         ],
       },
       // Deployments/Instances are top-level, cross-project pages (like Tasks) — a deployment/instance
@@ -62,6 +71,8 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/admin-shell.component').then((m) => m.AdminShellComponent),
         loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },
+      { path: 'plan', loadComponent: () => import('./features/plan/plan-usage.component').then((m) => m.PlanUsageComponent) },
+      { path: 'team', canActivate: [permissionGuard('team:read')], loadComponent: () => import('./features/team/team-page.component').then((m) => m.TeamPageComponent) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent) },
       // Workflow Instance Management (Case Management)
       {

@@ -15,6 +15,9 @@ setInterval(() => {
   for (const [k, b] of buckets) if (b.resetAt <= now) buckets.delete(k);
 }, 5 * 60_000).unref?.();
 
+/** test hook: forget every counter */
+export function resetRateLimits() { buckets.clear(); }
+
 /** `keyOf` defaults to the authenticated user id (req.user.sub, set by requireAuth) falling back to
  *  the client IP for routes mounted BEFORE auth (e.g. /auth/login, where there's no user yet). */
 export function rateLimit(opts: { windowMs: number; max: number; keyOf?: (req: Request) => string }) {

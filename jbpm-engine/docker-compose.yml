@@ -17,5 +17,13 @@ services:
       timeout: 5s
       retries: 10
 
+  # Shared state for running several server replicas (set REDIS_URL=redis://localhost:6380). Leases and counters only — no persistence needed.
+  redis:
+    image: redis:7-alpine
+    container_name: jbpm-engine-redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6380:6379"
+
 volumes:
   jbpm-postgres-data:

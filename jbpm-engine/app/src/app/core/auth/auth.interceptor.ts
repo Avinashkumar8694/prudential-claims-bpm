@@ -10,21 +10,37 @@ import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 import { AuthService } from './auth.service';
 import { ToastService } from '../../shared/toast.service';
+import { getSelectedTenantId } from '../tenant/tenant-selection';
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
   const toast = inject(ToastService);
 
-  const isPublicAuthRoute = req.url.includes('/api/auth/login');
+  const isPublicAuthRoute = /\/api\/auth\/(?!me)/.test(req.url) || req.url.includes('/api/public/') || req.url.includes('/api/tenants/check');
+  // signup is public without SSO but needs the caller's token with it (the workspace is created for the signed-in identity)
+  const isSignup = req.url.includes('/api/tenants/signup');
   const token = auth.token();
-  const authed = token && !isPublicAuthRoute ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
+  const selectedTenant = getSelectedTenantId();
+
+  const headers: Record<string, string> = {};
+  if (token && (!isPublicAuthRoute || isSignup)) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (selectedTenant && !req.headers.has('x-tenant-id') && !isPublicAuthRoute && !isSignup) {
+    headers['x-tenant-id'] = selectedTenant;
+  }
+
+  const authed = Object.keys(headers).length > 0 ? req.clone({ setHeaders: headers }) : req;
 
   return next(authed).pipe(
     catchError((err) => {
-      if (err.status === 401 && !isPublicAuthRoute && !router.url.startsWith('/login')) {
+      if (err.status === 401 && !isPublicAuthRoute && !router.url.startsWith('/login') && !router.url.startsWith('/auth/callback')) {
         auth.logout();
         router.navigate(['/login'], { queryParams: { redirect: router.url } });
+      } else if (err.status === 402 || err.status === 429) {
+        // plan expired (402) or a plan/quota limit (429): the server's message says exactly which and when it resets
+        toast.error(err.error?.error?.message || (err.status === 402 ? 'Your plan has ended' : 'A plan limit was reached'));
       } else if (err.status === 403) {
         toast.error(err.error?.error?.message || 'You don’t have permission to do that');
       }

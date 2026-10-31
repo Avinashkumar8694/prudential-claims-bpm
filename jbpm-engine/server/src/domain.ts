@@ -183,7 +183,15 @@ export interface SystemSettings extends Entity {
    *  unaffected until an admin opts in). Enforced at the point of creation, not retroactively. */
   maxActiveInstances?: number;   // top-level (root) instances concurrently running/waiting
   maxActiveTimers?: number;      // scheduled TimerJobs (boundary/catch timers) at once
-  maxConcurrentScripts?: number; // script-task/exit-script executions running at this instant
+  maxConcurrentScripts?: number; // DEPRECATED alias of scriptPoolSize (0 = platform default)
+  /** what happens when maxConcurrentScripts executions are already running: 'queue' (wait, bounded) or 'reject'
+   *  (QUOTA_EXCEEDED immediately). Unset = the SCRIPT_OVERFLOW_MODE env default. */
+  scriptOverflowMode?: 'queue' | 'reject';
+  /** requested script parallelism = isolate-pool size (memory ≈ size × 64 MB worst case). `maxConcurrentScripts` is its
+   *  deprecated alias. Always clamped by the platform caps (modules/platform/limits.ts). */
+  scriptPoolSize?: number;
+  /** how many script executions may wait when all isolates are busy (queue mode); clamped by the platform cap. */
+  scriptQueueMax?: number;
   updatedAt?: string; updatedBy?: string;
 }
 
@@ -210,11 +218,131 @@ export interface User extends Entity {
   groups: string[];         // Group names
   active: boolean;
   createdAt: string;
+  /** contact address; for a self-registered account it equals `username` */
+  email?: string;
+  /** false until the mailbox is proven (verification link or password-reset link). Absent = legacy/admin-provisioned = trusted. */
+  emailVerified?: boolean;
+  /** brute-force protection */
+  failedLogins?: number;
+  lockedUntil?: string | null;
+  /** single-use, hashed, expiring tokens (SHA-256 hex) */
+  verificationHash?: string | null;
+  verificationExpiresAt?: string | null;
+  passwordResetHash?: string | null;
+  passwordResetExpiresAt?: string | null;
+  passwordResetSentAt?: string | null;
+  /** tokens issued before this instant are rejected (password changed/reset) */
+  passwordChangedAt?: string | null;
+  displayName?: string;
+  /** temp-password onboarding: the stored password is an emailed temporary one; the first sign-in must replace it */
+  mustResetPassword?: boolean;
+  tempPasswordExpiresAt?: string | null;
+  /** emailed one-time sign-in code (hashed) */
+  otpHash?: string | null;
+  otpExpiresAt?: string | null;
+  otpAttempts?: number;
+  otpSentAt?: string | null;
+  tosAcceptedAt?: string | null;
+}
+
+/** Metered usage of one workspace in one calendar period (UTC): process starts per day / ISO week / month. */
+export interface Usage extends Entity {
+  id: string; tenantId: string;
+  period: 'day' | 'week' | 'month';
+  key: string;            // 2026-10-31 | 2026-10-26 (Monday of the week) | 2026-10
+  count: number;
+  resetsAt: string;
+}
+
+/** A self-registration that has not been confirmed yet: the person has been emailed a temporary password, and the
+ *  account does NOT exist until they sign in with it (so an unconfirmed address can neither squat nor be matched to seats). */
+export interface PendingRegistration extends Entity {
+  id: string; tenantId: string;
+  email: string;
+  displayName: string;
+  tempHash: string;            // scrypt hash of the emailed temporary password
+  expiresAt: string;
+  createdAt: string;
+  lastSentAt: string;
+  failedAttempts?: number;
+  lockedUntil?: string | null;
+  tosAcceptedAt?: string | null;
+}
+
+// ---- Multi-tenancy & Workspaces ----
+export type TenantStatus = 'active' | 'pending_verification' | 'suspended' | 'deleted';
+export type TenantPlan = 'trial' | 'starter' | 'pro' | 'custom' | 'enterprise';
+
+export interface TenantSettings {
+  timezone?: string;
+  dateFormat?: string;
+  brandName?: string;
+  brandColor?: string;
+  [key: string]: unknown;
+}
+
+export interface Tenant extends Entity {
+  id: string;
+  tenantId: string;
+  name: string;
+  slug: string;
+  status: TenantStatus;
+  plan: string;
+  planExpiresAt?: string | null;
+  settings?: TenantSettings;
+  ownerEmail?: string;
+  ownerName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TenantMemberRole = 'system_admin' | 'owner' | 'admin' | 'developer' | 'operator' | 'worker' | 'viewer';
+export type TenantMemberStatus = 'active' | 'invited' | 'suspended';
+
+export interface TenantMember extends Entity {
+  id: string;
+  tenantId: string;
+  userId: string;
+  email?: string;
+  role: string;
+  status: TenantMemberStatus;
+  displayName?: string | null;
+  permissions?: string[];
+  joinedAt: string;
+  lastActiveAt?: string;
+  /** invitation tracking (status 'invited'): who invited, SHA-256 of the single-use token, and its expiry */
+  invitedBy?: string;
+  invitationTokenHash?: string | null;
+  invitationExpiresAt?: string | null;
+}
+
+export interface PublicPlanContactConfig {
+  type: 'email' | 'url';
+  value: string;
+  label?: string;
+}
+
+export interface Plan extends Entity {
+  id: string;
+  tenantId: string;
+  key: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+  isCustom: boolean;
+  trialDays: number | null;
+  contactConfig?: PublicPlanContactConfig | null;
+  limits?: Record<string, unknown>;
+  features: string[];
+  /** not listed on the public pricing page (internal / assignable-only plans) */
+  hidden?: boolean;
 }
 
 export const Collections = {
   workflows: 'workflows', folders: 'folders', branches: 'branches', versions: 'versions', deployments: 'deployments',
   instances: 'instances', tasks: 'tasks', timers: 'timers', audit: 'audit',
   users: 'users', groups: 'groups', roles: 'roles',
+  tenants: 'tenants', tenantMembers: 'tenantMembers', plans: 'plans',
   errors: 'errors', comments: 'comments', notifications: 'notifications', settings: 'settings',
+  pendingRegistrations: 'pendingRegistrations', usage: 'usage',
 } as const;

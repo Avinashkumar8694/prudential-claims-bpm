@@ -83,16 +83,28 @@ type SettingsTab = 'account' | 'system';
               <h3>Resource quotas</h3>
               <p class="hint">Per-tenant limits that protect the server from a runaway or abusive workflow. Set to 0 for unlimited.</p>
               <div class="setting-row">
-                <div class="lbl">Max active instances<span class="shint">Top-level process instances running/waiting at once.</span></div>
-                <input type="number" min="0" [(ngModel)]="s.maxActiveInstances" style="width:90px;" />
+                <div class="lbl">Max active instances<span class="shint">Top-level process instances running/waiting at once.@if (s.limitCaps?.maxActiveInstancesCap) { Capped by the platform at {{ s.limitCaps?.maxActiveInstancesCap }}; 0 (unlimited) is not allowed. }</span></div>
+                <input type="number" [min]="s.limitCaps?.maxActiveInstancesCap ? 1 : 0" [max]="s.limitCaps?.maxActiveInstancesCap || null" [(ngModel)]="s.maxActiveInstances" style="width:90px;" />
               </div>
               <div class="setting-row">
-                <div class="lbl">Max active timers<span class="shint">Scheduled boundary/catch timers at once.</span></div>
-                <input type="number" min="0" [(ngModel)]="s.maxActiveTimers" style="width:90px;" />
+                <div class="lbl">Max active timers<span class="shint">Scheduled boundary/catch timers at once.@if (s.limitCaps?.maxActiveTimersCap) { Capped by the platform at {{ s.limitCaps?.maxActiveTimersCap }}. }</span></div>
+                <input type="number" [min]="s.limitCaps?.maxActiveTimersCap ? 1 : 0" [max]="s.limitCaps?.maxActiveTimersCap || null" [(ngModel)]="s.maxActiveTimers" style="width:90px;" />
               </div>
               <div class="setting-row">
-                <div class="lbl">Max concurrent scripts<span class="shint">Script tasks / exit-scripts executing at this instant.</span></div>
-                <input type="number" min="0" [(ngModel)]="s.maxConcurrentScripts" style="width:90px;" />
+                <div class="lbl">Script pool size<span class="shint">How many scripts run in parallel (each uses its own isolate, ≈64 MB worst case). Platform cap: {{ s.limitCaps?.scriptPoolMaxSize }}. Effective now: {{ s.effectiveLimits?.scriptPoolSize }}. Empty = platform default.</span></div>
+                <input type="number" min="1" [max]="s.limitCaps?.scriptPoolMaxSize || null" [(ngModel)]="s.scriptPoolSize" style="width:90px;" />
+              </div>
+              <div class="setting-row">
+                <div class="lbl">Script queue length<span class="shint">How many scripts may wait when the pool is busy (queue mode). Platform cap: {{ s.limitCaps?.scriptQueueMaxCap }}. Effective now: {{ s.effectiveLimits?.scriptQueueMax }}.</span></div>
+                <input type="number" min="0" [max]="s.limitCaps?.scriptQueueMaxCap ?? null" [(ngModel)]="s.scriptQueueMax" style="width:90px;" />
+              </div>
+              <div class="setting-row">
+                <div class="lbl">When scripts are at the limit<span class="shint">Queue: wait (bounded) for a free slot. Reject: fail immediately with QUOTA_EXCEEDED. Effective now: {{ s.effectiveLimits?.scriptOverflowMode }}.@if (s.limitCaps?.lockedOverflowMode) { Locked to {{ s.limitCaps?.lockedOverflowMode }} by the platform administrator. }</span></div>
+                <select [(ngModel)]="s.scriptOverflowMode" [disabled]="!!s.limitCaps?.lockedOverflowMode" style="width:140px;">
+                  <option [ngValue]="null">Platform default</option>
+                  <option value="queue">Queue</option>
+                  <option value="reject">Reject</option>
+                </select>
               </div>
             </section>
 

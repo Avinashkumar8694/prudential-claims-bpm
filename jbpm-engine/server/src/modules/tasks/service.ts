@@ -12,6 +12,15 @@ export class TaskService {
     this.instances = new InstanceService(ctx, emit);
   }
   private repo() { return this.ctx.store.repo<Task>(Collections.tasks); }
+  /** set by the HTTP layer for a workspace owner/admin or the platform admin: they may act on a task someone else holds. */
+  adminOverride = false;
+  /** Once a task is claimed, only its owner (or the task's businessAdmin, or a workspace admin) may work on it —
+   *  otherwise any member with task:manage could complete, release or hand off a colleague's task. An unclaimed task
+   *  (no assignee) stays open to whoever passes assertOwnable. */
+  private assertOwnerOrAdmin(t: Task, user: string): void {
+    if (this.adminOverride || t.businessAdmin === user || !t.assignee || t.assignee === user) return;
+    throw forbidden(`task is assigned to ${t.assignee}`);
+  }
   private async lookupUser(username: string): Promise<User | undefined> {
     return (await this.ctx.store.repo<User>(Collections.users).query((u) => u.tenantId === this.ctx.tenantId && u.username === username))[0];
   }
@@ -68,6 +77,8 @@ export class TaskService {
     await this.assertOwnable(t, user);
     await this.assertInstanceActionable(t);
     if (t.status !== 'created' && t.status !== 'reserved') throw conflict('task not claimable');
+    // a task someone else already holds cannot be taken from them (only released by them, or reassigned by an admin)
+    if (t.status === 'reserved' && t.assignee && t.assignee !== user && !this.adminOverride && t.businessAdmin !== user) throw conflict(`task already claimed by ${t.assignee}`);
     t.assignee = user; t.status = 'reserved';
     await this.repo().put(t);
     await this.ctx.audit({ actor: user, kind: 'task.claimed', instanceId: t.instanceId, taskId: t.id });
@@ -76,6 +87,7 @@ export class TaskService {
 
   async release(id: string, user: string): Promise<Task> {
     const t = await this.get(id);
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     t.assignee = undefined; t.status = 'created';
     await this.repo().put(t);
@@ -100,6 +112,7 @@ export class TaskService {
   async complete(id: string, outputs: Record<string, unknown>, user: string): Promise<Task> {
     const t = await this.get(id);
     await this.assertOwnable(t, user);
+    this.assertOwnerOrAdmin(t, user);
     if (t.status === 'completed') throw conflict('task already completed');
     // Refuse before mutating the task if the instance can't accept it (e.g. suspended/aborted), so a
     // failed resume can't leave the task completed but the instance un-advanced.
@@ -175,6 +188,7 @@ export class TaskService {
   async saveOutputs(id: string, outputs: Record<string, unknown>, user: string): Promise<Task> {
     const t = await this.get(id);
     await this.assertOwnable(t, user);
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
     t.outputs = outputs;
@@ -187,6 +201,7 @@ export class TaskService {
   async delegate(id: string, to: string, user: string): Promise<Task> {
     const t = await this.get(id);
     if (!to?.trim()) throw validation('target user is required');
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
     if (t.excludedOwners?.includes(to)) throw conflict(`${to} is excluded from this task`);
@@ -206,6 +221,7 @@ export class TaskService {
   async forward(id: string, to: { user?: string; group?: string }, user: string): Promise<Task> {
     const t = await this.get(id);
     if (!to?.user?.trim() && !to?.group?.trim()) throw validation('a target user or group is required');
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     if (t.status === 'completed' || t.status === 'skipped') throw conflict(`task already ${t.status}`);
     const from = t.assignee;

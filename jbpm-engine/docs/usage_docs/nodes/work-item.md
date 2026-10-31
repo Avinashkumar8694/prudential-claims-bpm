@@ -23,7 +23,7 @@ custom script.
 | `Email` | POSTs `params` to `env.EMAIL_SERVICE_URL` if the deployment sets one; otherwise **simulates** — returns `{ sent: true, simulated: true, to: params.to }` without a real send |
 | `SMS` | Same pattern, `env.SMS_SERVICE_URL` |
 | `DBQuery` | POSTs to `env.DB_SERVICE_URL` if set; otherwise simulates with `{ rows: [], simulated: true }` |
-| `Compute` | Evaluates `params.expression` as a JS expression (`params` fields in scope), returns `{ result }` — its own small `node:vm` sandbox, 1s timeout |
+| `Compute` | Evaluates `params.expression` as a JS expression (`params` fields in scope), returns `{ result }` — same isolated-vm isolate as script tasks, 1s timeout |
 | `Log` | Pure record — returns `{ logged: true, message: params.message }`, no external effect |
 
 Because Email/SMS/DB **simulate by default**, a process using them runs end-to-end in dev/test without

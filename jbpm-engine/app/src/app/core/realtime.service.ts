@@ -8,6 +8,7 @@
 // an effect() watching auth.token() — AuthService never reaches into RealtimeService directly.
 import { Injectable, NgZone, inject, effect } from '@angular/core';
 import { AuthService } from './auth/auth.service';
+import { getSelectedTenantId } from './tenant/tenant-selection';
 
 type Listener = (e: { topic: string; kind: string; data: any }) => void;
 
@@ -32,7 +33,9 @@ export class RealtimeService {
     if (!token) return;
     if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    this.ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}`);
+    // the socket is bound to the selected workspace; the server only streams that workspace's instances
+    const tenant = getSelectedTenantId();
+    this.ws = new WebSocket(`${proto}://${location.host}/ws?token=${encodeURIComponent(token)}${tenant ? `&tenant=${encodeURIComponent(tenant)}` : ''}`);
     this.ws.onopen = () => { for (const t of this.listeners.keys()) this.send({ op: 'sub', topics: [t] }); };
     this.ws.onmessage = (m) => {
       let e: any; try { e = JSON.parse(String(m.data)); } catch { return; }

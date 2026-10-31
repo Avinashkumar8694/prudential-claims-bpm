@@ -3,6 +3,7 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/ro
 import { filter, map } from 'rxjs/operators';
 import { AuthService } from '../core/auth/auth.service';
 import { ThemeService } from '../core/theme.service';
+import { TenantService } from '../core/tenant/tenant.service';
 import { IconComponent } from '../shared/icon.component';
 
 /** A dedicated single-entity detail page (instance/task detail) — as opposed to a list page. */
@@ -55,7 +56,7 @@ interface NavItem { label: string; icon: string; link: string; }
           @if (!collapsed()) {
             <div class="who">
               <div class="uname">{{ u.username }}</div>
-              <div class="roles muted">{{ u.roles.join(', ') || 'no roles' }}</div>
+              <div class="roles muted">{{ tenant.role() || u.roles.join(', ') || 'Member' }}</div>
             </div>
           }
           <button class="btn ghost logout" (click)="logout()" title="Sign out" aria-label="Sign out"><app-icon name="power" [size]="15" /></button>
@@ -98,6 +99,7 @@ interface NavItem { label: string; icon: string; link: string; }
 export class SideNavComponent {
   auth = inject(AuthService);
   theme = inject(ThemeService);
+  tenant = inject(TenantService);
   private router = inject(Router);
   collapsed = signal(isDetailRoute(this.router.url));
 
@@ -129,6 +131,7 @@ export class SideNavComponent {
       base.push({ label: 'Reports & Analytics', icon: 'chart', link: '/reports' });
       base.push({ label: 'Workflow Analytics', icon: 'chart', link: '/workflow-analytics' });
     }
+    if (this.tenant.isSystemAdmin()) base.push({ label: 'Platform limits', icon: 'settings', link: '/platform-limits' });
     return base;
   });
 
@@ -140,12 +143,13 @@ export class SideNavComponent {
       g.push({ label: 'Audit Log', icon: 'list', link: '/audit' });
     }
     if (this.auth.hasPermission('workflowInstance:admin')) g.push({ label: 'Workflow Management', icon: 'puzzle', link: '/workflow-management' });
+    if (this.auth.hasPermission('team:read')) { g.push({ label: 'Team', icon: 'admin', link: '/team' }); g.push({ label: 'Plan & usage', icon: 'chart', link: '/plan' }); }
     g.push({ label: 'Settings', icon: 'settings', link: '/settings' });
     return g;
   });
 
   logout() {
-    this.auth.logout();
+    this.auth.signOut();
     this.router.navigateByUrl('/login');
   }
 }

@@ -71,8 +71,10 @@ export function buildWorkflowInstanceRoutes(): Router {
   // audits (dedicated table) — user-addable for a custom/out-of-band entry, not only system-generated
   r.get('/workflow-instances/:id/audits', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
     res.json({ items: await insts(req).listAudits(req.params.id) })));
-  r.post('/workflow-instances/:id/audits', perm('workflowInstance:manage'), asyncHandler(async (req, res) =>
-    res.status(201).json(await insts(req).addAudit(req.params.id, actorOf(req), req.body?.kind || 'workflowInstance.note', req.body?.data))));
+  r.post('/workflow-instances/:id/audits', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
+    await insts(req).get(req.params.id);   // must be an instance of THIS workspace
+    res.status(201).json(await insts(req).addAudit(req.params.id, actorOf(req), req.body?.kind || 'workflowInstance.note', req.body?.data));
+  }));
   r.delete('/workflow-instances/:id/audits/:auditId', perm('workflowInstance:manage'), asyncHandler(async (req, res) => {
     await insts(req).deleteAudit(req.params.id, req.params.auditId, actorOf(req)); res.status(204).end();
   }));

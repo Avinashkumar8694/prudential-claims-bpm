@@ -11,15 +11,15 @@ import { signToken } from '../src/infra/auth.ts';
 
 const fakeReq = (url: string): IncomingMessage => ({ url } as IncomingMessage);
 
-test('rejects a connection with no token at all', () => {
-  assert.strictEqual(authenticateWsUpgrade(fakeReq('/ws')), false);
+test('rejects a connection with no token at all', async () => {
+  assert.strictEqual(await authenticateWsUpgrade(fakeReq('/ws')), null);
 });
 
-test('rejects a connection with a garbage token', () => {
-  assert.strictEqual(authenticateWsUpgrade(fakeReq('/ws?token=not-a-real-jwt')), false);
+test('rejects a connection with a garbage token', async () => {
+  assert.strictEqual(await authenticateWsUpgrade(fakeReq('/ws?token=not-a-real-jwt')), null);
 });
 
-test('accepts a connection with a valid token passed as a query param', () => {
+test('accepts a connection with a valid token passed as a query param', async () => {
   const token = signToken({ sub: 'u1', username: 'alice', roles: ['worker'], groups: [] });
-  assert.strictEqual(authenticateWsUpgrade(fakeReq(`/ws?token=${encodeURIComponent(token)}`)), true);
+  assert.strictEqual((await authenticateWsUpgrade(fakeReq(`/ws?token=${encodeURIComponent(token)}`)))?.sub, 'u1');
 });

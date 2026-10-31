@@ -20,3 +20,9 @@ export function permissionGuard(action: string): CanActivateFn {
     return router.createUrlTree(['/projects']);
   };
 }
+
+/** Sign-in / register / forgot-password are for people who are NOT signed in: a signed-in visitor goes straight to the app. */
+export const guestGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  return auth.isAuthenticated() ? inject(Router).createUrlTree(['/home']) : true;
+};

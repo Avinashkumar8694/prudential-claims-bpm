@@ -28,6 +28,9 @@ export interface ErrorQuery {
 export class ErrorService {
   constructor(private ctx: AppContext) {}
   private repo() { return this.ctx.store.repo<ExecutionError>(Collections.errors); }
+  /** platform-wide scope ('all') is only ever granted to the platform admin by requireWorkspaceAccess */
+  private isAll() { return this.ctx.tenantId === 'all' || this.ctx.tenantId === '*'; }
+  private mine(e: { tenantId?: string }) { return this.isAll() || e.tenantId === this.ctx.tenantId; }
 
   /**
    * Record a failure. Identical (instanceId, nodeId, message) triples increment `occurrences` on the
@@ -36,7 +39,7 @@ export class ErrorService {
    */
   async record(e: Omit<ExecutionError, 'id' | 'tenantId' | 'at' | 'occurrences' | 'acknowledged'>): Promise<ExecutionError> {
     const existing = (await this.repo().query((x) =>
-      x.instanceId === e.instanceId && x.nodeId === e.nodeId && x.message === e.message && !x.acknowledged,
+      x.tenantId === this.ctx.tenantId && x.instanceId === e.instanceId && x.nodeId === e.nodeId && x.message === e.message && !x.acknowledged,
     ))[0];
     if (existing) {
       existing.occurrences += 1;
@@ -59,6 +62,7 @@ export class ErrorService {
 
   async list(q: ErrorQuery = {}): Promise<{ items: ExecutionError[]; total: number }> {
     const all = await this.repo().query((e) => {
+      if (!this.mine(e)) return false;
       if (q.type?.length && !q.type.includes(e.type)) return false;
       if (q.instanceId && e.instanceId !== q.instanceId) return false;
       if (q.taskId && e.taskId !== q.taskId) return false;
@@ -79,7 +83,7 @@ export class ErrorService {
 
   async get(id: string): Promise<ExecutionError> {
     const e = await this.repo().get(id);
-    if (!e) throw notFound('ExecutionError');
+    if (!e || !this.mine(e)) throw notFound('ExecutionError');
     return e;
   }
 
@@ -106,7 +110,7 @@ export class ErrorService {
 
   /** Counts for the nav badge and the Home KPI tile. */
   async summary(): Promise<{ total: number; unacknowledged: number; last24h: number }> {
-    const all = await this.repo().query(() => true);
+    const all = await this.repo().query((e) => this.mine(e));
     const dayAgo = new Date(Date.parse(this.ctx.clock()) - 86_400_000).toISOString();
     return {
       total: all.length,

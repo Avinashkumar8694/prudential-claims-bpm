@@ -1,4 +1,6 @@
 // Process-instance lifecycle: start against a resolved deployment, query, inspect, resume.
+import { enforceInstanceStart } from '../plans/plans.ts';
+import { effectiveLimitsFor } from '../platform/limits.ts';
 import type { AppContext } from '../../context.ts';
 import { Collections, type AuditEvent, type Deployment, type Instance, type TimerJob } from '../../domain.ts';
 import { ExecutionEngine, type EngineEvent } from '../../engine/execution-engine.ts';
@@ -8,21 +10,23 @@ import { NotificationService } from '../notifications/service.ts';
 import { SettingsService } from '../settings/service.ts';
 import { notFound, conflict, validation, quotaExceeded } from '../../infra/errors.ts';
 
+export function makeResolveCalled(ctx: AppContext) {
+  return async (processId: string): Promise<{ dep: Deployment; processId: string } | undefined> => {
+    const deps = await ctx.store.repo<Deployment>(Collections.deployments).query((d) => d.tenantId === ctx.tenantId && d.status === 'active');
+    for (const dep of deps) {
+      const p = (dep.engine?.processes || []).find((x) => x.id === processId);
+      if (p) return { dep, processId: p.id! };
+    }
+    return undefined;
+  };
+}
+
 export class InstanceService {
   private engine: ExecutionEngine;
   private deployments: DeploymentService;
   constructor(private ctx: AppContext, emit: (e: EngineEvent) => void = () => {}) {
     this.deployments = new DeploymentService(ctx);
-    // resolve a called process id -> its active deployment + the matching process (any process, any active deployment)
-    const resolveCalled = async (processId: string): Promise<{ dep: Deployment; processId: string } | undefined> => {
-      const deps = await this.ctx.store.repo<Deployment>(Collections.deployments).query((d) => d.tenantId === this.ctx.tenantId && d.status === 'active');
-      for (const dep of deps) {
-        const p = (dep.engine?.processes || []).find((x) => x.id === processId);
-        if (p) return { dep, processId: p.id! };
-      }
-      return undefined;
-    };
-    this.engine = new ExecutionEngine(ctx, emit, resolveCalled);
+    this.engine = new ExecutionEngine(ctx, emit, makeResolveCalled(ctx));
   }
   private repo() { return this.ctx.store.repo<Instance>(Collections.instances); }
 
@@ -31,7 +35,7 @@ export class InstanceService {
    *  independently gated since they aren't independently "started" via this API either; they're a
    *  direct consequence of a parent that already passed this same check. */
   private async assertInstanceQuota(): Promise<void> {
-    const { maxActiveInstances } = await new SettingsService(this.ctx).get();
+    const { maxActiveInstances } = (await effectiveLimitsFor(this.ctx)).effective;
     if (!maxActiveInstances) return;
     const active = await this.repo().query((i) =>
       i.tenantId === this.ctx.tenantId && !i.parentInstanceId && (i.status === 'running' || i.status === 'waiting'));
@@ -71,6 +75,7 @@ export class InstanceService {
     else dep = await this.deployments.resolveActive(input.workflowId, input.environment || 'prod');
     if (dep.status === 'archived') throw conflict('cannot start on an archived deployment');
     await this.assertInstanceQuota();
+    await enforceInstanceStart(this.ctx);       // plan: trial/plan expiry + daily / weekly / monthly start budgets
     return this.recordIfFailed(await this.engine.start(dep, input.variables || {}, actor, { processId: input.processId, correlationKey: input.correlationKey }));
   }
 
@@ -116,6 +121,7 @@ export class InstanceService {
     const dep = await this.deployments.get(job.deploymentId!);
     if (dep.status !== 'active') throw conflict('scheduled deployment is no longer active');
     await this.assertInstanceQuota();
+    await enforceInstanceStart(this.ctx);
     return this.recordIfFailed(await this.engine.start(dep, {}, 'timer', { processId: job.processId }));
   }
 

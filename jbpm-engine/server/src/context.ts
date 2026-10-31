@@ -9,6 +9,8 @@ export interface AppContext {
   clock: Clock;
   newId: () => string;
   tenantId: string;
+  /** set by the HTTP layer for the platform administrator: plan limits and trial expiry do not apply to them */
+  planExempt?: boolean;
   audit: (e: Omit<AuditEvent, 'id' | 'tenantId' | 'at'>) => Promise<void>;
 }
 

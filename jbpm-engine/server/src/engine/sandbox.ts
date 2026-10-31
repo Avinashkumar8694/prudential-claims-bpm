@@ -1,5 +1,6 @@
-// Sandbox for script tasks and flow conditions. Dev-grade isolation via node:vm (docs/07 mandates
-// isolated-vm for prod) for the `js` dialect. `java` never runs as transpiled JavaScript — it's sent
+// Sandbox for script tasks and flow conditions. The `js` dialect runs in a real V8 isolate (isolated-vm):
+// no Node APIs, no host objects, only JSON crosses the boundary — see runJsInIsolate below and
+// isolate-runtime.ts for the in-isolate half (kcontext/instance/node builders + java/Jackson shims). `java` never runs as transpiled JavaScript — it's sent
 // to the persistent JVM sidecar (java-sidecar.ts / jbpm-engine/java-runtime) and compiled+executed as
 // real Java, so scripts converted unmodified from a real jBPM project behave exactly as they do there.
 // Other dialects (e.g. mvel) are not evaluated.
@@ -25,27 +26,38 @@
 // don't want to think in jBPM terms even for process/node introspection, not just variables. See
 // buildInstanceGlobal/buildNodeGlobal below, and bpmn-sdk/src/engine.ts's jsInstanceNodePreamble for
 // how a script using them still exports to plain, real-jBPM-runnable text.
-import vm from 'node:vm';
+import { withIsolate, effectiveOverflowMode, sandboxConfig } from './isolate-pool.ts';
 import { executeJava, executeJavaCondition, type ActiveNodeInstance, type PendingAction } from './java-sidecar.ts';
-import { installJsCompat, initVmRealm } from './js-compat.ts';
+import { ISOLATE_RUNTIME_SOURCE } from './isolate-runtime.ts';
 import { acquireScriptSlot } from '../infra/quotas.ts';
+import { coordinator } from '../infra/coordinator.ts';
+import { quotaExceeded } from '../infra/errors.ts';
 
-/** matches real jBPM's org.kie.api.runtime.process.ProcessInstance state constants — see
- *  KContext.ProcessInstance's STATE_* fields (java-runtime) for the Java-dialect twin. */
-export const PROCESS_INSTANCE_STATE = { PENDING: 0, ACTIVE: 1, COMPLETED: 2, ABORTED: 3, SUSPENDED: 4 } as const;
-
-/** this engine's own instance status string -> real jBPM's ProcessInstance.STATE_* int. "waiting"
- *  maps to ACTIVE because real jBPM's top-level instance state doesn't distinguish "active" from
- *  "blocked at a node" — that's a per-node-instance concept, not a whole-instance one. "failed" maps
- *  to ABORTED — real jBPM has no distinct persisted state for an unrecoverable failure. */
-function stateFor(status: string | undefined): number {
-  switch (status) {
-    case 'completed': return PROCESS_INSTANCE_STATE.COMPLETED;
-    case 'aborted': case 'failed': return PROCESS_INSTANCE_STATE.ABORTED;
-    case 'suspended': return PROCESS_INSTANCE_STATE.SUSPENDED;
-    default: return PROCESS_INSTANCE_STATE.ACTIVE; // 'running' | 'waiting' | undefined
+/** Cluster-wide script admission for the corner where more replicas share a workspace than it has script slots
+ *  (a pool can't be split below 1 per replica): a shared Redis slot is taken around the run, waiting up to the queue
+ *  timeout (or failing at once in reject mode) exactly like the local pool would. */
+async function withClusterSlot<T>(tenantId: string | undefined, cap: number | undefined, mode: string | undefined, fn: () => Promise<T>): Promise<T> {
+  if (!tenantId || !cap) return fn();
+  const co = coordinator();
+  const deadline = Date.now() + sandboxConfig().queueTimeoutMs;
+  for (let delay = 5; ; delay = Math.min(delay * 2, 50)) {
+    const release = await co.acquire('script', tenantId, cap);
+    if (release) { try { return await fn(); } finally { await release(); } }
+    if (effectiveOverflowMode(mode) === 'reject') throw quotaExceeded(`per-workspace concurrent script quota exceeded across replicas (max ${cap})`, { quota: 'maxConcurrentScripts', max: cap });
+    if (Date.now() > deadline) throw quotaExceeded(`timed out waiting for a script slot in this workspace (max ${cap} across replicas)`, { quota: 'scriptQueueTimeout', timeoutMs: sandboxConfig().queueTimeoutMs });
+    await new Promise((r) => setTimeout(r, delay));
   }
 }
+
+/** matches real jBPM's org.kie.api.runtime.process.ProcessInstance state constants — see
+ *  KContext.ProcessInstance's STATE_* fields (java-runtime) for the Java-dialect twin. The JS-dialect
+ *  mapping from this engine's status strings lives in isolate-runtime.ts (STATES). */
+/** pool key for callers that carry no tenant (tests/tools) — still its own pool, never a real workspace's. */
+const DEFAULT_POOL = '_no-tenant';
+
+export { setPoolLimits, sandboxStats, configureSandbox, sandboxConfig, resetSandboxPeaks, effectiveScriptConcurrency, effectiveOverflowMode } from './isolate-pool.ts';
+
+export const PROCESS_INSTANCE_STATE = { PENDING: 0, ACTIVE: 1, COMPLETED: 2, ABORTED: 3, SUSPENDED: 4 } as const;
 
 /** everything about the calling instance/node a script/condition might read via kcontext — shared by
  *  ScriptOpts (scripts) and ConditionCtx (conditions) so the two don't drift out of sync. */
@@ -67,90 +79,6 @@ interface KContextInfo {
    *  snapshot built by the caller, not live-queried (matches real jBPM's own Collection-snapshot
    *  semantics for this same method). */
   activeNodeInstances?: ActiveNodeInstance[];
-}
-
-/** builds the same kcontext.getProcessInstance()/.getNodeInstance()/.getKieRuntime() object shapes
- *  for both runScript and evalCondition's js branches — `vars` is the live record so setVariable/
- *  signalEvent-style mutations behave identically to the rest of this engine (write straight through,
- *  no copying). `actions` collects signal/abort calls to resolve after the script/condition returns
- *  (mirrors KContext.java's pendingActions — the caller has no store access mid-script either way). */
-function buildKcontext(vars: Record<string, unknown>, info: KContextInfo, actions: PendingAction[]) {
-  const selfId = info.instanceId == null ? '' : String(info.instanceId);
-  const instance = {
-    getId: () => selfId,
-    getProcessId: () => info.processId,
-    getProcessName: () => info.processName,
-    getCorrelationKey: () => info.correlationKey,
-    getParentProcessInstanceId: () => info.parentInstanceId,
-    getState: () => stateFor(info.state),
-    getVariables: () => vars,
-    getNodeInstances: () => (info.activeNodeInstances || []).map((n) => ({
-      getId: () => n.id, getNodeId: () => n.nodeId, getNodeName: () => n.nodeName ?? '',
-    })),
-    // self-scoped signal — real jBPM's ProcessInstance implements EventListener, so this is
-    // delivered to THIS instance only (see kieRuntime.signalEvent below for the session-wide form).
-    signalEvent: (type: string, event?: unknown) => { actions.push({ kind: 'signal', type, payload: event, targetInstanceId: selfId }); },
-  };
-  const nodeInstance = { getId: () => info.nodeInstanceId ?? '', getNodeId: () => info.nodeId ?? '', getNodeName: () => info.nodeName ?? '' };
-  const envMap: Record<string, any> = { ...(info.env || {}) };
-  const environment = {
-    ...envMap,
-    get: (k: string) => envMap[k] ?? process.env[k] ?? null,
-    set: (k: string, v: unknown) => { envMap[k] = v; if (info.env) info.env[k] = String(v); },
-  };
-  const kieRuntime = {
-    getEnvironment: () => environment,
-    // one function handles both the session-wide broadcast (2 args) and targeted delivery (3 args) —
-    // JS has no method overloading, unlike the Java-dialect twin's two signalEvent overloads.
-    signalEvent: (type: string, event?: unknown, processInstanceId?: string) => {
-      actions.push({ kind: 'signal', type, payload: event, targetInstanceId: processInstanceId });
-    },
-    abortProcessInstance: (processInstanceId: string) => { actions.push({ kind: 'abort', targetInstanceId: processInstanceId }); },
-  };
-  return {
-    getVariable: (n: string) => vars[n],
-    setVariable: (n: string, v: unknown) => { vars[n] = v; },
-    getProcessInstance: () => instance,
-    getNodeInstance: () => nodeInstance,
-    getKieRuntime: () => kieRuntime,
-  };
-}
-
-/** The Node-idiomatic alternative to `kcontext.getProcessInstance()`/`.getNodeInstance()`/
- *  `.getKieRuntime()` — same idea as `vars` vs. `kcontext.getVariable`: real jBPM has no `instance`/
- *  `node` concept, so these are this engine's own additive sugar, NOT jBPM API. Plain properties
- *  instead of getter chains, this engine's own status vocabulary ('running'/'waiting'/'completed'/...)
- *  instead of jBPM's STATE_* ints, and verb-methods for the handful of control actions a script might
- *  need. Backed by the exact same `actions` queue `buildKcontext` uses, so `instance.signal(...)` and
- *  `kcontext.getKieRuntime().signalEvent(...)` resolve identically — pick either per call, freely mixed.
- *  Exporting a script that uses `instance`/`node` prepends a preamble computing the same shape from
- *  real `kcontext` (see bpmn-sdk/src/engine.ts's jsInstanceNodePreamble) so it still runs, unmodified
- *  beyond that preamble, on a real jBPM/KIE server. */
-function buildInstanceGlobal(vars: Record<string, unknown>, info: KContextInfo, actions: PendingAction[]) {
-  const selfId = info.instanceId == null ? '' : String(info.instanceId);
-  return {
-    id: selfId,
-    processId: info.processId,
-    processName: info.processName,
-    correlationKey: info.correlationKey,
-    parentId: info.parentInstanceId,
-    // this engine's own status string, NOT jBPM's STATE_* int (that's still available via
-    // kcontext.getProcessInstance().getState() for anyone who needs the real jBPM constant).
-    state: info.state ?? 'running',
-    variables: vars,
-    activeNodes: (info.activeNodeInstances || []).map((n) => ({ id: n.id, nodeId: n.nodeId, name: n.nodeName ?? '' })),
-    signal: (type: string, payload?: unknown) => { actions.push({ kind: 'signal', type, payload, targetInstanceId: selfId }); },
-    signalOther: (targetInstanceId: string, type: string, payload?: unknown) => { actions.push({ kind: 'signal', type, payload, targetInstanceId }); },
-    broadcast: (type: string, payload?: unknown) => { actions.push({ kind: 'signal', type, payload }); },
-    abort: () => { actions.push({ kind: 'abort', targetInstanceId: selfId }); },
-    abortOther: (targetInstanceId: string) => { actions.push({ kind: 'abort', targetInstanceId }); },
-  };
-}
-
-/** read-only twin of `kcontext.getNodeInstance()` — `id` is the node *instance* (token) id, `nodeId`
- *  the node *definition* id, matching the same distinction `kcontext.getNodeInstance()` makes. */
-function buildNodeGlobal(info: KContextInfo) {
-  return { id: info.nodeInstanceId ?? '', nodeId: info.nodeId ?? '', name: info.nodeName ?? '' };
 }
 
 /** resolves queued signal/abort actions against the real engine, via the callbacks HandlerCtx already
@@ -187,12 +115,24 @@ export interface ScriptOpts extends KContextInfo {
    *  task, HTTP task exit-script) funnel through, so it can't be bypassed by adding a new caller. */
   tenantId?: string;
   maxConcurrentScripts?: number;
+  /** per-workspace override of SCRIPT_OVERFLOW_MODE ('queue' | 'reject'); unset = env default. */
+  scriptOverflowMode?: string;
+  /** max executions allowed to WAIT for a free isolate (resolved from the limits model); unset = pool default. */
+  scriptQueueMax?: number;
+  /** set only when more replicas share the workspace than it has script slots: the workspace-wide cap enforced through Redis */
+  clusterScriptCap?: number;
+  /** admission cap for the `java` dialect only (no pool there): the workspace's explicit request, undefined = unlimited. */
+  javaMaxConcurrent?: number;
 }
 
 export async function runScript(code: string, vars: Record<string, unknown>, timeoutMs: number, opts: ScriptOpts = {}): Promise<void> {
-  const release = opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.maxConcurrentScripts) : undefined;
+  // js: concurrency is governed by the tenant's isolate pool + bounded queue (isolate-pool.ts), which already
+  // enforces maxConcurrentScripts as parallelism. java has no pool (one shared JVM sidecar), so it keeps the
+  // hard-reject admission cap.
+  const release = opts.lang === 'java' && opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.javaMaxConcurrent) : undefined;
   try {
-    await runScriptBody(code, vars, timeoutMs, opts);
+    if (opts.lang === 'java') await withClusterSlot(opts.tenantId, opts.clusterScriptCap, opts.scriptOverflowMode, () => runScriptBody(code, vars, timeoutMs, opts));
+    else await runScriptBody(code, vars, timeoutMs, opts);
   } finally {
     release?.();
   }
@@ -214,66 +154,62 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
     if (opts.onAction) await resolveActions(result.pendingActions, opts.onAction);
     return;
   }
-  const actions: PendingAction[] = [];
-  const kcontext = buildKcontext(vars, opts, actions);
   const log = opts.log || (() => {});
-  // bare-name binding first (spread), THEN the fixed globals — so kcontext/vars/instance/node/env/
-  // console always win over a same-named process variable, matching real jBPM's own bare-name
-  // convention while keeping this engine's reserved globals safe from being shadowed.
-  const safeVars: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(vars)) {
-    if (!RESERVED_SANDBOX_KEYS.has(k)) {
-      safeVars[k] = v;
-    }
-  }
-  const sandbox: Record<string, unknown> = {
-    ...safeVars,
-    kcontext, vars,
-    instance: buildInstanceGlobal(vars, opts, actions),
-    node: buildNodeGlobal(opts),
-    env: { ...(opts.env || {}) },
-    console: { log: (...a: unknown[]) => log(a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ')) },
-  };
-  installJsCompat(sandbox);
-  vm.createContext(sandbox);
-  initVmRealm(sandbox);
-  // snapshot bare-name values BEFORE running, so afterward we can sync back only what a bare-name
-  // ASSIGNMENT actually changed — see the comment below for why this must be change-detected, not
-  // "copy everything back".
-  const before: Record<string, unknown> = {};
-  for (const k of Object.keys(sandbox)) if (!RESERVED_SANDBOX_KEYS.has(k)) before[k] = sandbox[k];
-  // Wrapped in an IIFE so a `var`/`let`/`const` the script declares stays a LOCAL of that function
-  // (never touching the global sandbox object) while an un-declared BARE assignment (`status = x`,
-  // no keyword) still falls through the scope chain to the global object exactly as before — this
-  // is what makes it possible to tell "deliberate bare-name process-variable write" apart from
-  // "scratch local variable": without the wrapper, `var list = new java.util.ArrayList()` is
-  // indistinguishable from `status = "x"` (both land as sandbox properties), and syncing back `list`
-  // too tries to persist a live shim object with methods on it, which isn't serializable — caught by
-  // this file's own test (engine-js-compat.test.ts).
-  vm.runInContext(`(function(){\n${code}\n})()`, sandbox, { timeout: timeoutMs });
-  // Sync bare-name writes back into `vars` — but ONLY keys whose sandbox value actually changed (or
-  // is brand new), never unconditionally: a DECLARED variable's value already sitting in `sandbox`
-  // (from the initial spread) is a snapshot, separate from `vars` itself. If the script instead used
-  // kcontext.setVariable(name, v) for that same name, that call writes `vars[name]` directly — while
-  // `sandbox[name]` stays at its untouched, now-stale snapshot value. Copying it back unconditionally
-  // would silently clobber the fresh kcontext write with the stale one (caught by an existing test:
-  // engine-flow.test.ts's `kcontext.setVariable("greeted", true)` on a variable declared as `bool`).
-  for (const k of Object.keys(sandbox)) {
-    if (RESERVED_SANDBOX_KEYS.has(k)) continue;
-    if (typeof sandbox[k] === 'function') continue;
-    if (!(k in before) || !Object.is(sandbox[k], before[k])) vars[k] = sandbox[k];
-  }
-  if (opts.onAction) await resolveActions(actions, opts.onAction);
+  const r = await runJsInIsolate(code, 'script', vars, opts, timeoutMs, opts.env, log);
+  for (const line of r.logs) log(line);
+  if (opts.onAction) await resolveActions(r.actions, opts.onAction);
 }
 
-const RESERVED_SANDBOX_KEYS = new Set([
-  'kcontext', 'vars', 'instance', 'node', 'env', 'console',
-  'Java', 'java', 'System', 'KieFunctions', 'org', 'com', 'makeJacksonNode',
-  'Boolean', 'String', 'Number', 'Object', 'Array', 'Integer', 'Long', 'Double', 'Float',
-  'Error', 'Date', 'Math', 'JSON', 'RegExp', 'Map', 'Set', 'Promise', 'Function',
-  'Symbol', 'Reflect', 'Proxy', 'isNaN', 'isFinite', 'parseInt', 'parseFloat',
-  'encodeURI', 'encodeURIComponent', 'decodeURI', 'decodeURIComponent', 'eval',
-]);
+/** Evaluates a single JS expression with `params` as bare-name globals in the same isolate sandbox (used by the
+ *  `Compute` work item). Returns the JSON-serialisable result. */
+export async function evalExpression(expr: string, params: Record<string, unknown>, timeoutMs = 1000, tenantId?: string): Promise<unknown> {
+  const r = await runJsInIsolate(expr, 'expression', { ...params }, { tenantId }, timeoutMs);
+  return typeof r.value === 'string' ? JSON.parse(r.value) : undefined;
+}
+
+interface IsolateResult { value: unknown; logs: string[]; actions: PendingAction[] }
+
+const MAX_RESULT_BYTES = 8 * 1024 * 1024;
+
+/** Runs js `code` in a pooled, tenant-private isolate (isolate-pool.ts) with a FRESH context per call, so no
+ *  cross-tenant or cross-run state survives:
+ *  vars/env/info go in as JSON text, the new vars / console lines / queued signal-abort actions come back as
+ *  JSON text. Synchronous script semantics are unchanged; the isolate has no Node APIs at all, so
+ *  `this.constructor.constructor('return process')()` etc. simply resolve to `undefined`.
+ *  mode 'script' runs `code` as a statement body (bare-name writes sync back into `vars`);
+ *  mode 'condition' evaluates it as a boolean expression / body with `return`. */
+async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number; scriptOverflowMode?: string; scriptQueueMax?: number; clusterScriptCap?: number }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
+  const { env, tenantId, maxConcurrentScripts, scriptOverflowMode, scriptQueueMax, clusterScriptCap, ...rest } = info;
+  const input = JSON.stringify({ vars, env: env || {}, info: rest });
+  return withClusterSlot(tenantId, clusterScriptCap, scriptOverflowMode, () => withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, effectiveOverflowMode(scriptOverflowMode), scriptQueueMax, async (isolate, context) => {
+    await context.global.set('__input', input);
+    await (await isolate.compileScript('__setup(__input); delete globalThis.__input;')).run(context, { timeout: timeoutMs });
+    // IIFE so var/let/const stay local while a bare assignment still lands on the global (see bare-name sync).
+    const body = mode === 'condition' ? (/return\b/.test(code) ? code : `return (${code});`) : code;
+    // only a boolean / string / undefined ever crosses back (never an object), so `copy` can't be abused.
+    const wrapped = mode === 'expression' ? `JSON.stringify((function(){ return (${body}\n); })())`
+      : mode === 'condition' ? `!!(function(){\n${body}\n})()` : `void (function(){\n${body}\n})()`;
+    let value: unknown;
+    try {
+      value = await (await isolate.compileScript(wrapped)).run(context, { timeout: timeoutMs, copy: true });
+    } catch (e) {
+      // best effort: surface console output produced before the failure (not possible after an OOM disposal)
+      try {
+        const lines = JSON.parse(await (await isolate.compileScript('__logs()')).run(context, { timeout: 100 })) as string[];
+        for (const l of lines) onLog?.(l);
+      } catch { /* isolate gone */ }
+      throw e;
+    }
+    const raw = await (await isolate.compileScript('__collect()')).run(context, { timeout: timeoutMs });
+    if (typeof raw !== 'string' || raw.length > MAX_RESULT_BYTES) throw new Error('script result missing or too large');
+    const out = JSON.parse(raw) as { vars: Record<string, unknown>; logs: string[]; actions: PendingAction[]; env: Record<string, string> };
+    // write back in place (callers hold the `vars` object): replace content, honoring deletions.
+    for (const k of Object.keys(vars)) if (!(k in out.vars)) delete vars[k];
+    Object.assign(vars, out.vars);
+    if (hostEnv) Object.assign(hostEnv, out.env);
+    return { value, logs: out.logs, actions: out.actions };
+  }));
+}
 
 /** deployment/instance context for a condition — same shape ScriptOpts carries for scripts, kept
  *  separate since a condition doesn't take the full ScriptOpts bag (no log sink). Conditions CAN
@@ -282,6 +218,12 @@ const RESERVED_SANDBOX_KEYS = new Set([
  *  condition silently drops the queued action, matching how the java-dialect condition path already
  *  behaves (conditions aren't expected to have side effects, but nothing stops a script author). */
 export interface ConditionCtx extends KContextInfo {
+  /** workspace whose isolate pool runs the condition (never shared across tenants). */
+  tenantId?: string;
+  maxConcurrentScripts?: number;
+  scriptOverflowMode?: string;
+  scriptQueueMax?: number;
+  clusterScriptCap?: number;
   onAction?: ScriptOpts['onAction'];
 }
 
@@ -308,27 +250,16 @@ export async function evalCondition(expr: string | undefined, lang: string | und
   }
   // kcontext was previously missing from JS conditions entirely — a real gap, since real jBPM's
   // ProcessContext is available in every script/condition, not just scripts.
-  const actions: PendingAction[] = [];
-  const kcontext = buildKcontext(vars, ctx, actions);
-  const safeVars: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(vars)) {
-    if (!RESERVED_SANDBOX_KEYS.has(k)) {
-      safeVars[k] = v;
-    }
-  }
-  const sandbox: Record<string, unknown> = {
-    ...safeVars, kcontext, vars,
-    instance: buildInstanceGlobal(vars, ctx, actions),
-    node: buildNodeGlobal(ctx),
-    env: { ...(ctx.env || {}) },
-  };
-  installJsCompat(sandbox);
-  vm.createContext(sandbox);
-  initVmRealm(sandbox);
   try {
-    const body = /return\b/.test(expr) ? expr : `return (${expr});`;
-    const result = !!vm.runInContext(`(function(){ ${body} })()`, sandbox, { timeout: timeoutMs });
-    if (ctx.onAction) await resolveActions(actions, ctx.onAction);
+    const { onAction, ...info } = ctx;
+    // conditions get a throwaway copy of vars: a condition is not expected to have side effects on process state.
+    const r = await runJsInIsolate(expr, 'condition', { ...vars }, info, timeoutMs, undefined);
+    const result = !!r.value;
+    if (onAction) await resolveActions(r.actions, onAction);
     return result;
-  } catch { return false; }
+  } catch (e) {
+    // a full/slow script queue is an infrastructure condition, not a 'false' — don't silently misroute the flow
+    if ((e as { code?: string }).code === 'QUOTA_EXCEEDED') throw e;
+    return false;
+  }
 }

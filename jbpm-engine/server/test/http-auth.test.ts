@@ -88,7 +88,7 @@ test('GET /auth/me returns the caller\'s identity and resolved permissions, and 
   const body = await res.json() as any;
   assert.strictEqual(body.user.username, 'viewer-vic');
   assert.deepStrictEqual(body.user.roles, ['viewer']);
-  assert.deepStrictEqual(body.permissions.sort(), ['query:read', 'workflow:view'].sort());
+  assert.deepStrictEqual(body.permissions.sort(), ['query:read', 'team:read', 'workflow:view'].sort());
 });
 
 test('the admin role can create a workflow end-to-end over real HTTP', async () => {

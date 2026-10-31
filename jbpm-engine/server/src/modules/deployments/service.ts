@@ -6,6 +6,8 @@ import { conflict, notFound, validation } from '../../infra/errors.ts';
 import { computeDue } from '../../engine/duration.ts';
 import { NotificationService } from '../notifications/service.ts';
 
+import { enforceDeploy } from '../plans/plans.ts';
+
 export class DeploymentService {
   constructor(private ctx: AppContext) {}
   private dp() { return this.ctx.store.repo<Deployment>(Collections.deployments); }
@@ -41,6 +43,7 @@ export class DeploymentService {
     if (v.state !== 'published') throw conflict('only published versions can be deployed');
     const environment = (input.environment || '').trim();
     if (!environment) throw validation('environment is required');
+    await enforceDeploy(this.ctx);               // plan: expiry + maxDeployments
 
     const dep: Deployment = {
       id: this.ctx.newId(), tenantId: this.ctx.tenantId, workflowId: v.workflowId, versionId: v.id, branchId: v.branchId,

@@ -54,3 +54,23 @@ Phase 0 (docs + scaffold) and the Phase 1/2 foundation are in place:
 
 See [`docs/10-checklist.md`](./docs/10-checklist.md) for exactly what's done vs. pending, and
 [`docs/11-roadmap.md`](./docs/11-roadmap.md) for the phased plan.
+
+## Docker (production)
+
+The engine API ships as one image **with a JDK** (needed by the Java script dialect, which compiles scripts with `javac`
+at runtime) and the precompiled JVM sidecar. The build context is the repository root:
+
+```bash
+docker build -f jbpm-engine/Dockerfile -t orkestr-engine .
+docker run -p 4000:4000 -v orkestr-data:/data \
+  -e STORE=pg -e PG_URL=postgresql://user:pass@db:5432/jbpm \
+  -e JWT_SECRET="$(openssl rand -hex 24)" -e ADMIN_INITIAL_PASSWORD='<strong password>' \
+  -e DASHBOARD_URL=https://orkestr.example.com orkestr-engine
+```
+
+- `NODE_ENV=production` is set in the image: the server **refuses to start** on a default `JWT_SECRET` / admin password
+  (see `docs/usage_docs/02-configuration.md` for every variable, incl. OIDC, SMTP and the script-pool limits).
+- The image build **fails** if the JVM sidecar classes were not produced (the `build:sidecar` npm step otherwise skips
+  silently when `javac` is missing).
+- The Angular app is not in this image: serve `jbpm-engine/app` from any static host and proxy `/api` and `/ws` to port 4000.
+- Health check: `GET /api/health`. Runs as the non-root `node` user; the sidecar JVM is capped at 25% of container memory.

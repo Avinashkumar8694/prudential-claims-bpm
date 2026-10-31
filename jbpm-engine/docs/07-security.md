@@ -16,8 +16,61 @@
 - **AuthN**: `POST /auth/login` (username/password) → JWT (`sub`, `username`, `roles`, `groups`, 12h
   expiry, HS256 via `jsonwebtoken`). Passwords are scrypt-hashed (`infra/auth.ts`), never returned by
   any API. `requireAuth` (`http/auth-middleware.ts`) verifies the `Authorization: Bearer <token>` on
-  every route except `/health` and `/auth/login` — there is no trust-any header anymore. OIDC/SAML
-  remain a future pluggable AuthN source, not built.
+  every route except `/health`, `/auth/login`, `/auth/config` and `/auth/oidc/*` — there is no
+  trust-any header anymore.
+  **Single sign-on** (same Identity Server contract as `zero-payment-ms`): `GET /auth/oidc/login` →
+  IdP (authorization code + **PKCE S256**, `state`, `nonce`; `client_secret_basic` at the token
+  endpoint; the transaction lives in a signed HttpOnly `oidc_tx` cookie) → `GET /auth/oidc/callback`
+  → SPA `/auth/callback` with the tokens in the URL **fragment**. Bearer tokens are verified against
+  the issuer's JWKS (`infra/oidc.ts`): asymmetric algorithms only, `iss`/`aud`/`exp` enforced, fail
+  closed. HS256 is accepted only for tokens this server signed itself (local login). See
+  `usage_docs/02-configuration.md` for the `OIDC_*`/`IDS_*` variables.
+- **Workspaces (multi-tenancy)**: every request is scoped by `x-tenant-id` and the caller must be an
+  **active member** of that workspace (`requireWorkspaceAccess`), else 403 — an explicit workspace is
+  never silently swapped. The ONE platform administrator, `arjunkumargupta108@gmail.com` (`PLATFORM_ADMIN_EMAIL` in `infra/config.ts`, fixed in code, always seeded as `system_admin` of the default workspace, recognised on a *verified* SSO email), may use any workspace and the `all` platform view; nobody else can — not a `system_admin` role on another seat, not the first member, not the local `admin`. A membership created ahead of time
+  (signup, invitation, the platform-admin seed) carries a placeholder `userId` and is **bound to the
+  caller's `sub` on the first sign-in with that email *verified*** (`modules/tenants/identity.ts`);
+  a bound seat is never re-bound, an email alone never matches. With SSO on, `POST /tenants/signup`
+  requires sign-in and makes the caller the owner. Workspace roles map to permissions through the
+  workspace's own `Role` rows, falling back to `DEFAULT_ROLES`. WebSockets are bound to one workspace
+  and can only subscribe to that workspace's instances; the timer scheduler fires per workspace.
+  Production start-up refuses weak defaults (`assertProductionConfig`).
+- **Script sandbox**: `js` script tasks, flow conditions and the `Compute` work item run in `isolated-vm` V8 isolates
+  (64 MB heap cap, hard wall-clock timeout, no Node APIs, no host objects — only JSON crosses the boundary).
+  Prototype-chain escapes resolve to `undefined`; the host environment (secrets) is unreadable (`System.getenv`/
+  `Environment.get` see only the instance `env`). Isolates come from a **bounded pool keyed by workspace**
+  (`src/engine/isolate-pool.ts`): an isolate is never shared across workspaces and runs one execution at a time;
+  **every execution gets a fresh context** (new global scope/realm) so no `globalThis` write or prototype pollution
+  survives into the next script. Effective concurrency (= pool size) = min(workspace `scriptPoolSize` (alias `maxConcurrentScripts`), per-workspace cap, global cap), default `scriptPoolDefaultSize`;
+  at that limit the overflow mode decides: `queue` (default) waits in a bounded per-workspace FIFO queue
+  (`SCRIPT_QUEUE_MAX`, `SCRIPT_QUEUE_TIMEOUT_MS` → `QUOTA_EXCEEDED`), `reject` refuses immediately with
+  `QUOTA_EXCEEDED` — platform default `scriptOverflowModeDefault` (env `SCRIPT_OVERFLOW_MODE`), overridable per workspace
+  via `scriptOverflowMode` unless the platform admin locked it. Counters/queues are per pod (limit × pods in a
+  multi-pod deployment).
+  **Who may change limits:** the caps are platform-admin-only (`/api/platform/*`, 403 for every workspace role, local admin and
+  every other SSO user). A workspace admin can only set values *within* the caps (422 otherwise, `0 = unlimited` refused when
+  capped, non-workspace keys refused), so a self-registered workspace owner cannot lift `maxConcurrentScripts`,
+  `maxActiveInstances` or `maxActiveTimers` to defeat platform protection. See usage_docs/02-configuration.md → *Platform limits*.
+  a global ceiling (`SCRIPT_MAX_ISOLATES`) with round-robin fairness stops one workspace starving others, and an isolate
+  is recycled after a timeout/OOM/`SCRIPT_ISOLATE_MAX_RUNS` and evicted after `SCRIPT_ISOLATE_IDLE_MS` idle.
+  `acquireScriptSlot` remains a hard-reject admission cap used only for the `java` sidecar (no pool there); `js` never
+  touches it, so nothing is counted twice.
+  Covered by EXE-91/91b/91c/91d and POOL-1…6; `sandboxStats()` exposes counters. `java` scripts run in the JVM sidecar.
+- **Task ownership**: once claimed, a task can be completed/saved/released/delegated/forwarded only by its owner, its
+  business admin, or a workspace owner/admin; a task held by someone else cannot be claimed.
+- **Team management** (same model as `zero-payment-ms`'s TeamService; `modules/tenants/team.ts`,
+  `http/team-routes.ts`, UI at `/team`): exactly one **owner** per workspace, **admins**, and role-based
+  members (built-in roles + the workspace's own `Role` rows). `POST /team/members/invite` (`team:invite`)
+  creates an `invited` seat with a single-use 7-day token (stored hashed; there is no mail transport, so the
+  link is returned to the inviter). The invitee signs in and `POST /team/invitations/accept`s — their
+  *verified* email must equal the invited one. `canManage`: nobody manages themselves, nobody touches the
+  owner except via `POST /team/ownership/transfer` (owner only, to an active member; the old owner becomes
+  admin), admins cannot manage or mint admins, the platform-admin seat is untouchable, `POST /team/leave`
+  for everyone but the owner. Permissions: `team:read` (all roles), `team:invite`, `team:manage` (owner/admin).
+- **Verification**: `test/rbac-matrix.test.ts` runs every route × every role × every scope (no token,
+  non-member, suspended, other workspace, `all`, local admin) and checks the UI's permission list equals
+  the server's; `test/tenant-isolation.test.ts` probes every id-addressed route with another workspace's
+  ids; `test/team.test.ts` and `test/oidc-sso.test.ts` cover team rules and SSO.
 - **AuthZ**: RBAC with roles `admin`, `author`, `release`, `operator`, `worker`, `viewer`, seeded on
   first boot (`modules/iam/service.ts`'s `DEFAULT_ROLES`) — each a named `Role` row carrying a
   `permissions: string[]` list (real, editable rows, not a hardcoded enum). Every route declares its
@@ -50,8 +103,7 @@
 
 ## 4. Script & expression sandboxing
 
-- Only `js` runs. Executed in an isolated context (`node:vm` with a frozen shim, or `isolated-vm` in
-  prod) exposing **only** `kcontext` (get/setVariable) and a safe stdlib subset. **No** `require`,
+- Only `js` runs. Executed in a per-execution `isolated-vm` isolate exposing **only** `kcontext` (get/setVariable) and a safe stdlib subset. **No** `require`,
   `process`, `fs`, network, globals, or prototype escape.
 - **Limits**: wall-clock timeout (e.g. 2 s), memory cap, no async I/O from scripts. Timeout → node
   fails with `SCRIPT_TIMEOUT` (retryable).

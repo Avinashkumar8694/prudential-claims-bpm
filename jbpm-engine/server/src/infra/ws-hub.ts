@@ -7,14 +7,17 @@ interface Sub { ws: WebSocket; topics: Set<string>; }
 export class WsHub {
   private subs = new Set<Sub>();
 
-  add(ws: WebSocket): Sub {
+  /** `canSubscribe` (optional) vetoes topics per socket — see ws-auth.ts's tenant scoping. */
+  add(ws: WebSocket, canSubscribe?: (topic: string) => Promise<boolean>): Sub {
     const sub: Sub = { ws, topics: new Set() };
     this.subs.add(sub);
     ws.on('close', () => this.subs.delete(sub));
-    ws.on('message', (raw) => {
+    ws.on('message', async (raw) => {
       try {
         const msg = JSON.parse(String(raw));
-        if (msg.op === 'sub' && Array.isArray(msg.topics)) for (const t of msg.topics) sub.topics.add(t);
+        if (msg.op === 'sub' && Array.isArray(msg.topics)) {
+          for (const t of msg.topics) if (typeof t === 'string' && (!canSubscribe || await canSubscribe(t))) sub.topics.add(t);
+        }
         if (msg.op === 'unsub' && Array.isArray(msg.topics)) for (const t of msg.topics) sub.topics.delete(t);
       } catch { /* ignore malformed */ }
     });

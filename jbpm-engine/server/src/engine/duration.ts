@@ -15,6 +15,12 @@ export function parseCycleRepeatCount(cycle: string): number | null {
   return m[1] ? Number(m[1]) : null;
 }
 
+export function parseCycle(cycle: string): { count: number | null; ms: number } {
+  const count = parseCycleRepeatCount(cycle);
+  const period = cycle.split('/').slice(1).join('/') || cycle;
+  return { count, ms: parseDuration(period) };
+}
+
 /** Next fire time (ISO) from a timer spec (duration | cycle | date), given now (ISO). */
 export function computeDue(timer: any, nowIso: string): string {
   const nowMs = Date.parse(nowIso);
