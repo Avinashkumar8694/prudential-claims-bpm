@@ -31,10 +31,10 @@ const WS_FIELDS: Array<keyof WorkspaceLimitOverride> = ['scriptPoolDefaultSize',
           <h3>Global defaults & caps</h3>
           @for (f of fields; track f.key) {
             <div class="setting-row"><div class="lbl">{{ f.label }}<span class="shint">{{ f.hint }}</span></div>
-              <input type="number" min="0" [ngModel]="limits[f.key]" (ngModelChange)="limits[f.key] = $event" style="width:110px;" /></div>
+              <input type="number" min="0" [ngModel]="limits[f.key]" (ngModelChange)="setG(f.key, $event)" style="width:110px;" /></div>
           }
           <div class="setting-row"><div class="lbl">Default overflow mode<span class="shint">Queue: wait for a slot. Reject: fail immediately.</span></div>
-            <select [ngModel]="limits.scriptOverflowModeDefault" (ngModelChange)="limits.scriptOverflowModeDefault = $event" style="width:120px;"><option value="queue">Queue</option><option value="reject">Reject</option></select></div>
+            <select [ngModel]="limits.scriptOverflowModeDefault" (ngModelChange)="setG('scriptOverflowModeDefault', $event)" style="width:120px;"><option value="queue">Queue</option><option value="reject">Reject</option></select></div>
           <div class="actions"><button class="btn primary" (click)="saveGlobal()">Save global limits</button></div>
         </section>
       }
@@ -99,6 +99,7 @@ export class PlatformLimitsComponent implements OnInit, OnDestroy {
   }
   ngOnDestroy() { clearInterval(this.timer); }
   refresh() { this.api.usage().subscribe({ next: (u) => this.usage.set(u), error: () => {} }); }
+  setG(key: keyof PlatformLimits, value: unknown) { this.g.update((cur) => (cur ? ({ ...cur, [key]: value } as PlatformLimits) : cur)); }
   saveGlobal() {
     this.api.putLimits(this.g()!).subscribe({ next: (r) => { this.g.set({ ...r.limits }); this.toast.success('Platform limits saved and applied live'); this.refresh(); }, error: (e) => this.toast.error(e?.error?.error?.message || 'Could not save') });
   }
