@@ -16,6 +16,12 @@ Configuration lives in two layers: **environment variables** (deployment-time, r
 | `ADMIN_INITIAL_PASSWORD` | `admin-change-me` | Password for the one-time seeded `admin` user (only used if no users exist yet at boot) |
 | `INTEGRATION_BASE_URL` / per-deployment `INTEGRATION_LAYER_URL` | `http://localhost:3000` | Base URL an HTTP service task's *relative* `url` is appended to — see the [HTTP / Service Task](nodes/http-service.md) node doc. Deployment-level `env.INTEGRATION_LAYER_URL` (set at deploy time) overrides the global default per environment |
 | `SCRIPT_TIMEOUT_MS` | `2000` | Wall-clock budget for a `js` script task/condition before it fails with `SCRIPT_TIMEOUT` |
+| `SCRIPT_POOL_DEFAULT_SIZE` | `4` | Per-workspace script parallelism (isolates) when the workspace has no `maxConcurrentScripts` quota. Effective size = clamp(`maxConcurrentScripts` \|\| this, 1, 16) |
+| `SCRIPT_MAX_ISOLATES` | `max(8, 2×CPU cores)` | Global ceiling on live script isolates across all workspaces (≈64 MB heap cap each). At the ceiling, waiting workspaces are served round-robin and may reclaim another workspace's *idle* isolate |
+| `SCRIPT_QUEUE_MAX` | `1000` | Max script executions waiting per workspace when all its isolates are busy; one more → `QUOTA_EXCEEDED` |
+| `SCRIPT_QUEUE_TIMEOUT_MS` | `5000` | Max time an execution may wait in the queue before failing with `QUOTA_EXCEEDED` (does not count toward `SCRIPT_TIMEOUT_MS`) |
+| `SCRIPT_ISOLATE_IDLE_MS` | `60000` | An idle isolate is disposed after this long (the pool shrinks to zero when a workspace goes quiet) |
+| `SCRIPT_ISOLATE_MAX_RUNS` | `1000` | An isolate is recycled after this many executions (also recycled after a timeout, OOM, or near-full heap) |
 | `WS_PATH` | `/ws` | WebSocket path for live UI updates (node/task/instance events) |
 | `DEFAULT_TENANT` | `default` | The workspace a request resolves to when it sends no `x-tenant-id` (the caller still has to be a member) |
 | `OIDC_ISSUER` (alias `IDS_ISSUER_URL`) | *(unset = SSO off)* | Identity Server issuer, e.g. `https://ids.fabrixly.com/oidc` (discovery at `/.well-known/openid-configuration`). Must be https in production |

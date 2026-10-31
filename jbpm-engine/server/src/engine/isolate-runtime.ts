@@ -14,6 +14,9 @@ export const ISOLATE_RUNTIME_SOURCE = String.raw`
   var def = function (proto, prop, val) {
     try { if (proto && !proto[prop]) defHidden(proto, prop, val); } catch (e) { /* sealed */ }
   };
+  // captured before any user code runs (the snapshot is taken here), so a script that clobbers these globals
+  // can only break its own run, never the result extraction.
+  var stringify = JSON.stringify, objKeys = Object.keys, ownNames = Object.getOwnPropertyNames;
   var truthyStr = function (v) { var s = String(v).trim().toLowerCase(); return s === 'true' || s === '1'; };
 
   // ---------------------------------------------------------------- Jackson / org.json / java.util shims
@@ -327,19 +330,19 @@ export const ISOLATE_RUNTIME_SOURCE = String.raw`
       bound[k] = vars[k];
     });
     var baseline = {};
-    Object.getOwnPropertyNames(G).forEach(function (k) { baseline[k] = true; });
+    ownNames(G).forEach(function (k) { baseline[k] = true; });
 
     // collect(): the result is whatever the script left in vars (+ changed/new bare-name globals), as JSON.
     defHidden(G, '__collect', function () {
       var out = {};
-      Object.keys(vars).forEach(function (k) { out[k] = vars[k]; });
-      Object.keys(G).forEach(function (k) {
+      objKeys(vars).forEach(function (k) { out[k] = vars[k]; });
+      objKeys(G).forEach(function (k) {
         if (typeof G[k] === 'function') return;
         if (hasOwn.call(bound, k)) { if (!Object.is(G[k], bound[k])) out[k] = G[k]; return; }
         if (baseline[k]) return;
         out[k] = G[k];
       });
-      return JSON.stringify({ vars: out, logs: logLines, actions: actions, env: envDirty });
+      return stringify({ vars: out, logs: logLines, actions: actions, env: envDirty });
     });
     defHidden(G, '__logs', function () { return JSON.stringify(logLines); });
   }

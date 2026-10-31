@@ -26,7 +26,7 @@
 // don't want to think in jBPM terms even for process/node introspection, not just variables. See
 // buildInstanceGlobal/buildNodeGlobal below, and bpmn-sdk/src/engine.ts's jsInstanceNodePreamble for
 // how a script using them still exports to plain, real-jBPM-runnable text.
-import ivm from 'isolated-vm';
+import { withIsolate } from './isolate-pool.ts';
 import { executeJava, executeJavaCondition, type ActiveNodeInstance, type PendingAction } from './java-sidecar.ts';
 import { ISOLATE_RUNTIME_SOURCE } from './isolate-runtime.ts';
 import { acquireScriptSlot } from '../infra/quotas.ts';
@@ -34,6 +34,11 @@ import { acquireScriptSlot } from '../infra/quotas.ts';
 /** matches real jBPM's org.kie.api.runtime.process.ProcessInstance state constants — see
  *  KContext.ProcessInstance's STATE_* fields (java-runtime) for the Java-dialect twin. The JS-dialect
  *  mapping from this engine's status strings lives in isolate-runtime.ts (STATES). */
+/** pool key for callers that carry no tenant (tests/tools) — still its own pool, never a real workspace's. */
+const DEFAULT_POOL = '_no-tenant';
+
+export { sandboxStats, configureSandbox, sandboxConfig } from './isolate-pool.ts';
+
 export const PROCESS_INSTANCE_STATE = { PENDING: 0, ACTIVE: 1, COMPLETED: 2, ABORTED: 3, SUSPENDED: 4 } as const;
 
 /** everything about the calling instance/node a script/condition might read via kcontext — shared by
@@ -95,7 +100,10 @@ export interface ScriptOpts extends KContextInfo {
 }
 
 export async function runScript(code: string, vars: Record<string, unknown>, timeoutMs: number, opts: ScriptOpts = {}): Promise<void> {
-  const release = opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.maxConcurrentScripts) : undefined;
+  // js: concurrency is governed by the tenant's isolate pool + bounded queue (isolate-pool.ts), which already
+  // enforces maxConcurrentScripts as parallelism. java has no pool (one shared JVM sidecar), so it keeps the
+  // hard-reject admission cap.
+  const release = opts.lang === 'java' && opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.maxConcurrentScripts) : undefined;
   try {
     await runScriptBody(code, vars, timeoutMs, opts);
   } finally {
@@ -127,48 +135,32 @@ async function runScriptBody(code: string, vars: Record<string, unknown>, timeou
 
 /** Evaluates a single JS expression with `params` as bare-name globals in the same isolate sandbox (used by the
  *  `Compute` work item). Returns the JSON-serialisable result. */
-export async function evalExpression(expr: string, params: Record<string, unknown>, timeoutMs = 1000): Promise<unknown> {
-  const r = await runJsInIsolate(expr, 'expression', { ...params }, {}, timeoutMs);
+export async function evalExpression(expr: string, params: Record<string, unknown>, timeoutMs = 1000, tenantId?: string): Promise<unknown> {
+  const r = await runJsInIsolate(expr, 'expression', { ...params }, { tenantId }, timeoutMs);
   return typeof r.value === 'string' ? JSON.parse(r.value) : undefined;
 }
 
 interface IsolateResult { value: unknown; logs: string[]; actions: PendingAction[] }
 
-// Hard ceilings, independent of the caller's timeout: a script can't ask for more.
-const ISOLATE_MEMORY_MB = 64;
 const MAX_RESULT_BYTES = 8 * 1024 * 1024;
 
-let snapshot: ivm.ExternalCopy<ArrayBuffer> | null | undefined;
-/** The runtime is parsed/run once into a V8 startup snapshot; every execution then boots a fresh isolate
- *  from it (≈1ms) instead of re-evaluating ~300 lines of shims. Falls back to plain eval if snapshots fail. */
-function getSnapshot(): ivm.ExternalCopy<ArrayBuffer> | null {
-  if (snapshot === undefined) {
-    try { snapshot = ivm.Isolate.createSnapshot([{ code: ISOLATE_RUNTIME_SOURCE }]); } catch { snapshot = null; }
-  }
-  return snapshot;
-}
-
-/** Runs js `code` in a brand-new isolate per call (never reused, so no cross-tenant or cross-run state):
+/** Runs js `code` in a pooled, tenant-private isolate (isolate-pool.ts) with a FRESH context per call, so no
+ *  cross-tenant or cross-run state survives:
  *  vars/env/info go in as JSON text, the new vars / console lines / queued signal-abort actions come back as
  *  JSON text. Synchronous script semantics are unchanged; the isolate has no Node APIs at all, so
  *  `this.constructor.constructor('return process')()` etc. simply resolve to `undefined`.
  *  mode 'script' runs `code` as a statement body (bare-name writes sync back into `vars`);
  *  mode 'condition' evaluates it as a boolean expression / body with `return`. */
-async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
-  const snap = getSnapshot();
-  const isolate = new ivm.Isolate({ memoryLimit: ISOLATE_MEMORY_MB, ...(snap ? { snapshot: snap } : {}) });
-  let context: ivm.Context | undefined;
-  try {
-    context = await isolate.createContext();
-    if (!snap) await (await isolate.compileScript(ISOLATE_RUNTIME_SOURCE)).run(context);
-    const { env, ...rest } = info;
-    const input = JSON.stringify({ vars, env: env || {}, info: rest });
+async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
+  const { env, tenantId, maxConcurrentScripts, ...rest } = info;
+  const input = JSON.stringify({ vars, env: env || {}, info: rest });
+  return withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, async (isolate, context) => {
     await context.global.set('__input', input);
     await (await isolate.compileScript('__setup(__input); delete globalThis.__input;')).run(context, { timeout: timeoutMs });
     // IIFE so var/let/const stay local while a bare assignment still lands on the global (see bare-name sync).
-    const body = mode !== 'script' && mode !== 'condition' ? code : mode === 'condition' ? (/return\b/.test(code) ? code : `return (${code});`) : code;
+    const body = mode === 'condition' ? (/return\b/.test(code) ? code : `return (${code});`) : code;
     // only a boolean / string / undefined ever crosses back (never an object), so `copy` can't be abused.
-    const wrapped = mode === 'expression' ? `JSON.stringify((function(){ return (${code}\n); })())`
+    const wrapped = mode === 'expression' ? `JSON.stringify((function(){ return (${body}\n); })())`
       : mode === 'condition' ? `!!(function(){\n${body}\n})()` : `void (function(){\n${body}\n})()`;
     let value: unknown;
     try {
@@ -189,10 +181,7 @@ async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expr
     Object.assign(vars, out.vars);
     if (hostEnv) Object.assign(hostEnv, out.env);
     return { value, logs: out.logs, actions: out.actions };
-  } finally {
-    try { context?.release(); } catch { /* already gone */ }
-    if (!isolate.isDisposed) isolate.dispose();
-  }
+  });
 }
 
 /** deployment/instance context for a condition — same shape ScriptOpts carries for scripts, kept
@@ -202,6 +191,9 @@ async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expr
  *  condition silently drops the queued action, matching how the java-dialect condition path already
  *  behaves (conditions aren't expected to have side effects, but nothing stops a script author). */
 export interface ConditionCtx extends KContextInfo {
+  /** workspace whose isolate pool runs the condition (never shared across tenants). */
+  tenantId?: string;
+  maxConcurrentScripts?: number;
   onAction?: ScriptOpts['onAction'];
 }
 
@@ -235,5 +227,9 @@ export async function evalCondition(expr: string | undefined, lang: string | und
     const result = !!r.value;
     if (onAction) await resolveActions(r.actions, onAction);
     return result;
-  } catch { return false; }
+  } catch (e) {
+    // a full/slow script queue is an infrastructure condition, not a 'false' — don't silently misroute the flow
+    if ((e as { code?: string }).code === 'QUOTA_EXCEEDED') throw e;
+    return false;
+  }
 }

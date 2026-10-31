@@ -106,19 +106,14 @@ test('acquireScriptSlot enforces the concurrent-script quota and releases cleanl
   release4(); release5();
 });
 
-test('runScript honors maxConcurrentScripts when a slot is already held for that tenant', async () => {
+test('acquireScriptSlot still hard-rejects at its cap (used for the java sidecar); js runs treat maxConcurrentScripts as pool size and queue instead', async () => {
   const held = acquireScriptSlot('t1', 1);
-  await assert.rejects(
-    () => runScript('vars.x = 1;', {}, 1000, { tenantId: 't1', maxConcurrentScripts: 1 }),
-    /QUOTA_EXCEEDED|quota/i,
-  );
+  await assert.rejects(() => runScript('1', {}, 1000, { tenantId: 't1', maxConcurrentScripts: 1, lang: 'java' }), /QUOTA_EXCEEDED|quota/i);
+  assert.throws(() => acquireScriptSlot('t1', 1), /quota/i);
   held();
-  const vars: Record<string, unknown> = {};
-  await runScript('vars.x = 1;', vars, 1000, { tenantId: 't1', maxConcurrentScripts: 1 });
-  assert.strictEqual(vars.x, 1, 'succeeds once the slot is free, and the slot is released afterward');
-  // the slot from the successful run above must have been released — a follow-up run isn't blocked
-  await runScript('vars.x = 2;', vars, 1000, { tenantId: 't1', maxConcurrentScripts: 1 });
-  assert.strictEqual(vars.x, 2);
+  // js with quota 1: three concurrent runs all succeed (serialised through one isolate), none rejected
+  const vs = await Promise.all([1, 2, 3].map(async (n) => { const v: Record<string, unknown> = {}; await runScript(`vars.x = ${n};`, v, 1000, { tenantId: 't1', maxConcurrentScripts: 1 }); return v.x; }));
+  assert.deepStrictEqual(vs, [1, 2, 3]);
 });
 
 test('assertOutboundAllowed blocks loopback/private/link-local (incl. the cloud-metadata IP) and allows a public address', async () => {

@@ -35,10 +35,18 @@
   workspace's own `Role` rows, falling back to `DEFAULT_ROLES`. WebSockets are bound to one workspace
   and can only subscribe to that workspace's instances; the timer scheduler fires per workspace.
   Production start-up refuses weak defaults (`assertProductionConfig`).
-- **Script sandbox**: `js` script tasks and flow conditions run in a fresh `isolated-vm` V8 isolate per execution (64 MB
-  heap cap, hard wall-clock timeout, no Node APIs, no host objects — only JSON crosses the boundary). Prototype-chain
-  escapes resolve to `undefined`; the host environment (secrets) is not readable (`System.getenv`/`Environment.get` see
-  only the instance `env`). Covered by EXE-91/91b/91c. `java` scripts run in the separate JVM sidecar.
+- **Script sandbox**: `js` script tasks, flow conditions and the `Compute` work item run in `isolated-vm` V8 isolates
+  (64 MB heap cap, hard wall-clock timeout, no Node APIs, no host objects — only JSON crosses the boundary).
+  Prototype-chain escapes resolve to `undefined`; the host environment (secrets) is unreadable (`System.getenv`/
+  `Environment.get` see only the instance `env`). Isolates come from a **bounded pool keyed by workspace**
+  (`src/engine/isolate-pool.ts`): an isolate is never shared across workspaces and runs one execution at a time;
+  **every execution gets a fresh context** (new global scope/realm) so no `globalThis` write or prototype pollution
+  survives into the next script. Size = clamp(`maxConcurrentScripts` || `SCRIPT_POOL_DEFAULT_SIZE`, 1, 16); excess work
+  waits in a bounded per-workspace FIFO queue (`SCRIPT_QUEUE_MAX`, `SCRIPT_QUEUE_TIMEOUT_MS` → `QUOTA_EXCEEDED`),
+  a global ceiling (`SCRIPT_MAX_ISOLATES`) with round-robin fairness stops one workspace starving others, and an isolate
+  is recycled after a timeout/OOM/`SCRIPT_ISOLATE_MAX_RUNS` and evicted after `SCRIPT_ISOLATE_IDLE_MS` idle.
+  `acquireScriptSlot` remains a hard-reject admission cap used only for the `java` sidecar (no pool there).
+  Covered by EXE-91/91b/91c/91d and POOL-1…6; `sandboxStats()` exposes counters. `java` scripts run in the JVM sidecar.
 - **Task ownership**: once claimed, a task can be completed/saved/released/delegated/forwarded only by its owner, its
   business admin, or a workspace owner/admin; a task held by someone else cannot be claimed.
 - **Team management** (same model as `zero-payment-ms`'s TeamService; `modules/tenants/team.ts`,
