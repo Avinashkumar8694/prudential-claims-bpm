@@ -1,0 +1,59 @@
+# =============================================================================
+# Orkestr (BPM engine + workflow builder) - PRODUCTION on the Fabrixly VPS, deployed by Jenkins (zero-jenkins: job zero-orkestr).
+#
+#   https://orkestr.fabrixly.com   web (Angular app + proxy of /api and /ws)  ->  engine (Express API :4000, JDK for Java scripts)
+#
+# - State: its own database in the shared prod Postgres (pg-prod, STORE=pg, tables created by the engine) and a Redis index in redis-prod.
+# - Configuration: the `.env` next to this file (apps/orkestr/.env + generated/orkestr.env in zero-jenkins). Nothing else is read.
+# - The VPS only runs the PUBLISHED images kumaravinit/zero:orkestr-*, built by the pipeline.
+# =============================================================================
+name: orkestr
+
+services:
+  engine:
+    image: kumaravinit/zero:orkestr-engine-1.0.0
+    restart: unless-stopped
+    env_file: .env
+    mem_limit: 1536m
+    extra_hosts: ["mail.fabrixly.com:95.111.231.166"]   # reach the mail server by its public address from inside the VPS
+    dns: [8.8.8.8, 8.8.4.4]
+    volumes:
+      - engine-data:/data
+    networks:
+      - orkestr
+      - zero-data
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  web:
+    image: kumaravinit/zero:orkestr-web-1.0.0
+    restart: unless-stopped
+    depends_on:
+      - engine
+    mem_limit: 128m
+    networks:
+      - orkestr
+      - web
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=web"
+      - "traefik.http.services.orkestr.loadbalancer.server.port=80"
+      - "traefik.http.routers.orkestr.rule=Host(`orkestr.fabrixly.com`)"
+      - "traefik.http.routers.orkestr.entrypoints=web,websecure"
+      - "traefik.http.routers.orkestr.tls=true"
+      - "traefik.http.routers.orkestr.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.orkestr.service=orkestr"
+
+volumes:
+  engine-data:
+
+networks:
+  orkestr:
+  web:
+    external: true
+  zero-data:
+    external: true

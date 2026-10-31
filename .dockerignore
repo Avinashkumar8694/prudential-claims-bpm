@@ -4,8 +4,6 @@
 .claude
 **/.angular
 **/.data
-jbpm-engine/app
-!jbpm-engine/app/package.json
 jbpm-engine/ux_design
 jbpm-engine/docs
 jbpm-engine/server/scratch
