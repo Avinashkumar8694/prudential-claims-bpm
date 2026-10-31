@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 const defaultJavaSidecarClasspath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../java-runtime/out');
 
 export interface Config {
+  appName: string;
+  domain: string;
   port: number;
   dataDir: string;
   store: 'file' | 'pg';
@@ -27,11 +29,39 @@ export interface Config {
    *  if it resolves to a private/link-local/loopback range — see infra/outbound-guard.ts. A RELATIVE
    *  `url` (appended to integrationBaseUrl) is never gated; only an author-supplied absolute URL is. */
   outboundAllowlist: string[];
+  /** production flag: NODE_ENV=production. Gates the weak-default-secret refusal below. */
+  isProduction: boolean;
+  /** single sign-on via the Identity Server (OIDC authorization code + PKCE). Unset issuer = SSO off. */
+  oidc: OidcConfig;
+  /** where the SPA lives: the SSO callback redirects here (tokens in the URL fragment). */
+  dashboardUrl: string;
+  /** POST /auth/login (local username+password, HS256). Always on in dev; set AUTH_LOCAL_LOGIN=false to disable. */
+  localLogin: boolean;
+  /** email of the platform administrator bootstrapped as system_admin of the default workspace (matched on the verified OIDC email). */
+  platformAdminEmail?: string;
+}
+
+export interface OidcConfig {
+  issuer?: string;
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri: string;
+  /** accepted `aud` values for bearer tokens; defaults to the client id */
+  audience: string[];
+  clockToleranceSec: number;
 }
 
 const env = process.env;
+const isProduction = env.NODE_ENV === 'production';
+const csv = (v?: string) => (v || '').split(',').map((h) => h.trim()).filter(Boolean);
+const pick = (...names: string[]) => names.map((n) => env[n]?.trim()).find(Boolean);
+const oidcClientId = pick('OIDC_CLIENT_ID', 'IDS_CLIENT_ID');
+const port = Number(env.PORT || 4000);
+
 export const config: Config = {
-  port: Number(env.PORT || 4000),
+  appName: env.APP_NAME || 'Orkestr',
+  domain: env.DOMAIN || 'orkestr.io',
+  port,
   dataDir: env.DATA_DIR || path.resolve(process.cwd(), '.data'),
   store: (env.STORE as 'file' | 'pg') || 'file',
   // matches docker-compose.yml's default postgres service — `STORE=pg` works with zero extra config
@@ -39,12 +69,40 @@ export const config: Config = {
   pgUrl: env.PG_URL || 'postgresql://jbpm:jbpm@localhost:5433/jbpm',
   jwtSecret: env.JWT_SECRET || 'dev-insecure-secret-change-me',
   adminInitialPassword: env.ADMIN_INITIAL_PASSWORD || 'admin-change-me',
-  integrationBaseUrl: env.INTEGRATION_BASE_URL || 'http://localhost:3000',
+  integrationBaseUrl: env.INTEGRATION_BASE_URL || `https://api.${env.DOMAIN || 'orkestr.io'}`,
   scriptTimeoutMs: Number(env.SCRIPT_TIMEOUT_MS || 2000),
   wsPath: env.WS_PATH || '/ws',
   defaultTenant: env.DEFAULT_TENANT || 'default',
   javaSidecarClasspath: env.JAVA_SIDECAR_CLASSPATH || defaultJavaSidecarClasspath,
   javaSidecarStartupTimeoutMs: Number(env.JAVA_SIDECAR_STARTUP_TIMEOUT_MS || 10000),
   javaSidecarTimeoutMs: Number(env.JAVA_SIDECAR_TIMEOUT_MS || 10000),
-  outboundAllowlist: (env.OUTBOUND_ALLOWLIST || '').split(',').map((h) => h.trim()).filter(Boolean),
+  outboundAllowlist: csv(env.OUTBOUND_ALLOWLIST),
+  isProduction,
+  oidc: {
+    issuer: pick('OIDC_ISSUER', 'IDS_ISSUER_URL')?.replace(/\/+$/, ''),
+    clientId: oidcClientId,
+    clientSecret: pick('OIDC_CLIENT_SECRET', 'IDS_CLIENT_SECRET'),
+    redirectUri: pick('OIDC_REDIRECT_URI') || `http://localhost:${port}/api/auth/oidc/callback`,
+    audience: csv(env.OIDC_AUDIENCE).length ? csv(env.OIDC_AUDIENCE) : (oidcClientId ? [oidcClientId] : []),
+    clockToleranceSec: Number(env.OIDC_CLOCK_TOLERANCE_SEC || 30),
+  },
+  dashboardUrl: (env.DASHBOARD_URL || env.APP_ORIGIN || 'http://localhost:4200').replace(/\/+$/, ''),
+  localLogin: env.AUTH_LOCAL_LOGIN !== 'false',
+  platformAdminEmail: env.PLATFORM_ADMIN_EMAIL?.trim().toLowerCase() || undefined,
 };
+
+/** Refuse to boot in production on insecure defaults (same posture as zero-payment-ms's settings validation). */
+export function assertProductionConfig(c: Config = config): void {
+  if (!c.isProduction) return;
+  const problems: string[] = [];
+  if (!c.jwtSecret || c.jwtSecret === 'dev-insecure-secret-change-me' || c.jwtSecret.length < 32) {
+    problems.push('JWT_SECRET must be set to a random value of at least 32 characters (it signs local tokens and the SSO login-transaction cookie)');
+  }
+  if (c.localLogin && c.adminInitialPassword === 'admin-change-me') {
+    problems.push('ADMIN_INITIAL_PASSWORD must be changed (or disable local login with AUTH_LOCAL_LOGIN=false)');
+  }
+  if (c.oidc.issuer && !c.oidc.clientId) problems.push('OIDC_CLIENT_ID is required when OIDC_ISSUER is set');
+  if (c.oidc.issuer && !/^https:\/\//.test(c.oidc.issuer)) problems.push('OIDC_ISSUER must be an https URL in production');
+  if (!c.oidc.issuer && !c.localLogin) problems.push('No sign-in method configured: set OIDC_ISSUER or enable AUTH_LOCAL_LOGIN');
+  if (problems.length) throw new Error(`Refusing to start in production:\n - ${problems.join('\n - ')}`);
+}

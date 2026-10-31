@@ -17,7 +17,17 @@ Configuration lives in two layers: **environment variables** (deployment-time, r
 | `INTEGRATION_BASE_URL` / per-deployment `INTEGRATION_LAYER_URL` | `http://localhost:3000` | Base URL an HTTP service task's *relative* `url` is appended to — see the [HTTP / Service Task](nodes/http-service.md) node doc. Deployment-level `env.INTEGRATION_LAYER_URL` (set at deploy time) overrides the global default per environment |
 | `SCRIPT_TIMEOUT_MS` | `2000` | Wall-clock budget for a `js` script task/condition before it fails with `SCRIPT_TIMEOUT` |
 | `WS_PATH` | `/ws` | WebSocket path for live UI updates (node/task/instance events) |
-| `DEFAULT_TENANT` | `default` | The one tenant every request resolves to — see [Security & quotas](10-security-and-quotas.md) for why multi-tenancy is deliberately not built out further |
+| `DEFAULT_TENANT` | `default` | The workspace a request resolves to when it sends no `x-tenant-id` (the caller still has to be a member) |
+| `OIDC_ISSUER` (alias `IDS_ISSUER_URL`) | *(unset = SSO off)* | Identity Server issuer, e.g. `https://ids.fabrixly.com/oidc` (discovery at `/.well-known/openid-configuration`). Must be https in production |
+| `OIDC_CLIENT_ID` (alias `IDS_CLIENT_ID`) | *(unset)* | Registered client id (`zero-orkestr`) |
+| `OIDC_CLIENT_SECRET` (alias `IDS_CLIENT_SECRET`) | *(unset = public client, PKCE only)* | Client secret, sent as `client_secret_basic`. **Secret — environment/secret store only, never committed** |
+| `OIDC_REDIRECT_URI` | `http://localhost:$PORT/api/auth/oidc/callback` | Must be registered at the IdP (prod: `https://orkestr.fabrixly.com/api/auth/oidc/callback`; local: `http://localhost:4000/…` or `http://localhost:4200/…`) |
+| `OIDC_AUDIENCE` | the client id | Comma-separated accepted `aud` values for bearer tokens |
+| `OIDC_CLOCK_TOLERANCE_SEC` | `30` | Clock skew allowed when checking `exp`/`nbf` |
+| `DASHBOARD_URL` | `APP_ORIGIN`, else `http://localhost:4200` | Where the SSO callback and logout send the browser (post-logout URI must be registered: `https://orkestr.fabrixly.com`, `http://localhost:4200`, `http://localhost:4000`) |
+| `AUTH_LOCAL_LOGIN` | `true` | Set `false` to disable `POST /auth/login` and HS256 tokens once SSO is the only way in |
+| `PLATFORM_ADMIN_EMAIL` | *(unset)* | Bootstrapped as `system_admin` of the default workspace; bound to the person's identity on their first verified SSO sign-in |
+| `NODE_ENV` | — | `production` makes start-up refuse a default `JWT_SECRET`/`ADMIN_INITIAL_PASSWORD` and a non-https issuer |
 | `JAVA_SIDECAR_CLASSPATH` | `<repo>/java-runtime/out` | Compiled classes for the Java script sidecar |
 | `JAVA_SIDECAR_STARTUP_TIMEOUT_MS` | `10000` | How long to wait for the sidecar JVM to report ready at boot |
 | `JAVA_SIDECAR_TIMEOUT_MS` | `10000` | Per-request timeout for a sidecar `/execute` call (the first call for a given script includes a real `javac` compile) |

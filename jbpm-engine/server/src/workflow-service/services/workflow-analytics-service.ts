@@ -24,8 +24,11 @@ export class WorkflowAnalyticsService {
     this.queries = new QueryService(ctx);
   }
 
+  private isAll() { return this.ctx.tenantId === 'all' || this.ctx.tenantId === '*'; }
+
   async summary() {
-    const cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId);
+    const isAll = this.isAll();
+    const cases = await this.store.instances().query((w) => isAll || w.tenantId === this.ctx.tenantId);
     const byStatus: Record<string, number> = {};
     for (const c of cases) byStatus[c.status] = (byStatus[c.status] || 0) + 1;
     return { total: cases.length, byStatus, withoutPiid: cases.filter((c) => !c.piid).length };
@@ -36,7 +39,8 @@ export class WorkflowAnalyticsService {
    *  case is in — rather than the case's own `status`, which has no fixed "this means done" value.
    *  TAT by user reuses the existing task-level analytics unchanged. */
   async tat() {
-    const cases = await this.store.instances().query((w) => w.tenantId === this.ctx.tenantId && !!w.piid);
+    const isAll = this.isAll();
+    const cases = await this.store.instances().query((w) => (isAll || w.tenantId === this.ctx.tenantId) && !!w.piid);
     const byName = new Map<string, number[]>();
     for (const c of cases) {
       const bpm = await this.bpmInstances.get(c.piid!).catch(() => null);

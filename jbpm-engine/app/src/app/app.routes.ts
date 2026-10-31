@@ -1,15 +1,16 @@
 import { Routes } from '@angular/router';
 import { authGuard, permissionGuard } from './core/auth/auth.guard';
+import { tenantGuard } from './core/tenant/tenant.guard';
 
 export const routes: Routes = [
+  { path: '', pathMatch: 'full', loadComponent: () => import('./features/landing/root-gate.component').then((m) => m.RootGateComponent) },
   { path: 'login', loadComponent: () => import('./features/auth/login-page.component').then((m) => m.LoginPageComponent) },
+  { path: 'auth/callback', loadComponent: () => import('./features/auth/sso-callback.component').then((m) => m.SsoCallbackComponent) },
+  { path: 'no-workspace', loadComponent: () => import('./features/tenant/no-workspace.component').then((m) => m.NoWorkspaceComponent) },
   {
     path: '',
-    canActivate: [authGuard],
+    canActivate: [authGuard, tenantGuard],
     children: [
-      // Home is the landing page, not the project grid: a project grid is the *builder's* view, while
-      // an operator or process owner logging in wants their work and the system's health first.
-      { path: '', redirectTo: 'home', pathMatch: 'full' },
       { path: 'home', loadComponent: () => import('./features/home/home.component').then((m) => m.HomeComponent) },
       { path: 'projects', loadComponent: () => import('./features/workflows/workflows.component').then((m) => m.WorkflowsComponent) },
       {

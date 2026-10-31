@@ -11,7 +11,7 @@ import { IconComponent } from '../../shared/icon.component';
     <h3 class="sec-h">General</h3>
     <div class="setrow"><label>Key</label><input [value]="ctx.wf()?.key" disabled /></div>
     <div class="setrow"><label>Description</label><input [(ngModel)]="ctx.description" (blur)="ctx.saveName()" placeholder="What this project does" /></div>
-    <div class="setrow"><label>Integration base URL</label><input [(ngModel)]="ctx.baseUrl" placeholder="http://localhost:3000" /><small>Applied per deployment environment for service tasks.</small></div>
+    <div class="setrow"><label>Integration base URL</label><input [(ngModel)]="ctx.baseUrl" placeholder="https://api.yourdomain.com" /><small>Applied per deployment environment for service tasks.</small></div>
     <p class="hint">Per-process cron/scheduled starts and environment overrides are planned (see docs/13).</p>
 
     <h3 class="sec-h">Shared variables</h3>

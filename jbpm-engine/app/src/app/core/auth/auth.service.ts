@@ -8,8 +8,14 @@ import { Observable, tap, switchMap, map } from 'rxjs';
 import { AuthApiService } from './auth-api.service';
 import { permissionGrants } from './permissions';
 import type { AuthUser, JwtClaims } from './auth.models';
+import { TenantService } from '../tenant/tenant.service';
+import { API_BASE } from '../config';
 
 const STORAGE_KEY = 'jbpm.token';
+// the Identity Server's ID token, kept (this tab only) purely as the id_token_hint for single sign-out
+const ID_TOKEN_KEY = 'jbpm.idtoken';
+
+const isJwt = (t: string | null | undefined): t is string => !!t && t.split('.').length === 3;
 
 function decodeJwt(token: string): JwtClaims | null {
   try {
@@ -25,8 +31,12 @@ function decodeJwt(token: string): JwtClaims | null {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private api = inject(AuthApiService);
+  private tenant = inject(TenantService);
 
-  private tokenSig = signal<string | null>(sessionStorage.getItem(STORAGE_KEY));
+  private tokenSig = signal<string | null>(
+    (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(STORAGE_KEY) : null) ||
+    (typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null)
+  );
   private permissionsSig = signal<string[]>([]);
 
   token = this.tokenSig.asReadonly();
@@ -38,45 +48,80 @@ export class AuthService {
     if (!t) return null;
     const claims = decodeJwt(t);
     if (!claims || claims.exp * 1000 <= Date.now()) return null;
-    return { id: claims.sub, username: claims.username, roles: claims.roles, groups: claims.groups };
+    // an Identity Server token has no `username`/`roles`/`groups` — authorization comes from workspace membership
+    return {
+      id: claims.sub,
+      username: claims.username || claims.email || claims.preferred_username || claims.sub,
+      roles: claims.roles ?? [],
+      groups: claims.groups ?? [],
+      email: claims.email,
+      name: claims.name,
+    };
   });
   isAuthenticated = computed(() => this.user() !== null);
 
-  // Resolves once the initial permission fetch (below) has settled, success or failure — permissionGuard
-  // awaits this before checking hasPermission(). Without it, a hard navigation straight to a
-  // permission-gated URL (e.g. reloading on /admin/users) races the guard against the async /auth/me
-  // call: the guard would see permissionsSig's empty initial value and wrongly redirect away, even for
-  // an admin, before the real permission list has had a chance to load.
   private markReady!: () => void;
   ready: Promise<void> = new Promise((resolve) => { this.markReady = resolve; });
 
   constructor() {
-    // a token survived reload via sessionStorage — refresh its real permission list (roles alone,
-    // from the JWT, aren't enough: permissions are only resolved server-side against current Role rows).
-    // Deferred to a microtask: authInterceptor injects AuthService on every HttpClient call, so firing
-    // this synchronously here — while the DI system is still hydrating this very instance — trips
-    // Angular's circular-dependency guard (NG0200). Queuing it lets construction finish first.
     if (this.tokenSig() && this.user()) {
-      queueMicrotask(() => this.refreshPermissions().subscribe({ next: () => this.markReady(), error: () => this.markReady() }));
+      queueMicrotask(() => {
+        this.tenant.init(this.user()!.id);
+        this.refreshPermissions().subscribe({ next: () => this.markReady(), error: () => this.markReady() });
+      });
     } else {
-      queueMicrotask(() => this.markReady());
+      queueMicrotask(() => {
+        this.tenant.init(null);
+        this.markReady();
+      });
     }
   }
 
   login(username: string, password: string): Observable<AuthUser> {
     return this.api.login(username, password).pipe(
-      tap((res) => { this.tokenSig.set(res.token); sessionStorage.setItem(STORAGE_KEY, res.token); }),
+      tap((res) => {
+        this.tokenSig.set(res.token);
+        sessionStorage.setItem(STORAGE_KEY, res.token);
+        this.tenant.init(res.user.id);
+      }),
       switchMap(() => this.refreshPermissions()),
     );
   }
 
+  /** Finish a single-sign-on login: the server redirected here with the tokens in the URL fragment. Prefers the
+   *  access token when it is a JWT (the server verifies it), else the ID token (always a JWT). */
+  completeSso(accessToken: string | null, idToken: string | null): Observable<AuthUser> {
+    const bearer = isJwt(accessToken) ? accessToken : isJwt(idToken) ? idToken : accessToken;
+    if (!bearer) throw new Error('no token in sign-in response');
+    this.tokenSig.set(bearer);
+    sessionStorage.setItem(STORAGE_KEY, bearer);
+    if (idToken) sessionStorage.setItem(ID_TOKEN_KEY, idToken);
+    const u = this.user();
+    this.tenant.init(u ? u.id : null);
+    return this.refreshPermissions();
+  }
+
+  /** Drop the local session only (also what a 401 does). */
   logout(): void {
     this.tokenSig.set(null);
     this.permissionsSig.set([]);
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(ID_TOKEN_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    this.tenant.reset();
+  }
+
+  /** The user clicked "Sign out": drop the session and, for an SSO session, end the identity-server session too. */
+  signOut(): void {
+    const idToken = sessionStorage.getItem(ID_TOKEN_KEY);
+    this.logout();
+    if (idToken) {
+      window.location.href = `${API_BASE}/auth/oidc/logout?id_token_hint=${encodeURIComponent(idToken)}`;
+    }
   }
 
   hasPermission(action: string): boolean {
+    if (this.tenant.can(action)) return true;
     return permissionGrants(this.permissionsSig(), action);
   }
 

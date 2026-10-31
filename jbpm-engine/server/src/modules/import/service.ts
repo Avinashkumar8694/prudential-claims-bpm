@@ -226,7 +226,7 @@ export function kjarToEngine(files: Record<string, string> | any): EngineProject
     for (const [rel, content] of Object.entries(files)) {
       const p = path.join(dir, rel);
       fs.mkdirSync(path.dirname(p), { recursive: true });
-      fs.writeFileSync(p, content);
+      fs.writeFileSync(p, content as string | Uint8Array);
     }
     const engine = toEngineProject(parseProject(dir));
     return convertProjectToNodeEngine(engine);

@@ -14,9 +14,9 @@ export class TimerService {
   }
   private repo() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
 
-  /** Fire every scheduled timer due at or before `nowIso`; returns the number fired. */
+  /** Fire every scheduled timer of THIS context's workspace due at or before `nowIso`; returns the number fired. */
   async tick(nowIso: string): Promise<number> {
-    const due = await this.repo().query((t) => t.status === 'scheduled' && t.dueAt <= nowIso);
+    const due = await this.repo().query((t) => t.tenantId === this.ctx.tenantId && t.status === 'scheduled' && t.dueAt <= nowIso);
     let fired = 0;
     for (const job of due) {
       // Don't fire (or consume) a timer whose instance is suspended — leave it scheduled to fire on resume.

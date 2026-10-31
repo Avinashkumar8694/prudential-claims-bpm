@@ -7,7 +7,9 @@ import { config } from './infra/config.ts';
 import { makeContext } from './context.ts';
 import { buildRoutes } from './http/routes.ts';
 import { buildAuthRoutes } from './http/auth-routes.ts';
-import { requireAuth } from './http/auth-middleware.ts';
+import { buildPublicTenantRoutes, buildTenantRoutes } from './http/tenant-routes.ts';
+import { TenantService } from './modules/tenants/service.ts';
+import { requireAuth, requireWorkspaceAccess } from './http/auth-middleware.ts';
 import { errorMiddleware } from './infra/errors.ts';
 
 /** STORE=pg switches from the file-per-entity dev store to a real Postgres-backed one (see
@@ -25,19 +27,16 @@ export function createApp(store?: Store) {
   const theStore: Store = store || resolveStore();
   app.use(express.json({ limit: '4mb' }));
 
-  // simple CORS for the Angular dev origin
+  // CORS for the Angular dev origin, including x-tenant-id
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', process.env.APP_ORIGIN || '*');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-tenant-id');
     res.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,PUT,DELETE,OPTIONS');
     if (req.method === 'OPTIONS') return res.status(204).end();
     next();
   });
 
-  // minimal security headers (docs/07-security.md §8) — this API returns JSON only, never HTML
-  // (aside from /api/docs' own Swagger UI page, which needs its CDN scripts/styles left alone), so
-  // there's no templating/XSS surface a real CSP is protecting beyond stopping a browser from ever
-  // being tricked into rendering a JSON response as something else.
+  // minimal security headers (docs/07-security.md §8)
   app.use((req, res, next) => {
     res.header('X-Content-Type-Options', 'nosniff');
     res.header('X-Frame-Options', 'DENY');
@@ -46,17 +45,23 @@ export function createApp(store?: Store) {
     next();
   });
 
-  // per-request AppContext (single default tenant — see the "skip multi-tenancy" note in
-  // docs/07-security.md). The actor identity itself now comes from a verified JWT (requireAuth,
-  // mounted below), not a trust-any X-User header.
+  // per-request AppContext: resolves tenant from x-tenant-id header, falling back to config.defaultTenant
   app.use((req, _res, next) => {
-    (req as any).ctx = makeContext({ store: theStore, tenantId: config.defaultTenant });
+    const tenantHeader = (req.headers['x-tenant-id'] as string | undefined)?.trim();
+    const tenantId = tenantHeader || config.defaultTenant;
+    (req as any).ctx = makeContext({ store: theStore, tenantId });
     next();
   });
 
+  // Seed default workspace and public plans asynchronously at boot
+  const seedCtx = makeContext({ store: theStore, tenantId: config.defaultTenant });
+  new TenantService(seedCtx).seedDefaultsIfEmpty().catch(() => {});
+
   app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'jbpm-engine-server', version: '0.1.0' }));
+  app.use('/api', buildPublicTenantRoutes()); // public: /api/public/plans, /api/tenants/check/:slug, /api/tenants/signup
   app.use('/api/auth', buildAuthRoutes());   // login only — must stay reachable without a token
-  app.use('/api', requireAuth, buildRoutes());
+  app.use('/api', buildTenantRoutes());       // authenticated tenant endpoints: /api/me/tenants, /api/me/profile, etc.
+  app.use('/api', requireAuth, requireWorkspaceAccess, buildRoutes());
   app.use(errorMiddleware);
   return { app, store: theStore };
 }

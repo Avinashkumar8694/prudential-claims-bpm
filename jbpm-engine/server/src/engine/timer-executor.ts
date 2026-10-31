@@ -31,7 +31,7 @@ async function rescheduleOrRetire(ctx: AppContext, job: TimerJob): Promise<void>
   const { count, ms } = parseCycle(job.cycle);
   const nextFired = job.fired + 1;
   job.fired = nextFired;
-  if (count !== undefined && nextFired >= count) {
+  if (count !== null && count !== undefined && nextFired >= count) {
     job.status = 'fired';
   } else {
     job.dueAt = new Date(Date.parse(job.dueAt) + ms).toISOString();

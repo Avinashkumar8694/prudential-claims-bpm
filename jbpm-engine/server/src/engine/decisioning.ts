@@ -178,7 +178,7 @@ export function evaluateGuidedTable(engine: EngineProject, name: string, vars: V
   }
 
   if (table.fact && table.fact !== name && vars[table.fact] && typeof vars[table.fact] === 'object') {
-    Object.assign(vars[table.fact], out);
+    Object.assign(vars[table.fact] as object, out);
     changed[table.fact] = vars[table.fact];
   } else {
     Object.assign(vars, changed);

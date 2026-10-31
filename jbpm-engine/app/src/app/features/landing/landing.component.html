@@ -1,0 +1,406 @@
+<div class="fp-landing" [attr.data-theme]="theme()">
+  <a class="lp-skip" href="#main">Skip to content</a>
+
+  <!-- Header Navigation -->
+  <header class="lp-nav" [class.lp-scrolled]="scrolled()" id="top">
+    <div class="lp-wrap lp-nav-in">
+      <a class="lp-brand" routerLink="/" [attr.aria-label]="appName + ' home'">
+        <span class="lp-brand-mark" aria-hidden="true">{{ appInitials }}</span>
+        <span>{{ appName }}</span>
+      </a>
+
+      <nav class="lp-nav-links" aria-label="Main">
+        <a href="#features" (click)="scrollTo('#features', $event)">Features</a>
+        <a href="#showcase" (click)="scrollTo('#showcase', $event)">Tour</a>
+        <a href="#demos" (click)="scrollTo('#demos', $event)">Demos</a>
+        <a href="#how" (click)="scrollTo('#how', $event)">How it works</a>
+        <a href="#plans" (click)="scrollTo('#plans', $event)">Plans</a>
+        <a href="#faq" (click)="scrollTo('#faq', $event)">FAQ</a>
+      </nav>
+
+      <div class="lp-nav-actions">
+        <button
+          class="lp-icon-btn"
+          type="button"
+          (click)="toggleTheme()"
+          [title]="theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+        >
+          <svg *ngIf="theme() === 'light'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path [attr.d]="ICON['moon']" />
+          </svg>
+          <svg *ngIf="theme() === 'dark'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path [attr.d]="ICON['sun']" />
+          </svg>
+        </button>
+        <a class="lp-btn lp-btn-ghost lp-nav-login" routerLink="/login">Log in</a>
+        <a class="lp-btn lp-btn-primary" routerLink="/login">{{ trialDays() ? 'Start free trial' : 'Get started' }}</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Hero Section -->
+    <section class="lp-hero">
+      <div class="lp-wrap lp-hero-in">
+        <div class="lp-hero-copy">
+          <p class="lp-eyebrow">Workflows · Visual Designer · Case Management · Decisions</p>
+          <h1>One workflow orchestration platform for <span class="lp-grad">every mission-critical process.</span></h1>
+          <p class="lp-lead">
+            {{ appName }} executes high-throughput enterprise workflows with an intuitive visual canvas, instant simulation, versioned deployments, and end-to-end task and case management behind a calm, secure multi-tenant engine.
+          </p>
+          <div class="lp-cta-row">
+            <a class="lp-btn lp-btn-primary lp-btn-lg" routerLink="/login">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path [attr.d]="ICON['login']" />
+              </svg>
+              Log in to {{ appName }}
+            </a>
+            <a class="lp-btn lp-btn-secondary lp-btn-lg" href="#demos" (click)="scrollTo('#demos', $event)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path [attr.d]="ICON['play']" />
+              </svg>
+              Watch the demos
+            </a>
+          </div>
+          <ul class="lp-chips" aria-label="Highlights">
+            <li *ngFor="let chip of chips">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path [attr.d]="ICON[chip.icon]" />
+              </svg>
+              {{ chip.text }}
+            </li>
+          </ul>
+        </div>
+
+        <div class="lp-hero-art">
+          <figure class="lp-shot lp-shot-hero">
+            <div class="lp-shot-bar" aria-hidden="true">
+              <i></i><i></i><i></i>
+              <span class="lp-shot-title">Customer KYC &amp; Identity Verification — Process Canvas</span>
+            </div>
+            <img src="assets/screenshots/feature_bpmn_designer.png" alt="Orkestr Visual Workflow Canvas" class="lp-shot-img" />
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <!-- Standards Strip -->
+    <section class="lp-logos" aria-label="Supported Standards">
+      <div class="lp-wrap">
+        <p class="lp-logos-title">Built on open enterprise standards</p>
+        <ul class="lp-logos-row">
+          <li *ngFor="let s of standards">{{ s }}</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="lp-section" id="features">
+      <div class="lp-wrap">
+        <header class="lp-section-head">
+          <p class="lp-eyebrow">Engineered for control & scale</p>
+          <h2>One calm console for all orchestration</h2>
+          <p class="lp-sub">Author processes, automate decisions, govern human tasks, and inspect live tokens without stitching disjointed tools together.</p>
+        </header>
+
+        <div class="lp-grid lp-cards">
+          <article class="lp-card" *ngFor="let f of features">
+            <span class="lp-ico">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path [attr.d]="ICON[f.icon]" />
+              </svg>
+            </span>
+            <h3>{{ f.title }}</h3>
+            <p>{{ f.text }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Product Showcase / Tour -->
+    <section class="lp-section lp-tint" id="showcase">
+      <div class="lp-wrap">
+        <header class="lp-section-head">
+          <p class="lp-eyebrow">Interactive Tour</p>
+          <h2>Made for real enterprise execution</h2>
+        </header>
+
+        <div class="lp-tabs" role="tablist">
+          <button
+            *ngFor="let t of tour; let i = index"
+            type="button"
+            class="lp-tab"
+            role="tab"
+            [attr.aria-selected]="activeTab() === i"
+            (click)="activeTab.set(i)"
+          >
+            {{ t.label }}
+          </button>
+        </div>
+
+        <div class="lp-panels">
+          <div
+            *ngFor="let t of tour; let i = index"
+            class="lp-panel"
+            [class.lp-in]="activeTab() === i"
+            [hidden]="activeTab() !== i"
+          >
+            <div class="lp-panel-copy">
+              <h3>{{ t.title }}</h3>
+              <p>{{ t.text }}</p>
+              <a class="lp-more" href="#how" (click)="scrollTo('#how', $event)">How it works →</a>
+            </div>
+
+            <figure class="lp-shot">
+              <div class="lp-shot-bar" aria-hidden="true">
+                <i></i><i></i><i></i>
+                <span class="lp-shot-title">{{ t.title }}</span>
+              </div>
+              <img [src]="'assets/screenshots/' + t.img" [alt]="t.title" class="lp-shot-img" />
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Demos Walkthrough -->
+    <section class="lp-section" id="demos">
+      <div class="lp-wrap">
+        <header class="lp-section-head">
+          <p class="lp-eyebrow">Interactive Scenarios</p>
+          <h2>Walk through real workflows</h2>
+          <p class="lp-sub">Explore step-by-step authoring, decision rules, deployment lifecycles, and human task inbox operations.</p>
+        </header>
+
+        <div class="lp-demos">
+          <div class="lp-demo-stage">
+            <div class="lp-shot">
+              <div class="lp-shot-bar" aria-hidden="true">
+                <i></i><i></i><i></i>
+                <span class="lp-shot-title">{{ currentDemo().title }}</span>
+              </div>
+              <img [src]="'assets/screenshots/' + currentDemo().img" [alt]="currentDemo().title" class="lp-shot-img" />
+            </div>
+            <div class="lp-demo-info">
+              <p class="lp-eyebrow">Chapter {{ demoIndex() + 1 }} of {{ flatDemos.length }}</p>
+              <h3>{{ currentDemo().title }}</h3>
+              <p>{{ currentDemo().text }}</p>
+              <ol class="lp-demo-steps">
+                <li *ngFor="let s of currentDemo().steps">{{ s }}</li>
+              </ol>
+              <div class="lp-demo-controls">
+                <button
+                  type="button"
+                  class="lp-btn lp-btn-secondary"
+                  (click)="prevDemo()"
+                  [disabled]="demoIndex() === 0"
+                >
+                  ← Previous
+                </button>
+                <button
+                  type="button"
+                  class="lp-btn lp-btn-secondary"
+                  (click)="nextDemo()"
+                  [disabled]="demoIndex() === flatDemos.length - 1"
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <nav class="lp-demo-list" aria-label="Demo chapters">
+            <div class="lp-demo-group" *ngFor="let group of demos">
+              <h4>{{ group.name }}</h4>
+              <button
+                type="button"
+                *ngFor="let d of group.items"
+                class="lp-chapter"
+                [attr.aria-current]="flatDemos[demoIndex()].key === d.key"
+                (click)="setDemoByKey(d.key)"
+              >
+                <span class="lp-chapter-n">{{ getDemoGlobalIndex(d.key) + 1 }}</span>
+                <span>{{ d.title }}</span>
+              </button>
+            </div>
+          </nav>
+        </div>
+      </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="lp-section lp-tint" id="how">
+      <div class="lp-wrap">
+        <header class="lp-section-head">
+          <p class="lp-eyebrow">Developer Quickstart</p>
+          <h2>Three steps, then it just works</h2>
+        </header>
+
+        <ol class="lp-steps">
+          <li *ngFor="let s of steps; let i = index">
+            <span class="lp-step-n">{{ i + 1 }}</span>
+            <h3>{{ s.title }}</h3>
+            <p>{{ s.text }}</p>
+          </li>
+        </ol>
+
+        <div class="lp-code">
+          <div class="lp-code-head">
+            <span>Start a process instance</span>
+            <span class="lp-code-tag">POST /api/instances</span>
+          </div>
+          <pre><code><span class="lp-c-k">curl</span> -X POST {{ apiBase }}/instances \
+  -H <span class="lp-c-s">"Authorization: Bearer $ORKESTR_TOKEN"</span> \
+  -H <span class="lp-c-s">"x-tenant-id: default"</span> \
+  -H <span class="lp-c-s">"content-type: application/json"</span> \
+  -d <span class="lp-c-s">'&#123; "deploymentId": "dep_01HZX3K9Q2", "processId": "ClaimAssessment", "variables": &#123; "claimAmount": 15000, "policyNumber": "POL-9821" &#125; &#125;'</span>
+
+<span class="lp-c-m">// 201 Created</span>
+&#123;
+  <span class="lp-c-p">"id"</span>: <span class="lp-c-s">"inst_01HZX49R5T"</span>,
+  <span class="lp-c-p">"status"</span>: <span class="lp-c-s">"running"</span>,
+  <span class="lp-c-p">"processId"</span>: <span class="lp-c-s">"ClaimAssessment"</span>,
+  <span class="lp-c-p">"tokens"</span>: [ &#123; <span class="lp-c-p">"nodeId"</span>: <span class="lp-c-s">"ReviewTask"</span>, <span class="lp-c-p">"state"</span>: <span class="lp-c-s">"waiting"</span> &#125; ]
+&#125;</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trust & Stats -->
+    <section class="lp-section" id="control">
+      <div class="lp-wrap lp-two">
+        <div>
+          <p class="lp-eyebrow">Enterprise Reliability</p>
+          <h2>Deterministic execution you can trust</h2>
+          <p class="lp-sub lp-left">
+            Your mission-critical state transitions execute deterministically with isolated sandboxing, instant error traces, and append-only audits.
+          </p>
+          <ul class="lp-ticks">
+            <li *ngFor="let t of trust">{{ t }}</li>
+          </ul>
+        </div>
+
+        <div class="lp-stack">
+          <div class="lp-stat">
+            <strong>100%</strong>
+            <span>Workflow & jBPM specification fidelity</span>
+          </div>
+          <div class="lp-stat">
+            <strong>&lt; 1ms</strong>
+            <span>average node execution dispatch time</span>
+          </div>
+          <div class="lp-stat" *ngIf="trialDays()">
+            <strong>{{ trialDays() }} days</strong>
+            <span>free trial, zero credit card required</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Plans Section -->
+    <section class="lp-section lp-tint" id="plans">
+      <div class="lp-wrap">
+        <header class="lp-section-head">
+          <p class="lp-eyebrow">Pricing & Plans</p>
+          <h2>{{ trialDays() ? 'Start with a trial. Grow into a plan that fits.' : 'Pick a plan that fits.' }}</h2>
+          <p class="lp-sub">Choose a plan that matches your workspace requirements. Self-serve signup takes less than 30 seconds.</p>
+        </header>
+
+        <div class="lp-plans">
+          <article class="lp-plan" [class.lp-plan-featured]="p.isCustom" *ngFor="let p of plans()">
+            <span class="lp-plan-badge" *ngIf="p.isCustom">Custom</span>
+            <span class="lp-plan-badge-soft" *ngIf="p.isDefault">Start here</span>
+            <h3>{{ p.name }}</h3>
+            <p class="lp-plan-sub">{{ p.description }}</p>
+            <ul class="lp-ticks lp-small">
+              <li *ngFor="let f of p.features">{{ f }}</li>
+            </ul>
+            <a
+              *ngIf="p.isCustom && p.contactConfig?.value"
+              class="lp-btn lp-btn-secondary lp-btn-block"
+              [href]="'mailto:' + p.contactConfig?.value"
+            >
+              {{ p.contactConfig?.label || 'Contact sales' }}
+            </a>
+            <a
+              *ngIf="!p.isCustom || !p.contactConfig?.value"
+              class="lp-btn lp-btn-block"
+              [class.lp-btn-primary]="!p.isCustom"
+              [class.lp-btn-secondary]="p.isCustom"
+              routerLink="/login"
+            >
+              {{ p.trialDays ? 'Start free trial' : 'Get started' }}
+            </a>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ Section -->
+    <section class="lp-section" id="faq">
+      <div class="lp-wrap lp-narrow">
+        <header class="lp-section-head">
+          <p class="lp-eyebrow">Good to know</p>
+          <h2>Questions, answered</h2>
+        </header>
+
+        <div class="lp-faq">
+          <details *ngFor="let item of faq(); let i = index" [open]="i === 0">
+            <summary>{{ item.q }}</summary>
+            <p>{{ item.a }}</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom CTA -->
+    <section class="lp-cta">
+      <div class="lp-wrap lp-cta-in">
+        <h2>Orchestrate your first process in minutes.</h2>
+        <p>Log in, create your workspace, and model your first visual workflow in seconds.</p>
+        <div class="lp-cta-row lp-center-row">
+          <a class="lp-btn lp-btn-primary lp-btn-lg" routerLink="/login">Log in to {{ appName }}</a>
+          <a class="lp-btn lp-btn-secondary lp-btn-lg" href="#features" (click)="scrollTo('#features', $event)">Explore features</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="lp-foot">
+    <div class="lp-wrap lp-foot-in">
+      <div class="lp-foot-brand">
+        <a class="lp-brand" routerLink="/">
+          <span class="lp-brand-mark" aria-hidden="true">{{ appInitials }}</span>
+          <span>{{ appName }}</span>
+        </a>
+        <p>Enterprise workflow orchestration & execution runtime.</p>
+      </div>
+
+      <nav aria-label="Product">
+        <h4>Product</h4>
+        <a href="#features" (click)="scrollTo('#features', $event)">Features</a>
+        <a href="#showcase" (click)="scrollTo('#showcase', $event)">Product tour</a>
+        <a href="#demos" (click)="scrollTo('#demos', $event)">Demos</a>
+        <a href="#plans" (click)="scrollTo('#plans', $event)">Plans</a>
+      </nav>
+
+      <nav aria-label="Developers">
+        <h4>Developers</h4>
+        <a href="#how" (click)="scrollTo('#how', $event)">Quick start</a>
+        <a href="#faq" (click)="scrollTo('#faq', $event)">FAQ</a>
+      </nav>
+
+      <nav aria-label="Account">
+        <h4>Account</h4>
+        <a routerLink="/login">Log in</a>
+        <a routerLink="/login">Sign up</a>
+      </nav>
+    </div>
+
+    <div class="lp-wrap lp-foot-base">
+      <span>© {{ currentYear }} {{ appName }}, a Fabrixly product. All rights reserved.</span>
+      <a href="#top" (click)="scrollTo('#top', $event)">Back to top ↑</a>
+    </div>
+  </footer>
+</div>

@@ -86,7 +86,7 @@ const MapPrototype = {
   values() {
     return makeArrayList(Object.values(this));
   },
-  toString() {
+  toString(): string {
     return `{${Object.entries(this).map(([k, v]) => `${k}=${v}`).join(', ')}}`;
   },
 };

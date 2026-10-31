@@ -212,9 +212,73 @@ export interface User extends Entity {
   createdAt: string;
 }
 
+// ---- Multi-tenancy & Workspaces ----
+export type TenantStatus = 'active' | 'pending_verification' | 'suspended' | 'deleted';
+export type TenantPlan = 'trial' | 'starter' | 'pro' | 'custom' | 'enterprise';
+
+export interface TenantSettings {
+  timezone?: string;
+  dateFormat?: string;
+  brandName?: string;
+  brandColor?: string;
+  [key: string]: unknown;
+}
+
+export interface Tenant extends Entity {
+  id: string;
+  tenantId: string;
+  name: string;
+  slug: string;
+  status: TenantStatus;
+  plan: string;
+  planExpiresAt?: string | null;
+  settings?: TenantSettings;
+  ownerEmail?: string;
+  ownerName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TenantMemberRole = 'system_admin' | 'owner' | 'admin' | 'developer' | 'operator' | 'worker' | 'viewer';
+export type TenantMemberStatus = 'active' | 'invited' | 'suspended';
+
+export interface TenantMember extends Entity {
+  id: string;
+  tenantId: string;
+  userId: string;
+  email?: string;
+  role: string;
+  status: TenantMemberStatus;
+  displayName?: string | null;
+  permissions?: string[];
+  joinedAt: string;
+  lastActiveAt?: string;
+}
+
+export interface PublicPlanContactConfig {
+  type: 'email' | 'url';
+  value: string;
+  label?: string;
+}
+
+export interface Plan extends Entity {
+  id: string;
+  tenantId: string;
+  key: string;
+  name: string;
+  description: string;
+  isDefault: boolean;
+  isCustom: boolean;
+  trialDays: number | null;
+  contactConfig?: PublicPlanContactConfig | null;
+  limits?: Record<string, unknown>;
+  features: string[];
+}
+
 export const Collections = {
   workflows: 'workflows', folders: 'folders', branches: 'branches', versions: 'versions', deployments: 'deployments',
   instances: 'instances', tasks: 'tasks', timers: 'timers', audit: 'audit',
   users: 'users', groups: 'groups', roles: 'roles',
+  tenants: 'tenants', tenantMembers: 'tenantMembers', plans: 'plans',
   errors: 'errors', comments: 'comments', notifications: 'notifications', settings: 'settings',
 } as const;

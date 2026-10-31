@@ -8,21 +8,23 @@ import { NotificationService } from '../notifications/service.ts';
 import { SettingsService } from '../settings/service.ts';
 import { notFound, conflict, validation, quotaExceeded } from '../../infra/errors.ts';
 
+export function makeResolveCalled(ctx: AppContext) {
+  return async (processId: string): Promise<{ dep: Deployment; processId: string } | undefined> => {
+    const deps = await ctx.store.repo<Deployment>(Collections.deployments).query((d) => d.tenantId === ctx.tenantId && d.status === 'active');
+    for (const dep of deps) {
+      const p = (dep.engine?.processes || []).find((x) => x.id === processId);
+      if (p) return { dep, processId: p.id! };
+    }
+    return undefined;
+  };
+}
+
 export class InstanceService {
   private engine: ExecutionEngine;
   private deployments: DeploymentService;
   constructor(private ctx: AppContext, emit: (e: EngineEvent) => void = () => {}) {
     this.deployments = new DeploymentService(ctx);
-    // resolve a called process id -> its active deployment + the matching process (any process, any active deployment)
-    const resolveCalled = async (processId: string): Promise<{ dep: Deployment; processId: string } | undefined> => {
-      const deps = await this.ctx.store.repo<Deployment>(Collections.deployments).query((d) => d.tenantId === this.ctx.tenantId && d.status === 'active');
-      for (const dep of deps) {
-        const p = (dep.engine?.processes || []).find((x) => x.id === processId);
-        if (p) return { dep, processId: p.id! };
-      }
-      return undefined;
-    };
-    this.engine = new ExecutionEngine(ctx, emit, resolveCalled);
+    this.engine = new ExecutionEngine(ctx, emit, makeResolveCalled(ctx));
   }
   private repo() { return this.ctx.store.repo<Instance>(Collections.instances); }
 

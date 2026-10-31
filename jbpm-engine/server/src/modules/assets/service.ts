@@ -234,7 +234,7 @@ export class AssetsService {
       }
       case 'tests': {
         const result = evaluateTestScenario(engine, name);
-        return { success: true, kind, name, ...result };
+        return { success: true, kind, ...result };
       }
       case 'forms': {
         const submission = (inputPayload.submission || inputPayload) as Record<string, unknown>;

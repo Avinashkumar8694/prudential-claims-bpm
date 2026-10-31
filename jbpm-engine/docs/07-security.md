@@ -16,8 +16,26 @@
 - **AuthN**: `POST /auth/login` (username/password) → JWT (`sub`, `username`, `roles`, `groups`, 12h
   expiry, HS256 via `jsonwebtoken`). Passwords are scrypt-hashed (`infra/auth.ts`), never returned by
   any API. `requireAuth` (`http/auth-middleware.ts`) verifies the `Authorization: Bearer <token>` on
-  every route except `/health` and `/auth/login` — there is no trust-any header anymore. OIDC/SAML
-  remain a future pluggable AuthN source, not built.
+  every route except `/health`, `/auth/login`, `/auth/config` and `/auth/oidc/*` — there is no
+  trust-any header anymore.
+  **Single sign-on** (same Identity Server contract as `zero-payment-ms`): `GET /auth/oidc/login` →
+  IdP (authorization code + **PKCE S256**, `state`, `nonce`; `client_secret_basic` at the token
+  endpoint; the transaction lives in a signed HttpOnly `oidc_tx` cookie) → `GET /auth/oidc/callback`
+  → SPA `/auth/callback` with the tokens in the URL **fragment**. Bearer tokens are verified against
+  the issuer's JWKS (`infra/oidc.ts`): asymmetric algorithms only, `iss`/`aud`/`exp` enforced, fail
+  closed. HS256 is accepted only for tokens this server signed itself (local login). See
+  `usage_docs/02-configuration.md` for the `OIDC_*`/`IDS_*` variables.
+- **Workspaces (multi-tenancy)**: every request is scoped by `x-tenant-id` and the caller must be an
+  **active member** of that workspace (`requireWorkspaceAccess`), else 403 — an explicit workspace is
+  never silently swapped. Platform administrators (a `system_admin` membership, or the local
+  `admin`) may use any workspace and the `all` platform view. A membership created ahead of time
+  (signup, invitation, `PLATFORM_ADMIN_EMAIL`) carries a placeholder `userId` and is **bound to the
+  caller's `sub` on the first sign-in with that email *verified*** (`modules/tenants/identity.ts`);
+  a bound seat is never re-bound, an email alone never matches. With SSO on, `POST /tenants/signup`
+  requires sign-in and makes the caller the owner. Workspace roles map to permissions through the
+  workspace's own `Role` rows, falling back to `DEFAULT_ROLES`. WebSockets are bound to one workspace
+  and can only subscribe to that workspace's instances; the timer scheduler fires per workspace.
+  Production start-up refuses weak defaults (`assertProductionConfig`).
 - **AuthZ**: RBAC with roles `admin`, `author`, `release`, `operator`, `worker`, `viewer`, seeded on
   first boot (`modules/iam/service.ts`'s `DEFAULT_ROLES`) — each a named `Role` row carrying a
   `permissions: string[]` list (real, editable rows, not a hardcoded enum). Every route declares its
