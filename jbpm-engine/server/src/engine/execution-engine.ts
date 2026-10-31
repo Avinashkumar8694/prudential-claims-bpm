@@ -1,5 +1,6 @@
 // Token-based interpreter over the SDK engine JSON. See docs/08-execution-engine.md.
 // Deterministic core (clock/newId injected). Persists the instance after runToQuiescence.
+import { effectiveLimitsFor } from '../modules/platform/limits.ts';
 import type { AppContext } from '../context.ts';
 import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.ts';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
@@ -504,7 +505,7 @@ export class ExecutionEngine {
   /** `cycle` (boundary timers only — see call site) lets TimerService reschedule this job for its next
    *  occurrence after firing, instead of the one-shot behavior every other timer kind wants. */
   private async scheduleTimer(inst: Instance, tokenId: string, nodeId: string, dueAt: string, cycle?: string) {
-    const { maxActiveTimers } = await new SettingsService(this.ctx).get();
+    const { maxActiveTimers } = (await effectiveLimitsFor(this.ctx)).effective;
     if (maxActiveTimers) {
       const active = await this.timerRepo().query((t) => t.tenantId === this.ctx.tenantId && t.status === 'scheduled');
       if (active.length >= maxActiveTimers) {

@@ -7,6 +7,7 @@ import { config } from './infra/config.ts';
 import { makeContext } from './context.ts';
 import { buildRoutes } from './http/routes.ts';
 import { buildAuthRoutes } from './http/auth-routes.ts';
+import { buildPlatformRoutes, requirePlatformAdmin } from './http/platform-routes.ts';
 import { buildPublicTenantRoutes, buildTenantRoutes } from './http/tenant-routes.ts';
 import { TenantService } from './modules/tenants/service.ts';
 import { requireAuth, requireWorkspaceAccess } from './http/auth-middleware.ts';
@@ -61,6 +62,7 @@ export function createApp(store?: Store) {
   app.use('/api', buildPublicTenantRoutes()); // public: /api/public/plans, /api/tenants/check/:slug, /api/tenants/signup
   app.use('/api/auth', buildAuthRoutes());   // login only — must stay reachable without a token
   app.use('/api', buildTenantRoutes());       // authenticated tenant endpoints: /api/me/tenants, /api/me/profile, etc.
+  app.use('/api/platform', requireAuth, requirePlatformAdmin, buildPlatformRoutes()); // platform admin only, no workspace scope
   app.use('/api', requireAuth, requireWorkspaceAccess, buildRoutes());
   app.use(errorMiddleware);
   return { app, store: theStore };

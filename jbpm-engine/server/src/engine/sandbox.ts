@@ -37,7 +37,7 @@ import { acquireScriptSlot } from '../infra/quotas.ts';
 /** pool key for callers that carry no tenant (tests/tools) — still its own pool, never a real workspace's. */
 const DEFAULT_POOL = '_no-tenant';
 
-export { sandboxStats, configureSandbox, sandboxConfig, resetSandboxPeaks, effectiveScriptConcurrency, effectiveOverflowMode } from './isolate-pool.ts';
+export { setPoolLimits, sandboxStats, configureSandbox, sandboxConfig, resetSandboxPeaks, effectiveScriptConcurrency, effectiveOverflowMode } from './isolate-pool.ts';
 
 export const PROCESS_INSTANCE_STATE = { PENDING: 0, ACTIVE: 1, COMPLETED: 2, ABORTED: 3, SUSPENDED: 4 } as const;
 
@@ -99,13 +99,17 @@ export interface ScriptOpts extends KContextInfo {
   maxConcurrentScripts?: number;
   /** per-workspace override of SCRIPT_OVERFLOW_MODE ('queue' | 'reject'); unset = env default. */
   scriptOverflowMode?: string;
+  /** max executions allowed to WAIT for a free isolate (resolved from the limits model); unset = pool default. */
+  scriptQueueMax?: number;
+  /** admission cap for the `java` dialect only (no pool there): the workspace's explicit request, undefined = unlimited. */
+  javaMaxConcurrent?: number;
 }
 
 export async function runScript(code: string, vars: Record<string, unknown>, timeoutMs: number, opts: ScriptOpts = {}): Promise<void> {
   // js: concurrency is governed by the tenant's isolate pool + bounded queue (isolate-pool.ts), which already
   // enforces maxConcurrentScripts as parallelism. java has no pool (one shared JVM sidecar), so it keeps the
   // hard-reject admission cap.
-  const release = opts.lang === 'java' && opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.maxConcurrentScripts) : undefined;
+  const release = opts.lang === 'java' && opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.javaMaxConcurrent) : undefined;
   try {
     await runScriptBody(code, vars, timeoutMs, opts);
   } finally {
@@ -153,10 +157,10 @@ const MAX_RESULT_BYTES = 8 * 1024 * 1024;
  *  `this.constructor.constructor('return process')()` etc. simply resolve to `undefined`.
  *  mode 'script' runs `code` as a statement body (bare-name writes sync back into `vars`);
  *  mode 'condition' evaluates it as a boolean expression / body with `return`. */
-async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number; scriptOverflowMode?: string }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
-  const { env, tenantId, maxConcurrentScripts, scriptOverflowMode, ...rest } = info;
+async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number; scriptOverflowMode?: string; scriptQueueMax?: number }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
+  const { env, tenantId, maxConcurrentScripts, scriptOverflowMode, scriptQueueMax, ...rest } = info;
   const input = JSON.stringify({ vars, env: env || {}, info: rest });
-  return withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, effectiveOverflowMode(scriptOverflowMode), async (isolate, context) => {
+  return withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, effectiveOverflowMode(scriptOverflowMode), scriptQueueMax, async (isolate, context) => {
     await context.global.set('__input', input);
     await (await isolate.compileScript('__setup(__input); delete globalThis.__input;')).run(context, { timeout: timeoutMs });
     // IIFE so var/let/const stay local while a bare assignment still lands on the global (see bare-name sync).
@@ -196,6 +200,8 @@ export interface ConditionCtx extends KContextInfo {
   /** workspace whose isolate pool runs the condition (never shared across tenants). */
   tenantId?: string;
   maxConcurrentScripts?: number;
+  scriptOverflowMode?: string;
+  scriptQueueMax?: number;
   onAction?: ScriptOpts['onAction'];
 }
 

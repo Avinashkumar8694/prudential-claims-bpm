@@ -60,13 +60,15 @@ export function effectiveOverflowMode(workspaceMode?: string): OverflowMode {
 
 interface Pooled { isolate: ivm.Isolate; tenant: string; runs: number; idleTimer?: NodeJS.Timeout }
 interface Waiter { resolve: (p: Pooled) => void; reject: (e: unknown) => void; timer: NodeJS.Timeout }
-interface TenantPool { id: string; size: number; busy: number; all: Set<Pooled>; idle: Pooled[]; queue: Waiter[] }
+interface TenantPool { id: string; size: number; queueMax?: number; busy: number; all: Set<Pooled>; idle: Pooled[]; queue: Waiter[] }
 
 const tenants = new Map<string, TenantPool>();
 let total = 0;
 let rr = 0;
 const peakBusy = new Map<string, number>();
 export function resetSandboxPeaks(): void { peakBusy.clear(); }
+const perTenant = new Map<string, { created: number; recycled: number }>();
+const bump = (id: string, k: 'created' | 'recycled') => { const e = perTenant.get(id) || { created: 0, recycled: 0 }; e[k]++; perTenant.set(id, e); };
 const totals = { created: 0, recycled: 0, evictedIdle: 0, queueRejected: 0, overflowRejected: 0, queueTimeouts: 0, executions: 0 };
 
 let snapshot: ivm.ExternalCopy<ArrayBuffer> | null | undefined;
@@ -90,15 +92,33 @@ export function sandboxStats() {
   }
   const running: Record<string, number> = {}, effective: Record<string, number> = {};
   for (const t of tenants.values()) { if (t.busy) running[t.id] = t.busy; effective[t.id] = t.size; }
-  return { running, peakRunning: Object.fromEntries(peakBusy), effectiveConcurrency: effective, isolatesAlive: alive, totalIsolates: total, idle: [...tenants.values()].reduce((a, t) => a + t.idle.length, 0), queued: queued, queuedTotal, ...totals };
+  return { perTenant: Object.fromEntries(perTenant), running, peakRunning: Object.fromEntries(peakBusy), effectiveConcurrency: effective, isolatesAlive: alive, totalIsolates: total, idle: [...tenants.values()].reduce((a, t) => a + t.idle.length, 0), queued: queued, queuedTotal, ...totals };
 }
 
-function poolOf(id: string, requestedSize: number | undefined): TenantPool {
+function poolOf(id: string, requestedSize: number | undefined, queueMax?: number): TenantPool {
   let t = tenants.get(id);
   if (!t) { t = { id, size: effectiveScriptConcurrency(), busy: 0, all: new Set(), idle: [], queue: [] }; tenants.set(id, t); }
   // quota applies as pool size; an unset quota leaves the tenant's last-known size (default on first sight)
-  if (requestedSize) t.size = effectiveScriptConcurrency(requestedSize);
+  if (requestedSize) resize(t, effectiveScriptConcurrency(requestedSize));
+  if (queueMax !== undefined) t.queueMax = queueMax;
   return t;
+}
+
+/** live resize: growing is lazy (isolates are created on demand, and waiting work is pumped right away);
+ *  shrinking drains idle isolates now and retires busy ones when their run ends. Queued work is never dropped. */
+function resize(t: TenantPool, size: number): void {
+  const grew = size > t.size;
+  t.size = size;
+  while (t.all.size > t.size && t.idle.length) dispose(t.idle[0], 'recycled');
+  if (grew && t.queue.length) pump();
+}
+
+/** apply new limits to a workspace's live pool (platform admin changed something) without a restart. */
+export function setPoolLimits(tenantId: string, l: { size: number; queueMax: number; mode?: OverflowMode }): void {
+  const t = tenants.get(tenantId);
+  if (!t) return;
+  t.queueMax = l.queueMax;
+  resize(t, effectiveScriptConcurrency(l.size));
 }
 
 function dispose(p: Pooled, why: 'recycled' | 'idle' | 'dead'): void {
@@ -106,7 +126,7 @@ function dispose(p: Pooled, why: 'recycled' | 'idle' | 'dead'): void {
   if (p.idleTimer) clearTimeout(p.idleTimer);
   if (t) { t.all.delete(p); const i = t.idle.indexOf(p); if (i >= 0) t.idle.splice(i, 1); }
   total--;
-  if (why === 'recycled') totals.recycled++; else if (why === 'idle') totals.evictedIdle++;
+  if (why === 'recycled') { totals.recycled++; bump(p.tenant, 'recycled'); } else if (why === 'idle') totals.evictedIdle++;
   try { if (!p.isolate.isDisposed) p.isolate.dispose(); } catch { /* already gone */ }
   if (t && !t.all.size && !t.queue.length) tenants.delete(p.tenant);
 }
@@ -114,7 +134,7 @@ function dispose(p: Pooled, why: 'recycled' | 'idle' | 'dead'): void {
 function create(t: TenantPool): Pooled {
   const snap = getSnapshot();
   const p: Pooled = { isolate: new ivm.Isolate({ memoryLimit: cfg.memoryMb, ...(snap ? { snapshot: snap } : {}) }), tenant: t.id, runs: 0 };
-  t.all.add(p); total++; totals.created++;
+  t.all.add(p); total++; totals.created++; bump(t.id, 'created');
   return p;
 }
 
@@ -165,8 +185,8 @@ function grant(t: TenantPool, p: Pooled): Pooled {
   return p;
 }
 
-async function acquire(tenantId: string, size?: number, mode?: OverflowMode): Promise<Pooled> {
-  const t = poolOf(tenantId, size);
+async function acquire(tenantId: string, size?: number, mode?: OverflowMode, queueMax?: number): Promise<Pooled> {
+  const t = poolOf(tenantId, size, queueMax);
   if (!t.queue.length) {
     const p = t.idle.pop();
     if (p) { if (p.idleTimer) { clearTimeout(p.idleTimer); p.idleTimer = undefined; } return grant(t, p); }
@@ -182,9 +202,10 @@ async function acquire(tenantId: string, size?: number, mode?: OverflowMode): Pr
     if (t.all.size < t.size) throw quotaExceeded(`server script capacity exhausted (global isolate ceiling ${cfg.maxIsolates})`, { quota: 'scriptMaxIsolates', max: cfg.maxIsolates });
     throw quotaExceeded(`per-tenant concurrent script quota exceeded (max ${t.size})`, { quota: 'maxConcurrentScripts', max: t.size, current: t.busy });
   }
-  if (t.queue.length >= cfg.queueMax) {
+  const qMax = t.queueMax ?? cfg.queueMax;
+  if (t.queue.length >= qMax) {
     totals.queueRejected++;
-    throw quotaExceeded(`script queue full for this workspace (max ${cfg.queueMax} waiting)`, { quota: 'scriptQueue', max: cfg.queueMax });
+    throw quotaExceeded(`script queue full for this workspace (max ${qMax} waiting)`, { quota: 'scriptQueue', max: qMax });
   }
   return new Promise<Pooled>((resolve, reject) => {
     const w: Waiter = {
@@ -205,7 +226,7 @@ function release(p: Pooled, recycle: boolean): void {
   const t = tenants.get(p.tenant);
   if (t && t.busy > 0) t.busy--;
   p.runs++;
-  if (!t || recycle || p.isolate.isDisposed || p.runs >= cfg.maxRuns) { dispose(p, 'recycled'); pump(); return; }
+  if (!t || recycle || p.isolate.isDisposed || p.runs >= cfg.maxRuns || t.all.size > t.size) { dispose(p, 'recycled'); pump(); return; }
   t.idle.push(p);
   p.idleTimer = setTimeout(() => dispose(p, 'idle'), cfg.idleMs);
   p.idleTimer.unref();
@@ -213,8 +234,8 @@ function release(p: Pooled, recycle: boolean): void {
 }
 
 /** Runs `fn` with a fresh context inside a pooled isolate of `tenantId`. `fn` must not retain the context. */
-export async function withIsolate<T>(tenantId: string, poolSize: number | undefined, mode: OverflowMode, fn: (isolate: ivm.Isolate, context: ivm.Context) => Promise<T>): Promise<T> {
-  const p = await acquire(tenantId, poolSize, mode);
+export async function withIsolate<T>(tenantId: string, poolSize: number | undefined, mode: OverflowMode, queueMax: number | undefined, fn: (isolate: ivm.Isolate, context: ivm.Context) => Promise<T>): Promise<T> {
+  const p = await acquire(tenantId, poolSize, mode, queueMax);
   totals.executions++;
   let context: ivm.Context | undefined;
   let recycle = false;

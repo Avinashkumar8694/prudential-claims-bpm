@@ -16,16 +16,39 @@ Configuration lives in two layers: **environment variables** (deployment-time, r
 | `ADMIN_INITIAL_PASSWORD` | `admin-change-me` | Password for the one-time seeded `admin` user (only used if no users exist yet at boot) |
 | `INTEGRATION_BASE_URL` / per-deployment `INTEGRATION_LAYER_URL` | `http://localhost:3000` | Base URL an HTTP service task's *relative* `url` is appended to — see the [HTTP / Service Task](nodes/http-service.md) node doc. Deployment-level `env.INTEGRATION_LAYER_URL` (set at deploy time) overrides the global default per environment |
 | `SCRIPT_TIMEOUT_MS` | `2000` | Wall-clock budget for a `js` script task/condition before it fails with `SCRIPT_TIMEOUT` |
-| `SCRIPT_OVERFLOW_MODE` | `queue` | What happens when a workspace already has its **effective concurrency** of scripts running: `queue` = the caller waits in a bounded FIFO queue; `reject` = refused immediately with `QUOTA_EXCEEDED` (no waiting, no queue slot). A workspace can override it with the Settings → System field `scriptOverflowMode` (`queue`/`reject`; unset = this value) |
-| `SCRIPT_POOL_DEFAULT_SIZE` | `4` | Script concurrency for a workspace that has no `maxConcurrentScripts` set |
-| `SCRIPT_POOL_MAX_SIZE` | `16` | Upper bound on any workspace's script concurrency. **Effective concurrency = `min(maxConcurrentScripts \|\| SCRIPT_POOL_DEFAULT_SIZE, SCRIPT_POOL_MAX_SIZE)`** — so a `maxConcurrentScripts` of 50 only gives 50 if this is ≥ 50 (it is also the exact `reject` threshold). Worst-case memory per workspace = effective concurrency × 64 MB isolate cap. `GET /settings/system` returns `effectiveScriptConcurrency` / `effectiveScriptOverflowMode` so you can see what is really applied |
-| `SCRIPT_MAX_ISOLATES` | `max(8, 2×CPU cores)` | Global ceiling on live isolates across all workspaces — keep it ≥ the sum of the busy workspaces' effective concurrency, otherwise the ceiling (not the per-workspace limit) is what bites (in `reject` mode: `server script capacity exhausted`). At the ceiling, waiting workspaces are served round-robin and may reclaim another workspace's *idle* isolate |
-| `SCRIPT_QUEUE_MAX` | `1000` | `queue` mode only: max executions waiting per workspace when all its isolates are busy; one more → `QUOTA_EXCEEDED` |
-| `SCRIPT_QUEUE_TIMEOUT_MS` | `5000` | `queue` mode only: max time an execution may wait in the queue before failing with `QUOTA_EXCEEDED` (does not count toward `SCRIPT_TIMEOUT_MS`) |
+| `SCRIPT_OVERFLOW_MODE` | `queue` | **Bootstrap default** of the platform's `scriptOverflowModeDefault`: what happens at a workspace's pool size — `queue` (wait, bounded) or `reject` (refuse immediately with `QUOTA_EXCEEDED`) |
+| `SCRIPT_POOL_DEFAULT_SIZE` | `2` | Bootstrap default of `scriptPoolDefaultSize`: pool size (= parallel scripts) for a workspace that doesn't set one |
+| `SCRIPT_POOL_MAX_SIZE` | `16` | Bootstrap default of `scriptPoolMaxSize`: **hard cap** on any workspace's pool size. Memory worst case per workspace = pool size × 64 MB |
+| `SCRIPT_QUEUE_DEFAULT_MAX` | `1000` | Bootstrap default of `scriptQueueDefaultMax`: how many executions may wait per workspace (queue mode) |
+| `SCRIPT_QUEUE_MAX` | `1000` | Bootstrap default of `scriptQueueMaxCap`: hard cap on a workspace's queue length |
+| `SCRIPT_QUEUE_TIMEOUT_MS` | `5000` | Bootstrap default of `scriptQueueTimeoutMs`: max wait in the queue before `QUOTA_EXCEEDED` (not counted in `SCRIPT_TIMEOUT_MS`) |
+| `SCRIPT_MAX_ISOLATES` | `max(8, 2×CPU cores)` | Bootstrap default of `scriptMaxIsolates`: server-wide ceiling of live isolates **per pod**. Keep it ≥ the sum of the busy workspaces' pool sizes. At the ceiling, waiting workspaces are served round-robin and may reclaim another's *idle* isolate |
+| `MAX_ACTIVE_INSTANCES_CAP` / `MAX_ACTIVE_TIMERS_CAP` | `0` (no cap) | Bootstrap defaults of `maxActiveInstancesCap` / `maxActiveTimersCap` |
 | `SCRIPT_ISOLATE_IDLE_MS` | `60000` | An idle isolate is disposed after this long (the pool shrinks to zero when a workspace goes quiet) |
 | `SCRIPT_ISOLATE_MAX_RUNS` | `1000` | An isolate is recycled after this many executions (also recycled after a timeout, OOM, or near-full heap) |
 
 > **Single pod vs several.** Isolate pools, queues and the concurrency/overflow limits above are **per server process**. With N pods behind a load balancer a workspace's real limit is `limit × N` (and its worst-case script memory × N). Size `maxConcurrentScripts` and `SCRIPT_MAX_ISOLATES` per pod accordingly.
+
+### Platform limits — who controls what (3 levels)
+
+The script runtime and the workspace quotas are governed by a **platform administrator** (the fixed platform-admin SSO identity), not by workspace owners:
+
+```
+effective value = min( workspace setting , per-workspace platform cap , global platform cap )     (unset → the default, itself clamped to the cap)
+```
+
+| Level | Who sets it | Where | What |
+|---|---|---|---|
+| **Global** | platform admin | `GET/PUT /api/platform/limits` · UI *Platform limits* | defaults + hard caps: `scriptPoolDefaultSize`, `scriptPoolMaxSize`, `scriptQueueDefaultMax`, `scriptQueueMaxCap`, `scriptQueueTimeoutMs`, `scriptMaxIsolates`, `scriptOverflowModeDefault`, `maxActiveInstancesCap`, `maxActiveTimersCap`. Stored outside any workspace; the env vars above are only the bootstrap defaults, the stored values override them **live** (no restart) |
+| **Per workspace** | platform admin | `GET/PUT /api/platform/workspaces/:id/limits` | tighten that workspace's caps/defaults (never above the global cap) and optionally **lock** its overflow mode (`lockedOverflowMode`) |
+| **Workspace** | workspace admins | `PUT /api/settings/system` · Settings → System | `scriptPoolSize`, `scriptQueueMax`, `scriptOverflowMode`, `maxActiveInstances`, `maxActiveTimers` — only **within the caps**: above the cap → `422` naming the cap; `0 = unlimited` is accepted only when the cap itself is unlimited; going lower is always allowed |
+
+- **One isolate runs one script at a time, so parallelism = pool size.** `scriptPoolSize` is *the* parallelism/memory knob. `maxConcurrentScripts` is a **deprecated alias** of the workspace's requested pool size (`scriptPoolSize` wins if both are set; `0` now means "platform default", not "unlimited"). The second, separate knob is `scriptQueueMax` (+ the platform's timeout) = how many may *wait*.
+- Pools resize live: growing creates isolates lazily and starts waiting work immediately; shrinking drains idle isolates and retires busy ones after their run; queued work is never dropped.
+- `GET /api/settings/system` returns the workspace's `effectiveLimits` and its read-only `limitCaps`; `GET /api/platform/limits/usage` (platform admin) lists every workspace's effective limits, pool size, running, queued, peak, created/recycled. Every platform change is audited (`platform.limits.updated`, `platform.workspace-limits.updated`).
+- Every workspace owner/admin gets `403` on `/api/platform/*`; settings keys that are not workspace settings (including all caps) are refused with `422`.
+- Workspace settings are stored **per workspace** (earlier builds shared one row, so one workspace's save overwrote another's; legacy rows are still read).
+
 
 | `WS_PATH` | `/ws` | WebSocket path for live UI updates (node/task/instance events) |
 | `DEFAULT_TENANT` | `default` | The workspace a request resolves to when it sends no `x-tenant-id` (the caller still has to be a member) |

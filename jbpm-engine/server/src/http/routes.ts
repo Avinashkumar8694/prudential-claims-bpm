@@ -21,7 +21,7 @@ import { IamService } from '../modules/iam/service.ts';
 import { ErrorService } from '../modules/errors/service.ts';
 import { AuditService } from '../modules/audit/service.ts';
 import { NotificationService } from '../modules/notifications/service.ts';
-import { effectiveScriptConcurrency, effectiveOverflowMode } from '../engine/sandbox.ts';
+import { effectiveLimitsFor } from '../modules/platform/limits.ts';
 import { SettingsService } from '../modules/settings/service.ts';
 import { TimerService } from '../modules/timers/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
@@ -269,7 +269,13 @@ export function buildRoutes(): Router {
   // mode vs the SCRIPT_OVERFLOW_MODE env default) — so operators can see the real limit, not just the setting.
   r.get('/settings/system', asyncHandler(async (req, res) => {
     const s = await new SettingsService(ctxOf(req)).get();
-    res.json({ ...s, effectiveScriptConcurrency: effectiveScriptConcurrency(s.maxConcurrentScripts), effectiveScriptOverflowMode: effectiveOverflowMode(s.scriptOverflowMode) });
+    const { effective, caps } = await effectiveLimitsFor(ctxOf(req));
+    res.json({
+      ...s,
+      effectiveScriptConcurrency: effective.scriptPoolSize, effectiveScriptOverflowMode: effective.scriptOverflowMode,
+      effectiveLimits: effective,   // what is really applied (read-only)
+      limitCaps: caps,              // what this workspace may not exceed (set by the platform administrator)
+    });
   }));
   r.put('/settings/system', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).update(req.body || {}, actorOf(req)))));
 

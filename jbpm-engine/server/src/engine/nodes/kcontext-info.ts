@@ -1,7 +1,7 @@
 // Shared helpers for building the kcontext-facing data (declared variable types, active node
 // instances, process/instance metadata) from a HandlerCtx — used identically by script/http/gateway
 // handlers so these three don't drift out of sync with each other over time.
-import { SettingsService } from '../../modules/settings/service.ts';
+import { effectiveLimitsFor } from '../../modules/platform/limits.ts';
 import type { HandlerCtx } from './types.ts';
 import type { ActiveNodeInstance } from '../java-sidecar.ts';
 import type { EngineNode } from '../../sdk/index.ts';
@@ -51,9 +51,13 @@ export function onActionOf(c: HandlerCtx) {
   return { broadcast: c.broadcast, signal: c.signal, abort: c.abort };
 }
 
-/** the workspace's script concurrency/overflow settings, for the isolate pool (js) — read once per execution so a
- *  settings change takes effect immediately. Spread into runScript/evalCondition options. */
-export async function scriptLimitsOf(c: HandlerCtx): Promise<{ maxConcurrentScripts: number | undefined; scriptOverflowMode: 'queue' | 'reject' | undefined }> {
-  const s = await new SettingsService(c.app).get();
-  return { maxConcurrentScripts: s.maxConcurrentScripts, scriptOverflowMode: s.scriptOverflowMode };
+/** the workspace's effective script limits (platform caps ∩ workspace settings, see modules/platform/limits.ts) for the
+ *  isolate pool (js) and the java admission cap — read per execution so a change applies to the very next run. */
+export async function scriptLimitsOf(c: HandlerCtx): Promise<{ maxConcurrentScripts: number; scriptQueueMax: number; scriptOverflowMode: 'queue' | 'reject'; javaMaxConcurrent: number | undefined }> {
+  const { effective, caps, settings } = await effectiveLimitsFor(c.app);
+  const asked = settings.scriptPoolSize || settings.maxConcurrentScripts;
+  return {
+    maxConcurrentScripts: effective.scriptPoolSize, scriptQueueMax: effective.scriptQueueMax, scriptOverflowMode: effective.scriptOverflowMode,
+    javaMaxConcurrent: asked ? Math.min(asked, caps.scriptPoolMaxSize) : undefined,
+  };
 }

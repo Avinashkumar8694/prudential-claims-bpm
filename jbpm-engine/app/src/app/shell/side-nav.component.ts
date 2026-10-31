@@ -131,6 +131,7 @@ export class SideNavComponent {
       base.push({ label: 'Reports & Analytics', icon: 'chart', link: '/reports' });
       base.push({ label: 'Workflow Analytics', icon: 'chart', link: '/workflow-analytics' });
     }
+    if (this.tenant.isSystemAdmin()) base.push({ label: 'Platform limits', icon: 'settings', link: '/platform-limits' });
     return base;
   });
 

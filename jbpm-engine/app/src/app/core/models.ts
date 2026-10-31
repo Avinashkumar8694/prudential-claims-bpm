@@ -140,6 +140,11 @@ export interface SystemSettings {
   maxActiveTimers?: number;
   maxConcurrentScripts?: number;
   scriptOverflowMode?: 'queue' | 'reject' | null;
+  scriptPoolSize?: number;
+  scriptQueueMax?: number;
+  /** read-only, from the platform administrator: what this workspace may not exceed / what is really applied */
+  limitCaps?: { scriptPoolMaxSize: number; scriptQueueMaxCap: number; maxActiveInstancesCap: number; maxActiveTimersCap: number; lockedOverflowMode?: 'queue' | 'reject' };
+  effectiveLimits?: { scriptPoolSize: number; scriptQueueMax: number; scriptOverflowMode: 'queue' | 'reject'; maxActiveInstances: number; maxActiveTimers: number };
   /** read-only, computed by the server: what the script pool actually applies */
   effectiveScriptConcurrency?: number;
   effectiveScriptOverflowMode?: 'queue' | 'reject';

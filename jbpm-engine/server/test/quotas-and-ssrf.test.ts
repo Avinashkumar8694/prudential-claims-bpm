@@ -108,7 +108,7 @@ test('acquireScriptSlot enforces the concurrent-script quota and releases cleanl
 
 test('acquireScriptSlot still hard-rejects at its cap (used for the java sidecar); js runs treat maxConcurrentScripts as pool size and queue instead', async () => {
   const held = acquireScriptSlot('t1', 1);
-  await assert.rejects(() => runScript('1', {}, 1000, { tenantId: 't1', maxConcurrentScripts: 1, lang: 'java' }), /QUOTA_EXCEEDED|quota/i);
+  await assert.rejects(() => runScript('1', {}, 1000, { tenantId: 't1', javaMaxConcurrent: 1, lang: 'java' }), /QUOTA_EXCEEDED|quota/i);
   assert.throws(() => acquireScriptSlot('t1', 1), /quota/i);
   held();
   // js with quota 1: three concurrent runs all succeed (serialised through one isolate), none rejected

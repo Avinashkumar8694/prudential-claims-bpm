@@ -75,6 +75,7 @@ Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 | EXE-90…92 | quotas per workspace (no bleed), sandbox infinite loop & direct globals, 25 concurrent starts | ✅ |
 | EXE-95/96 | other workspace can neither see nor drive any of it; analytics per workspace | ✅ |
 | EXE-97 | case management: definition/instance roles, isolation, no audit on non-existent case | ✅ |
+| PLIM-1…7 | platform-governed limits: every `/api/platform/*` route 403 for all workspace roles/local admin/other SSO user, 200 only for the platform admin; escalation closed (above-cap, 0=unlimited, platform-only keys → 422); min-chain resolution; per-workspace override + mode lock; live pool resize without dropping queued work; validation; audit entries; usage endpoint | ✅ |
 | POOL-7…11 | overflow mode: reject (2000-burst, limit 50 → exactly 50 run/1950 refused instantly), queue (all 2000 ok, ≤50 concurrent), small queue/short wait errors, effective concurrency + workspace-over-env + invalid value, mixed-mode workspaces, pool healthy after reject burst | ✅ |
 | POOL-1…6 | isolate pool: no state leak between scripts/tenants, 2000-burst bounded, queue overflow/timeout, recycle on timeout/OOM, idle eviction, fair under a global ceiling | ✅ |
 | EXE-91b | **sandbox escape via constructor chains** | ✅ |
