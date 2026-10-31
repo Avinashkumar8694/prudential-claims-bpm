@@ -4,7 +4,7 @@ import type { AppContext } from '../context.ts';
 import { Collections, type Deployment, type Instance, type NodeVisit, type Task, type TimerJob, type Token } from '../domain.ts';
 import type { EngineFlow, EngineNode, EngineProcess } from '../sdk/index.ts';
 import { NODE_HANDLERS, CHILD_OUTPUT_MAPPERS, buildMultiInstanceResult, type HandlerCtx, type HandlerResult } from './nodes/index.ts';
-import { varTypesOf, kcontextInfoOf, onActionOf } from './nodes/kcontext-info.ts';
+import { varTypesOf, kcontextInfoOf, onActionOf, scriptLimitsOf } from './nodes/kcontext-info.ts';
 // Aliased (not `boundary`) since fireBoundary()'s own parameter below is already named `boundary`.
 import * as boundaryHandler from './nodes/boundary/handler.ts';
 import { computeDue } from './duration.ts';
@@ -636,7 +636,7 @@ export class ExecutionEngine {
     const lang = (node as any)[`${kind}Lang`] as string | undefined;
     try {
       await runScript(text, c.inst.variables, config.scriptTimeoutMs, {
-        ...kcontextInfoOf(c), lang, varTypes: varTypesOf(c), onAction: onActionOf(c),
+        ...kcontextInfoOf(c), ...(await scriptLimitsOf(c)), lang, varTypes: varTypesOf(c), onAction: onActionOf(c),
       });
       return undefined;
     } catch (e) {

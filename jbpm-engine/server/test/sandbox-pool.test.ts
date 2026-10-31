@@ -104,3 +104,86 @@ test('POOL-6 two workspaces under load are served fairly under a tiny global cei
   const alive = sandboxStats().isolatesAlive;
   assert.ok(!('fair-a' in alive && 'fair-b' in alive && alive['fair-a'] + alive['fair-b'] > 2));
 });
+
+// ------------------------------------------------ overflow mode: queue vs reject, effective concurrency
+import { resetSandboxPeaks, effectiveScriptConcurrency, effectiveOverflowMode } from '../src/engine/sandbox.ts';
+import { MemoryStore } from '../src/store/memory-store.ts';
+import { fakeClock } from '../src/infra/ids.ts';
+import { makeContext } from '../src/context.ts';
+import { SettingsService } from '../src/modules/settings/service.ts';
+
+const runM = (c: string, tenantId: string, quota: number | undefined, mode: string | undefined, vars: Record<string, unknown> = {}) =>
+  runScript(c, vars, 2000, { tenantId, maxConcurrentScripts: quota, scriptOverflowMode: mode }).then(() => vars);
+const settle = (ps: Promise<unknown>[]) => Promise.allSettled(ps);
+
+test('POOL-7 reject mode: 2000 simultaneous with limit 50 → exactly 50 run, 1950 refused immediately with QUOTA_EXCEEDED', async () => {
+  configureSandbox({ poolMaxSize: 64, maxIsolates: 64, overflowMode: 'queue' });
+  await Promise.all(Array.from({ length: 50 }, () => runM(burn(30), 'rej-a', 50, 'reject'))); // warm the pool: rejection speed, not isolate boot
+  resetSandboxPeaks();
+  const t0 = performance.now();
+  let rejectedAt = 0;
+  const ps = Array.from({ length: 2000 }, (_, i) => runM(burn(60) + ' vars.out = vars.n', 'rej-a', 50, 'reject', { n: i })
+    .catch((e) => { rejectedAt = Math.max(rejectedAt, performance.now() - t0); throw e; }));
+  const rs = await settle(ps);
+  const ok = rs.filter((r) => r.status === 'fulfilled').length;
+  const rejected = rs.filter((r) => r.status === 'rejected' && code((r as PromiseRejectedResult).reason) === 'QUOTA_EXCEEDED').length;
+  assert.strictEqual(ok, 50);
+  assert.strictEqual(rejected, 1950);
+  assert.ok(rejectedAt < 100, `all rejections returned within ${rejectedAt.toFixed(1)}ms (not after waiting)`);
+  assert.strictEqual(sandboxStats().peakRunning['rej-a'], 50);
+  assert.strictEqual(sandboxStats().queued['rej-a'], undefined, 'reject mode never queues');
+  // POOL-12 (f): the pool is healthy afterwards
+  for (let i = 0; i < 5; i++) assert.strictEqual((await runM('vars.v = 1', 'rej-a', 50, 'reject')).v, 1);
+  assert.ok(sandboxStats().totalIsolates >= 1);
+});
+
+test('POOL-8 queue mode: same burst with a big enough queue → all 2000 succeed and never more than 50 run at once', async () => {
+  configureSandbox({ poolMaxSize: 64, maxIsolates: 64, queueMax: 5000, queueTimeoutMs: 60_000 });
+  resetSandboxPeaks();
+  const rs = await Promise.all(Array.from({ length: 2000 }, (_, i) => runM('vars.out = vars.n * 2', 'que-a', 50, 'queue', { n: i })));
+  rs.forEach((r, i) => assert.strictEqual(r.out, i * 2));
+  assert.ok(sandboxStats().peakRunning['que-a'] <= 50, `peak ${sandboxStats().peakRunning['que-a']}`);
+  assert.strictEqual(sandboxStats().effectiveConcurrency['que-a'], 50);
+});
+
+test('POOL-9 queue mode with a small queue / short wait → the documented overflow and timeout errors', async () => {
+  configureSandbox({ queueMax: 2, queueTimeoutMs: 60 });
+  const hog = runM(burn(300), 'que-b', 1, 'queue');
+  await sleep(20);
+  const waiters = [runM('1', 'que-b', 1, 'queue'), runM('1', 'que-b', 1, 'queue')];
+  await assert.rejects(runM('1', 'que-b', 1, 'queue'), (e) => code(e) === 'QUOTA_EXCEEDED' && /queue full/.test((e as Error).message));
+  const w = await settle(waiters);
+  assert.ok(w.every((r) => r.status === 'rejected' && /waiting for a script slot/.test(String((r as PromiseRejectedResult).reason?.message))), 'waiters time out');
+  await hog;
+});
+
+test('POOL-10 effective concurrency = min(quota || default, SCRIPT_POOL_MAX_SIZE); per-workspace mode beats env; invalid mode is rejected', async () => {
+  configureSandbox({ poolDefaultSize: 4, poolMaxSize: 16, overflowMode: 'queue' });
+  assert.strictEqual(effectiveScriptConcurrency(0), 4);
+  assert.strictEqual(effectiveScriptConcurrency(undefined), 4);
+  assert.strictEqual(effectiveScriptConcurrency(50), 16, 'a quota above the pool max is capped by SCRIPT_POOL_MAX_SIZE');
+  configureSandbox({ poolMaxSize: 100 });
+  assert.strictEqual(effectiveScriptConcurrency(50), 50);
+  assert.strictEqual(effectiveOverflowMode(undefined), 'queue');
+  assert.strictEqual(effectiveOverflowMode('reject'), 'reject', 'workspace beats env');
+  configureSandbox({ overflowMode: 'reject' });
+  assert.strictEqual(effectiveOverflowMode(undefined), 'reject', 'unset = env');
+  assert.strictEqual(effectiveOverflowMode('queue'), 'queue', 'workspace beats env (other direction)');
+
+  const ctx = makeContext({ store: new MemoryStore(), tenantId: 'ws-set', clock: fakeClock().clock, newId: (() => { let n = 0; return () => `s${++n}`; })() });
+  const svc = new SettingsService(ctx);
+  assert.strictEqual((await svc.update({ scriptOverflowMode: 'reject' }, 'a')).scriptOverflowMode, 'reject');
+  await assert.rejects(svc.update({ scriptOverflowMode: 'drop' as never }, 'a'), (e) => (e as { code?: string }).code === 'VALIDATION' || /scriptOverflowMode/.test((e as Error).message));
+  assert.strictEqual((await svc.get()).scriptOverflowMode, 'reject', 'invalid update left the setting untouched');
+  assert.strictEqual((await svc.update({ scriptOverflowMode: null as never }, 'a')).scriptOverflowMode, undefined, 'null = back to the env default');
+});
+
+test('POOL-11 one workspace in reject mode and another in queue mode behave independently at the same time', async () => {
+  configureSandbox({ poolMaxSize: 16, queueMax: 100, queueTimeoutMs: 5000 });
+  const rej = Array.from({ length: 6 }, () => runM(burn(80), 'mix-r', 2, 'reject'));
+  const que = Array.from({ length: 6 }, (_, i) => runM(burn(20) + ' vars.i = ' + i, 'mix-q', 2, 'queue'));
+  const [r, q] = await Promise.all([settle(rej), Promise.all(que)]);
+  assert.strictEqual(r.filter((x) => x.status === 'fulfilled').length, 2);
+  assert.strictEqual(r.filter((x) => x.status === 'rejected' && code((x as PromiseRejectedResult).reason) === 'QUOTA_EXCEEDED').length, 4);
+  assert.deepStrictEqual(q.map((v) => v.i), [0, 1, 2, 3, 4, 5], 'queue-mode workspace waited and all succeeded');
+});

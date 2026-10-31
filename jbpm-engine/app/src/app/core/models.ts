@@ -139,6 +139,10 @@ export interface SystemSettings {
   maxActiveInstances?: number;
   maxActiveTimers?: number;
   maxConcurrentScripts?: number;
+  scriptOverflowMode?: 'queue' | 'reject' | null;
+  /** read-only, computed by the server: what the script pool actually applies */
+  effectiveScriptConcurrency?: number;
+  effectiveScriptOverflowMode?: 'queue' | 'reject';
   updatedAt?: string; updatedBy?: string;
 }
 

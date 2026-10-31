@@ -1,6 +1,7 @@
 // Shared helpers for building the kcontext-facing data (declared variable types, active node
 // instances, process/instance metadata) from a HandlerCtx — used identically by script/http/gateway
 // handlers so these three don't drift out of sync with each other over time.
+import { SettingsService } from '../../modules/settings/service.ts';
 import type { HandlerCtx } from './types.ts';
 import type { ActiveNodeInstance } from '../java-sidecar.ts';
 import type { EngineNode } from '../../sdk/index.ts';
@@ -48,4 +49,11 @@ export function kcontextInfoOf(c: HandlerCtx) {
  *  execution — see sandbox.ts's ScriptOpts.onAction. */
 export function onActionOf(c: HandlerCtx) {
   return { broadcast: c.broadcast, signal: c.signal, abort: c.abort };
+}
+
+/** the workspace's script concurrency/overflow settings, for the isolate pool (js) — read once per execution so a
+ *  settings change takes effect immediately. Spread into runScript/evalCondition options. */
+export async function scriptLimitsOf(c: HandlerCtx): Promise<{ maxConcurrentScripts: number | undefined; scriptOverflowMode: 'queue' | 'reject' | undefined }> {
+  const s = await new SettingsService(c.app).get();
+  return { maxConcurrentScripts: s.maxConcurrentScripts, scriptOverflowMode: s.scriptOverflowMode };
 }

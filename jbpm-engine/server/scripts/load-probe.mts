@@ -21,7 +21,7 @@ await Promise.all(Array.from({ length: N }, async (_, i) => {
   const vars: Record<string, unknown> = { n: i };
   const s = performance.now();
   try {
-    await runScript(code, vars, 2000, { tenantId: 'ws-1', maxConcurrentScripts: QUOTA });
+    await runScript(code, vars, 2000, { tenantId: 'ws-1', maxConcurrentScripts: QUOTA, scriptOverflowMode: process.env.MODE });
     lat.push(performance.now() - s);
     (vars.out === i * 2 + (vars.out as number) - i * 2 && typeof vars.out === 'number') ? ok++ : wrong++;
     if ((vars.out as number) - i * 2 !== (vars.out as number) - i * 2) wrong++;
@@ -35,7 +35,7 @@ console.log(JSON.stringify({
   requests: N, quotaPerWorkspace: QUOTA ?? 'unlimited', succeeded: ok, wrongResult: wrong, failed: N - ok - wrong, errors,
   wallMs: Math.round(wall), throughputPerSec: Math.round(N / (wall / 1000)),
   latencyMs: { p50: pct(0.5), p95: pct(0.95), p99: pct(0.99), max: lat.length ? lat[lat.length - 1].toFixed(0) : '-' },
-  isolates: { created: sandboxStats().created, recycled: sandboxStats().recycled, queueRejected: sandboxStats().queueRejected },
+  isolates: { maxConcurrentlyRunning: sandboxStats().peakRunning['ws-1'], effectiveConcurrency: sandboxStats().effectiveConcurrency['ws-1'], created: sandboxStats().created, recycled: sandboxStats().recycled, queueRejected: sandboxStats().queueRejected },
   rssMB: { before: mb(baseRss), peak: mb(peakRss), growth: mb(peakRss - baseRss) }, peakHeapMB: mb(peakHeap),
 }, null, 1));
 process.exit(0);

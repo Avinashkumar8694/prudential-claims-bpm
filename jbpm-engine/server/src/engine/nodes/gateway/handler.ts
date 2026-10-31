@@ -1,7 +1,7 @@
 // Gateway — exclusive/parallel/inclusive/event/complex branching + join.
 import type { NodeHandler, HandlerResult } from '../types.ts';
 import { evalCondition } from '../../sandbox.ts';
-import { varTypesOf, kcontextInfoOf, onActionOf } from '../kcontext-info.ts';
+import { varTypesOf, kcontextInfoOf, onActionOf, scriptLimitsOf } from '../kcontext-info.ts';
 
 /** sequential (not Promise.all) so a 'java' condition's sidecar round trip for flow N doesn't race
  *  the one for flow N+1 — gateway fan-out is small and not a hot path, so this costs nothing real. */
@@ -25,7 +25,7 @@ export const handler: NodeHandler = async (c): Promise<HandlerResult> => {
   // sandbox.ts evalCondition / java-sidecar.ts executeJavaCondition. Unused by `js` conditions (bare
   // names there aren't statically typed), but harmless to pass either way.
   const varTypes = varTypesOf(c);
-  const condCtx = { ...kcontextInfoOf(c), onAction: onActionOf(c) };
+  const condCtx = { ...kcontextInfoOf(c), ...(await scriptLimitsOf(c)), onAction: onActionOf(c) };
 
   if (converging && (node.mode === 'parallel' || node.mode === 'inclusive')) {
     // join: wait until a token has arrived via each incoming flow

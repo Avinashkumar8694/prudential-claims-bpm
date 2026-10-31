@@ -94,6 +94,14 @@ type SettingsTab = 'account' | 'system';
                 <div class="lbl">Max concurrent scripts<span class="shint">Script tasks / exit-scripts executing at this instant.</span></div>
                 <input type="number" min="0" [(ngModel)]="s.maxConcurrentScripts" style="width:90px;" />
               </div>
+              <div class="setting-row">
+                <div class="lbl">When scripts are at the limit<span class="shint">Queue: wait (bounded) for a free slot. Reject: fail immediately with QUOTA_EXCEEDED. Effective limit now: {{ s.effectiveScriptConcurrency }} ({{ s.effectiveScriptOverflowMode }}).</span></div>
+                <select [(ngModel)]="s.scriptOverflowMode" style="width:140px;">
+                  <option [ngValue]="null">Server default</option>
+                  <option value="queue">Queue</option>
+                  <option value="reject">Reject</option>
+                </select>
+              </div>
             </section>
 
             <section class="card">

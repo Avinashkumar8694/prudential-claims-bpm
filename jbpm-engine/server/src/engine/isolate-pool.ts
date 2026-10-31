@@ -2,10 +2,13 @@
 //
 //  * One pool per tenant (workspace) — an isolate is NEVER shared across tenants.
 //  * One isolate runs ONE execution at a time, so a timeout / OOM kill only ever hits the run that caused it.
-//  * Pool size (= per-workspace parallelism) = clamp(maxConcurrentScripts || SCRIPT_POOL_DEFAULT_SIZE, 1, 16).
+//  * Effective concurrency (= pool size = per-workspace parallelism) =
+//    max(1, min(maxConcurrentScripts || SCRIPT_POOL_DEFAULT_SIZE, SCRIPT_POOL_MAX_SIZE)). In reject mode this is
+//    exactly the threshold at which new executions are refused.
 //    Isolates are created lazily, reused across ALL of that workspace's processes, evicted after an idle period.
-//  * Excess demand waits in a bounded FIFO queue per tenant (SCRIPT_QUEUE_MAX / SCRIPT_QUEUE_TIMEOUT_MS →
-//    QUOTA_EXCEEDED) instead of spawning more isolates.
+//  * Overflow behaviour is configurable (SCRIPT_OVERFLOW_MODE, per-workspace override scriptOverflowMode):
+//    'queue' (default) — excess demand waits in a bounded FIFO queue per tenant (SCRIPT_QUEUE_MAX /
+//    SCRIPT_QUEUE_TIMEOUT_MS → QUOTA_EXCEEDED); 'reject' — refused immediately with QUOTA_EXCEEDED, no waiting.
 //  * A global ceiling (SCRIPT_MAX_ISOLATES) caps total isolates; when it is reached, waiting tenants are
 //    served round-robin and may reclaim another tenant's IDLE isolate, so one noisy workspace can't starve others.
 //  * Isolates are recycled after a timeout, OOM/dispose, a near-full heap, or SCRIPT_ISOLATE_MAX_RUNS runs.
@@ -16,8 +19,13 @@ import ivm from 'isolated-vm';
 import { ISOLATE_RUNTIME_SOURCE } from './isolate-runtime.ts';
 import { quotaExceeded } from '../infra/errors.ts';
 
+export type OverflowMode = 'queue' | 'reject';
+export const isOverflowMode = (v: unknown): v is OverflowMode => v === 'queue' || v === 'reject';
+
 export interface SandboxConfig {
   poolDefaultSize: number;
+  poolMaxSize: number;
+  overflowMode: OverflowMode;
   maxIsolates: number;
   queueMax: number;
   queueTimeoutMs: number;
@@ -29,6 +37,8 @@ export interface SandboxConfig {
 const num = (v: string | undefined, d: number) => { const n = Number(v); return v !== undefined && v !== '' && Number.isFinite(n) ? n : d; };
 const cfg: SandboxConfig = {
   poolDefaultSize: num(process.env.SCRIPT_POOL_DEFAULT_SIZE, 4),
+  poolMaxSize: num(process.env.SCRIPT_POOL_MAX_SIZE, 16),
+  overflowMode: isOverflowMode(process.env.SCRIPT_OVERFLOW_MODE) ? process.env.SCRIPT_OVERFLOW_MODE : 'queue',
   maxIsolates: num(process.env.SCRIPT_MAX_ISOLATES, Math.max(8, 2 * os.cpus().length)),
   queueMax: num(process.env.SCRIPT_QUEUE_MAX, 1000),
   queueTimeoutMs: num(process.env.SCRIPT_QUEUE_TIMEOUT_MS, 5000),
@@ -40,17 +50,24 @@ const cfg: SandboxConfig = {
 export function configureSandbox(patch: Partial<SandboxConfig>): void { Object.assign(cfg, patch); }
 export function sandboxConfig(): Readonly<SandboxConfig> { return cfg; }
 
-const MAX_POOL = 16;
-const clampSize = (n: number) => Math.min(MAX_POOL, Math.max(1, Math.floor(n)));
+/** the concurrency a workspace actually gets for a given maxConcurrentScripts quota (0/undefined = default). */
+export function effectiveScriptConcurrency(quota?: number): number {
+  return Math.max(1, Math.min(Math.floor(quota || cfg.poolDefaultSize), cfg.poolMaxSize));
+}
+export function effectiveOverflowMode(workspaceMode?: string): OverflowMode {
+  return isOverflowMode(workspaceMode) ? workspaceMode : cfg.overflowMode;
+}
 
 interface Pooled { isolate: ivm.Isolate; tenant: string; runs: number; idleTimer?: NodeJS.Timeout }
 interface Waiter { resolve: (p: Pooled) => void; reject: (e: unknown) => void; timer: NodeJS.Timeout }
-interface TenantPool { id: string; size: number; all: Set<Pooled>; idle: Pooled[]; queue: Waiter[] }
+interface TenantPool { id: string; size: number; busy: number; all: Set<Pooled>; idle: Pooled[]; queue: Waiter[] }
 
 const tenants = new Map<string, TenantPool>();
 let total = 0;
 let rr = 0;
-const totals = { created: 0, recycled: 0, evictedIdle: 0, queueRejected: 0, queueTimeouts: 0, executions: 0 };
+const peakBusy = new Map<string, number>();
+export function resetSandboxPeaks(): void { peakBusy.clear(); }
+const totals = { created: 0, recycled: 0, evictedIdle: 0, queueRejected: 0, overflowRejected: 0, queueTimeouts: 0, executions: 0 };
 
 let snapshot: ivm.ExternalCopy<ArrayBuffer> | null | undefined;
 /** the runtime is run once into a V8 startup snapshot; each fresh context then starts from it (cheap) rather
@@ -71,14 +88,16 @@ export function sandboxStats() {
     if (t.queue.length) queued[t.id] = t.queue.length;
     queuedTotal += t.queue.length;
   }
-  return { isolatesAlive: alive, totalIsolates: total, idle: [...tenants.values()].reduce((a, t) => a + t.idle.length, 0), queued: queued, queuedTotal, ...totals };
+  const running: Record<string, number> = {}, effective: Record<string, number> = {};
+  for (const t of tenants.values()) { if (t.busy) running[t.id] = t.busy; effective[t.id] = t.size; }
+  return { running, peakRunning: Object.fromEntries(peakBusy), effectiveConcurrency: effective, isolatesAlive: alive, totalIsolates: total, idle: [...tenants.values()].reduce((a, t) => a + t.idle.length, 0), queued: queued, queuedTotal, ...totals };
 }
 
 function poolOf(id: string, requestedSize: number | undefined): TenantPool {
   let t = tenants.get(id);
-  if (!t) { t = { id, size: clampSize(cfg.poolDefaultSize), all: new Set(), idle: [], queue: [] }; tenants.set(id, t); }
+  if (!t) { t = { id, size: effectiveScriptConcurrency(), busy: 0, all: new Set(), idle: [], queue: [] }; tenants.set(id, t); }
   // quota applies as pool size; an unset quota leaves the tenant's last-known size (default on first sight)
-  if (requestedSize) t.size = clampSize(requestedSize);
+  if (requestedSize) t.size = effectiveScriptConcurrency(requestedSize);
   return t;
 }
 
@@ -119,7 +138,7 @@ function pump(): void {
       if (!p) continue;
       t.queue.shift();
       clearTimeout(w.timer);
-      w.resolve(p);
+      w.resolve(grant(t, p));
       progressed = true;
     }
     rr++;
@@ -140,15 +159,28 @@ function reclaimOne(forTenant: string): boolean {
   return true;
 }
 
-async function acquire(tenantId: string, size?: number): Promise<Pooled> {
+function grant(t: TenantPool, p: Pooled): Pooled {
+  t.busy++;
+  peakBusy.set(t.id, Math.max(peakBusy.get(t.id) || 0, t.busy));
+  return p;
+}
+
+async function acquire(tenantId: string, size?: number, mode?: OverflowMode): Promise<Pooled> {
   const t = poolOf(tenantId, size);
   if (!t.queue.length) {
     const p = t.idle.pop();
-    if (p) { if (p.idleTimer) { clearTimeout(p.idleTimer); p.idleTimer = undefined; } return p; }
+    if (p) { if (p.idleTimer) { clearTimeout(p.idleTimer); p.idleTimer = undefined; } return grant(t, p); }
     if (t.all.size < t.size) {
       if (total >= cfg.maxIsolates) reclaimIdleFromOthers(t.id);
-      if (total < cfg.maxIsolates) return create(t);
+      if (total < cfg.maxIsolates) return grant(t, create(t));
     }
+  }
+  if (mode === 'reject') {
+    // at the workspace's effective concurrency (or the global ceiling): refuse immediately, never wait
+    totals.overflowRejected++;
+    if (tenants.get(t.id) === t && !t.all.size && !t.queue.length) tenants.delete(t.id);
+    if (t.all.size < t.size) throw quotaExceeded(`server script capacity exhausted (global isolate ceiling ${cfg.maxIsolates})`, { quota: 'scriptMaxIsolates', max: cfg.maxIsolates });
+    throw quotaExceeded(`per-tenant concurrent script quota exceeded (max ${t.size})`, { quota: 'maxConcurrentScripts', max: t.size, current: t.busy });
   }
   if (t.queue.length >= cfg.queueMax) {
     totals.queueRejected++;
@@ -171,6 +203,7 @@ async function acquire(tenantId: string, size?: number): Promise<Pooled> {
 
 function release(p: Pooled, recycle: boolean): void {
   const t = tenants.get(p.tenant);
+  if (t && t.busy > 0) t.busy--;
   p.runs++;
   if (!t || recycle || p.isolate.isDisposed || p.runs >= cfg.maxRuns) { dispose(p, 'recycled'); pump(); return; }
   t.idle.push(p);
@@ -180,8 +213,8 @@ function release(p: Pooled, recycle: boolean): void {
 }
 
 /** Runs `fn` with a fresh context inside a pooled isolate of `tenantId`. `fn` must not retain the context. */
-export async function withIsolate<T>(tenantId: string, poolSize: number | undefined, fn: (isolate: ivm.Isolate, context: ivm.Context) => Promise<T>): Promise<T> {
-  const p = await acquire(tenantId, poolSize);
+export async function withIsolate<T>(tenantId: string, poolSize: number | undefined, mode: OverflowMode, fn: (isolate: ivm.Isolate, context: ivm.Context) => Promise<T>): Promise<T> {
+  const p = await acquire(tenantId, poolSize, mode);
   totals.executions++;
   let context: ivm.Context | undefined;
   let recycle = false;

@@ -3,9 +3,8 @@
 import type { NodeHandler } from '../types.ts';
 import { config } from '../../../infra/config.ts';
 import { runScript } from '../../sandbox.ts';
-import { varTypesOf, kcontextInfoOf, onActionOf } from '../kcontext-info.ts';
+import { varTypesOf, kcontextInfoOf, onActionOf, scriptLimitsOf } from '../kcontext-info.ts';
 import { assertOutboundAllowed } from '../../../infra/outbound-guard.ts';
-import { SettingsService } from '../../../modules/settings/service.ts';
 
 function jsonPath(obj: any, path: string): unknown {
   if (obj == null) return undefined;
@@ -47,10 +46,10 @@ export const handler: NodeHandler = async (c) => {
       // as String on top of whatever's actually declared for this process.
       const varTypes: Record<string, string> = { resPayload: 'String', ...varTypesOf(c) };
       try {
-        const { maxConcurrentScripts } = await new SettingsService(c.app).get();
+        const limits = await scriptLimitsOf(c);
         await runScript(String(n.exitScript), scriptVars, config.scriptTimeoutMs, {
           ...kcontextInfoOf(c), lang: n.lang, varTypes, onAction: onActionOf(c),
-          tenantId: c.app.tenantId, maxConcurrentScripts,
+          tenantId: c.app.tenantId, ...limits,
         });
         delete scriptVars.resPayload;
         Object.assign(vars, scriptVars);

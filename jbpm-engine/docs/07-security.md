@@ -41,11 +41,15 @@
   `Environment.get` see only the instance `env`). Isolates come from a **bounded pool keyed by workspace**
   (`src/engine/isolate-pool.ts`): an isolate is never shared across workspaces and runs one execution at a time;
   **every execution gets a fresh context** (new global scope/realm) so no `globalThis` write or prototype pollution
-  survives into the next script. Size = clamp(`maxConcurrentScripts` || `SCRIPT_POOL_DEFAULT_SIZE`, 1, 16); excess work
-  waits in a bounded per-workspace FIFO queue (`SCRIPT_QUEUE_MAX`, `SCRIPT_QUEUE_TIMEOUT_MS` → `QUOTA_EXCEEDED`),
+  survives into the next script. Effective concurrency = min(`maxConcurrentScripts` || `SCRIPT_POOL_DEFAULT_SIZE`, `SCRIPT_POOL_MAX_SIZE`);
+  at that limit the overflow mode decides: `queue` (default) waits in a bounded per-workspace FIFO queue
+  (`SCRIPT_QUEUE_MAX`, `SCRIPT_QUEUE_TIMEOUT_MS` → `QUOTA_EXCEEDED`), `reject` refuses immediately with
+  `QUOTA_EXCEEDED` — env `SCRIPT_OVERFLOW_MODE`, overridable per workspace via `scriptOverflowMode`. Counters/queues are
+  per pod (limit × pods in a multi-pod deployment).
   a global ceiling (`SCRIPT_MAX_ISOLATES`) with round-robin fairness stops one workspace starving others, and an isolate
   is recycled after a timeout/OOM/`SCRIPT_ISOLATE_MAX_RUNS` and evicted after `SCRIPT_ISOLATE_IDLE_MS` idle.
-  `acquireScriptSlot` remains a hard-reject admission cap used only for the `java` sidecar (no pool there).
+  `acquireScriptSlot` remains a hard-reject admission cap used only for the `java` sidecar (no pool there); `js` never
+  touches it, so nothing is counted twice.
   Covered by EXE-91/91b/91c/91d and POOL-1…6; `sandboxStats()` exposes counters. `java` scripts run in the JVM sidecar.
 - **Task ownership**: once claimed, a task can be completed/saved/released/delegated/forwarded only by its owner, its
   business admin, or a workspace owner/admin; a task held by someone else cannot be claimed.

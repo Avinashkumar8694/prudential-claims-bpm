@@ -21,6 +21,7 @@ import { IamService } from '../modules/iam/service.ts';
 import { ErrorService } from '../modules/errors/service.ts';
 import { AuditService } from '../modules/audit/service.ts';
 import { NotificationService } from '../modules/notifications/service.ts';
+import { effectiveScriptConcurrency, effectiveOverflowMode } from '../engine/sandbox.ts';
 import { SettingsService } from '../modules/settings/service.ts';
 import { TimerService } from '../modules/timers/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
@@ -264,7 +265,12 @@ export function buildRoutes(): Router {
   r.post('/notifications/:id/read', asyncHandler(async (req, res) => res.json(await new NotificationService(ctxOf(req)).markRead(req.params.id, actorOf(req)))));
 
   // --- system settings (singleton; readable by anyone signed in, writable by admins) ---
-  r.get('/settings/system', asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).get())));
+  // `effective*` = what the script pool actually applies (quota/default clamped by SCRIPT_POOL_MAX_SIZE; workspace
+  // mode vs the SCRIPT_OVERFLOW_MODE env default) — so operators can see the real limit, not just the setting.
+  r.get('/settings/system', asyncHandler(async (req, res) => {
+    const s = await new SettingsService(ctxOf(req)).get();
+    res.json({ ...s, effectiveScriptConcurrency: effectiveScriptConcurrency(s.maxConcurrentScripts), effectiveScriptOverflowMode: effectiveOverflowMode(s.scriptOverflowMode) });
+  }));
   r.put('/settings/system', perm('admin:iam'), asyncHandler(async (req, res) => res.json(await new SettingsService(ctxOf(req)).update(req.body || {}, actorOf(req)))));
 
   // --- query / task-admin / analytics (jBPM KIE-Server-style; see docs/17) ---

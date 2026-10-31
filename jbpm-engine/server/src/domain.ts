@@ -183,7 +183,10 @@ export interface SystemSettings extends Entity {
    *  unaffected until an admin opts in). Enforced at the point of creation, not retroactively. */
   maxActiveInstances?: number;   // top-level (root) instances concurrently running/waiting
   maxActiveTimers?: number;      // scheduled TimerJobs (boundary/catch timers) at once
-  maxConcurrentScripts?: number; // script-task/exit-script executions running at this instant
+  maxConcurrentScripts?: number; // script-task/exit-script executions running at this instant (0 = SCRIPT_POOL_DEFAULT_SIZE)
+  /** what happens when maxConcurrentScripts executions are already running: 'queue' (wait, bounded) or 'reject'
+   *  (QUOTA_EXCEEDED immediately). Unset = the SCRIPT_OVERFLOW_MODE env default. */
+  scriptOverflowMode?: 'queue' | 'reject';
   updatedAt?: string; updatedBy?: string;
 }
 

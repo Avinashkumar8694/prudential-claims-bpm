@@ -1,5 +1,6 @@
 // Global configuration: one singleton SystemSettings row (id 'system' per tenant). Reads always
 // succeed — a missing row yields the documented defaults — so the client never needs a seed step.
+import { isOverflowMode } from '../../engine/isolate-pool.ts';
 import type { AppContext } from '../../context.ts';
 import { Collections, type SystemSettings } from '../../domain.ts';
 import { validation } from '../../infra/errors.ts';
@@ -49,12 +50,19 @@ export class SettingsService {
         throw validation(`${k} must be a non-negative integer (0 = unlimited)`);
       }
     }
+    if (patch.scriptOverflowMode !== undefined && patch.scriptOverflowMode !== null && !isOverflowMode(patch.scriptOverflowMode)) {
+      throw validation("scriptOverflowMode must be 'queue' or 'reject' (or null to use the server default)");
+    }
+    // computed/read-only fields the UI may echo back on save — never persist them
+    const { effectiveScriptConcurrency: _c, effectiveScriptOverflowMode: _m, ...clean } = patch as Partial<SystemSettings> & Record<string, unknown>;
+    patch = clean;
     const current = await this.get();
     const next: SystemSettings = {
       ...current, ...patch,
       id: 'system', tenantId: this.ctx.tenantId,
       updatedAt: this.ctx.clock(), updatedBy: actor,
     };
+    if (next.scriptOverflowMode == null) delete next.scriptOverflowMode;   // null = back to the env default
     await this.repo().put(next);
     await this.ctx.audit({ actor, kind: 'settings.updated', data: { changed: Object.keys(patch) } });
     return next;

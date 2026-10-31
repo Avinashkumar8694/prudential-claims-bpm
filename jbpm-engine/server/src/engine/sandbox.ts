@@ -26,7 +26,7 @@
 // don't want to think in jBPM terms even for process/node introspection, not just variables. See
 // buildInstanceGlobal/buildNodeGlobal below, and bpmn-sdk/src/engine.ts's jsInstanceNodePreamble for
 // how a script using them still exports to plain, real-jBPM-runnable text.
-import { withIsolate } from './isolate-pool.ts';
+import { withIsolate, effectiveOverflowMode } from './isolate-pool.ts';
 import { executeJava, executeJavaCondition, type ActiveNodeInstance, type PendingAction } from './java-sidecar.ts';
 import { ISOLATE_RUNTIME_SOURCE } from './isolate-runtime.ts';
 import { acquireScriptSlot } from '../infra/quotas.ts';
@@ -37,7 +37,7 @@ import { acquireScriptSlot } from '../infra/quotas.ts';
 /** pool key for callers that carry no tenant (tests/tools) — still its own pool, never a real workspace's. */
 const DEFAULT_POOL = '_no-tenant';
 
-export { sandboxStats, configureSandbox, sandboxConfig } from './isolate-pool.ts';
+export { sandboxStats, configureSandbox, sandboxConfig, resetSandboxPeaks, effectiveScriptConcurrency, effectiveOverflowMode } from './isolate-pool.ts';
 
 export const PROCESS_INSTANCE_STATE = { PENDING: 0, ACTIVE: 1, COMPLETED: 2, ABORTED: 3, SUSPENDED: 4 } as const;
 
@@ -97,6 +97,8 @@ export interface ScriptOpts extends KContextInfo {
    *  task, HTTP task exit-script) funnel through, so it can't be bypassed by adding a new caller. */
   tenantId?: string;
   maxConcurrentScripts?: number;
+  /** per-workspace override of SCRIPT_OVERFLOW_MODE ('queue' | 'reject'); unset = env default. */
+  scriptOverflowMode?: string;
 }
 
 export async function runScript(code: string, vars: Record<string, unknown>, timeoutMs: number, opts: ScriptOpts = {}): Promise<void> {
@@ -151,10 +153,10 @@ const MAX_RESULT_BYTES = 8 * 1024 * 1024;
  *  `this.constructor.constructor('return process')()` etc. simply resolve to `undefined`.
  *  mode 'script' runs `code` as a statement body (bare-name writes sync back into `vars`);
  *  mode 'condition' evaluates it as a boolean expression / body with `return`. */
-async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
-  const { env, tenantId, maxConcurrentScripts, ...rest } = info;
+async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number; scriptOverflowMode?: string }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
+  const { env, tenantId, maxConcurrentScripts, scriptOverflowMode, ...rest } = info;
   const input = JSON.stringify({ vars, env: env || {}, info: rest });
-  return withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, async (isolate, context) => {
+  return withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, effectiveOverflowMode(scriptOverflowMode), async (isolate, context) => {
     await context.global.set('__input', input);
     await (await isolate.compileScript('__setup(__input); delete globalThis.__input;')).run(context, { timeout: timeoutMs });
     // IIFE so var/let/const stay local while a bare assignment still lands on the global (see bare-name sync).
