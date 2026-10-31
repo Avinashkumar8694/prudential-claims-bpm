@@ -4,10 +4,10 @@
 // in-memory-only token would log users out on every accidental reload with no way to silently re-auth,
 // while localStorage persists indefinitely across restarts for no benefit here).
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, tap, switchMap, map } from 'rxjs';
+import { Observable, tap, switchMap, map, of, from } from 'rxjs';
 import { AuthApiService } from './auth-api.service';
 import { permissionGrants } from './permissions';
-import type { AuthUser, JwtClaims } from './auth.models';
+import type { AuthUser, JwtClaims, LoginOutcome, LoginResponse } from './auth.models';
 import { TenantService } from '../tenant/tenant.service';
 import { API_BASE } from '../config';
 
@@ -77,14 +77,27 @@ export class AuthService {
     }
   }
 
-  login(username: string, password: string): Observable<AuthUser> {
-    return this.api.login(username, password).pipe(
-      tap((res) => {
-        this.tokenSig.set(res.token);
-        sessionStorage.setItem(STORAGE_KEY, res.token);
-        this.tenant.init(res.user.id);
-      }),
+  /** Password sign-in. May answer with the set-password step instead of a session (account still on its temporary password). */
+  login(username: string, password: string): Observable<LoginOutcome> {
+    return this.api.login(username, password).pipe(switchMap((res) => this.outcome(res)));
+  }
+  /** Step 2 of temp-password onboarding: choose a real password, get the first session. */
+  setInitialPassword(setupToken: string, password: string): Observable<LoginOutcome> {
+    return this.api.setPassword(setupToken, password).pipe(switchMap((res) => this.outcome(res)));
+  }
+  /** Passwordless sign-in with the emailed 6-digit code. */
+  verifyOtp(email: string, code: string): Observable<LoginOutcome> {
+    return this.api.otpVerify(email, code).pipe(switchMap((res) => this.outcome(res)));
+  }
+  private outcome(res: LoginResponse): Observable<LoginOutcome> {
+    if ('passwordSetupRequired' in res) return of({ kind: 'setup', setupToken: res.setupToken, email: res.user?.email });
+    this.tokenSig.set(res.token);
+    sessionStorage.setItem(STORAGE_KEY, res.token);
+    // Load the person's workspaces BEFORE anything navigates: the route guard decides "no workspace → create one" from
+    // this state, and a guard that runs while it is still loading would let a brand-new user into an app they cannot use.
+    return from(this.tenant.init(res.user.id)).pipe(
       switchMap(() => this.refreshPermissions()),
+      map((user) => ({ kind: 'session', user }) as LoginOutcome),
     );
   }
 
@@ -97,8 +110,7 @@ export class AuthService {
     sessionStorage.setItem(STORAGE_KEY, bearer);
     if (idToken) sessionStorage.setItem(ID_TOKEN_KEY, idToken);
     const u = this.user();
-    this.tenant.init(u ? u.id : null);
-    return this.refreshPermissions();
+    return from(this.tenant.init(u ? u.id : null)).pipe(switchMap(() => this.refreshPermissions()));
   }
 
   /** Drop the local session only (also what a 401 does). */

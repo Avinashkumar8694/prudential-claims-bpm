@@ -14,7 +14,11 @@ Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 | AUTH-CFG-03 | local login off ⇒ already-issued local tokens are refused too | ✅ |
 | oidc-sso | SSO: PKCE S256 + state + nonce, `client_secret_basic`, tokens only in the URL fragment, forged/missing transaction cookie, open-redirect `return_to`, logout via end-session, JWKS verification (wrong key/aud/iss/expired/alg-none/HS256-confusion) | ✅ |
 | oidc-sso | claim-by-verified-email (unverified refused, bound seat never re-bound), platform admin only by verified email, SSO signup requires sign-in and ignores a free-text owner | ✅ |
-| AUTH-REG-01…05 | register: normalised email, welcome mail, validation matrix, no roles / no workspace access, `x-tenant-id` cannot steer account creation, registering a victim's email does **not** grant their pending seat | ✅ |
+| REG-TMP-01…08 | **Identity-Server style onboarding**: register asks no password → 202 + emailed temporary password, no account yet; signing in with it creates the account and returns the *set-password step* (setup token ≠ bearer); choosing a password (policy, ≠ temp) yields the first session; anti-enumeration (existing account gets an "already registered" mail, identical answer); expiry & re-register; throttle; no squatting (unconfirmed address blocks nobody, matches no seats); brute-force lockout of a pending registration | ✅ |
+| REG-RULE-01…03 | disposable-domain block, allowed-domain list, terms acceptance, input hardening, config advertised to the UI | ✅ |
+| OTP-01…03 | emailed 6-digit sign-in code: hashed, single use, expiry, 5 guesses burn it, resend throttle, anti-enumeration, deactivated accounts, temp-password accounts still go through set-password | ✅ |
+| ACT-01…03 | invited person without an account sets a password from the invitation (token proves the mailbox; works with open registration off); expired/cancelled/local-off refused | ✅ |
+| AUTH-REG-01…05 (method `password`) | register: normalised email, welcome mail, validation matrix, no roles / no workspace access, `x-tenant-id` cannot steer account creation, registering a victim's email does **not** grant their pending seat | ✅ |
 | AUTH-VER-01…03 | email verification: blocked until verified, single use, expiry, resend rotates & never reveals existence, tokens hashed at rest, no secrets in `/users` | ✅ |
 | AUTH-PWD-01…05 | forgot/reset: single use, expiry, old password dies, reuse refused, other sessions revoked, anti-enumeration, per-account throttle, unlocks account, deactivated user, change-own-password | ✅ |
 | AUTH-LOCK-01/02 | lockout after N failures (even for the right password), expiry, notice mail, counter reset, unknown-user ≡ wrong-password | ✅ |
@@ -26,7 +30,7 @@ Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 ## 2. Email — `auth-accounts.test.ts` (MAIL-*)
 | ID | Scenario | |
 |---|---|---|
-| MAIL-01 | all 16 templates (verification, reset, password-changed ×3, locked, welcome, workspace-created, invitation, invitation-accepted, role-changed, suspended/restored, removed, ownership ×2) render subject+text+HTML; links stay on `DASHBOARD_URL`; user input HTML-escaped | ✅ |
+| MAIL-01 | all 19 templates (temp password, already-registered, sign-in code, verification, reset, password-changed ×3, locked, welcome, workspace-created, invitation, invitation-accepted, role-changed, suspended/restored, removed, ownership ×2) render subject+text+HTML; links stay on `DASHBOARD_URL`; user input HTML-escaped | ✅ |
 | MAIL-02 | CR/LF header injection neutralised | ✅ |
 | MAIL-03 | full team lifecycle sends the right mails to the right people | ✅ |
 | MAIL-04 | transport failure never breaks the triggering request | ✅ |

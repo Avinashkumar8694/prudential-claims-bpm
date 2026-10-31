@@ -30,6 +30,16 @@ function build(to: string, subject: string, title: string, lines: string[], cta?
 const ignore = 'If you did not expect this, you can safely ignore this message.';
 
 export const templates = {
+  tempPassword: (to: string, p: { name: string; tempPassword: string; hours: number }) =>
+    build(to, `Your ${config.appName} temporary password`, 'Confirm your email to get started',
+      [`Hi ${p.name}, thanks for registering. Use the temporary password below to sign in with ${to} — that confirms your email and creates your account.`, `Temporary password: ${p.tempPassword}`, `It is valid for ${p.hours} hours and you will be asked to choose your own password the first time you sign in. ${ignore}`], { label: 'Sign in', href: url('/login') }),
+
+  alreadyRegistered: (to: string) =>
+    build(to, `You already have a ${config.appName} account`, 'You already have an account', [`Someone (hopefully you) tried to register ${to}, but an account already exists for it.`, 'Sign in, or reset your password if you have forgotten it. If this was not you, no action is needed.'], { label: 'Sign in', href: url('/login') }),
+
+  otp: (to: string, p: { code: string; minutes: number }) =>
+    build(to, `Your ${config.appName} sign-in code: ${p.code}`, 'Your sign-in code', [`Use this code to sign in: ${p.code}`, `It expires in ${p.minutes} minutes and works once. Never share it. If you did not try to sign in, ignore this message.`]),
+
   verification: (to: string, token: string) =>
     build(to, `Verify your email for ${config.appName}`, 'Confirm your email address', [`Welcome to ${config.appName}. Confirm this address to activate your account.`, `The link expires in 24 hours. ${ignore}`], { label: 'Verify email', href: url('/verify-email', { token }) }),
 

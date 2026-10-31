@@ -10,12 +10,16 @@ import { authRequired, forbidden, notFound } from '../infra/errors.ts';
 import { isPlatformAdmin } from '../modules/tenants/identity.ts';
 import { oidc } from '../infra/oidc.ts';
 import { rateLimit } from './rate-limit.ts';
+import { AccountService } from '../modules/iam/accounts.ts';
+import { config } from '../infra/config.ts';
+import { makeContext } from '../context.ts';
 import { Collections, type Tenant, type TenantMember, type Instance, type Task, type Deployment } from '../domain.ts';
 
 const ctxOf = (req: Request): AppContext => (req as any).ctx;
 
 export function buildPublicTenantRoutes(): Router {
   const r = Router();
+  const activateLimiter = rateLimit({ windowMs: 15 * 60_000, max: 20, keyOf: (req) => req.ip || 'anon' });
 
   // Public: live address availability check for workspace signup
   r.get('/tenants/check/:slug', asyncHandler(async (req, res) => {
@@ -52,6 +56,16 @@ export function buildPublicTenantRoutes(): Router {
     const info = await TeamService.lookup(ctxOf(req), req.params.token);
     if (!info) throw notFound('Invitation');
     res.json({ success: true, data: info });
+  }));
+
+  // Public: the invitee has no account yet — the invitation token proves they own the mailbox, so they just choose a
+  // password (the Identity Server's /activate model). Allowed even when open registration is off.
+  r.post('/team/invitations/:token/activate', activateLimiter, asyncHandler(async (req, res) => {
+    if (!config.localLogin) throw notFound('Account setup');
+    const info = await TeamService.lookup(ctxOf(req), req.params.token);
+    if (!info) throw notFound('Invitation');
+    await new AccountService(makeContext({ store: ctxOf(req).store, tenantId: config.defaultTenant })).activateInvitedAccount(info.email, String(req.body?.password || ''), req.body?.name);
+    res.status(204).end();
   }));
 
   return r;

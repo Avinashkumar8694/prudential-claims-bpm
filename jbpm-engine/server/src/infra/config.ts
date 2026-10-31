@@ -50,8 +50,22 @@ export interface AuthFeatures {
   registration: boolean;
   /** forgot / reset password (needs localLogin) */
   forgotPassword: boolean;
-  /** a registered account cannot sign in until its email is verified */
+  /** a registered account cannot sign in until its email is verified (only used by registrationMethod 'password') */
   emailVerification: boolean;
+  /** how self-registration works. 'temp_password' = the Identity-Server model (rules-manager): no password at sign-up, a
+   *  temporary password is emailed, the account is created when it is used, and the first sign-in forces a new password.
+   *  'password' = the person chooses a password at sign-up (+ optional email verification). */
+  registrationMethod: 'temp_password' | 'password';
+  /** how long an emailed temporary password stays valid */
+  tempPasswordHours: number;
+  /** passwordless sign-in with a 6-digit code emailed to the address */
+  otpLogin: boolean;
+  /** refuse throw-away mailbox domains at registration */
+  blockDisposableEmails: boolean;
+  /** if non-empty, only these email domains may self-register */
+  allowedEmailDomains: string[];
+  /** if set, registration requires accepting the terms at this URL */
+  tosUrl?: string;
   passwordMinLength: number;
   /** consecutive wrong passwords before the account is locked ... */
   maxFailedLogins: number;
@@ -112,6 +126,12 @@ export const config: Config = {
     registration: env.AUTH_REGISTRATION !== 'false',
     forgotPassword: env.AUTH_FORGOT_PASSWORD !== 'false',
     emailVerification: env.AUTH_REQUIRE_EMAIL_VERIFICATION === 'true',
+    registrationMethod: env.AUTH_REGISTRATION_METHOD === 'password' ? 'password' : 'temp_password',
+    tempPasswordHours: Math.max(1, Number(env.AUTH_TEMP_PASSWORD_HOURS || 72)),
+    otpLogin: env.AUTH_OTP_LOGIN === 'true',
+    blockDisposableEmails: env.AUTH_BLOCK_DISPOSABLE_EMAILS !== 'false',
+    allowedEmailDomains: csv(env.AUTH_ALLOWED_EMAIL_DOMAINS).map((d) => d.toLowerCase().replace(/^@/, '')),
+    tosUrl: env.AUTH_TOS_URL?.trim() || undefined,
     passwordMinLength: Math.max(8, Number(env.AUTH_PASSWORD_MIN_LENGTH || 8)),
     maxFailedLogins: Math.max(1, Number(env.AUTH_MAX_FAILED_LOGINS || 5)),
     lockoutMinutes: Math.max(1, Number(env.AUTH_LOCKOUT_MINUTES || 15)),

@@ -343,11 +343,11 @@ export class NoWorkspaceComponent {
     effect(() => {
       const u = this.auth.user();
       if (u) {
-        this.userEmail.set(u.username.includes('@') ? u.username : `${u.username}@local`);
+        this.userEmail.set(u.email || (u.username.includes('@') ? u.username : `${u.username}@local`));
         if (!this.ownerEmail) this.ownerEmail = this.userEmail();
-        if (!this.ownerName) this.ownerName = u.username;
+        if (!this.ownerName) this.ownerName = u.name || u.username;
       }
-    });
+    }, { allowSignalWrites: true });   // Angular 18 refuses signal writes in an effect unless allowed — without this it threw and the email never showed
   }
 
   onNameChange(val: string) {

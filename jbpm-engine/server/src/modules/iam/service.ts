@@ -10,11 +10,10 @@ import { config } from '../../infra/config.ts';
 import { sendMail } from '../../infra/mailer.ts';
 import { templates } from '../../infra/mail-templates.ts';
 import { passwordProblem } from '../../infra/passwords.ts';
+import { AccountService } from './accounts.ts';
 
-export type PublicUser = Omit<User, (typeof SECRET_FIELDS)[number]>;
-/** Never serialise credentials or one-time-token material: the public user shape carries none of it. */
-const SECRET_FIELDS = ['passwordHash', 'verificationHash', 'verificationExpiresAt', 'passwordResetHash', 'passwordResetExpiresAt', 'passwordResetSentAt', 'failedLogins', 'lockedUntil'] as const;
-const sanitize = (u: User): PublicUser => { const rest: any = { ...u }; for (const k of SECRET_FIELDS) delete rest[k]; return rest; };
+export { sanitize, type PublicUser, type LoginResult } from './session.ts';
+import { sanitize, finishSignIn, type PublicUser, type LoginResult } from './session.ts';
 
 /** name -> default permission set, seeded once (see ensureSeeded) if the roles collection is empty.
  *  Matches docs/07-security.md's role list exactly. */
@@ -58,11 +57,13 @@ export class IamService {
   /** Sign in by username OR email. Wrong password / unknown account answer identically (and spend the same
    *  hashing time), repeated failures lock the account for a while, and an account whose mailbox is not yet
    *  verified cannot sign in when verification is required. */
-  async login(identifier: string, password: string): Promise<{ token: string; user: PublicUser }> {
+  async login(identifier: string, password: string): Promise<LoginResult> {
     if (typeof identifier !== 'string' || typeof password !== 'string') throw authRequired('invalid username or password');
     const id = identifier.trim();
     const low = id.toLowerCase();
-    const u = id ? (await this.users().query((x) => x.tenantId === this.ctx.tenantId && (x.username === id || x.username.toLowerCase() === low || (x.email || '').toLowerCase() === low)))[0] : undefined;
+    let u = id ? (await this.users().query((x) => x.tenantId === this.ctx.tenantId && (x.username === id || x.username.toLowerCase() === low || (x.email || '').toLowerCase() === low)))[0] : undefined;
+    // not an account yet: maybe a self-registration waiting for its emailed temporary password (confirms → creates the account)
+    if (!u && id) u = await new AccountService(this.ctx).confirmPendingRegistration(low, password);
     if (!u) { await verifyPassword(password || '', await dummyHash()); throw authRequired('invalid username or password'); }
 
     const now = this.ctx.clock();
@@ -84,10 +85,9 @@ export class IamService {
       }
       throw authRequired('invalid username or password');
     }
-    if (config.auth.emailVerification && u.emailVerified === false) throw forbidden('Verify your email address before signing in');
+    const result = finishSignIn(u, now);
     if (u.failedLogins || u.lockedUntil) { u.failedLogins = 0; u.lockedUntil = null; await this.users().put(u); }
-    const token = signToken({ sub: u.id, username: u.username, roles: u.roles, groups: u.groups, email: u.email || (u.username.includes('@') ? u.username.toLowerCase() : undefined), emailVerified: u.emailVerified !== false, name: u.displayName });
-    return { token, user: sanitize(u) };
+    return result;
   }
 
   /** Resolves a role-name list to its union of granted permission strings (missing/unknown role names

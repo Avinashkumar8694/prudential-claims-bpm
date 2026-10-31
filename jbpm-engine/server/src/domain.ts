@@ -226,6 +226,30 @@ export interface User extends Entity {
   /** tokens issued before this instant are rejected (password changed/reset) */
   passwordChangedAt?: string | null;
   displayName?: string;
+  /** temp-password onboarding: the stored password is an emailed temporary one; the first sign-in must replace it */
+  mustResetPassword?: boolean;
+  tempPasswordExpiresAt?: string | null;
+  /** emailed one-time sign-in code (hashed) */
+  otpHash?: string | null;
+  otpExpiresAt?: string | null;
+  otpAttempts?: number;
+  otpSentAt?: string | null;
+  tosAcceptedAt?: string | null;
+}
+
+/** A self-registration that has not been confirmed yet: the person has been emailed a temporary password, and the
+ *  account does NOT exist until they sign in with it (so an unconfirmed address can neither squat nor be matched to seats). */
+export interface PendingRegistration extends Entity {
+  id: string; tenantId: string;
+  email: string;
+  displayName: string;
+  tempHash: string;            // scrypt hash of the emailed temporary password
+  expiresAt: string;
+  createdAt: string;
+  lastSentAt: string;
+  failedAttempts?: number;
+  lockedUntil?: string | null;
+  tosAcceptedAt?: string | null;
 }
 
 // ---- Multi-tenancy & Workspaces ----
@@ -301,4 +325,5 @@ export const Collections = {
   users: 'users', groups: 'groups', roles: 'roles',
   tenants: 'tenants', tenantMembers: 'tenantMembers', plans: 'plans',
   errors: 'errors', comments: 'comments', notifications: 'notifications', settings: 'settings',
+  pendingRegistrations: 'pendingRegistrations',
 } as const;

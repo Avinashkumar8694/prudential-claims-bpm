@@ -10,6 +10,7 @@ import { API_BASE, APP_NAME } from '../config';
 const FALLBACK: AuthConfig = {
   appName: APP_NAME, sso: false, localLogin: true, registration: false, forgotPassword: false,
   emailVerification: false, passwordMinLength: 8, ssoLoginUrl: null,
+  registrationMethod: 'temp_password', tempPasswordHours: 72, otpLogin: false, tosUrl: null,
 };
 
 @Injectable({ providedIn: 'root' })

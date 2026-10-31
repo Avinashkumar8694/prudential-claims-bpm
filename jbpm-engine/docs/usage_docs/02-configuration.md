@@ -25,6 +25,12 @@ Configuration lives in two layers: **environment variables** (deployment-time, r
 | `OIDC_AUDIENCE` | the client id | Comma-separated accepted `aud` values for bearer tokens |
 | `OIDC_CLOCK_TOLERANCE_SEC` | `30` | Clock skew allowed when checking `exp`/`nbf` |
 | `DASHBOARD_URL` | `APP_ORIGIN`, else `http://localhost:4200` | Where the SSO callback and logout send the browser (post-logout URI must be registered: `https://orkestr.fabrixly.com`, `http://localhost:4200`, `http://localhost:4000`) |
+| `AUTH_REGISTRATION_METHOD` | `temp_password` | `temp_password` = Identity-Server / rules-manager model: sign-up asks for name + email only, a **temporary password** is emailed, signing in with it creates the account, and the first sign-in forces choosing a real password. `password` = the person picks a password at sign-up (pair with `AUTH_REQUIRE_EMAIL_VERIFICATION`) |
+| `AUTH_TEMP_PASSWORD_HOURS` | `72` | How long an emailed temporary password stays valid (expired → "register again") |
+| `AUTH_OTP_LOGIN` | `false` | Passwordless sign-in with an emailed 6-digit code (10 min, 5 attempts, single use) |
+| `AUTH_BLOCK_DISPOSABLE_EMAILS` | `true` | Refuse throw-away mailbox domains at registration |
+| `AUTH_ALLOWED_EMAIL_DOMAINS` | *(empty)* | Comma-separated; if set, only these domains may self-register |
+| `AUTH_TOS_URL` | *(unset)* | If set, registration requires accepting the terms at this URL |
 | `AUTH_REGISTRATION` | `true` | Self-service account creation (needs local login); the landing page's "Get started" goes to `/register` when on, else to sign-in |
 | `AUTH_FORGOT_PASSWORD` | `true` | Forgot / reset password flow (needs local login) |
 | `AUTH_REQUIRE_EMAIL_VERIFICATION` | `false` | A registered account cannot sign in until it confirms its email |

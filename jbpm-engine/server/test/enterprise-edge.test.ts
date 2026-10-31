@@ -191,6 +191,7 @@ test('SEC-01 mass assignment: client-supplied tenantId / userId / permissions / 
   assert.strictEqual(su.status, 201);
   const t = (await h.store.repo<Tenant>(Collections.tenants).get(su.body.data.id))!;
   assert.deepStrictEqual([t.status, t.plan, t.id === 'default'], ['active', 'trial', false], 'status/plan/id are server-decided');
+  config.auth.registrationMethod = 'password';
   const reg = await h.call('POST', '/auth/register', { body: { email: 'mass@example.com', password: 'Sup3rSecret!', roles: ['admin'], active: false, emailVerified: true, tenantId: other.id } });
   assert.strictEqual(reg.status, 201);
   const login = (await h.call('POST', '/auth/login', { body: { username: 'mass@example.com', password: 'Sup3rSecret!' } })).body;

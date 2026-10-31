@@ -18,7 +18,7 @@ const mailsTo = (to: string) => outbox.filter((m) => m.to === to);
 
 test.before(async () => { config.mail.capture = true; h = await boot(); });
 test.after(async () => { Object.assign(config.auth, saved); config.localLogin = savedLocal; await h.close(); });
-test.beforeEach(() => { resetRateLimits(); Object.assign(config.auth, saved); config.localLogin = savedLocal; config.auth.registration = true; config.auth.forgotPassword = true; config.auth.emailVerification = false; });
+test.beforeEach(() => { resetRateLimits(); Object.assign(config.auth, saved); config.localLogin = savedLocal; config.auth.registration = true; config.auth.forgotPassword = true; config.auth.emailVerification = false; config.auth.registrationMethod = 'password'; config.auth.otpLogin = false; config.auth.tosUrl = undefined; config.auth.allowedEmailDomains = []; config.auth.blockDisposableEmails = true; });
 
 const users = () => h.store.repo<User>(Collections.users).query(() => true);
 const userOf = async (email: string) => (await users()).find((u) => u.email === email)!;
@@ -28,6 +28,7 @@ const register = (email: string, password = 'Sup3rSecret!', name?: string) => h.
 test('AUTH-CFG-01 /auth/config reflects every flag, and local-only features vanish when local login is off', async () => {
   let c = (await h.call('GET', '/auth/config')).body;
   assert.deepStrictEqual([c.localLogin, c.registration, c.forgotPassword, c.emailVerification, c.sso], [true, true, true, false, false]);
+  assert.deepStrictEqual([c.registrationMethod, c.otpLogin, c.tosUrl], ['password', false, null]);
   assert.ok(c.appName && c.passwordMinLength >= 8);
   config.auth.emailVerification = true; config.auth.registration = false;
   c = (await h.call('GET', '/auth/config')).body;
@@ -269,6 +270,7 @@ test('AUTH-POL-01 password policy: length, identity, common, classes; admin-prov
 test('MAIL-01 every template renders subject + text + html, links point at DASHBOARD_URL, and user input is HTML-escaped', () => {
   const evil = '<img src=x onerror=alert(1)>"&\'';
   const all = [
+    templates.tempPassword('a@b.co', { name: evil, tempPassword: 'Tmp1!Aa', hours: 72 }), templates.alreadyRegistered('a@b.co'), templates.otp('a@b.co', { code: '123456', minutes: 10 }),
     templates.verification('a@b.co', 'TKN'), templates.passwordReset('a@b.co', 'TKN'), templates.passwordChanged('a@b.co', 'reset'), templates.passwordChanged('a@b.co', 'changed'), templates.passwordChanged('a@b.co', 'admin'),
     templates.accountLocked('a@b.co', 15), templates.welcome('a@b.co', evil), templates.workspaceCreated('a@b.co', evil, 14),
     templates.invitation('a@b.co', { workspaceName: evil, inviterName: evil, role: 'viewer', token: 'TKN', expiresAt: new Date().toISOString() }),
@@ -276,7 +278,7 @@ test('MAIL-01 every template renders subject + text + html, links point at DASHB
     templates.memberSuspended('a@b.co', { workspaceName: evil, suspended: true }), templates.memberSuspended('a@b.co', { workspaceName: evil, suspended: false }),
     templates.removed('a@b.co', { workspaceName: evil }), templates.ownershipTransferred('a@b.co', { workspaceName: evil, newOwner: evil, becameOwner: true }), templates.ownershipTransferred('a@b.co', { workspaceName: evil, newOwner: evil, becameOwner: false }),
   ];
-  assert.strictEqual(all.length, 16);
+  assert.strictEqual(all.length, 19);
   for (const m of all) {
     assert.ok(m.subject && m.text && m.html, m.subject);
     assert.ok(!/[\r\n]/.test(m.subject.replace(/\s+$/, '')) || true);

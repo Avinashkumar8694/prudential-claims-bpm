@@ -8,7 +8,7 @@
 // There is no mail transport in this service, so an invitation returns its one-time token/link to the inviter to deliver.
 import crypto from 'node:crypto';
 import type { AppContext } from '../../context.ts';
-import { Collections, type Role, type Tenant, type TenantMember } from '../../domain.ts';
+import { Collections, type Role, type Tenant, type TenantMember, type User } from '../../domain.ts';
 import { conflict, forbidden, notFound, validation } from '../../infra/errors.ts';
 import { config } from '../../infra/config.ts';
 import { DEFAULT_ROLES } from '../iam/service.ts';
@@ -123,13 +123,15 @@ export class TeamService {
   }
 
   /** Public lookup so the accept page can say what the invitation is for. Token only; never lists the roster. */
-  static async lookup(ctx: AppContext, token: string): Promise<{ workspace: { id: string; name: string }; email: string; role: string; expiresAt: string } | null> {
+  static async lookup(ctx: AppContext, token: string): Promise<{ workspace: { id: string; name: string }; email: string; role: string; expiresAt: string; accountExists: boolean } | null> {
     const h = hash(token || '');
     const m = (await ctx.store.repo<TenantMember>(Collections.tenantMembers).query((x) => x.status === 'invited' && x.invitationTokenHash === h))[0];
     if (!m || !m.invitationExpiresAt || m.invitationExpiresAt < ctx.clock()) return null;
     const t = (await ctx.store.repo<Tenant>(Collections.tenants).query((x) => x.id === m.tenantId))[0];
     if (!t || t.status !== 'active') return null;
-    return { workspace: { id: t.id, name: t.name }, email: m.email || '', role: m.role, expiresAt: m.invitationExpiresAt };
+    const email = lower(m.email);
+    const accountExists = !!(await ctx.store.repo<User>(Collections.users).query((u) => lower(u.email) === email || lower(u.username) === email))[0];
+    return { workspace: { id: t.id, name: t.name }, email: m.email || '', role: m.role, expiresAt: m.invitationExpiresAt, accountExists };
   }
 
   /** The invitee, signed in, presents the token. Their VERIFIED email must be the invited one; the seat is bound to their `sub`. */

@@ -33,7 +33,7 @@ test('login succeeds with the right password and fails with the wrong one or an 
   const iam = new IamService(ctx);
   await iam.ensureSeeded('correct-horse-battery');
 
-  const ok = await iam.login('admin', 'correct-horse-battery');
+  const ok = (await iam.login('admin', 'correct-horse-battery')) as { token: string; user: any };
   assert.ok(ok.token.split('.').length === 3, 'looks like a JWT');
   assert.strictEqual(ok.user.username, 'admin');
   assert.strictEqual((ok.user as any).passwordHash, undefined, 'never leaks the hash');
@@ -101,6 +101,6 @@ test('changeOwnPassword: requires the correct current password, enforces min len
   await assert.rejects(() => iam.changeOwnPassword(dave.id, 'password123', 'short'), /at least 8/);
   await iam.changeOwnPassword(dave.id, 'password123', 'newpassword123');
   await assert.rejects(() => iam.login('dave', 'password123'), /invalid/);
-  const { user } = await iam.login('dave', 'newpassword123');
+  const { user } = (await iam.login('dave', 'newpassword123')) as { token: string; user: any };
   assert.strictEqual(user.username, 'dave');
 });

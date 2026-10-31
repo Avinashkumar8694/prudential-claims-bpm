@@ -12,7 +12,7 @@ export interface TeamMember {
 }
 /** `invitationPath` is present only when the server has no mail transport (so the inviter must pass the link on) */
 export interface InviteResult { member: TeamMember; emailed: boolean; invitationToken?: string; invitationPath?: string; expiresAt: string }
-export interface InvitationInfo { workspace: { id: string; name: string }; email: string; role: string; expiresAt: string }
+export interface InvitationInfo { workspace: { id: string; name: string }; email: string; role: string; expiresAt: string; accountExists: boolean }
 
 @Injectable({ providedIn: 'root' })
 export class TeamApiService {
@@ -29,5 +29,7 @@ export class TeamApiService {
   leave() { return firstValueFrom(this.http.post<void>('/api/team/leave', {})); }
   transferOwnership(memberId: string) { return firstValueFrom(this.http.post('/api/team/ownership/transfer', { memberId })); }
   lookupInvitation(token: string) { return this.unwrap(firstValueFrom(this.http.get<{ data: InvitationInfo }>(`/api/team/invitations/${encodeURIComponent(token)}`))); }
+  /** invitee without an account: set a password from the invitation (the token proves the mailbox) */
+  activateInvitation(token: string, password: string, name?: string) { return this.http.post<void>(`/api/team/invitations/${encodeURIComponent(token)}/activate`, { password, name }); }
   acceptInvitation(token: string) { return this.unwrap(firstValueFrom(this.http.post<{ data: { tenantId: string; role: string } }>('/api/team/invitations/accept', { token }))); }
 }

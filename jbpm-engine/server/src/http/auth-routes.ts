@@ -44,6 +44,10 @@ export function buildAuthRoutes(): Router {
       localLogin: local,
       // the built-in account flows only exist alongside local login
       registration: local && config.auth.registration,
+      registrationMethod: config.auth.registrationMethod,
+      tempPasswordHours: config.auth.tempPasswordHours,
+      otpLogin: local && config.auth.otpLogin,
+      tosUrl: config.auth.tosUrl ?? null,
       forgotPassword: local && config.auth.forgotPassword,
       emailVerification: local && config.auth.emailVerification,
       passwordMinLength: config.auth.passwordMinLength,
@@ -59,7 +63,23 @@ export function buildAuthRoutes(): Router {
 
   r.post('/register', sensitiveLimiter, asyncHandler(async (req, res) => {
     needLocal(config.auth.registration);
-    res.status(201).json(await accounts(req).register(req.body || {}));
+    // temp-password registration answers 202 (uniform, whether or not the address is new); password registration 201
+    res.status(config.auth.registrationMethod === 'temp_password' ? 202 : 201).json(await accounts(req).register(req.body || {}));
+  }));
+  // Step 2 of temp-password onboarding: the person signed in with the emailed temporary password and now chooses their own.
+  r.post('/set-password', sensitiveLimiter, asyncHandler(async (req, res) => {
+    needLocal(true);
+    res.json(await accounts(req).setInitialPassword(String(req.body?.setupToken || ''), String(req.body?.password || '')));
+  }));
+  // Passwordless sign-in with an emailed 6-digit code (AUTH_OTP_LOGIN)
+  const otpLimiter = rateLimit({ windowMs: 15 * 60_000, max: 20, keyOf: (req) => req.ip || 'anon' });
+  r.post('/otp/request', otpLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.otpLogin);
+    await accounts(req).requestOtp(String(req.body?.email || '')); res.status(202).json({ ok: true });
+  }));
+  r.post('/otp/verify', otpLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.otpLogin);
+    res.json(await accounts(req).verifyOtp(String(req.body?.email || ''), String(req.body?.code || '')));
   }));
   r.post('/verify-email', sensitiveLimiter, asyncHandler(async (req, res) => {
     needLocal(config.auth.emailVerification);
