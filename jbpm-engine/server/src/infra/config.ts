@@ -43,6 +43,8 @@ export interface Config {
   localLogin: boolean;
   /** the ONE platform administrator (system_admin everywhere). Fixed in code, deliberately not configurable. */
   platformAdminEmail: string;
+  /** cross-replica coordination (see infra/coordinator.ts). No REDIS_URL = this process coordinates only itself. */
+  cluster: { redisUrl?: string; keyPrefix: string; replicaId: string; leaseTtlMs: number; heartbeatMs: number };
 }
 
 export interface AuthFeatures {
@@ -149,6 +151,13 @@ export const config: Config = {
     capture: env.MAIL_CAPTURE === 'true',
   },
   platformAdminEmail: PLATFORM_ADMIN_EMAIL,
+  cluster: {
+    redisUrl: env.REDIS_URL?.trim() || undefined,
+    keyPrefix: env.REDIS_KEY_PREFIX || 'orkestr:',
+    replicaId: env.REPLICA_ID || env.HOSTNAME || `replica-${Math.random().toString(36).slice(2, 8)}`,
+    leaseTtlMs: Math.max(2000, Number(env.CLUSTER_LEASE_TTL_MS || 20000)),
+    heartbeatMs: Math.max(500, Number(env.CLUSTER_HEARTBEAT_MS || 5000)),
+  },
 };
 
 /** Refuse to boot in production on insecure defaults (same posture as zero-payment-ms's settings validation). */
@@ -164,5 +173,6 @@ export function assertProductionConfig(c: Config = config): void {
   if (c.oidc.issuer && !c.oidc.clientId) problems.push('OIDC_CLIENT_ID is required when OIDC_ISSUER is set');
   if (c.oidc.issuer && !/^https:\/\//.test(c.oidc.issuer)) problems.push('OIDC_ISSUER must be an https URL in production');
   if (!c.oidc.issuer && !c.localLogin) problems.push('No sign-in method configured: set OIDC_ISSUER or enable AUTH_LOCAL_LOGIN');
+  if (c.cluster.redisUrl && !/^rediss?:\/\//.test(c.cluster.redisUrl)) problems.push('REDIS_URL must start with redis:// or rediss://');
   if (problems.length) throw new Error(`Refusing to start in production:\n - ${problems.join('\n - ')}`);
 }

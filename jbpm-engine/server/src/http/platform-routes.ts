@@ -5,7 +5,9 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { asyncHandler, forbidden } from '../infra/errors.ts';
 import type { JwtClaims } from '../infra/auth.ts';
 import { isPlatformAdmin } from '../modules/tenants/identity.ts';
-import { PlatformLimitsService } from '../modules/platform/limits.ts';
+import { PlatformLimitsService, maxReplicasFor } from '../modules/platform/limits.ts';
+import { coordinator } from '../infra/coordinator.ts';
+import { Collections } from '../domain.ts';
 import type { AppContext } from '../context.ts';
 import { makeContext } from '../context.ts';
 import { PlanService } from '../modules/plans/plans.ts';
@@ -30,6 +32,20 @@ export function buildPlatformRoutes(): Router {
   r.get('/limits/usage', asyncHandler(async (req, res) => res.json({ success: true, data: await svc(req).usage() })));
   r.get('/workspaces/:id/limits', asyncHandler(async (req, res) => res.json({ success: true, data: await svc(req).getWorkspace(req.params.id) })));
   r.put('/workspaces/:id/limits', asyncHandler(async (req, res) => res.json({ success: true, data: await svc(req).putWorkspace(req.params.id, req.body || {}, actor(req)) })));
+
+  // ---- cluster: which replicas are alive and which of them serve each workspace right now ----
+  r.get('/cluster', asyncHandler(async (req, res) => {
+    const co = coordinator();
+    const store = ((req as any).ctx as AppContext).store;
+    const tenants = await store.repo<{ id: string; name?: string; slug?: string }>(Collections.tenants).list();
+    const workspaces = [];
+    for (const t of tenants) {
+      const holders = await co.holders(t.id);
+      const max = await maxReplicasFor(store, t.id);
+      if (holders.length || max) workspaces.push({ workspaceId: t.id, name: t.name, maxReplicas: max || null, holders, requestsInFlight: await co.inUse('req', t.id) });
+    }
+    res.json({ success: true, data: { backend: co.kind, shared: co.shared, thisReplica: co.replicaId, replicas: await co.replicas(), workspaces } });
+  }));
 
   // ---- plans: the commercial layer. Every limit is enforced; -1 = unlimited. ----
   const plans = (req: Request) => new PlanService(((req as any).ctx as AppContext).store);

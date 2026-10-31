@@ -19,6 +19,7 @@ import type { Entity } from '../../store/repository.ts';
 import { validation, notFound } from '../../infra/errors.ts';
 import { isOverflowMode, sandboxConfig, configureSandbox, setPoolLimits, sandboxStats, type OverflowMode } from '../../engine/isolate-pool.ts';
 import { SettingsService } from '../settings/service.ts';
+import { coordinator } from '../../infra/coordinator.ts';
 
 export const PLATFORM_TENANT = 'platform';
 const GLOBAL_ID = 'platform-limits';
@@ -34,6 +35,7 @@ export interface PlatformLimits {
   scriptOverflowModeDefault: OverflowMode;
   maxActiveInstancesCap: number;      // 0 = no cap
   maxActiveTimersCap: number;         // 0 = no cap
+  maxReplicasCap: number;             // most replicas that may serve any one workspace; 0 = no cap
 }
 /** per-workspace platform override — every field optional; unset = inherit the global value. */
 export interface WorkspaceLimits {
@@ -43,14 +45,15 @@ export interface WorkspaceLimits {
   scriptQueueMaxCap?: number;
   maxActiveInstancesCap?: number;
   maxActiveTimersCap?: number;
+  maxReplicasCap?: number;
   /** when set, the workspace cannot choose its own overflow mode */
   lockedOverflowMode?: OverflowMode;
 }
 
-const GLOBAL_INT_FIELDS = ['scriptPoolDefaultSize', 'scriptPoolMaxSize', 'scriptQueueDefaultMax', 'scriptQueueMaxCap', 'scriptQueueTimeoutMs', 'scriptMaxIsolates', 'maxActiveInstancesCap', 'maxActiveTimersCap'] as const;
-const WS_INT_FIELDS = ['scriptPoolDefaultSize', 'scriptPoolMaxSize', 'scriptQueueDefaultMax', 'scriptQueueMaxCap', 'maxActiveInstancesCap', 'maxActiveTimersCap'] as const;
+const GLOBAL_INT_FIELDS = ['scriptPoolDefaultSize', 'scriptPoolMaxSize', 'scriptQueueDefaultMax', 'scriptQueueMaxCap', 'scriptQueueTimeoutMs', 'scriptMaxIsolates', 'maxActiveInstancesCap', 'maxActiveTimersCap', 'maxReplicasCap'] as const;
+const WS_INT_FIELDS = ['scriptPoolDefaultSize', 'scriptPoolMaxSize', 'scriptQueueDefaultMax', 'scriptQueueMaxCap', 'maxActiveInstancesCap', 'maxActiveTimersCap', 'maxReplicasCap'] as const;
 /** fields where 0 is a legal value (no cap / no waiting) rather than "must be ≥ 1" */
-const ZERO_OK = new Set(['scriptQueueDefaultMax', 'scriptQueueMaxCap', 'maxActiveInstancesCap', 'maxActiveTimersCap']);
+const ZERO_OK = new Set(['scriptQueueDefaultMax', 'scriptQueueMaxCap', 'maxActiveInstancesCap', 'maxActiveTimersCap', 'maxReplicasCap']);
 
 const envNum = (v: string | undefined, d: number) => { const n = Number(v); return v !== undefined && v !== '' && Number.isFinite(n) ? n : d; };
 /** bootstrap defaults (env); a stored platform document overrides these field by field. */
@@ -64,6 +67,7 @@ const ENV_DEFAULTS = (): PlatformLimits => ({
   scriptOverflowModeDefault: isOverflowMode(process.env.SCRIPT_OVERFLOW_MODE) ? process.env.SCRIPT_OVERFLOW_MODE : 'queue',
   maxActiveInstancesCap: envNum(process.env.MAX_ACTIVE_INSTANCES_CAP, 0),
   maxActiveTimersCap: envNum(process.env.MAX_ACTIVE_TIMERS_CAP, 0),
+  maxReplicasCap: envNum(process.env.MAX_REPLICAS_CAP, 0),
 });
 const BOOT_DEFAULTS = ENV_DEFAULTS();
 
@@ -77,6 +81,7 @@ export interface EffectiveLimits {
   scriptQueueTimeoutMs: number;
   maxActiveInstances: number;      // 0 = unlimited
   maxActiveTimers: number;
+  maxReplicas: number;             // 0 = unlimited
 }
 export interface LimitCaps {
   scriptPoolMaxSize: number;
@@ -86,6 +91,7 @@ export interface LimitCaps {
   lockedOverflowMode?: OverflowMode;
   maxActiveInstancesCap: number;   // 0 = unlimited
   maxActiveTimersCap: number;
+  maxReplicasCap: number;          // 0 = unlimited
 }
 
 const atLeast1 = (n: number) => Math.max(1, Math.floor(n));
@@ -108,6 +114,7 @@ export function capsOf(g: PlatformLimits, o: WorkspaceLimits = {}): LimitCaps {
     lockedOverflowMode: o.lockedOverflowMode,
     maxActiveInstancesCap: minQuotaCap(o.maxActiveInstancesCap, g.maxActiveInstancesCap),
     maxActiveTimersCap: minQuotaCap(o.maxActiveTimersCap, g.maxActiveTimersCap),
+    maxReplicasCap: minQuotaCap(o.maxReplicasCap, g.maxReplicasCap),
   };
 }
 
@@ -122,6 +129,24 @@ export function resolveLimits(g: PlatformLimits, o: WorkspaceLimits | undefined,
     scriptQueueTimeoutMs: g.scriptQueueTimeoutMs,
     maxActiveInstances: capQuota(s.maxActiveInstances, c.maxActiveInstancesCap),
     maxActiveTimers: capQuota(s.maxActiveTimers, c.maxActiveTimersCap),
+    maxReplicas: c.maxReplicasCap,
+  };
+}
+
+/** The slice of a workspace's script budget this replica enforces. The effective limits are for the WHOLE workspace;
+ *  with H replicas holding it (infra/coordinator.ts) the pool is split exactly — replica of rank r gets
+ *  floor(size/H) plus one while r < size mod H — so the replicas' pools add up to the workspace's size. When there are
+ *  more holders than slots (a pool can't go below 1 per replica) `clusterCap` asks the sandbox to also take a shared
+ *  slot around each run. The queue is split evenly (rounded up). */
+export function replicaShare(workspaceId: string, e: Pick<EffectiveLimits, 'scriptPoolSize' | 'scriptQueueMax'>): { size: number; queueMax: number; clusterCap?: number } {
+  const co = coordinator();
+  const { holders, rank } = co.holdersOf(workspaceId);
+  const size = e.scriptPoolSize;
+  const mine = Math.floor(size / holders) + (rank < size % holders ? 1 : 0);
+  return {
+    size: Math.max(1, mine),
+    queueMax: e.scriptQueueMax > 0 ? Math.ceil(e.scriptQueueMax / holders) : 0,
+    clusterCap: co.shared && holders > size ? size : undefined,
   };
 }
 
@@ -191,8 +216,18 @@ export async function effectiveLimitsFor(ctx: AppContext): Promise<{ effective: 
   const override: WorkspaceLimits = { ...wsOverride,
     scriptPoolMaxSize: tight(wsOverride.scriptPoolMaxSize, pos(plan.limits.concurrentScripts)),
     maxActiveInstancesCap: tight(wsOverride.maxActiveInstancesCap, pos(plan.limits.maxActiveInstances)),
-    maxActiveTimersCap: tight(wsOverride.maxActiveTimersCap, pos(plan.limits.maxActiveTimers)) };
+    maxActiveTimersCap: tight(wsOverride.maxActiveTimersCap, pos(plan.limits.maxActiveTimers)),
+    maxReplicasCap: tight(wsOverride.maxReplicasCap, pos(plan.limits.maxReplicas)) };
   return { effective: resolveLimits(global, override, settings), caps: capsOf(global, override), settings };
+}
+
+/** The most replicas that may serve `workspaceId` right now (0 = unlimited) = min(platform cap, per-workspace cap, plan).
+ *  Cheap (cached reads only) — the request gate calls it on every API call. */
+export async function maxReplicasFor(store: Store, workspaceId: string): Promise<number> {
+  const [{ global, override }, plan] = await Promise.all([platformLimitsOf(store, workspaceId), resolvePlan(store, workspaceId)]);
+  const pos = (v: number | undefined) => (v !== undefined && v > 0 ? v : undefined);
+  const all = [pos(global.maxReplicasCap), pos(override.maxReplicasCap), pos(plan.limits.maxReplicas)].filter((v): v is number => v !== undefined);
+  return all.length ? Math.min(...all) : 0;
 }
 
 // ------------------------------------------------------------------------------------------ service
@@ -281,7 +316,8 @@ export class PlatformLimitsService {
       if (id.startsWith('_')) continue;
       const settings = await new SettingsService(makeContext({ store: this.store, tenantId: id })).get();
       const e = resolveLimits(g, await readWs(this.store, id), settings);
-      setPoolLimits(id, { size: e.scriptPoolSize, queueMax: e.scriptQueueMax, mode: e.scriptOverflowMode });
+      const share = replicaShare(id, e);
+      setPoolLimits(id, { size: share.size, queueMax: share.queueMax, mode: e.scriptOverflowMode });
     }
   }
 

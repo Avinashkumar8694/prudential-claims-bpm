@@ -24,10 +24,15 @@ Configuration lives in two layers: **environment variables** (deployment-time, r
 | `SCRIPT_QUEUE_TIMEOUT_MS` | `5000` | Bootstrap default of `scriptQueueTimeoutMs`: max wait in the queue before `QUOTA_EXCEEDED` (not counted in `SCRIPT_TIMEOUT_MS`) |
 | `SCRIPT_MAX_ISOLATES` | `max(8, 2×CPU cores)` | Bootstrap default of `scriptMaxIsolates`: server-wide ceiling of live isolates **per pod**. Keep it ≥ the sum of the busy workspaces' pool sizes. At the ceiling, waiting workspaces are served round-robin and may reclaim another's *idle* isolate |
 | `MAX_ACTIVE_INSTANCES_CAP` / `MAX_ACTIVE_TIMERS_CAP` | `0` (no cap) | Bootstrap defaults of `maxActiveInstancesCap` / `maxActiveTimersCap` |
+| `REDIS_URL` | *(unset)* | **Run several replicas? Set this.** `redis://host:6379` (or `rediss://`). Makes request limits, script pools, `maxReplicas` placement, timer ownership and usage counters hold across all replicas. Unset = single-process coordination (correct for exactly one pod). In production a configured-but-unreachable Redis stops the boot |
+| `REDIS_KEY_PREFIX` | `orkestr:` | Prefix for every key, so several environments can share one Redis |
+| `REPLICA_ID` | `$HOSTNAME` | This replica's name in the cluster (set it to the pod name; it appears in `X-Served-By` and `/api/platform/cluster`) |
+| `CLUSTER_LEASE_TTL_MS` / `CLUSTER_HEARTBEAT_MS` | `20000` / `5000` | A replica's claim on a workspace slot expires this long after its last heartbeat (crash recovery time); how often live replicas renew and re-balance |
+| `MAX_REPLICAS_CAP` | `0` (no cap) | Bootstrap default of `maxReplicasCap`: most replicas that may serve one workspace |
 | `SCRIPT_ISOLATE_IDLE_MS` | `60000` | An idle isolate is disposed after this long (the pool shrinks to zero when a workspace goes quiet) |
 | `SCRIPT_ISOLATE_MAX_RUNS` | `1000` | An isolate is recycled after this many executions (also recycled after a timeout, OOM, or near-full heap) |
 
-> **Single pod vs several.** Isolate pools, queues and the concurrency/overflow limits above are **per server process**. With N pods behind a load balancer a workspace's real limit is `limit × N` (and its worst-case script memory × N). Size `maxConcurrentScripts` and `SCRIPT_MAX_ISOLATES` per pod accordingly.
+> **Single pod vs several.** Every workspace limit is a *workspace* number. With `REDIS_URL` set it is enforced across all replicas: the pool size / queue are split exactly over the replicas currently serving the workspace (8 slots over 2 replicas = 4 + 4), request and rate limits are shared counters, and `maxReplicas` bounds how many replicas serve it. `SCRIPT_MAX_ISOLATES` and memory remain **per pod** (a pod's worst case = its share of every workspace it serves). Without `REDIS_URL` the limits are per process, i.e. `limit × N` — fine for one pod only. See [Plans & limits → Running several replicas](plans-and-limits.md#running-several-replicas).
 
 ### Platform limits — who controls what (3 levels)
 

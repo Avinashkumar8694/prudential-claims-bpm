@@ -8,10 +8,12 @@
 //   reserve*                      → daily / weekly / monthly process-start counters, incremented atomically per
 //                                   workspace (an in-process lock; counters live in the `usage` collection).
 //
+// With several replicas the read-modify-write below also takes a cluster-wide lock (Redis) so counters never lose updates.
 // The platform administrator (ctx.planExempt) is not subject to plan limits or expiry in any workspace.
 import type { Store } from '../../store/repository.ts';
 import type { AppContext } from '../../context.ts';
 import { Collections, type Deployment, type Instance, type Plan, type Tenant, type TenantMember, type Usage, type Workflow } from '../../domain.ts';
+import { coordinator } from '../../infra/coordinator.ts';
 import { notFound, planExpired, quotaExceeded, validation } from '../../infra/errors.ts';
 import { DEFAULT_PLAN_LIMITS, LIMIT_CATALOG, PLAN_LIMIT_KEYS, TRIAL_DAYS, UNLIMITED, cap, type PlanLimitKey, type PlanLimits } from './plan-limits.ts';
 
@@ -89,7 +91,9 @@ async function reserveInstanceStart(ctx: AppContext, p: ResolvedPlan): Promise<v
   const nowMs = Date.parse(ctx.clock());
   const w = periodWindows(nowMs);
   const repo = ctx.store.repo<Usage>(Collections.usage);
-  await withLock(ctx.tenantId, async () => {
+  // in-process lock first (cheap, serialises this replica's own requests), then the cluster-wide lock so another replica
+  // cannot read the same counters between our read and our write
+  await withLock(ctx.tenantId, () => coordinator().mutex(`usage:${ctx.tenantId}`, async () => {
     const docs = await Promise.all(PERIODS.map(async ([period]) => (await repo.get(usageId(ctx.tenantId, period, w[period].key))) ?? { id: usageId(ctx.tenantId, period, w[period].key), tenantId: ctx.tenantId, period, key: w[period].key, count: 0, resetsAt: w[period].resetsAt } as Usage));
     PERIODS.forEach(([period, limitKey], i) => {
       const limit = cap(p.limits[limitKey]);
@@ -99,7 +103,7 @@ async function reserveInstanceStart(ctx: AppContext, p: ResolvedPlan): Promise<v
       }
     });
     for (const d of docs) { d.count += 1; await repo.put(d); }
-  });
+  }));
 }
 
 // ---------------------------------------------------------------------------------------------- enforcement

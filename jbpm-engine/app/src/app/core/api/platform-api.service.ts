@@ -7,11 +7,11 @@ import { ApiBase } from './api-base';
 export interface PlatformLimits {
   scriptPoolDefaultSize: number; scriptPoolMaxSize: number; scriptQueueDefaultMax: number; scriptQueueMaxCap: number;
   scriptQueueTimeoutMs: number; scriptMaxIsolates: number; scriptOverflowModeDefault: 'queue' | 'reject';
-  maxActiveInstancesCap: number; maxActiveTimersCap: number;
+  maxActiveInstancesCap: number; maxActiveTimersCap: number; maxReplicasCap: number;
 }
 export interface WorkspaceLimitOverride {
   scriptPoolDefaultSize?: number; scriptPoolMaxSize?: number; scriptQueueDefaultMax?: number; scriptQueueMaxCap?: number;
-  maxActiveInstancesCap?: number; maxActiveTimersCap?: number; lockedOverflowMode?: 'queue' | 'reject';
+  maxActiveInstancesCap?: number; maxActiveTimersCap?: number; maxReplicasCap?: number; lockedOverflowMode?: 'queue' | 'reject';
 }
 export interface PlatformUsageRow {
   workspaceId: string; name?: string; slug?: string;

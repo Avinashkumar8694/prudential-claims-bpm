@@ -22,6 +22,8 @@ export interface PlanLimits {
   maxTeamMembers?: number;
   /** deployments that are not archived */
   maxDeployments?: number;
+  /** replicas (pods) that may serve the workspace at the same time — enforced across the whole cluster via Redis */
+  maxReplicas?: number;
 }
 
 export type PlanLimitKey = keyof PlanLimits;
@@ -37,6 +39,7 @@ export const LIMIT_CATALOG: Record<PlanLimitKey, { label: string; unit: string; 
   maxActiveTimers: { label: 'Active timers', unit: 'timers', description: 'Scheduled timers alive at once.' },
   maxWorkflows: { label: 'Workflows', unit: 'workflows', description: 'Non-archived workflows (projects).' },
   maxTeamMembers: { label: 'Team members', unit: 'members', description: 'Active members plus pending invitations.' },
+  maxReplicas: { label: 'Serving replicas', unit: 'replicas', description: 'How many replicas (pods) may serve the workspace at once; the other replicas answer 503 + Retry-After so the load balancer tries another. Concurrency, rate and script pools are split across the replicas that hold the workspace.' },
   maxDeployments: { label: 'Deployments', unit: 'deployments', description: 'Deployments that are not archived.' },
 };
 export const PLAN_LIMIT_KEYS = Object.keys(LIMIT_CATALOG) as PlanLimitKey[];
@@ -50,17 +53,17 @@ export const DEFAULT_PLAN_LIMITS: Record<string, Required<PlanLimits>> = {
   trial: {
     concurrentRequests: 50, requestsPerMinute: 600, concurrentScripts: 2,
     instancesPerDay: 200, instancesPerWeek: 1000, instancesPerMonth: 3000,
-    maxActiveInstances: 50, maxActiveTimers: 100, maxWorkflows: 10, maxTeamMembers: 5, maxDeployments: 20,
+    maxActiveInstances: 50, maxActiveTimers: 100, maxWorkflows: 10, maxTeamMembers: 5, maxDeployments: 20, maxReplicas: 2,
   },
   starter: {
     concurrentRequests: 100, requestsPerMinute: 3000, concurrentScripts: 4,
     instancesPerDay: 2000, instancesPerWeek: 10000, instancesPerMonth: 30000,
-    maxActiveInstances: 500, maxActiveTimers: 1000, maxWorkflows: 50, maxTeamMembers: 15, maxDeployments: 100,
+    maxActiveInstances: 500, maxActiveTimers: 1000, maxWorkflows: 50, maxTeamMembers: 15, maxDeployments: 100, maxReplicas: 2,
   },
   pro: {
     concurrentRequests: 250, requestsPerMinute: 15000, concurrentScripts: 8,
     instancesPerDay: 20000, instancesPerWeek: 100000, instancesPerMonth: 300000,
-    maxActiveInstances: 5000, maxActiveTimers: 10000, maxWorkflows: 500, maxTeamMembers: 100, maxDeployments: 1000,
+    maxActiveInstances: 5000, maxActiveTimers: 10000, maxWorkflows: 500, maxTeamMembers: 100, maxDeployments: 1000, maxReplicas: 4,
   },
   enterprise: UNLIMITED_ALL,
   custom: UNLIMITED_ALL,

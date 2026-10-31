@@ -1,7 +1,7 @@
 // Shared helpers for building the kcontext-facing data (declared variable types, active node
 // instances, process/instance metadata) from a HandlerCtx — used identically by script/http/gateway
 // handlers so these three don't drift out of sync with each other over time.
-import { effectiveLimitsFor } from '../../modules/platform/limits.ts';
+import { effectiveLimitsFor, replicaShare } from '../../modules/platform/limits.ts';
 import type { HandlerCtx } from './types.ts';
 import type { ActiveNodeInstance } from '../java-sidecar.ts';
 import type { EngineNode } from '../../sdk/index.ts';
@@ -53,11 +53,15 @@ export function onActionOf(c: HandlerCtx) {
 
 /** the workspace's effective script limits (platform caps ∩ workspace settings, see modules/platform/limits.ts) for the
  *  isolate pool (js) and the java admission cap — read per execution so a change applies to the very next run. */
-export async function scriptLimitsOf(c: HandlerCtx): Promise<{ maxConcurrentScripts: number; scriptQueueMax: number; scriptOverflowMode: 'queue' | 'reject'; javaMaxConcurrent: number | undefined }> {
+export async function scriptLimitsOf(c: HandlerCtx): Promise<{ maxConcurrentScripts: number; scriptQueueMax: number; scriptOverflowMode: 'queue' | 'reject'; javaMaxConcurrent: number | undefined; clusterScriptCap: number | undefined }> {
   const { effective, caps, settings } = await effectiveLimitsFor(c.app);
   const asked = settings.scriptPoolSize || settings.maxConcurrentScripts;
+  // the limits above are for the whole workspace; this replica enforces its share of them (all replicas together = the limit)
+  const share = replicaShare(c.app.tenantId, effective);
+  const javaTotal = asked ? Math.min(asked, caps.scriptPoolMaxSize) : undefined;
   return {
-    maxConcurrentScripts: effective.scriptPoolSize, scriptQueueMax: effective.scriptQueueMax, scriptOverflowMode: effective.scriptOverflowMode,
-    javaMaxConcurrent: asked ? Math.min(asked, caps.scriptPoolMaxSize) : undefined,
+    maxConcurrentScripts: share.size, scriptQueueMax: share.queueMax, scriptOverflowMode: effective.scriptOverflowMode,
+    javaMaxConcurrent: javaTotal === undefined ? undefined : replicaShare(c.app.tenantId, { ...effective, scriptPoolSize: javaTotal }).size,
+    clusterScriptCap: share.clusterCap,
   };
 }

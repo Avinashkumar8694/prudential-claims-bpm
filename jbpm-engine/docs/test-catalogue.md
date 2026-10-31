@@ -97,13 +97,27 @@ Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 | PLAN-40…42 | requestsPerMinute, concurrentRequests (429 + Retry-After, counter released), the free plan's 50 concurrent requests | ✅ |
 | PLAN-50/60 | `/plan/usage` for every member, plan administration validation, edits apply at once, hidden plans | ✅ |
 
+## 5c. Several replicas — `cluster.test.ts` (CLU-*) — limits hold whatever the replica count
+Run against a shared in-memory backend (fake clock) **and**, when `REDIS_URL` is set, the same contract against real Redis.
+| ID | Scenario | |
+|---|---|---|
+| CLU-01/02 | concurrent-request slots and requests-per-minute are one shared budget across 5 replicas (exact totals), freed slots usable from any replica, window reset | ✅ |
+| CLU-03/04 | `maxReplicas`: of 10 replicas exactly 2 serve; per-workspace; lowering/raising applies on every replica and the survivors agree | ✅ |
+| CLU-05/06 | crashed replica's slots expire and move; renewal keeps a live replica's slot; graceful stop hands over at once | ✅ |
+| CLU-07/08 | one-owner claim (10 racers → 1 winner); cluster mutex never loses an update | ✅ |
+| CLU-09 | pool/queue split exactly across holders (sums to the limit, ≥ 1 each, shared slot only when replicas > slots) | ✅ |
+| CLU-10/11 | no Redis = private single-process behaviour; Redis outage degrades to per-replica limits, API stays up | ✅ |
+| CLU-12 | a timer fires exactly once with 5 replicas ticking at once; only admitted replicas work the workspace | ✅ |
+| CLU-13 | HTTP: 503 `REPLICA_NOT_ASSIGNED` + `Retry-After` + `X-Served-By` on a non-holder; plan rate/concurrency counted across replicas; raising the cap lets the next replica in | ✅ |
+Also verified by hand: 5 real OS processes racing on a Redis container (exactly 2 placed, exactly 7 of 7 request slots granted) and the production bundle booting against Redis, registering and releasing on SIGTERM.
+
 ## 6. Hostile input, headers, audit, config — `enterprise-edge.test.ts`
 SEC-01 mass assignment · SEC-02 prototype pollution · SEC-03 malformed bodies ⇒ 4xx, no stack traces · SEC-04 operator injection in login ·
 SEC-05 security headers & CORS preflight · SEC-07 no secrets in responses · AUD-01 audit trail scoped per workspace · CFG-01 landing/sign-in render from public endpoints only. ✅
 
 ## 7. Gaps — stated plainly
 1. ⛔ No browser-driven end-to-end tests of the Angular screens (verified manually: login, team page, invite). The permission *logic* behind the UI is covered by the parity test in `rbac-matrix`.
-2. ⛔ No load / soak / failover tests; rate limiting and WebSocket hub are single-process in-memory.
+2. 🟡 No load / soak tests. Multi-replica limits are covered (CLU-*); the WebSocket hub and per-IP login limiters are still single-process in-memory.
 3. 🟡 Postgres store: the unit suite uses the in-memory store. The production image is smoke-tested against a real Postgres by `scripts/docker-smoke.sh` (sign-in, Java + JS scripts, UTF-8, case management, 40 parallel starts); `npm run test:pg` is not part of it.
 4. ⛔ Real SMTP and real Identity Server round-trips are not automated (fakes/capture are).
 5. 🟡 Task *group* membership is enforced only for IAM-provisioned users; workspace members (SSO) are authorised by role, not by task group.

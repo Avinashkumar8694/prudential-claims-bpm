@@ -12,10 +12,13 @@ import { TenantService } from './modules/tenants/service.ts';
 import { authenticateWsUpgrade, authorizeWsTenant, canSubscribe } from './infra/ws-auth.ts';
 import { Collections, type Tenant } from './domain.ts';
 import { ensurePlatformAdmin } from './modules/tenants/identity.ts';
+import { initCoordinator, coordinator } from './infra/coordinator.ts';
+import { maxReplicasFor, PlatformLimitsService } from './modules/platform/limits.ts';
 
 assertProductionConfig();   // refuse to boot in production on insecure defaults
 
 const { app, store } = createApp();
+await initCoordinator();      // Redis (REDIS_URL) or a private in-memory backend; heartbeats start here
 const server = http.createServer(app);
 
 const wss = new WebSocketServer({ server, path: config.wsPath });
@@ -46,11 +49,25 @@ setInterval(async () => {
     const tenants = await store.repo<Tenant>(Collections.tenants).query((t) => t.status === 'active');
     const ids = new Set([config.defaultTenant, ...tenants.map((t) => t.id)]);
     for (const tenantId of ids) {
-      await new TimerService(makeContext({ store, tenantId }), hub.engineEmit).tick(now)
-        .catch((e) => logger.error('timer tick failed', { tenantId, err: (e as Error).message }));
+      // with several replicas: only a replica that may serve this workspace (maxReplicas) works its timers, and each
+      // job is claimed by exactly one of them — a timer fires once however many pods run
+      const co = coordinator();
+      await new TimerService(makeContext({ store, tenantId }), hub.engineEmit).tick(now, {
+        admit: async () => (await co.place(tenantId, await maxReplicasFor(store, tenantId))).ok,
+        claim: (job) => co.claim(`timer:${job.id}`),
+      }).catch((e) => logger.error('timer tick failed', { tenantId, err: (e as Error).message }));
     }
   } finally { ticking = false; }
 }, 5000);
+
+// every replica re-applies the stored limits to its own live pools: an admin change made on ANY replica reaches all of them
+// (limits live in the shared store, not in memory), and a replica joining/leaving rebalances each workspace's share.
+setInterval(() => { new PlatformLimitsService(store).applyLive().catch((e) => logger.error('limits reconcile failed', { err: (e as Error).message })); }, config.cluster.heartbeatMs).unref?.();
+
+// graceful stop: give the replica's workspace slots back at once instead of waiting for them to expire
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+  process.once(sig, () => { server.close(); coordinator().stop().finally(() => process.exit(0)); });
+}
 
 const iamCtx = makeContext({ store, tenantId: config.defaultTenant });
 new IamService(iamCtx).ensureSeeded(config.adminInitialPassword).then(async ({ seededAdmin }) => {

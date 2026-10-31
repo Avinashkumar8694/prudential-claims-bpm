@@ -13,8 +13,9 @@ const GLOBAL_FIELDS: Array<{ key: keyof PlatformLimits; label: string; hint: str
   { key: 'scriptMaxIsolates', label: 'Server-wide isolate ceiling', hint: 'Per pod. Keep ≥ the sum of busy workspaces’ pool sizes.' },
   { key: 'maxActiveInstancesCap', label: 'Active-instances cap', hint: '0 = no cap. Workspaces cannot raise their quota past it.' },
   { key: 'maxActiveTimersCap', label: 'Active-timers cap', hint: '0 = no cap.' },
+  { key: 'maxReplicasCap', label: 'Serving-replicas cap', hint: '0 = no cap. Most replicas (pods) that may serve any one workspace at once; needs Redis when several pods run.' },
 ];
-const WS_FIELDS: Array<keyof WorkspaceLimitOverride> = ['scriptPoolDefaultSize', 'scriptPoolMaxSize', 'scriptQueueDefaultMax', 'scriptQueueMaxCap', 'maxActiveInstancesCap', 'maxActiveTimersCap'];
+const WS_FIELDS: Array<keyof WorkspaceLimitOverride> = ['scriptPoolDefaultSize', 'scriptPoolMaxSize', 'scriptQueueDefaultMax', 'scriptQueueMaxCap', 'maxActiveInstancesCap', 'maxActiveTimersCap', 'maxReplicasCap'];
 
 // Platform administrator only (the server answers 403 to everyone else): global limits + per-workspace caps/locks + live usage.
 @Component({

@@ -7,6 +7,13 @@ import type { EngineEvent } from '../../engine/execution-engine.ts';
 import { computeDue, parseCycleRepeatCount } from '../../engine/duration.ts';
 import { notFound, conflict, validation } from '../../infra/errors.ts';
 
+/** Multi-replica guards for tick(): `admit` says whether this replica may work this workspace's timers at all (checked
+ *  once, and only when something is due), `claim` takes exclusive ownership of ONE job so two replicas never fire it. */
+export interface TickGate {
+  admit?: () => Promise<boolean>;
+  claim?: (job: TimerJob) => Promise<(() => Promise<void>) | null>;
+}
+
 export class TimerService {
   private instances: InstanceService;
   constructor(private ctx: AppContext, emit: (e: EngineEvent) => void = () => {}) {
@@ -15,35 +22,46 @@ export class TimerService {
   private repo() { return this.ctx.store.repo<TimerJob>(Collections.timers); }
 
   /** Fire every scheduled timer of THIS context's workspace due at or before `nowIso`; returns the number fired. */
-  async tick(nowIso: string): Promise<number> {
+  async tick(nowIso: string, gate?: TickGate): Promise<number> {
     const due = await this.repo().query((t) => t.tenantId === this.ctx.tenantId && t.status === 'scheduled' && t.dueAt <= nowIso);
+    if (!due.length) return 0;
+    if (gate?.admit && !(await gate.admit())) return 0;
     let fired = 0;
-    for (const job of due) {
+    for (let job of due) {
       // Don't fire (or consume) a timer whose instance is suspended — leave it scheduled to fire on resume.
       if (job.kind !== 'start') {
         const inst = await this.instances.get(job.instanceId).catch(() => null);
         if (inst && inst.status === 'suspended') continue;
       }
-      job.status = 'fired'; job.fired += 1;
-      await this.repo().put(job);
-      fired++;
+      const release = gate?.claim ? await gate.claim(job) : undefined;
+      if (gate?.claim && !release) continue;                       // another replica owns this job right now
       try {
-        if (job.kind === 'start') {
-          // reschedule the next occurrence in `finally`, not only on success — a single failed firing
-          // (deployment archived, or now a quota rejection) must not permanently kill a recurring
-          // cron/cycle start; it should just skip this occurrence and try again next time.
-          try { await this.instances.startScheduled(job); }
-          finally { if (job.cycle) await this.reschedule(job, nowIso); }
-        } else {
-          const inst = await this.instances.fireTimer(job);
-          // A non-interrupting boundary timer doesn't remove its host token — if it's also declared
-          // with a cycle, that means "keep pinging every period" (e.g. an SLA reminder), so reschedule
-          // for the next occurrence. An interrupting boundary (or a plain catch-timer, which always
-          // consumes its own wait) removes the token, so this naturally stops recurring on its own —
-          // no separate "which kind was this" check needed.
-          if (job.cycle && inst.tokens.some((t) => t.id === job.tokenId)) await this.reschedule(job, nowIso);
+        if (gate?.claim) {                                         // it may have been fired (and released) between our query and our claim
+          const fresh = await this.repo().get(job.id);
+          if (!fresh || fresh.status !== 'scheduled' || fresh.dueAt > nowIso) continue;
+          job = fresh;
         }
-      } catch { /* token gone / instance finished / deployment inactive — ignore */ }
+        job.status = 'fired'; job.fired += 1;
+        await this.repo().put(job);
+        fired++;
+        try {
+          if (job.kind === 'start') {
+            // reschedule the next occurrence in `finally`, not only on success — a single failed firing
+            // (deployment archived, or now a quota rejection) must not permanently kill a recurring
+            // cron/cycle start; it should just skip this occurrence and try again next time.
+            try { await this.instances.startScheduled(job); }
+            finally { if (job.cycle) await this.reschedule(job, nowIso); }
+          } else {
+            const inst = await this.instances.fireTimer(job);
+            // A non-interrupting boundary timer doesn't remove its host token — if it's also declared
+            // with a cycle, that means "keep pinging every period" (e.g. an SLA reminder), so reschedule
+            // for the next occurrence. An interrupting boundary (or a plain catch-timer, which always
+            // consumes its own wait) removes the token, so this naturally stops recurring on its own —
+            // no separate "which kind was this" check needed.
+            if (job.cycle && inst.tokens.some((t) => t.id === job.tokenId)) await this.reschedule(job, nowIso);
+          }
+        } catch { /* token gone / instance finished / deployment inactive — ignore */ }
+      } finally { await release?.(); }
     }
     return fired;
   }

@@ -26,10 +26,28 @@
 // don't want to think in jBPM terms even for process/node introspection, not just variables. See
 // buildInstanceGlobal/buildNodeGlobal below, and bpmn-sdk/src/engine.ts's jsInstanceNodePreamble for
 // how a script using them still exports to plain, real-jBPM-runnable text.
-import { withIsolate, effectiveOverflowMode } from './isolate-pool.ts';
+import { withIsolate, effectiveOverflowMode, sandboxConfig } from './isolate-pool.ts';
 import { executeJava, executeJavaCondition, type ActiveNodeInstance, type PendingAction } from './java-sidecar.ts';
 import { ISOLATE_RUNTIME_SOURCE } from './isolate-runtime.ts';
 import { acquireScriptSlot } from '../infra/quotas.ts';
+import { coordinator } from '../infra/coordinator.ts';
+import { quotaExceeded } from '../infra/errors.ts';
+
+/** Cluster-wide script admission for the corner where more replicas share a workspace than it has script slots
+ *  (a pool can't be split below 1 per replica): a shared Redis slot is taken around the run, waiting up to the queue
+ *  timeout (or failing at once in reject mode) exactly like the local pool would. */
+async function withClusterSlot<T>(tenantId: string | undefined, cap: number | undefined, mode: string | undefined, fn: () => Promise<T>): Promise<T> {
+  if (!tenantId || !cap) return fn();
+  const co = coordinator();
+  const deadline = Date.now() + sandboxConfig().queueTimeoutMs;
+  for (let delay = 5; ; delay = Math.min(delay * 2, 50)) {
+    const release = await co.acquire('script', tenantId, cap);
+    if (release) { try { return await fn(); } finally { await release(); } }
+    if (effectiveOverflowMode(mode) === 'reject') throw quotaExceeded(`per-workspace concurrent script quota exceeded across replicas (max ${cap})`, { quota: 'maxConcurrentScripts', max: cap });
+    if (Date.now() > deadline) throw quotaExceeded(`timed out waiting for a script slot in this workspace (max ${cap} across replicas)`, { quota: 'scriptQueueTimeout', timeoutMs: sandboxConfig().queueTimeoutMs });
+    await new Promise((r) => setTimeout(r, delay));
+  }
+}
 
 /** matches real jBPM's org.kie.api.runtime.process.ProcessInstance state constants — see
  *  KContext.ProcessInstance's STATE_* fields (java-runtime) for the Java-dialect twin. The JS-dialect
@@ -101,6 +119,8 @@ export interface ScriptOpts extends KContextInfo {
   scriptOverflowMode?: string;
   /** max executions allowed to WAIT for a free isolate (resolved from the limits model); unset = pool default. */
   scriptQueueMax?: number;
+  /** set only when more replicas share the workspace than it has script slots: the workspace-wide cap enforced through Redis */
+  clusterScriptCap?: number;
   /** admission cap for the `java` dialect only (no pool there): the workspace's explicit request, undefined = unlimited. */
   javaMaxConcurrent?: number;
 }
@@ -111,7 +131,8 @@ export async function runScript(code: string, vars: Record<string, unknown>, tim
   // hard-reject admission cap.
   const release = opts.lang === 'java' && opts.tenantId ? acquireScriptSlot(opts.tenantId, opts.javaMaxConcurrent) : undefined;
   try {
-    await runScriptBody(code, vars, timeoutMs, opts);
+    if (opts.lang === 'java') await withClusterSlot(opts.tenantId, opts.clusterScriptCap, opts.scriptOverflowMode, () => runScriptBody(code, vars, timeoutMs, opts));
+    else await runScriptBody(code, vars, timeoutMs, opts);
   } finally {
     release?.();
   }
@@ -157,10 +178,10 @@ const MAX_RESULT_BYTES = 8 * 1024 * 1024;
  *  `this.constructor.constructor('return process')()` etc. simply resolve to `undefined`.
  *  mode 'script' runs `code` as a statement body (bare-name writes sync back into `vars`);
  *  mode 'condition' evaluates it as a boolean expression / body with `return`. */
-async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number; scriptOverflowMode?: string; scriptQueueMax?: number }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
-  const { env, tenantId, maxConcurrentScripts, scriptOverflowMode, scriptQueueMax, ...rest } = info;
+async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expression', vars: Record<string, unknown>, info: KContextInfo & { tenantId?: string; maxConcurrentScripts?: number; scriptOverflowMode?: string; scriptQueueMax?: number; clusterScriptCap?: number }, timeoutMs: number, hostEnv?: Record<string, string>, onLog?: (line: string) => void): Promise<IsolateResult> {
+  const { env, tenantId, maxConcurrentScripts, scriptOverflowMode, scriptQueueMax, clusterScriptCap, ...rest } = info;
   const input = JSON.stringify({ vars, env: env || {}, info: rest });
-  return withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, effectiveOverflowMode(scriptOverflowMode), scriptQueueMax, async (isolate, context) => {
+  return withClusterSlot(tenantId, clusterScriptCap, scriptOverflowMode, () => withIsolate(tenantId || DEFAULT_POOL, maxConcurrentScripts, effectiveOverflowMode(scriptOverflowMode), scriptQueueMax, async (isolate, context) => {
     await context.global.set('__input', input);
     await (await isolate.compileScript('__setup(__input); delete globalThis.__input;')).run(context, { timeout: timeoutMs });
     // IIFE so var/let/const stay local while a bare assignment still lands on the global (see bare-name sync).
@@ -187,7 +208,7 @@ async function runJsInIsolate(code: string, mode: 'script' | 'condition' | 'expr
     Object.assign(vars, out.vars);
     if (hostEnv) Object.assign(hostEnv, out.env);
     return { value, logs: out.logs, actions: out.actions };
-  });
+  }));
 }
 
 /** deployment/instance context for a condition — same shape ScriptOpts carries for scripts, kept
@@ -202,6 +223,7 @@ export interface ConditionCtx extends KContextInfo {
   maxConcurrentScripts?: number;
   scriptOverflowMode?: string;
   scriptQueueMax?: number;
+  clusterScriptCap?: number;
   onAction?: ScriptOpts['onAction'];
 }
 

@@ -92,7 +92,7 @@ test('PLIM-2 privilege escalation is closed: a workspace owner cannot exceed a c
 });
 
 test('PLIM-3 min-chain resolution: global cap < workspace cap < workspace value; unset → default; override beats global default but never the global cap', () => {
-  const g: PlatformLimits = { scriptPoolDefaultSize: 2, scriptPoolMaxSize: 8, scriptQueueDefaultMax: 100, scriptQueueMaxCap: 500, scriptQueueTimeoutMs: 5000, scriptMaxIsolates: 64, scriptOverflowModeDefault: 'queue', maxActiveInstancesCap: 0, maxActiveTimersCap: 0 };
+  const g: PlatformLimits = { scriptPoolDefaultSize: 2, scriptPoolMaxSize: 8, scriptQueueDefaultMax: 100, scriptQueueMaxCap: 500, scriptQueueTimeoutMs: 5000, scriptMaxIsolates: 64, scriptOverflowModeDefault: 'queue', maxActiveInstancesCap: 0, maxActiveTimersCap: 0, maxReplicasCap: 0 };
   assert.strictEqual(resolveLimits(g, {}, {}).scriptPoolSize, 2, 'unset → default');
   assert.strictEqual(resolveLimits(g, {}, { scriptPoolSize: 5 }).scriptPoolSize, 5, 'workspace value inside the cap');
   assert.strictEqual(resolveLimits(g, {}, { scriptPoolSize: 50 }).scriptPoolSize, 8, 'global cap wins');
