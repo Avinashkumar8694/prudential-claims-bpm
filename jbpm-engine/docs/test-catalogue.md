@@ -87,6 +87,16 @@ Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 | EXE-91b | **sandbox escape via constructor chains** | ✅ |
 | engine-*.test.ts | 30 files of engine semantics (cascades, compensation, messaging, DMN import, java sidecar…) | ✅ (java needs JDK) |
 
+## 5b. Plans and limits — `plan-limits.test.ts` (PLAN-*) — every plan limit is enforced
+| ID | Scenario | |
+|---|---|---|
+| PLAN-01…03 | free-trial seed (7 days, 50 concurrent requests, per-day/week/month starts, every key present), signup = exactly 7 days, default workspace unlimited, old databases topped up without overwriting edits | ✅ |
+| PLAN-10…14 | per-day / per-week / per-month start limits, tightest wins, resets on UTC day / Monday / month boundaries, race-safe under 30 parallel starts, refused starts uncounted, per-workspace budgets | ✅ |
+| PLAN-20/21 | expired trial → 402 on new work, reads intact, extension restores access; platform admin exempt | ✅ |
+| PLAN-30…35 | maxWorkflows, maxTeamMembers (pending counts, re-invite free), maxDeployments, maxActiveInstances, concurrentScripts, maxActiveTimers — and a workspace cannot raise them | ✅ |
+| PLAN-40…42 | requestsPerMinute, concurrentRequests (429 + Retry-After, counter released), the free plan's 50 concurrent requests | ✅ |
+| PLAN-50/60 | `/plan/usage` for every member, plan administration validation, edits apply at once, hidden plans | ✅ |
+
 ## 6. Hostile input, headers, audit, config — `enterprise-edge.test.ts`
 SEC-01 mass assignment · SEC-02 prototype pollution · SEC-03 malformed bodies ⇒ 4xx, no stack traces · SEC-04 operator injection in login ·
 SEC-05 security headers & CORS preflight · SEC-07 no secrets in responses · AUD-01 audit trail scoped per workspace · CFG-01 landing/sign-in render from public endpoints only. ✅

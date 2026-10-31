@@ -11,6 +11,7 @@ import { buildPlatformRoutes, requirePlatformAdmin } from './http/platform-route
 import { buildPublicTenantRoutes, buildTenantRoutes } from './http/tenant-routes.ts';
 import { TenantService } from './modules/tenants/service.ts';
 import { requireAuth, requireWorkspaceAccess } from './http/auth-middleware.ts';
+import { planRequestGate } from './http/plan-gates.ts';
 import { errorMiddleware } from './infra/errors.ts';
 
 /** STORE=pg switches from the file-per-entity dev store to a real Postgres-backed one (see
@@ -63,7 +64,7 @@ export function createApp(store?: Store) {
   app.use('/api/auth', buildAuthRoutes());   // login only — must stay reachable without a token
   app.use('/api', buildTenantRoutes());       // authenticated tenant endpoints: /api/me/tenants, /api/me/profile, etc.
   app.use('/api/platform', requireAuth, requirePlatformAdmin, buildPlatformRoutes()); // platform admin only, no workspace scope
-  app.use('/api', requireAuth, requireWorkspaceAccess, buildRoutes());
+  app.use('/api', requireAuth, requireWorkspaceAccess, planRequestGate, buildRoutes());
   app.use(errorMiddleware);
   return { app, store: theStore };
 }

@@ -51,6 +51,7 @@ test('PLIM-1 every platform route is 403 for every workspace role (owner/admin i
   const routes: Array<[string, string, unknown?]> = [
     ['GET', '/limits'], ['PUT', '/limits', { scriptPoolMaxSize: 16 }], ['GET', '/limits/usage'],
     ['GET', `/workspaces/${ws.id}/limits`], ['PUT', `/workspaces/${ws.id}/limits`, {}],
+    ['GET', '/plans'], ['PUT', '/plans/qa-plan', { limits: { maxWorkflows: 5 } }], ['PUT', `/workspaces/${ws.id}/plan`, { plan: 'enterprise' }],
   ];
   const local = (await h.call('POST', '/auth/login', { body: { username: 'admin', password: 'bootstrap-pw-123' } })).body.token;
   for (const [m, p, b] of routes) {

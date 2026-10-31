@@ -21,6 +21,7 @@ import { config } from '../src/infra/config.ts';
 import { IamService, DEFAULT_ROLES } from '../src/modules/iam/service.ts';
 import { TenantService } from '../src/modules/tenants/service.ts';
 import { permissionGrants, signToken } from '../src/infra/auth.ts';
+import { PlanService } from '../src/modules/plans/plans.ts';
 import { Collections, type TenantMember } from '../src/domain.ts';
 
 interface RouteSpec { method: string; path: string; perm?: string }
@@ -57,6 +58,7 @@ test.before(async () => {
   const a = await ts.signup({ name: 'Matrix A', slug: 'matrix-a', ownerEmail: 'owner-a@example.com' });
   const b = await ts.signup({ name: 'Matrix B', slug: 'matrix-b', ownerEmail: 'owner-b@example.com' });
   wsA = a.id; wsB = b.id;
+  for (const id of [wsA, wsB]) await new PlanService(store).assign(id, 'enterprise', { planExpiresAt: null });   // the matrix is not about plan limits
   const members = store.repo<TenantMember>(Collections.tenantMembers);
   // workspace roles: owner is created by signup (userId = ownerEmail placeholder → local token username matches)
   tokens.owner = tok('owner-a@example.com');

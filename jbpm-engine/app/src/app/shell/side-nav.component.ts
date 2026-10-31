@@ -143,7 +143,7 @@ export class SideNavComponent {
       g.push({ label: 'Audit Log', icon: 'list', link: '/audit' });
     }
     if (this.auth.hasPermission('workflowInstance:admin')) g.push({ label: 'Workflow Management', icon: 'puzzle', link: '/workflow-management' });
-    if (this.auth.hasPermission('team:read')) g.push({ label: 'Team', icon: 'admin', link: '/team' });
+    if (this.auth.hasPermission('team:read')) { g.push({ label: 'Team', icon: 'admin', link: '/team' }); g.push({ label: 'Plan & usage', icon: 'chart', link: '/plan' }); }
     g.push({ label: 'Settings', icon: 'settings', link: '/settings' });
     return g;
   });

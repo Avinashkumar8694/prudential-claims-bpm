@@ -15,12 +15,12 @@ export const FALLBACK_PLANS: PublicPlan[] = [
   {
     key: 'trial',
     name: 'Free trial',
-    description: 'Explore the visual workflow designer, process engine, and execution runtime for 14 days.',
+    description: 'Explore the visual workflow designer, process engine, and execution runtime for 7 days.',
     isDefault: true,
     isCustom: false,
-    trialDays: 14,
+    trialDays: 7,
     contactConfig: null,
-    limits: { maxWorkflows: 10, maxInstances: 500, maxTeamMembers: 5 },
+    limits: { concurrentRequests: 50, requestsPerMinute: 600, concurrentScripts: 2, instancesPerDay: 200, instancesPerWeek: 1000, instancesPerMonth: 3000, maxActiveInstances: 50, maxActiveTimers: 100, maxWorkflows: 10, maxTeamMembers: 5, maxDeployments: 20 },
     features: ['Visual Workflow Designer', 'Process Execution', 'Task Inbox', 'Decision Tables', 'Versioned Deployments'],
   },
   {
@@ -31,7 +31,7 @@ export const FALLBACK_PLANS: PublicPlan[] = [
     isCustom: true,
     trialDays: null,
     contactConfig: { type: 'email', value: 'sales@orkestr.io', label: 'Contact us' },
-    limits: { maxWorkflows: -1, maxInstances: -1, maxTeamMembers: -1 },
+    limits: { maxWorkflows: -1, maxTeamMembers: -1 },
     features: ['Unlimited Workflows & Instances', 'Dedicated Execution Sidecar', 'Custom hitPolicies & Rules', 'High-availability clustering', 'Dedicated 24/7 SLA Support'],
   },
 ];
@@ -59,7 +59,7 @@ export const ICON: Record<string, string> = {
 };
 
 export const CHIPS = [
-  { icon: 'calendar', text: '14-day free trial' },
+  { icon: 'calendar', text: '7-day free trial' },
   { icon: 'bolt', text: 'Sub-millisecond dispatch' },
   { icon: 'shield', text: 'Isolated multi-tenant' },
   { icon: 'check', text: 'jBPM kjar compatible' },
@@ -273,12 +273,17 @@ export function trialFaq(plan: PublicPlan | undefined): { q: string; a: string }
     : '';
 
   const limits = plan.limits as Record<string, unknown> | undefined;
-  const limitsText = limits && Object.keys(limits).length
-    ? ` Generous trial allowances include up to ${limits['maxWorkflows'] ?? 10} active workflows, ${limits['maxInstances'] ?? 500} process instances, and ${limits['maxTeamMembers'] ?? 5} team members.`
-    : '';
+  const n = (k: string) => (typeof limits?.[k] === 'number' && (limits[k] as number) >= 0 ? (limits[k] as number) : undefined);
+  const parts = [
+    n('maxWorkflows') !== undefined ? `${n('maxWorkflows')} workflows` : '',
+    n('instancesPerDay') !== undefined ? `${n('instancesPerDay')} process runs per day (${n('instancesPerWeek') ?? '—'} per week, ${n('instancesPerMonth') ?? '—'} per month)` : '',
+    n('concurrentRequests') !== undefined ? `${n('concurrentRequests')} concurrent API requests` : '',
+    n('maxTeamMembers') !== undefined ? `${n('maxTeamMembers')} team members` : '',
+  ].filter(Boolean);
+  const limitsText = parts.length ? ` Trial allowances: ${parts.join(', ')}.` : '';
 
   return {
     q: 'What is included in the free trial?',
-    a: `Your ${plan.trialDays}-day free trial provides unrestricted access with no credit card required.${featuresText}${limitsText} When your trial ends, all your workflows and history remain intact while you select a plan or contact us.`,
+    a: `Your ${plan.trialDays}-day free trial gives you full access with no credit card required.${featuresText}${limitsText} When your trial ends, all your workflows and history remain intact while you select a plan or contact us.`,
   };
 }

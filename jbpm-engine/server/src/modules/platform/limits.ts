@@ -11,6 +11,7 @@
 //     scriptOverflowMode, quotas), writable by its admins but only inside the caps above.
 //
 // Only the fixed platform administrator can write levels 1 and 2 (see http/platform-routes.ts).
+import { resolvePlan } from '../plans/plans.ts';
 import type { Store } from '../../store/repository.ts';
 import { makeContext, type AppContext } from '../../context.ts';
 import { Collections, type SystemSettings } from '../../domain.ts';
@@ -182,8 +183,15 @@ export function applyGlobalToSandbox(g: PlatformLimits): void {
 /** Everything a script/condition execution needs from the limits model for `ctx`'s workspace. Also (re)applies the
  *  platform-wide values to the sandbox so an admin's change is picked up by the very next execution. */
 export async function effectiveLimitsFor(ctx: AppContext): Promise<{ effective: EffectiveLimits; caps: LimitCaps; settings: SystemSettings }> {
-  const [{ global, override }, settings] = await Promise.all([platformLimitsOf(ctx.store, ctx.tenantId), new SettingsService(ctx).get()]);
+  const [{ global, override: wsOverride }, settings, plan] = await Promise.all([platformLimitsOf(ctx.store, ctx.tenantId), new SettingsService(ctx).get(), resolvePlan(ctx.store, ctx.tenantId, Date.parse(ctx.clock()))]);
   applyGlobalToSandbox(global);
+  // the plan is one more cap layer: min(platform global, per-workspace override, plan) — it can only tighten
+  const pos = (v: number) => (v > 0 ? v : undefined);
+  const tight = (a: number | undefined, b: number | undefined) => (a === undefined ? b : b === undefined ? a : Math.min(a, b));
+  const override: WorkspaceLimits = { ...wsOverride,
+    scriptPoolMaxSize: tight(wsOverride.scriptPoolMaxSize, pos(plan.limits.concurrentScripts)),
+    maxActiveInstancesCap: tight(wsOverride.maxActiveInstancesCap, pos(plan.limits.maxActiveInstances)),
+    maxActiveTimersCap: tight(wsOverride.maxActiveTimersCap, pos(plan.limits.maxActiveTimers)) };
   return { effective: resolveLimits(global, override, settings), caps: capsOf(global, override), settings };
 }
 

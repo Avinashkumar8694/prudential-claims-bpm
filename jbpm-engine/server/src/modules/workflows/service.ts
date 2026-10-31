@@ -16,6 +16,8 @@ function emptyEngine(id: string, name: string, key: string): EngineProject {
   } as unknown as EngineProject;
 }
 
+import { enforceWorkflowCreate } from '../plans/plans.ts';
+
 export class WorkflowService {
   constructor(private ctx: AppContext) {}
   private wf() { return this.ctx.store.repo<Workflow>(Collections.workflows); }
@@ -43,6 +45,7 @@ export class WorkflowService {
   async create(input: { name: string; key?: string; description?: string; folderId?: string | null }, actor: string): Promise<Workflow> {
     const name = (input.name || '').trim();
     if (!name) throw validation('name is required');
+    await enforceWorkflowCreate(this.ctx);      // plan: expiry + maxWorkflows
     const key = slug(input.key || name);
     // Archived workflows don't count as a collision — list() already hides them, so a name should be
     // freely reusable once its previous holder is archived, not permanently reserved by a hidden record.

@@ -1,4 +1,5 @@
 // Process-instance lifecycle: start against a resolved deployment, query, inspect, resume.
+import { enforceInstanceStart } from '../plans/plans.ts';
 import { effectiveLimitsFor } from '../platform/limits.ts';
 import type { AppContext } from '../../context.ts';
 import { Collections, type AuditEvent, type Deployment, type Instance, type TimerJob } from '../../domain.ts';
@@ -74,6 +75,7 @@ export class InstanceService {
     else dep = await this.deployments.resolveActive(input.workflowId, input.environment || 'prod');
     if (dep.status === 'archived') throw conflict('cannot start on an archived deployment');
     await this.assertInstanceQuota();
+    await enforceInstanceStart(this.ctx);       // plan: trial/plan expiry + daily / weekly / monthly start budgets
     return this.recordIfFailed(await this.engine.start(dep, input.variables || {}, actor, { processId: input.processId, correlationKey: input.correlationKey }));
   }
 
@@ -119,6 +121,7 @@ export class InstanceService {
     const dep = await this.deployments.get(job.deploymentId!);
     if (dep.status !== 'active') throw conflict('scheduled deployment is no longer active');
     await this.assertInstanceQuota();
+    await enforceInstanceStart(this.ctx);
     return this.recordIfFailed(await this.engine.start(dep, {}, 'timer', { processId: job.processId }));
   }
 

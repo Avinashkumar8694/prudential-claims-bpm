@@ -71,6 +71,7 @@ export const routes: Routes = [
         loadComponent: () => import('./features/admin/admin-shell.component').then((m) => m.AdminShellComponent),
         loadChildren: () => import('./features/admin/admin.routes').then((m) => m.ADMIN_ROUTES),
       },
+      { path: 'plan', loadComponent: () => import('./features/plan/plan-usage.component').then((m) => m.PlanUsageComponent) },
       { path: 'team', canActivate: [permissionGuard('team:read')], loadComponent: () => import('./features/team/team-page.component').then((m) => m.TeamPageComponent) },
       { path: 'settings', loadComponent: () => import('./features/settings/settings.component').then((m) => m.SettingsComponent) },
       // Workflow Instance Management (Case Management)

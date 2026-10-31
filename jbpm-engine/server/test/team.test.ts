@@ -10,6 +10,7 @@ import { config } from '../src/infra/config.ts';
 import { IamService } from '../src/modules/iam/service.ts';
 import { TenantService } from '../src/modules/tenants/service.ts';
 import { signToken } from '../src/infra/auth.ts';
+import { PlanService } from '../src/modules/plans/plans.ts';
 import { Collections, type TenantMember } from '../src/domain.ts';
 
 let server: http.Server, base: string, store: MemoryStore, ws = '';
@@ -23,6 +24,7 @@ test.before(async () => {
   const ts = new TenantService(ctx);
   await ts.seedDefaultsIfEmpty();
   ws = (await ts.signup({ name: 'Team Co', slug: 'team-co', ownerEmail: 'owner@x.com' })).id;
+  await new PlanService(store).assign(ws, 'enterprise', { planExpiresAt: null });   // these tests are about the team rules, not plan limits
   const { app } = createApp(store);
   server = http.createServer(app);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
@@ -123,6 +125,7 @@ test('owner / admin / member hierarchy (canManage) and assignable roles', async 
 test('cross-workspace: managing another workspace\'s member by id is a 404', async () => {
   const ts = new TenantService(makeContext({ store, tenantId: config.defaultTenant }));
   const other = await ts.signup({ name: 'Other Co', slug: 'other-co', ownerEmail: 'other@x.com' });
+  await new PlanService(store).assign(other.id, 'enterprise', { planExpiresAt: null });
   const foreign = (await store.repo<TenantMember>(Collections.tenantMembers).query((m) => m.tenantId === other.id))[0];
   assert.strictEqual((await call('PUT', `/team/members/${foreign.id}`, T.owner, { role: 'viewer' })).status, 404);
   assert.strictEqual((await call('DELETE', `/team/members/${foreign.id}`, T.owner)).status, 404);

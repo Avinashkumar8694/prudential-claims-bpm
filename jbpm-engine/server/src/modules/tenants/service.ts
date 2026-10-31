@@ -10,6 +10,8 @@ import {
 } from '../../domain.ts';
 import { conflict, forbidden, notFound, validation } from '../../infra/errors.ts';
 import { config } from '../../infra/config.ts';
+import { DEFAULT_PLAN_LIMITS, TRIAL_DAYS } from '../plans/plan-limits.ts';
+import { PlanService } from '../plans/plans.ts';
 import { DEFAULT_ROLES } from '../iam/service.ts';
 import { sendMail } from '../../infra/mailer.ts';
 import { templates } from '../../infra/mail-templates.ts';
@@ -131,7 +133,7 @@ export class TenantService {
       slug,
       status: 'active',
       plan: 'trial',
-      planExpiresAt: new Date(Date.parse(now) + 14 * 24 * 3600 * 1000).toISOString(),
+      planExpiresAt: new Date(Date.parse(now) + TRIAL_DAYS * 24 * 3600 * 1000).toISOString(),
       settings: {
         timezone: 'UTC',
         dateFormat: 'YYYY-MM-DD',
@@ -164,7 +166,7 @@ export class TenantService {
     };
 
     await this.memberRepo().put(membership);
-    void sendMail(templates.workspaceCreated(ownerEmail, name, 14));
+    void sendMail(templates.workspaceCreated(ownerEmail, name, TRIAL_DAYS));
 
     return tenant;
   }
@@ -352,7 +354,7 @@ export class TenantService {
   }
 
   async listPublicPlans(): Promise<Plan[]> {
-    const plans = await this.planRepo().query(() => true);
+    const plans = (await this.planRepo().query(() => true)).filter((p) => !p.hidden);
     if (plans.length > 0) return plans;
 
     return [
@@ -361,12 +363,12 @@ export class TenantService {
         tenantId: 'system',
         key: 'trial',
         name: 'Free trial',
-        description: 'Explore the visual workflow designer, process engine, and execution runtime for 14 days.',
+        description: 'Explore the visual workflow designer, process engine, and execution runtime for 7 days.',
         isDefault: true,
         isCustom: false,
-        trialDays: 14,
+        trialDays: TRIAL_DAYS,
         contactConfig: null,
-        limits: { maxWorkflows: 10, maxInstances: 500, maxTeamMembers: 5 },
+        limits: { ...DEFAULT_PLAN_LIMITS.trial },
         features: ['Visual Workflow Designer', 'Process Execution', 'Task Inbox', 'Decision Tables', 'Versioned Deployments'],
       },
       {
@@ -379,7 +381,7 @@ export class TenantService {
         isCustom: true,
         trialDays: null,
         contactConfig: { type: 'email', value: `sales@${config.domain}`, label: 'Contact us' },
-        limits: { maxWorkflows: -1, maxInstances: -1, maxTeamMembers: -1 },
+        limits: { ...DEFAULT_PLAN_LIMITS.custom },
         features: ['Unlimited Workflows & Instances', 'Dedicated Execution Sidecar', 'Custom hitPolicies & Rules', 'High-availability clustering', 'Dedicated 24/7 SLA Support'],
       },
     ];
@@ -397,7 +399,7 @@ export class TenantService {
         name: 'Default Workspace',
         slug: 'default',
         status: 'active',
-        plan: 'trial',
+        plan: 'enterprise',        // the system workspace is not a commercial trial: unlimited, never expires
         planExpiresAt: null,
         settings: { timezone: 'UTC', dateFormat: 'YYYY-MM-DD', brandName: config.appName },
         ownerEmail: `admin@${config.domain}`,
@@ -437,5 +439,7 @@ export class TenantService {
         await this.planRepo().put(p);
       }
     }
+    // bring plans stored by an older version up to date: add the limit keys they lack, move the old 14-day trial to 7
+    await new PlanService(this.ctx.store).ensureDefaults();
   }
 }

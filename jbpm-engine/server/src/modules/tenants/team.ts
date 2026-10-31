@@ -13,6 +13,7 @@ import { conflict, forbidden, notFound, validation } from '../../infra/errors.ts
 import { config } from '../../infra/config.ts';
 import { DEFAULT_ROLES } from '../iam/service.ts';
 import { isPlaceholderUserId, type Identity } from './identity.ts';
+import { enforceMemberInvite } from '../plans/plans.ts';
 import { mailEnabled, sendMail } from '../../infra/mailer.ts';
 import { templates } from '../../infra/mail-templates.ts';
 
@@ -105,6 +106,7 @@ export class TeamService {
     if (existing && existing.status === 'active') throw conflict(`${email} is already a member of this workspace`);
     if (existing && existing.status === 'suspended') throw conflict(`${email}'s membership is suspended — reinstate it instead of inviting again`);
 
+    if (!existing) await enforceMemberInvite(this.ctx);      // plan: expiry + maxTeamMembers (a re-invite of a pending seat adds no seat)
     const token = crypto.randomBytes(32).toString('base64url');
     const expiresAt = new Date(Date.parse(this.ctx.clock()) + INVITE_TTL_MS).toISOString();
     const member: TenantMember = existing ?? {

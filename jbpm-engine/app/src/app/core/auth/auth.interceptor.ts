@@ -38,6 +38,9 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       if (err.status === 401 && !isPublicAuthRoute && !router.url.startsWith('/login') && !router.url.startsWith('/auth/callback')) {
         auth.logout();
         router.navigate(['/login'], { queryParams: { redirect: router.url } });
+      } else if (err.status === 402 || err.status === 429) {
+        // plan expired (402) or a plan/quota limit (429): the server's message says exactly which and when it resets
+        toast.error(err.error?.error?.message || (err.status === 402 ? 'Your plan has ended' : 'A plan limit was reached'));
       } else if (err.status === 403) {
         toast.error(err.error?.error?.message || 'You don’t have permission to do that');
       }

@@ -15,6 +15,7 @@ import { config } from '../src/infra/config.ts';
 import { IamService } from '../src/modules/iam/service.ts';
 import { TenantService } from '../src/modules/tenants/service.ts';
 import { signToken } from '../src/infra/auth.ts';
+import { PlanService } from '../src/modules/plans/plans.ts';
 import { Collections } from '../src/domain.ts';
 
 let server: http.Server, base: string, store: MemoryStore, wsA = '', wsB = '';
@@ -29,6 +30,7 @@ test.before(async () => {
   await ts.seedDefaultsIfEmpty();
   wsA = (await ts.signup({ name: 'Iso A', slug: 'iso-a', ownerEmail: 'owner-a@example.com' })).id;
   wsB = (await ts.signup({ name: 'Iso B', slug: 'iso-b', ownerEmail: 'owner-b@example.com' })).id;
+  for (const id of [wsA, wsB]) await new PlanService(store).assign(id, 'enterprise', { planExpiresAt: null });
   const { app } = createApp(store);
   server = http.createServer(app);
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

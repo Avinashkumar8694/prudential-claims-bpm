@@ -5,12 +5,12 @@ import { logger } from './logger.ts';
 export type ErrorCode =
   | 'AUTH_REQUIRED' | 'FORBIDDEN' | 'NOT_FOUND' | 'VALIDATION_FAILED' | 'CONFLICT'
   | 'VERSION_FROZEN' | 'DEPLOY_BLOCKED' | 'INSTANCE_NOT_RESUMABLE' | 'SCRIPT_TIMEOUT' | 'INTERNAL'
-  | 'QUOTA_EXCEEDED' | 'RATE_LIMITED' | 'JBPM_EXPORT_DENIED';
+  | 'QUOTA_EXCEEDED' | 'RATE_LIMITED' | 'JBPM_EXPORT_DENIED' | 'PLAN_EXPIRED';
 
 const STATUS: Record<ErrorCode, number> = {
   AUTH_REQUIRED: 401, FORBIDDEN: 403, NOT_FOUND: 404, VALIDATION_FAILED: 422, CONFLICT: 409,
   VERSION_FROZEN: 409, DEPLOY_BLOCKED: 409, INSTANCE_NOT_RESUMABLE: 409, SCRIPT_TIMEOUT: 500, INTERNAL: 500,
-  QUOTA_EXCEEDED: 429, RATE_LIMITED: 429, JBPM_EXPORT_DENIED: 422,
+  QUOTA_EXCEEDED: 429, RATE_LIMITED: 429, JBPM_EXPORT_DENIED: 422, PLAN_EXPIRED: 402,
 };
 
 export class ApiError extends Error {
@@ -26,6 +26,8 @@ export const conflict = (message: string, details?: unknown) => new ApiError('CO
 export const forbidden = (message: string, details?: unknown) => new ApiError('FORBIDDEN', message, details);
 export const authRequired = (message = 'authentication required') => new ApiError('AUTH_REQUIRED', message);
 export const quotaExceeded = (message: string, details?: unknown) => new ApiError('QUOTA_EXCEEDED', message, details);
+/** the workspace's trial/plan has lapsed: reads keep working, anything that creates or runs work is refused (402) */
+export const planExpired = (message: string, details?: unknown) => new ApiError('PLAN_EXPIRED', message, details);
 export const rateLimited = (message = 'too many requests') => new ApiError('RATE_LIMITED', message);
 export const jbpmExportDenied = (message: string, details?: unknown) => new ApiError('JBPM_EXPORT_DENIED', message, details);
 

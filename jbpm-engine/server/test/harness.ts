@@ -8,6 +8,7 @@ import { IamService } from '../src/modules/iam/service.ts';
 import { TenantService } from '../src/modules/tenants/service.ts';
 import { signToken } from '../src/infra/auth.ts';
 import { Collections, type TenantMember } from '../src/domain.ts';
+import { PlanService } from '../src/modules/plans/plans.ts';
 
 export const ROLE_NAMES = ['viewer', 'worker', 'operator', 'developer', 'author', 'release', 'admin'] as const;
 
@@ -39,9 +40,11 @@ export async function boot(opts: { adminPassword?: string } = {}) {
   };
 
   /** a workspace owned by `<slug>-owner`, plus one active member per role */
-  const workspace = async (slug: string, roles: readonly string[] = ROLE_NAMES) => {
+  /** `plan` defaults to 'enterprise' (unlimited) so tests that are not about plans never trip a trial limit */
+  const workspace = async (slug: string, roles: readonly string[] = ROLE_NAMES, plan: string | null = 'enterprise') => {
     const ownerEmail = `${slug}-owner@example.com`;
     const t = await tenants.signup({ name: slug, slug, ownerEmail });
+    if (plan) await new PlanService(store).assign(t.id, plan, plan === 'trial' ? {} : { planExpiresAt: null });
     const tokens: Record<string, string> = { owner: tokenFor(ownerEmail) };
     for (const r of roles) {
       const email = `${slug}-${r}@example.com`;

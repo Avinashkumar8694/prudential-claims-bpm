@@ -245,6 +245,15 @@ export interface User extends Entity {
   tosAcceptedAt?: string | null;
 }
 
+/** Metered usage of one workspace in one calendar period (UTC): process starts per day / ISO week / month. */
+export interface Usage extends Entity {
+  id: string; tenantId: string;
+  period: 'day' | 'week' | 'month';
+  key: string;            // 2026-10-31 | 2026-10-26 (Monday of the week) | 2026-10
+  count: number;
+  resetsAt: string;
+}
+
 /** A self-registration that has not been confirmed yet: the person has been emailed a temporary password, and the
  *  account does NOT exist until they sign in with it (so an unconfirmed address can neither squat nor be matched to seats). */
 export interface PendingRegistration extends Entity {
@@ -325,6 +334,8 @@ export interface Plan extends Entity {
   contactConfig?: PublicPlanContactConfig | null;
   limits?: Record<string, unknown>;
   features: string[];
+  /** not listed on the public pricing page (internal / assignable-only plans) */
+  hidden?: boolean;
 }
 
 export const Collections = {
@@ -333,5 +344,5 @@ export const Collections = {
   users: 'users', groups: 'groups', roles: 'roles',
   tenants: 'tenants', tenantMembers: 'tenantMembers', plans: 'plans',
   errors: 'errors', comments: 'comments', notifications: 'notifications', settings: 'settings',
-  pendingRegistrations: 'pendingRegistrations',
+  pendingRegistrations: 'pendingRegistrations', usage: 'usage',
 } as const;

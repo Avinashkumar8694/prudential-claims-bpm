@@ -1,6 +1,6 @@
 // Global configuration: one singleton SystemSettings row (id 'system' per tenant). Reads always
 // succeed — a missing row yields the documented defaults — so the client never needs a seed step.
-import { platformLimitsOf, capsOf, assertWithinCaps } from '../platform/limits.ts';
+import { effectiveLimitsFor, assertWithinCaps } from '../platform/limits.ts';
 import type { AppContext } from '../../context.ts';
 import { Collections, type SystemSettings } from '../../domain.ts';
 import { validation } from '../../infra/errors.ts';
@@ -64,8 +64,8 @@ export class SettingsService {
       throw validation('slaWarnThresholdPct must be between 1 and 100');
     }
     // limits: integer/enum validation + the platform caps (a workspace may always go lower, never above the cap)
-    const { global, override } = await platformLimitsOf(this.ctx.store, this.ctx.tenantId);
-    assertWithinCaps(patch, capsOf(global, override));
+    // caps = platform global ∩ per-workspace override ∩ the workspace's PLAN (a workspace can only go lower)
+    assertWithinCaps(patch, (await effectiveLimitsFor(this.ctx)).caps);
     const current = await this.get();
     const next: SystemSettings = {
       ...current, ...patch,

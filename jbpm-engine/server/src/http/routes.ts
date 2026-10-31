@@ -23,6 +23,7 @@ import { AuditService } from '../modules/audit/service.ts';
 import { NotificationService } from '../modules/notifications/service.ts';
 import { effectiveLimitsFor } from '../modules/platform/limits.ts';
 import { SettingsService } from '../modules/settings/service.ts';
+import { planUsageFor } from '../modules/plans/plans.ts';
 import { TimerService } from '../modules/timers/service.ts';
 import { NODE_DEFS, NODE_DEF_BY_TYPE, CATEGORIES } from '../engine/nodes/index.ts';
 import { exportKjar, validateJbpmExport } from '../modules/export/service.ts';
@@ -267,6 +268,8 @@ export function buildRoutes(): Router {
   // --- system settings (singleton; readable by anyone signed in, writable by admins) ---
   // `effective*` = what the script pool actually applies (quota/default clamped by SCRIPT_POOL_MAX_SIZE; workspace
   // mode vs the SCRIPT_OVERFLOW_MODE env default) — so operators can see the real limit, not just the setting.
+  // the workspace's plan, its limits and what it has used (every member may look; the platform admin edits plans)
+  r.get('/plan/usage', perm('team:read'), asyncHandler(async (req, res) => res.json(await planUsageFor(ctxOf(req)))));
   r.get('/settings/system', asyncHandler(async (req, res) => {
     const s = await new SettingsService(ctxOf(req)).get();
     const { effective, caps } = await effectiveLimitsFor(ctxOf(req));

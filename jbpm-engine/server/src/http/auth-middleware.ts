@@ -100,6 +100,7 @@ export function requireWorkspaceAccess(req: Request, _res: Response, next: NextF
       if (requestedTenantId === 'all' || requestedTenantId === '*') {
         if (!platformAdmin) throw forbidden('Platform system administrator access required for platform-wide scope.');
         (req as any).ctx = makeContext({ store: ctx.store, tenantId: 'all' });
+        (req as any).ctx.planExempt = true;
         (req as any).access = { platformAdmin } satisfies Access;
         return next();
       }
@@ -118,6 +119,8 @@ export function requireWorkspaceAccess(req: Request, _res: Response, next: NextF
       }
 
       if (ctx.tenantId !== requestedTenantId) (req as any).ctx = makeContext({ store: ctx.store, tenantId: requestedTenantId });
+      // the platform administrator is not subject to plan limits or trial expiry in any workspace
+      (req as any).ctx.planExempt = platformAdmin;
       (req as any).access = { platformAdmin, member } satisfies Access;
       next();
     } catch (err) {
