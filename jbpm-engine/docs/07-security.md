@@ -35,10 +35,10 @@
   workspace's own `Role` rows, falling back to `DEFAULT_ROLES`. WebSockets are bound to one workspace
   and can only subscribe to that workspace's instances; the timer scheduler fires per workspace.
   Production start-up refuses weak defaults (`assertProductionConfig`).
-- **Known critical gap — script sandbox**: `js` script tasks run in `node:vm` with live host objects; that is not an
-  isolation boundary (prototype-chain escapes reach the host `process`; reproduced by test EXE-91b). In a multi-tenant
-  deployment this means anyone who can author a script task can execute code on the server. Replace with `isolated-vm`
-  or a locked-down worker before exposing authoring to untrusted tenants. See `docs/test-catalogue.md` §7.
+- **Script sandbox**: `js` script tasks and flow conditions run in a fresh `isolated-vm` V8 isolate per execution (64 MB
+  heap cap, hard wall-clock timeout, no Node APIs, no host objects — only JSON crosses the boundary). Prototype-chain
+  escapes resolve to `undefined`; the host environment (secrets) is not readable (`System.getenv`/`Environment.get` see
+  only the instance `env`). Covered by EXE-91/91b/91c. `java` scripts run in the separate JVM sidecar.
 - **Task ownership**: once claimed, a task can be completed/saved/released/delegated/forwarded only by its owner, its
   business admin, or a workspace owner/admin; a task held by someone else cannot be claimed.
 - **Team management** (same model as `zero-payment-ms`'s TeamService; `modules/tenants/team.ts`,
@@ -86,8 +86,7 @@
 
 ## 4. Script & expression sandboxing
 
-- Only `js` runs. Executed in an isolated context (`node:vm` with a frozen shim, or `isolated-vm` in
-  prod) exposing **only** `kcontext` (get/setVariable) and a safe stdlib subset. **No** `require`,
+- Only `js` runs. Executed in a per-execution `isolated-vm` isolate exposing **only** `kcontext` (get/setVariable) and a safe stdlib subset. **No** `require`,
   `process`, `fs`, network, globals, or prototype escape.
 - **Limits**: wall-clock timeout (e.g. 2 s), memory cap, no async I/O from scripts. Timeout → node
   fails with `SCRIPT_TIMEOUT` (retryable).

@@ -31,7 +31,7 @@ them still runs unmodified on a real KIE server).
 `console.log(...)` output is captured into the node's history entry, visible in the instance's
 [Logs tab](../06-running-and-monitoring-instances.md).
 
-Runs in a `node:vm` sandbox — no `require`/`process`/`fs`/network — with a wall-clock timeout
+Runs in a per-execution `isolated-vm` V8 isolate — no `require`/`process`/`fs`/network — with a wall-clock timeout
 (`SCRIPT_TIMEOUT_MS`, default 2s) and, if [`maxConcurrentScripts`](../10-security-and-quotas.md) is
 set, a per-tenant concurrency cap. See [Security & quotas](../10-security-and-quotas.md) for the
 sandbox's known limitations.

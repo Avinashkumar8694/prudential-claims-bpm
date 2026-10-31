@@ -158,8 +158,8 @@ var PgRepo = class {
   }
 };
 var PgStore = class {
-  constructor(url) {
-    this.url = url;
+  constructor(url2) {
+    this.url = url2;
   }
   url;
   ds;
@@ -200,10 +200,16 @@ import path2 from "path";
 import { fileURLToPath } from "url";
 var defaultJavaSidecarClasspath = path2.resolve(path2.dirname(fileURLToPath(import.meta.url)), "../../../java-runtime/out");
 var env = process.env;
+var PLATFORM_ADMIN_EMAIL = "arjunkumargupta108@gmail.com";
+var isProduction = env.NODE_ENV === "production";
+var csv = (v) => (v || "").split(",").map((h) => h.trim()).filter(Boolean);
+var pick = (...names) => names.map((n) => env[n]?.trim()).find(Boolean);
+var oidcClientId = pick("OIDC_CLIENT_ID", "IDS_CLIENT_ID");
+var port = Number(env.PORT || 4e3);
 var config = {
   appName: env.APP_NAME || "Orkestr",
   domain: env.DOMAIN || "orkestr.io",
-  port: Number(env.PORT || 4e3),
+  port,
   dataDir: env.DATA_DIR || path2.resolve(process.cwd(), ".data"),
   store: env.STORE || "file",
   // matches docker-compose.yml's default postgres service — `STORE=pg` works with zero extra config
@@ -218,8 +224,55 @@ var config = {
   javaSidecarClasspath: env.JAVA_SIDECAR_CLASSPATH || defaultJavaSidecarClasspath,
   javaSidecarStartupTimeoutMs: Number(env.JAVA_SIDECAR_STARTUP_TIMEOUT_MS || 1e4),
   javaSidecarTimeoutMs: Number(env.JAVA_SIDECAR_TIMEOUT_MS || 1e4),
-  outboundAllowlist: (env.OUTBOUND_ALLOWLIST || "").split(",").map((h) => h.trim()).filter(Boolean)
+  outboundAllowlist: csv(env.OUTBOUND_ALLOWLIST),
+  isProduction,
+  oidc: {
+    issuer: pick("OIDC_ISSUER", "IDS_ISSUER_URL")?.replace(/\/+$/, ""),
+    clientId: oidcClientId,
+    clientSecret: pick("OIDC_CLIENT_SECRET", "IDS_CLIENT_SECRET"),
+    redirectUri: pick("OIDC_REDIRECT_URI") || `http://localhost:${port}/api/auth/oidc/callback`,
+    audience: csv(env.OIDC_AUDIENCE).length ? csv(env.OIDC_AUDIENCE) : oidcClientId ? [oidcClientId] : [],
+    clockToleranceSec: Number(env.OIDC_CLOCK_TOLERANCE_SEC || 30)
+  },
+  dashboardUrl: (env.DASHBOARD_URL || env.APP_ORIGIN || "http://localhost:4200").replace(/\/+$/, ""),
+  localLogin: env.AUTH_LOCAL_LOGIN !== "false",
+  auth: {
+    registration: env.AUTH_REGISTRATION !== "false",
+    forgotPassword: env.AUTH_FORGOT_PASSWORD !== "false",
+    emailVerification: env.AUTH_REQUIRE_EMAIL_VERIFICATION === "true",
+    passwordMinLength: Math.max(8, Number(env.AUTH_PASSWORD_MIN_LENGTH || 8)),
+    maxFailedLogins: Math.max(1, Number(env.AUTH_MAX_FAILED_LOGINS || 5)),
+    lockoutMinutes: Math.max(1, Number(env.AUTH_LOCKOUT_MINUTES || 15))
+  },
+  mail: {
+    smtp: pick("SMTP_HOST", "EMAIL_HOST") ? {
+      host: pick("SMTP_HOST", "EMAIL_HOST"),
+      port: Number(pick("SMTP_PORT", "EMAIL_PORT") || 587),
+      secure: (pick("SMTP_SECURE", "EMAIL_SECURE") || "false") === "true",
+      user: pick("SMTP_USER", "EMAIL_USER"),
+      pass: pick("SMTP_PASSWORD", "SMTP_PASS", "EMAIL_PASS")
+    } : void 0,
+    webhookUrl: env.MAIL_WEBHOOK_URL?.trim() || void 0,
+    from: pick("MAIL_FROM", "EMAIL_FROM") || `no-reply@${env.DOMAIN || "orkestr.io"}`,
+    capture: env.MAIL_CAPTURE === "true"
+  },
+  platformAdminEmail: PLATFORM_ADMIN_EMAIL
 };
+function assertProductionConfig(c = config) {
+  if (!c.isProduction) return;
+  const problems = [];
+  if (!c.jwtSecret || c.jwtSecret === "dev-insecure-secret-change-me" || c.jwtSecret.length < 32) {
+    problems.push("JWT_SECRET must be set to a random value of at least 32 characters (it signs local tokens and the SSO login-transaction cookie)");
+  }
+  if (c.localLogin && c.adminInitialPassword === "admin-change-me") {
+    problems.push("ADMIN_INITIAL_PASSWORD must be changed (or disable local login with AUTH_LOCAL_LOGIN=false)");
+  }
+  if (c.oidc.issuer && !c.oidc.clientId) problems.push("OIDC_CLIENT_ID is required when OIDC_ISSUER is set");
+  if (c.oidc.issuer && !/^https:\/\//.test(c.oidc.issuer)) problems.push("OIDC_ISSUER must be an https URL in production");
+  if (!c.oidc.issuer && !c.localLogin) problems.push("No sign-in method configured: set OIDC_ISSUER or enable AUTH_LOCAL_LOGIN");
+  if (problems.length) throw new Error(`Refusing to start in production:
+ - ${problems.join("\n - ")}`);
+}
 
 // src/infra/ids.ts
 var B32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
@@ -287,7 +340,7 @@ function makeContext(opts) {
 }
 
 // src/http/routes.ts
-import { Router as Router2 } from "express";
+import { Router as Router3 } from "express";
 
 // src/infra/logger.ts
 var order = { debug: 10, info: 20, warn: 30, error: 40 };
@@ -348,6 +401,11 @@ function errorMiddleware(err, _req, res, _next) {
   if (err instanceof ApiError) {
     if (err.status >= 500) logger.error(err.message, { code: err.code });
     return res.status(err.status).json({ error: { code: err.code, message: err.message, details: err.details } });
+  }
+  const status = err?.status ?? err?.statusCode;
+  if (typeof status === "number" && status >= 400 && status < 500 && err.expose !== false) {
+    const code = status === 413 ? "PAYLOAD_TOO_LARGE" : status === 400 ? "BAD_REQUEST" : "REQUEST_REJECTED";
+    return res.status(status).json({ error: { code, message: status === 413 ? "request body too large" : status === 400 ? "malformed request body" : "request rejected" } });
   }
   logger.error("unhandled error", { err: err?.message, stack: err?.stack });
   return res.status(500).json({ error: { code: "INTERNAL", message: "Internal server error" } });
@@ -650,7 +708,7 @@ var handler2 = async (c) => {
 var handler3 = () => ({});
 
 // src/engine/sandbox.ts
-import vm2 from "vm";
+import ivm from "isolated-vm";
 
 // src/engine/java-sidecar.ts
 import fs2 from "fs";
@@ -678,7 +736,7 @@ var JavaSidecarUnavailableError = class extends Error {
   }
 };
 var child;
-var port;
+var port2;
 var starting;
 function start() {
   if (starting) return starting;
@@ -700,8 +758,8 @@ function start() {
       if (m && !settled) {
         settled = true;
         clearTimeout(timer);
-        port = Number(m[1]);
-        resolve(port);
+        port2 = Number(m[1]);
+        resolve(port2);
       }
     });
     proc.stderr?.on("data", (chunk) => {
@@ -710,7 +768,7 @@ function start() {
     proc.on("exit", (code) => {
       const wasRunning = child === proc;
       child = void 0;
-      port = void 0;
+      port2 = void 0;
       starting = void 0;
       if (!settled) {
         settled = true;
@@ -731,7 +789,7 @@ function start() {
   return starting;
 }
 async function ensureStarted() {
-  if (port !== void 0 && child) return port;
+  if (port2 !== void 0 && child) return port2;
   return start();
 }
 async function callSidecar(body) {
@@ -750,7 +808,7 @@ async function callSidecar(body) {
     if (child) {
       child.kill();
       child = void 0;
-      port = void 0;
+      port2 = void 0;
       starting = void 0;
     }
     throw new JavaSidecarUnavailableError(`Request to the sidecar failed: ${e.message}`);
@@ -800,629 +858,348 @@ async function validateJava(code, asCondition, varTypes) {
   return json.ok ? { ok: true } : { ok: false, error: json.error || "java validation failed" };
 }
 
-// src/engine/js-compat.ts
-import vm from "vm";
-function makeJacksonNode(initial) {
-  const data = initial;
-  const self = {
-    put: function(k, v) {
-      if (data && typeof data === "object") data[k] = v;
-      return self;
-    },
-    putPOJO: function(k, v) {
-      if (data && typeof data === "object") data[k] = v;
-      return self;
-    },
-    putNull: function(k) {
-      if (data && typeof data === "object") data[k] = null;
-      return self;
-    },
-    putArray: function(k) {
-      const a = [];
-      if (data && typeof data === "object") data[k] = a;
-      return makeJacksonArray(a);
-    },
-    set: function(k, v) {
-      if (data && typeof data === "object") data[k] = v;
-      return self;
-    },
-    get: function(k) {
-      return data && typeof data === "object" ? data[k] : void 0;
-    },
-    path: function(k) {
-      return makeJacksonNode(data && typeof data === "object" ? data[k] : void 0);
-    },
-    has: function(k) {
-      return data && typeof data === "object" ? Object.prototype.hasOwnProperty.call(data, k) : false;
-    },
-    hasNonNull: function(k) {
-      return data && typeof data === "object" ? data[k] != null : false;
-    },
-    isArray: function() {
-      return Array.isArray(data);
-    },
-    asBoolean: function(fb = false) {
-      if (data == null) return fb;
-      if (typeof data === "boolean") return data;
-      const s = String(data).trim().toLowerCase();
-      return s === "true" || s === "1";
-    },
-    asInt: function(fb = 0) {
-      const n = parseInt(String(data), 10);
-      return isNaN(n) ? fb : n;
-    },
-    asText: function(fb = "") {
-      return data == null ? fb : String(data);
-    },
-    isNull: function() {
-      return data == null;
-    },
-    isMissingNode: function() {
-      return data === void 0;
-    },
-    size: function() {
-      return Array.isArray(data) ? data.length : typeof data === "object" && data !== null ? Object.keys(data).length : 0;
-    },
-    toString: function() {
-      return typeof data === "string" ? data : JSON.stringify(data);
-    }
+// src/engine/isolate-runtime.ts
+var ISOLATE_RUNTIME_SOURCE = String.raw`
+'use strict';
+(function () {
+  var G = globalThis;
+  var hasOwn = Object.prototype.hasOwnProperty;
+  var defHidden = function (o, k, v) { Object.defineProperty(o, k, { value: v, writable: true, configurable: true, enumerable: false }); };
+  var def = function (proto, prop, val) {
+    try { if (proto && !proto[prop]) defHidden(proto, prop, val); } catch (e) { /* sealed */ }
   };
-  return self;
-}
-function makeJacksonArray(arr) {
-  const data = arr || [];
-  return {
-    addObject: function() {
-      const o = {};
-      data.push(o);
-      return makeJacksonNode(o);
-    },
-    add: function(v) {
-      data.push(v);
-      return this;
-    },
-    toString: function() {
-      return JSON.stringify(data);
-    }
-  };
-}
-function makeArrayList(initial) {
-  return initial ? initial.slice() : [];
-}
-var MapPrototype = {
-  put(k, v) {
-    const key = String(k);
-    const old = this[key] !== void 0 ? this[key] : null;
-    this[key] = v;
-    return old;
-  },
-  get(k) {
-    const key = String(k);
-    return this[key] !== void 0 ? this[key] : null;
-  },
-  remove(k) {
-    const key = String(k);
-    const old = this[key] !== void 0 ? this[key] : null;
-    delete this[key];
-    return old;
-  },
-  containsKey(k) {
-    return Object.prototype.hasOwnProperty.call(this, String(k));
-  },
-  size() {
-    return Object.keys(this).length;
-  },
-  isEmpty() {
-    return Object.keys(this).length === 0;
-  },
-  clear() {
-    for (const k of Object.keys(this)) delete this[k];
-  },
-  keySet() {
-    return makeArrayList(Object.keys(this));
-  },
-  values() {
-    return makeArrayList(Object.values(this));
-  },
-  toString() {
-    return `{${Object.entries(this).map(([k, v]) => `${k}=${v}`).join(", ")}}`;
-  }
-};
-function makeHashMap(initial) {
-  const self = Object.create(MapPrototype);
-  if (initial && typeof initial === "object") {
-    Object.assign(self, initial);
-  }
-  return self;
-}
-function makeHashSet() {
-  const data = /* @__PURE__ */ new Set();
-  const self = {};
-  self.add = (v) => {
-    const had = data.has(v);
-    data.add(v);
-    return !had;
-  };
-  self.contains = (v) => data.has(v);
-  self.remove = (v) => {
-    const had = data.has(v);
-    data.delete(v);
-    return had;
-  };
-  self.size = () => data.size;
-  self.isEmpty = () => data.size === 0;
-  self.clear = () => data.clear();
-  self.toString = () => `[${[...data].join(", ")}]`;
-  return self;
-}
-var JsonObjectPrototype = {
-  put(k, v) {
-    this[k] = v;
-    return this;
-  },
-  get(k) {
-    return this[k];
-  },
-  getString(k) {
-    const v = this[k];
-    return v == null ? null : String(v);
-  },
-  optString(k, fb = "") {
-    const v = this[k];
-    return v == null ? fb : String(v);
-  },
-  optBoolean(k, fb = false) {
-    const v = this[k];
-    if (v == null) return fb;
-    if (typeof v === "boolean") return v;
-    const s = String(v).trim().toLowerCase();
-    return s === "true" || s === "1";
-  },
-  optInt(k, fb = 0) {
-    const v = this[k];
-    if (v == null) return fb;
-    const n = parseInt(String(v), 10);
-    return isNaN(n) ? fb : n;
-  },
-  has(k) {
-    return Object.prototype.hasOwnProperty.call(this, k);
-  },
-  isNull(k) {
-    return this[k] == null;
-  },
-  toString() {
-    return JSON.stringify(this);
-  }
-};
-function makeJsonObject(initial) {
-  let data = {};
-  if (initial && typeof initial === "string") {
-    try {
-      const parsed = JSON.parse(initial);
-      if (parsed && typeof parsed === "object") data = parsed;
-    } catch {
-    }
-  } else if (initial && typeof initial === "object") {
-    data = { ...initial };
-  }
-  const self = Object.create(JsonObjectPrototype);
-  Object.assign(self, data);
-  return self;
-}
-var COLLECTION_FACTORIES = {
-  "java.util.ArrayList": () => makeArrayList(),
-  "java.util.LinkedList": () => makeArrayList(),
-  "java.util.HashMap": makeHashMap,
-  "java.util.LinkedHashMap": makeHashMap,
-  "java.util.HashSet": makeHashSet,
-  "java.util.LinkedHashSet": makeHashSet
-};
-function javaType(fqn) {
-  const factory = COLLECTION_FACTORIES[fqn];
-  if (!factory) {
-    throw new Error(
-      `Java.type("${fqn}") is not supported in this engine's JS sandbox \u2014 only the common java.util collection types (ArrayList, LinkedList, HashMap, LinkedHashMap, HashSet, LinkedHashSet) are shimmed; custom/application classes and anything else on the JDK aren't resolvable here (this engine runs JS natively in V8, never a JVM).`
-    );
-  }
-  return function() {
-    return factory();
-  };
-}
-function installRealmPrototypes(target) {
-  const def28 = (proto, prop, val) => {
-    try {
-      if (proto && !proto[prop]) {
-        Object.defineProperty(proto, prop, { value: val, writable: true, configurable: true, enumerable: false });
-      }
-    } catch {
-    }
-  };
-  if (target.Object && target.Object.prototype) {
-    def28(target.Object.prototype, "isEmpty", function() {
-      if (this == null) return true;
-      if (typeof this.length === "number") return this.length === 0;
-      if (typeof this.size === "function") return this.size() === 0;
-      if (typeof this.size === "number") return this.size === 0;
-      return Object.keys(this).length === 0;
-    });
-    def28(target.Object.prototype, "equals", function(o) {
-      if (this === o) return true;
-      if (o == null) return false;
-      return this.valueOf() === (typeof o.valueOf === "function" ? o.valueOf() : o);
-    });
-    def28(target.Object.prototype, "path", function(k) {
-      const v = this && typeof this === "object" ? this[k] : void 0;
-      return makeJacksonNode(v);
-    });
-    def28(target.Object.prototype, "has", function(k) {
-      return this && typeof this === "object" && Object.prototype.hasOwnProperty.call(this, k);
-    });
-    def28(target.Object.prototype, "hasNonNull", function(k) {
-      return this && typeof this === "object" && this[k] != null;
-    });
-    def28(target.Object.prototype, "asText", function(fb = "") {
-      return this == null ? fb : String(this);
-    });
-    def28(target.Object.prototype, "asBoolean", function(fb = false) {
-      if (this == null) return fb;
-      if (typeof this === "boolean") return this;
-      const s = String(this).trim().toLowerCase();
-      return s === "true" || s === "1";
-    });
-    def28(target.Object.prototype, "asInt", function(fb = 0) {
-      const n = parseInt(String(this), 10);
-      return isNaN(n) ? fb : n;
-    });
-    def28(target.Object.prototype, "isNull", function() {
-      return this == null;
-    });
-    def28(target.Object.prototype, "isMissingNode", function() {
-      return this === void 0;
-    });
-    def28(target.Object.prototype, "size", function() {
-      if (Array.isArray(this)) return this.length;
-      return typeof this === "object" && this !== null ? Object.keys(this).length : 0;
-    });
-  }
-  if (target.Array && target.Array.prototype) {
-    def28(target.Array.prototype, "isEmpty", function() {
-      return this.length === 0;
-    });
-    def28(target.Array.prototype, "size", function() {
-      return this.length;
-    });
-    def28(target.Array.prototype, "get", function(i) {
-      return this[i];
-    });
-    def28(target.Array.prototype, "set", function(i, v) {
-      const old = this[i];
-      this[i] = v;
-      return old;
-    });
-    def28(target.Array.prototype, "add", function(v) {
-      this.push(v);
-      return true;
-    });
-    def28(target.Array.prototype, "remove", function(idxOrVal) {
-      if (typeof idxOrVal === "number" && idxOrVal >= 0 && idxOrVal < this.length) {
-        return this.splice(idxOrVal, 1)[0];
-      }
-      const idx = this.indexOf(idxOrVal);
-      if (idx !== -1) {
-        return this.splice(idx, 1)[0];
-      }
-      return null;
-    });
-    def28(target.Array.prototype, "contains", function(v) {
-      return this.includes(v);
-    });
-    def28(target.Array.prototype, "clear", function() {
-      this.length = 0;
-    });
-  }
-  if (target.String && target.String.prototype) {
-    def28(target.String.prototype, "isEmpty", function() {
-      return this.length === 0;
-    });
-    def28(target.String.prototype, "equals", function(o) {
-      return this.valueOf() === String(o);
-    });
-    def28(target.String.prototype, "equalsIgnoreCase", function(o) {
-      return o != null && this.toLowerCase() === String(o).toLowerCase();
-    });
-    def28(target.String.prototype, "path", function(k) {
-      try {
-        const parsed = JSON.parse(this.valueOf());
-        return makeJacksonNode(parsed && typeof parsed === "object" ? parsed[k] : void 0);
-      } catch {
-        return makeJacksonNode(void 0);
-      }
-    });
-    def28(target.String.prototype, "has", function(k) {
-      try {
-        const parsed = JSON.parse(this.valueOf());
-        return parsed && typeof parsed === "object" && Object.prototype.hasOwnProperty.call(parsed, k);
-      } catch {
-        return false;
-      }
-    });
-    def28(target.String.prototype, "isNull", function() {
-      return false;
-    });
-    def28(target.String.prototype, "asText", function() {
-      return this.valueOf();
-    });
-    def28(target.String.prototype, "asBoolean", function(fb = false) {
-      const s = this.trim().toLowerCase();
-      return s === "true" || s === "1";
-    });
-    def28(target.String.prototype, "asInt", function(fb = 0) {
-      const n = parseInt(this, 10);
-      return isNaN(n) ? fb : n;
-    });
-  }
-  if (target.Error && target.Error.prototype) {
-    def28(target.Error.prototype, "getMessage", function() {
-      return this.message || String(this);
-    });
-    def28(target.Error.prototype, "getLocalizedMessage", function() {
-      return this.message || String(this);
-    });
-    def28(target.Error.prototype, "printStackTrace", function() {
-      console.error(this.stack);
-    });
-  }
-  if (target.String && !target.String.valueOfFixed) {
-    target.String.valueOf = function(o) {
-      return o == null ? "null" : String(o);
+  var truthyStr = function (v) { var s = String(v).trim().toLowerCase(); return s === 'true' || s === '1'; };
+
+  // ---------------------------------------------------------------- Jackson / org.json / java.util shims
+  function makeJacksonNode(data) {
+    var self = {
+      put: function (k, v) { if (data && typeof data === 'object') data[k] = v; return self; },
+      putPOJO: function (k, v) { if (data && typeof data === 'object') data[k] = v; return self; },
+      putNull: function (k) { if (data && typeof data === 'object') data[k] = null; return self; },
+      putArray: function (k) { var a = []; if (data && typeof data === 'object') data[k] = a; return makeJacksonArray(a); },
+      set: function (k, v) { if (data && typeof data === 'object') data[k] = v; return self; },
+      get: function (k) { return (data && typeof data === 'object') ? data[k] : undefined; },
+      path: function (k) { return makeJacksonNode((data && typeof data === 'object') ? data[k] : undefined); },
+      has: function (k) { return (data && typeof data === 'object') ? hasOwn.call(data, k) : false; },
+      hasNonNull: function (k) { return (data && typeof data === 'object') ? data[k] != null : false; },
+      isArray: function () { return Array.isArray(data); },
+      asBoolean: function (fb) {
+        if (data == null) return fb === undefined ? false : fb;
+        if (typeof data === 'boolean') return data;
+        return truthyStr(data);
+      },
+      asInt: function (fb) { var n = parseInt(String(data), 10); return isNaN(n) ? (fb === undefined ? 0 : fb) : n; },
+      asText: function (fb) { return data == null ? (fb === undefined ? '' : fb) : String(data); },
+      isNull: function () { return data == null; },
+      isMissingNode: function () { return data === undefined; },
+      size: function () { return Array.isArray(data) ? data.length : (typeof data === 'object' && data !== null ? Object.keys(data).length : 0); },
+      toString: function () { return typeof data === 'string' ? data : JSON.stringify(data); }
     };
-    target.String.valueOfFixed = true;
+    return self;
   }
-  if (target.Boolean && typeof target.Boolean.TRUE === "undefined") {
-    target.Boolean.TRUE = { equals: function(o) {
-      return Boolean(o) === true;
-    }, valueOf: function() {
-      return true;
-    }, toString: function() {
-      return "true";
-    } };
-    target.Boolean.FALSE = { equals: function(o) {
-      return Boolean(o) === false;
-    }, valueOf: function() {
-      return false;
-    }, toString: function() {
-      return "false";
-    } };
+  function makeJacksonArray(arr) {
+    var data = arr || [];
+    return {
+      addObject: function () { var o = {}; data.push(o); return makeJacksonNode(o); },
+      add: function (v) { data.push(v); return this; },
+      toString: function () { return JSON.stringify(data); }
+    };
   }
-}
-installRealmPrototypes(globalThis);
-function initVmRealm(sandbox) {
-  installRealmPrototypes(sandbox);
-  vm.runInContext(`
-    (function() {
-      var def = function(proto, prop, val) {
-        try {
-          if (proto && !proto[prop]) {
-            Object.defineProperty(proto, prop, { value: val, writable: true, configurable: true, enumerable: false });
-          }
-        } catch(e) {}
-      };
-      if (typeof Object !== "undefined" && Object.prototype) {
-        def(Object.prototype, "isEmpty", function() {
-          if (this == null) return true;
-          if (typeof this.length === "number") return this.length === 0;
-          if (typeof this.size === "function") return this.size() === 0;
-          if (typeof this.size === "number") return this.size === 0;
-          return Object.keys(this).length === 0;
-        });
-        def(Object.prototype, "equals", function(o) {
-          if (this === o) return true;
-          if (o == null) return false;
-          return this.valueOf() === (typeof o.valueOf === "function" ? o.valueOf() : o);
-        });
-        def(Object.prototype, "has", function(k) {
-          return this && typeof this === "object" && Object.prototype.hasOwnProperty.call(this, k);
-        });
-        def(Object.prototype, "hasNonNull", function(k) {
-          return this && typeof this === "object" && this[k] != null;
-        });
-        def(Object.prototype, "asText", function(fb) {
-          return this == null ? (fb || "") : String(this);
-        });
-        def(Object.prototype, "asBoolean", function(fb) {
-          if (this == null) return !!fb;
-          if (typeof this === "boolean") return this;
-          var s = String(this).trim().toLowerCase();
-          return s === "true" || s === "1";
-        });
-        def(Object.prototype, "asInt", function(fb) {
-          var n = parseInt(String(this), 10);
-          return isNaN(n) ? (fb || 0) : n;
-        });
-        def(Object.prototype, "isNull", function() { return this == null; });
-        def(Object.prototype, "isMissingNode", function() { return this === undefined; });
-        def(Object.prototype, "size", function() {
-          if (Array.isArray(this)) return this.length;
-          return typeof this === "object" && this !== null ? Object.keys(this).length : 0;
-        });
-        def(Object.prototype, "path", function(k) {
-          var v = (this && typeof this === "object") ? this[k] : undefined;
-          return makeJacksonNode(v);
-        });
+  function makeArrayList(initial) { return initial ? initial.slice() : []; }
+
+  var MapPrototype = {
+    put: function (k, v) { var key = String(k); var old = this[key] !== undefined ? this[key] : null; this[key] = v; return old; },
+    get: function (k) { var key = String(k); return this[key] !== undefined ? this[key] : null; },
+    remove: function (k) { var key = String(k); var old = this[key] !== undefined ? this[key] : null; delete this[key]; return old; },
+    containsKey: function (k) { return hasOwn.call(this, String(k)); },
+    size: function () { return Object.keys(this).length; },
+    isEmpty: function () { return Object.keys(this).length === 0; },
+    clear: function () { var ks = Object.keys(this); for (var i = 0; i < ks.length; i++) delete this[ks[i]]; },
+    keySet: function () { return makeArrayList(Object.keys(this)); },
+    values: function () { return makeArrayList(Object.values(this)); },
+    toString: function () { return '{' + Object.entries(this).map(function (e) { return e[0] + '=' + e[1]; }).join(', ') + '}'; }
+  };
+  function makeHashMap(initial) {
+    var self = Object.create(MapPrototype);
+    if (initial && typeof initial === 'object') Object.assign(self, initial);
+    return self;
+  }
+  function makeHashSet() {
+    var data = new Set();
+    var self = {};
+    self.add = function (v) { var had = data.has(v); data.add(v); return !had; };
+    self.contains = function (v) { return data.has(v); };
+    self.remove = function (v) { var had = data.has(v); data.delete(v); return had; };
+    self.size = function () { return data.size; };
+    self.isEmpty = function () { return data.size === 0; };
+    self.clear = function () { data.clear(); };
+    self.toString = function () { return '[' + Array.from(data).join(', ') + ']'; };
+    return self;
+  }
+  var JsonObjectPrototype = {
+    put: function (k, v) { this[k] = v; return this; },
+    get: function (k) { return this[k]; },
+    getString: function (k) { var v = this[k]; return v == null ? null : String(v); },
+    optString: function (k, fb) { var v = this[k]; return v == null ? (fb === undefined ? '' : fb) : String(v); },
+    optBoolean: function (k, fb) { var v = this[k]; if (v == null) return fb === undefined ? false : fb; if (typeof v === 'boolean') return v; return truthyStr(v); },
+    optInt: function (k, fb) { var v = this[k]; if (v == null) return fb === undefined ? 0 : fb; var n = parseInt(String(v), 10); return isNaN(n) ? (fb === undefined ? 0 : fb) : n; },
+    has: function (k) { return hasOwn.call(this, k); },
+    isNull: function (k) { return this[k] == null; },
+    toString: function () { return JSON.stringify(this); }
+  };
+  function makeJsonObject(initial) {
+    var data = {};
+    if (initial && typeof initial === 'string') {
+      try { var parsed = JSON.parse(initial); if (parsed && typeof parsed === 'object') data = parsed; } catch (e) { /* fallback */ }
+    } else if (initial && typeof initial === 'object') {
+      data = Object.assign({}, initial);
+    }
+    var self = Object.create(JsonObjectPrototype);
+    Object.assign(self, data);
+    return self;
+  }
+  var COLLECTION_FACTORIES = {
+    'java.util.ArrayList': function () { return makeArrayList(); },
+    'java.util.LinkedList': function () { return makeArrayList(); },
+    'java.util.HashMap': makeHashMap,
+    'java.util.LinkedHashMap': makeHashMap,
+    'java.util.HashSet': makeHashSet,
+    'java.util.LinkedHashSet': makeHashSet
+  };
+  function javaType(fqn) {
+    var factory = COLLECTION_FACTORIES[fqn];
+    if (!factory) {
+      throw new Error('Java.type("' + fqn + '") is not supported in this engine\'s JS sandbox — only the common ' +
+        'java.util collection types (ArrayList, LinkedList, HashMap, LinkedHashMap, HashSet, ' +
+        'LinkedHashSet) are shimmed; custom/application classes and anything else on the JDK ' +
+        'aren\'t resolvable here (this engine runs JS natively in V8, never a JVM).');
+    }
+    return function () { return factory(); };
+  }
+
+  // ---------------------------------------------------------------- realm prototype shims
+  var OP = Object.prototype, AP = Array.prototype, SP = String.prototype;
+  def(OP, 'isEmpty', function () {
+    if (this == null) return true;
+    if (typeof this.length === 'number') return this.length === 0;
+    if (typeof this.size === 'function') return this.size() === 0;
+    if (typeof this.size === 'number') return this.size === 0;
+    return Object.keys(this).length === 0;
+  });
+  def(OP, 'equals', function (o) {
+    if (this === o) return true;
+    if (o == null) return false;
+    return this.valueOf() === (typeof o.valueOf === 'function' ? o.valueOf() : o);
+  });
+  def(OP, 'path', function (k) { return makeJacksonNode((this && typeof this === 'object') ? this[k] : undefined); });
+  def(OP, 'has', function (k) { return this && typeof this === 'object' && hasOwn.call(this, k); });
+  def(OP, 'hasNonNull', function (k) { return this && typeof this === 'object' && this[k] != null; });
+  def(OP, 'asText', function (fb) { return this == null ? (fb || '') : String(this); });
+  def(OP, 'asBoolean', function (fb) { if (this == null) return !!fb; if (typeof this === 'boolean') return this; return truthyStr(this); });
+  def(OP, 'asInt', function (fb) { var n = parseInt(String(this), 10); return isNaN(n) ? (fb || 0) : n; });
+  def(OP, 'isNull', function () { return this == null; });
+  def(OP, 'isMissingNode', function () { return this === undefined; });
+  def(OP, 'size', function () {
+    if (Array.isArray(this)) return this.length;
+    return typeof this === 'object' && this !== null ? Object.keys(this).length : 0;
+  });
+  def(AP, 'isEmpty', function () { return this.length === 0; });
+  def(AP, 'size', function () { return this.length; });
+  def(AP, 'get', function (i) { return this[i]; });
+  def(AP, 'set', function (i, v) { var old = this[i]; this[i] = v; return old; });
+  def(AP, 'add', function (v) { this.push(v); return true; });
+  def(AP, 'remove', function (idxOrVal) {
+    if (typeof idxOrVal === 'number' && idxOrVal >= 0 && idxOrVal < this.length) return this.splice(idxOrVal, 1)[0];
+    var idx = this.indexOf(idxOrVal);
+    if (idx !== -1) return this.splice(idx, 1)[0];
+    return null;
+  });
+  def(AP, 'contains', function (v) { return this.indexOf(v) !== -1; });
+  def(AP, 'clear', function () { this.length = 0; });
+  def(SP, 'isEmpty', function () { return this.length === 0; });
+  def(SP, 'equals', function (o) { return this.valueOf() === String(o); });
+  def(SP, 'equalsIgnoreCase', function (o) { return o != null && this.toLowerCase() === String(o).toLowerCase(); });
+  def(SP, 'isNull', function () { return false; });
+  def(SP, 'asText', function () { return this.valueOf(); });
+  def(SP, 'asBoolean', function () { return truthyStr(this); });
+  def(SP, 'asInt', function (fb) { var n = parseInt(this, 10); return isNaN(n) ? (fb || 0) : n; });
+  def(SP, 'path', function (k) {
+    try { var p = JSON.parse(this.valueOf()); return makeJacksonNode(p && typeof p === 'object' ? p[k] : undefined); }
+    catch (e) { return makeJacksonNode(undefined); }
+  });
+  def(SP, 'has', function (k) {
+    try { var p = JSON.parse(this.valueOf()); return p && typeof p === 'object' && hasOwn.call(p, k); }
+    catch (e) { return false; }
+  });
+  def(Error.prototype, 'getMessage', function () { return this.message || String(this); });
+  def(Error.prototype, 'getLocalizedMessage', function () { return this.message || String(this); });
+  def(Error.prototype, 'printStackTrace', function () { console.error(this.stack); });
+  String.valueOf = function (o) { return o == null ? 'null' : String(o); };
+  if (typeof Boolean.TRUE === 'undefined') {
+    Boolean.TRUE = { equals: function (o) { return Boolean(o) === true; }, valueOf: function () { return true; }, toString: function () { return 'true'; } };
+    Boolean.FALSE = { equals: function (o) { return Boolean(o) === false; }, valueOf: function () { return false; }, toString: function () { return 'false'; } };
+  }
+
+  // ---------------------------------------------------------------- jBPM-style globals (Java/java/org/com/System/KieFunctions/…)
+  var logLines = [];
+  var envMap = {};
+  var envDirty = {};
+  var consoleObj = {};
+  ['log', 'info', 'warn', 'error', 'debug'].forEach(function (lvl) {
+    consoleObj[lvl] = function () {
+      var args = Array.prototype.slice.call(arguments);
+      logLines.push(args.map(function (x) { return typeof x === 'string' ? x : JSON.stringify(x); }).join(' '));
+    };
+  });
+  var logFn = consoleObj.log;
+  var hidden = {
+    makeJacksonNode: makeJacksonNode,
+    Java: { type: javaType },
+    Integer: { valueOf: function (x) { return parseInt(x, 10); }, parseInt: function (x) { return parseInt(x, 10); } },
+    Long: { valueOf: function (x) { return parseInt(x, 10); }, parseLong: function (x) { return parseInt(x, 10); } },
+    Double: { valueOf: function (x) { return parseFloat(x); }, parseDouble: function (x) { return parseFloat(x); } },
+    Float: { valueOf: function (x) { return parseFloat(x); }, parseFloat: function (x) { return parseFloat(x); } },
+    java: { util: {
+      ArrayList: function ArrayList(init) { return makeArrayList(Array.isArray(init) ? init : []); },
+      LinkedList: function LinkedList(init) { return makeArrayList(Array.isArray(init) ? init : []); },
+      HashMap: function HashMap(init) { return makeHashMap(init); },
+      LinkedHashMap: function LinkedHashMap(init) { return makeHashMap(init); },
+      HashSet: function HashSet() { return makeHashSet(); },
+      LinkedHashSet: function LinkedHashSet() { return makeHashSet(); },
+      Map: function Map(init) { return makeHashMap(init); },
+      List: function List(init) { return makeArrayList(Array.isArray(init) ? init : []); },
+      Set: function Set() { return makeHashSet(); }
+    } },
+    KieFunctions: {
+      equalsTo: function (a, b) { if (a === b) return true; if (a == null || b == null) return false; return String(a) === String(b); },
+      isTrue: function (a) { if (typeof a === 'boolean') return a; if (typeof a === 'string') return a.trim().toLowerCase() === 'true' || a.trim() === '1'; return Boolean(a); },
+      isFalse: function (a) { if (typeof a === 'boolean') return !a; if (typeof a === 'string') return a.trim().toLowerCase() === 'false' || a.trim() === '0'; return !a; },
+      isNull: function (a) { return a == null; },
+      notNull: function (a) { return a != null; },
+      isEmpty: function (a) { return a == null || String(a).trim() === ''; }
+    },
+    org: { json: {
+      JSONObject: function JSONObject(init) { return makeJsonObject(init); },
+      JSONArray: function JSONArray(init) { return makeArrayList(Array.isArray(init) ? init : (typeof init === 'string' ? JSON.parse(init) : [])); }
+    } },
+    com: { fasterxml: { jackson: { databind: {
+      ObjectMapper: function ObjectMapper() {
+        return {
+          createObjectNode: function () { return makeJacksonNode({}); },
+          createArrayNode: function () { return makeJacksonArray([]); },
+          readTree: function (str) { try { return makeJacksonNode(typeof str === 'string' ? JSON.parse(str) : str); } catch (e) { return makeJacksonNode({}); } },
+          writeValueAsString: function (obj) { return JSON.stringify(obj); }
+        };
+      },
+      node: {
+        ObjectNode: function ObjectNode() { return makeJacksonNode({}); },
+        ArrayNode: function ArrayNode() { return makeJacksonArray([]); }
       }
-      if (typeof Array !== "undefined" && Array.prototype) {
-        def(Array.prototype, "isEmpty", function() { return this.length === 0; });
-        def(Array.prototype, "size", function() { return this.length; });
-        def(Array.prototype, "get", function(i) { return this[i]; });
-        def(Array.prototype, "set", function(i, v) { var old = this[i]; this[i] = v; return old; });
-        def(Array.prototype, "add", function(v) { this.push(v); return true; });
-        def(Array.prototype, "remove", function(idxOrVal) {
-          if (typeof idxOrVal === "number" && idxOrVal >= 0 && idxOrVal < this.length) {
-            return this.splice(idxOrVal, 1)[0];
-          }
-          var idx = this.indexOf(idxOrVal);
-          if (idx !== -1) return this.splice(idx, 1)[0];
-          return null;
-        });
-        def(Array.prototype, "contains", function(v) { return this.indexOf(v) !== -1; });
-        def(Array.prototype, "clear", function() { this.length = 0; });
-      }
-      if (typeof String !== "undefined" && String.prototype) {
-        def(String.prototype, "isEmpty", function() { return this.length === 0; });
-        def(String.prototype, "equals", function(o) { return this.valueOf() === String(o); });
-        def(String.prototype, "equalsIgnoreCase", function(o) {
-          return o != null && this.toLowerCase() === String(o).toLowerCase();
-        });
-        def(String.prototype, "isNull", function() { return false; });
-        def(String.prototype, "asText", function() { return this.valueOf(); });
-        def(String.prototype, "asBoolean", function(fb) {
-          var s = this.trim().toLowerCase();
-          return s === "true" || s === "1";
-        });
-        def(String.prototype, "asInt", function(fb) {
-          var n = parseInt(this, 10);
-          return isNaN(n) ? (fb || 0) : n;
-        });
-        def(String.prototype, "path", function(k) {
-          try {
-            var parsed = JSON.parse(this.valueOf());
-            return makeJacksonNode(parsed && typeof parsed === "object" ? parsed[k] : undefined);
-          } catch(e) {
-            return makeJacksonNode(undefined);
-          }
-        });
-        def(String.prototype, "has", function(k) {
-          try {
-            var parsed = JSON.parse(this.valueOf());
-            return parsed && typeof parsed === "object" && Object.prototype.hasOwnProperty.call(parsed, k);
-          } catch(e) {
-            return false;
-          }
-        });
-      }
-      if (typeof Error !== "undefined" && Error.prototype) {
-        def(Error.prototype, "getMessage", function() { return this.message || String(this); });
-        def(Error.prototype, "getLocalizedMessage", function() { return this.message || String(this); });
-        def(Error.prototype, "printStackTrace", function() { console.error(this.stack); });
-      }
-      if (typeof String !== "undefined") {
-        String.valueOf = function(o) { return o == null ? "null" : String(o); };
-      }
-      if (typeof Boolean !== "undefined" && typeof Boolean.TRUE === "undefined") {
-        Boolean.TRUE = { equals: function(o) { return Boolean(o) === true; }, valueOf: function() { return true; }, toString: function() { return "true"; } };
-        Boolean.FALSE = { equals: function(o) { return Boolean(o) === false; }, valueOf: function() { return false; }, toString: function() { return "false"; } };
-      }
-    })();
-  `, sandbox);
-}
-function installJsCompat(sandbox) {
-  sandbox.makeJacksonNode = makeJacksonNode;
-  sandbox.Java = { type: javaType };
-  sandbox.Integer = { valueOf: (x) => parseInt(x, 10), parseInt: (x) => parseInt(x, 10) };
-  sandbox.Long = { valueOf: (x) => parseInt(x, 10), parseLong: (x) => parseInt(x, 10) };
-  sandbox.Double = { valueOf: (x) => parseFloat(x), parseDouble: (x) => parseFloat(x) };
-  sandbox.Float = { valueOf: (x) => parseFloat(x), parseFloat: (x) => parseFloat(x) };
-  sandbox.java = {
-    util: {
-      ArrayList: function ArrayList(init) {
-        return makeArrayList(Array.isArray(init) ? init : []);
-      },
-      LinkedList: function LinkedList(init) {
-        return makeArrayList(Array.isArray(init) ? init : []);
-      },
-      HashMap: function HashMap(init) {
-        return makeHashMap(init);
-      },
-      LinkedHashMap: function LinkedHashMap(init) {
-        return makeHashMap(init);
-      },
-      HashSet: function HashSet() {
-        return makeHashSet();
-      },
-      LinkedHashSet: function LinkedHashSet() {
-        return makeHashSet();
-      },
-      Map: function Map2(init) {
-        return makeHashMap(init);
-      },
-      List: function List(init) {
-        return makeArrayList(Array.isArray(init) ? init : []);
-      },
-      Set: function Set2() {
-        return makeHashSet();
-      }
+    } } } },
+    System: {
+      out: { println: function () { logFn.apply(null, arguments); }, print: function () { logFn.apply(null, arguments); } },
+      // env only — the host process environment is deliberately NOT reachable (it holds server secrets).
+      getenv: function (k) { return (envMap && envMap[k]) || ''; },
+      getProperty: function (k) { return (envMap && envMap[k]) || ''; },
+      currentTimeMillis: function () { return Date.now(); }
     }
   };
-  sandbox.KieFunctions = {
-    equalsTo: (a, b) => {
-      if (a === b) return true;
-      if (a == null || b == null) return false;
-      return String(a) === String(b);
-    },
-    isTrue: (a) => {
-      if (typeof a === "boolean") return a;
-      if (typeof a === "string") return a.trim().toLowerCase() === "true" || a.trim() === "1";
-      return Boolean(a);
-    },
-    isFalse: (a) => {
-      if (typeof a === "boolean") return !a;
-      if (typeof a === "string") return a.trim().toLowerCase() === "false" || a.trim() === "0";
-      return !a;
-    },
-    isNull: (a) => a == null,
-    notNull: (a) => a != null,
-    isEmpty: (a) => a == null || String(a).trim() === ""
-  };
-  sandbox.org = {
-    json: {
-      JSONObject: function JSONObject(init) {
-        return makeJsonObject(init);
+  Object.keys(hidden).forEach(function (k) { defHidden(G, k, hidden[k]); });
+  defHidden(G, 'console', consoleObj);
+
+  // ---------------------------------------------------------------- kcontext / instance / node
+  var actions = [];
+  var vars = {};
+  var STATES = { completed: 2, aborted: 3, failed: 3, suspended: 4 };
+
+  function setup(inputJson) {
+    var input = JSON.parse(inputJson);
+    var info = input.info || {};
+    vars = input.vars || {};
+    actions = [];
+    logLines.length = 0;
+    envMap = Object.assign({}, input.env || {});
+    envDirty = {};
+    var selfId = info.instanceId == null ? '' : String(info.instanceId);
+    var instObj = {
+      getId: function () { return selfId; },
+      getProcessId: function () { return info.processId; },
+      getProcessName: function () { return info.processName; },
+      getCorrelationKey: function () { return info.correlationKey; },
+      getParentProcessInstanceId: function () { return info.parentInstanceId; },
+      getState: function () { return STATES[info.state] !== undefined ? STATES[info.state] : 1; },
+      getVariables: function () { return vars; },
+      getNodeInstances: function () {
+        return (info.activeNodeInstances || []).map(function (n) {
+          return { getId: function () { return n.id; }, getNodeId: function () { return n.nodeId; }, getNodeName: function () { return n.nodeName == null ? '' : n.nodeName; } };
+        });
       },
-      JSONArray: function JSONArray(init) {
-        return makeArrayList(Array.isArray(init) ? init : typeof init === "string" ? JSON.parse(init) : []);
-      }
-    }
-  };
-  sandbox.com = {
-    fasterxml: {
-      jackson: {
-        databind: {
-          ObjectMapper: function ObjectMapper() {
-            return {
-              createObjectNode: () => makeJacksonNode({}),
-              createArrayNode: () => makeJacksonArray([]),
-              readTree: (str) => {
-                try {
-                  return makeJacksonNode(typeof str === "string" ? JSON.parse(str) : str);
-                } catch {
-                  return makeJacksonNode({});
-                }
-              },
-              writeValueAsString: (obj) => JSON.stringify(obj)
-            };
-          },
-          node: {
-            ObjectNode: function ObjectNode() {
-              return makeJacksonNode({});
-            },
-            ArrayNode: function ArrayNode() {
-              return makeJacksonArray([]);
-            }
-          }
-        }
-      }
-    }
-  };
-  sandbox.System = {
-    out: {
-      println: (...args) => (sandbox.console?.log || console.log)(...args),
-      print: (...args) => (sandbox.console?.log || console.log)(...args)
-    },
-    getenv: (k) => sandbox.env?.[k] || process.env[k] || "",
-    getProperty: (k) => sandbox.env?.[k] || process.env[k] || "",
-    currentTimeMillis: () => Date.now()
-  };
-}
+      signalEvent: function (type, event) { actions.push({ kind: 'signal', type: type, payload: event, targetInstanceId: selfId }); }
+    };
+    var nodeInst = {
+      getId: function () { return info.nodeInstanceId || ''; },
+      getNodeId: function () { return info.nodeId || ''; },
+      getNodeName: function () { return info.nodeName || ''; }
+    };
+    var environment = Object.assign({}, envMap, {
+      get: function (k) { return envMap[k] != null ? envMap[k] : null; },
+      set: function (k, v) { envMap[k] = v; envDirty[k] = String(v); }
+    });
+    var kieRuntime = {
+      getEnvironment: function () { return environment; },
+      signalEvent: function (type, event, processInstanceId) { actions.push({ kind: 'signal', type: type, payload: event, targetInstanceId: processInstanceId }); },
+      abortProcessInstance: function (pid) { actions.push({ kind: 'abort', targetInstanceId: pid }); }
+    };
+    var kcontext = {
+      getVariable: function (n) { return vars[n]; },
+      setVariable: function (n, v) { vars[n] = v; },
+      getProcessInstance: function () { return instObj; },
+      getNodeInstance: function () { return nodeInst; },
+      getKieRuntime: function () { return kieRuntime; }
+    };
+    var instance = {
+      id: selfId, processId: info.processId, processName: info.processName, correlationKey: info.correlationKey,
+      parentId: info.parentInstanceId, state: info.state || 'running', variables: vars,
+      activeNodes: (info.activeNodeInstances || []).map(function (n) { return { id: n.id, nodeId: n.nodeId, name: n.nodeName == null ? '' : n.nodeName }; }),
+      signal: function (type, payload) { actions.push({ kind: 'signal', type: type, payload: payload, targetInstanceId: selfId }); },
+      signalOther: function (t, type, payload) { actions.push({ kind: 'signal', type: type, payload: payload, targetInstanceId: t }); },
+      broadcast: function (type, payload) { actions.push({ kind: 'signal', type: type, payload: payload }); },
+      abort: function () { actions.push({ kind: 'abort', targetInstanceId: selfId }); },
+      abortOther: function (t) { actions.push({ kind: 'abort', targetInstanceId: t }); }
+    };
+    var node = { id: info.nodeInstanceId || '', nodeId: info.nodeId || '', name: info.nodeName || '' };
+    var env = Object.assign({}, input.env || {});
+
+    // fixed globals first; bare-name process variables bind only where nothing already owns the name
+    // (so kcontext/vars/console/Object/… can never be shadowed by a same-named variable).
+    var fixed = { kcontext: kcontext, vars: vars, instance: instance, node: node, env: env };
+    Object.keys(fixed).forEach(function (k) { defHidden(G, k, fixed[k]); });
+    var bound = {};
+    Object.keys(vars).forEach(function (k) {
+      if (hasOwn.call(G, k)) return;
+      G[k] = vars[k];
+      bound[k] = vars[k];
+    });
+    var baseline = {};
+    Object.getOwnPropertyNames(G).forEach(function (k) { baseline[k] = true; });
+
+    // collect(): the result is whatever the script left in vars (+ changed/new bare-name globals), as JSON.
+    defHidden(G, '__collect', function () {
+      var out = {};
+      Object.keys(vars).forEach(function (k) { out[k] = vars[k]; });
+      Object.keys(G).forEach(function (k) {
+        if (typeof G[k] === 'function') return;
+        if (hasOwn.call(bound, k)) { if (!Object.is(G[k], bound[k])) out[k] = G[k]; return; }
+        if (baseline[k]) return;
+        out[k] = G[k];
+      });
+      return JSON.stringify({ vars: out, logs: logLines, actions: actions, env: envDirty });
+    });
+    defHidden(G, '__logs', function () { return JSON.stringify(logLines); });
+  }
+  defHidden(G, '__setup', setup);
+})();
+`;
 
 // src/infra/quotas.ts
 var runningScripts = /* @__PURE__ */ new Map();
@@ -1441,105 +1218,6 @@ function acquireScriptSlot(tenantId, max) {
 }
 
 // src/engine/sandbox.ts
-var PROCESS_INSTANCE_STATE = { PENDING: 0, ACTIVE: 1, COMPLETED: 2, ABORTED: 3, SUSPENDED: 4 };
-function stateFor(status) {
-  switch (status) {
-    case "completed":
-      return PROCESS_INSTANCE_STATE.COMPLETED;
-    case "aborted":
-    case "failed":
-      return PROCESS_INSTANCE_STATE.ABORTED;
-    case "suspended":
-      return PROCESS_INSTANCE_STATE.SUSPENDED;
-    default:
-      return PROCESS_INSTANCE_STATE.ACTIVE;
-  }
-}
-function buildKcontext(vars, info, actions) {
-  const selfId = info.instanceId == null ? "" : String(info.instanceId);
-  const instance = {
-    getId: () => selfId,
-    getProcessId: () => info.processId,
-    getProcessName: () => info.processName,
-    getCorrelationKey: () => info.correlationKey,
-    getParentProcessInstanceId: () => info.parentInstanceId,
-    getState: () => stateFor(info.state),
-    getVariables: () => vars,
-    getNodeInstances: () => (info.activeNodeInstances || []).map((n) => ({
-      getId: () => n.id,
-      getNodeId: () => n.nodeId,
-      getNodeName: () => n.nodeName ?? ""
-    })),
-    // self-scoped signal — real jBPM's ProcessInstance implements EventListener, so this is
-    // delivered to THIS instance only (see kieRuntime.signalEvent below for the session-wide form).
-    signalEvent: (type, event) => {
-      actions.push({ kind: "signal", type, payload: event, targetInstanceId: selfId });
-    }
-  };
-  const nodeInstance = { getId: () => info.nodeInstanceId ?? "", getNodeId: () => info.nodeId ?? "", getNodeName: () => info.nodeName ?? "" };
-  const envMap = { ...info.env || {} };
-  const environment = {
-    ...envMap,
-    get: (k) => envMap[k] ?? process.env[k] ?? null,
-    set: (k, v) => {
-      envMap[k] = v;
-      if (info.env) info.env[k] = String(v);
-    }
-  };
-  const kieRuntime = {
-    getEnvironment: () => environment,
-    // one function handles both the session-wide broadcast (2 args) and targeted delivery (3 args) —
-    // JS has no method overloading, unlike the Java-dialect twin's two signalEvent overloads.
-    signalEvent: (type, event, processInstanceId) => {
-      actions.push({ kind: "signal", type, payload: event, targetInstanceId: processInstanceId });
-    },
-    abortProcessInstance: (processInstanceId) => {
-      actions.push({ kind: "abort", targetInstanceId: processInstanceId });
-    }
-  };
-  return {
-    getVariable: (n) => vars[n],
-    setVariable: (n, v) => {
-      vars[n] = v;
-    },
-    getProcessInstance: () => instance,
-    getNodeInstance: () => nodeInstance,
-    getKieRuntime: () => kieRuntime
-  };
-}
-function buildInstanceGlobal(vars, info, actions) {
-  const selfId = info.instanceId == null ? "" : String(info.instanceId);
-  return {
-    id: selfId,
-    processId: info.processId,
-    processName: info.processName,
-    correlationKey: info.correlationKey,
-    parentId: info.parentInstanceId,
-    // this engine's own status string, NOT jBPM's STATE_* int (that's still available via
-    // kcontext.getProcessInstance().getState() for anyone who needs the real jBPM constant).
-    state: info.state ?? "running",
-    variables: vars,
-    activeNodes: (info.activeNodeInstances || []).map((n) => ({ id: n.id, nodeId: n.nodeId, name: n.nodeName ?? "" })),
-    signal: (type, payload) => {
-      actions.push({ kind: "signal", type, payload, targetInstanceId: selfId });
-    },
-    signalOther: (targetInstanceId, type, payload) => {
-      actions.push({ kind: "signal", type, payload, targetInstanceId });
-    },
-    broadcast: (type, payload) => {
-      actions.push({ kind: "signal", type, payload });
-    },
-    abort: () => {
-      actions.push({ kind: "abort", targetInstanceId: selfId });
-    },
-    abortOther: (targetInstanceId) => {
-      actions.push({ kind: "abort", targetInstanceId });
-    }
-  };
-}
-function buildNodeGlobal(info) {
-  return { id: info.nodeInstanceId ?? "", nodeId: info.nodeId ?? "", name: info.nodeName ?? "" };
-}
 async function resolveActions(actions, cb) {
   for (const a of actions) {
     if (a.kind === "signal" && a.type) {
@@ -1585,85 +1263,73 @@ async function runScriptBody(code, vars, timeoutMs, opts) {
     if (opts.onAction) await resolveActions(result.pendingActions, opts.onAction);
     return;
   }
-  const actions = [];
-  const kcontext = buildKcontext(vars, opts, actions);
   const log = opts.log || (() => {
   });
-  const safeVars = {};
-  for (const [k, v] of Object.entries(vars)) {
-    if (!RESERVED_SANDBOX_KEYS.has(k)) {
-      safeVars[k] = v;
+  const r = await runJsInIsolate(code, "script", vars, opts, timeoutMs, opts.env, log);
+  for (const line of r.logs) log(line);
+  if (opts.onAction) await resolveActions(r.actions, opts.onAction);
+}
+async function evalExpression(expr, params, timeoutMs = 1e3) {
+  const r = await runJsInIsolate(expr, "expression", { ...params }, {}, timeoutMs);
+  return typeof r.value === "string" ? JSON.parse(r.value) : void 0;
+}
+var ISOLATE_MEMORY_MB = 64;
+var MAX_RESULT_BYTES = 8 * 1024 * 1024;
+var snapshot;
+function getSnapshot() {
+  if (snapshot === void 0) {
+    try {
+      snapshot = ivm.Isolate.createSnapshot([{ code: ISOLATE_RUNTIME_SOURCE }]);
+    } catch {
+      snapshot = null;
     }
   }
-  const sandbox = {
-    ...safeVars,
-    kcontext,
-    vars,
-    instance: buildInstanceGlobal(vars, opts, actions),
-    node: buildNodeGlobal(opts),
-    env: { ...opts.env || {} },
-    console: { log: (...a) => log(a.map((x) => typeof x === "string" ? x : JSON.stringify(x)).join(" ")) }
-  };
-  installJsCompat(sandbox);
-  vm2.createContext(sandbox);
-  initVmRealm(sandbox);
-  const before = {};
-  for (const k of Object.keys(sandbox)) if (!RESERVED_SANDBOX_KEYS.has(k)) before[k] = sandbox[k];
-  vm2.runInContext(`(function(){
-${code}
-})()`, sandbox, { timeout: timeoutMs });
-  for (const k of Object.keys(sandbox)) {
-    if (RESERVED_SANDBOX_KEYS.has(k)) continue;
-    if (typeof sandbox[k] === "function") continue;
-    if (!(k in before) || !Object.is(sandbox[k], before[k])) vars[k] = sandbox[k];
-  }
-  if (opts.onAction) await resolveActions(actions, opts.onAction);
+  return snapshot;
 }
-var RESERVED_SANDBOX_KEYS = /* @__PURE__ */ new Set([
-  "kcontext",
-  "vars",
-  "instance",
-  "node",
-  "env",
-  "console",
-  "Java",
-  "java",
-  "System",
-  "KieFunctions",
-  "org",
-  "com",
-  "makeJacksonNode",
-  "Boolean",
-  "String",
-  "Number",
-  "Object",
-  "Array",
-  "Integer",
-  "Long",
-  "Double",
-  "Float",
-  "Error",
-  "Date",
-  "Math",
-  "JSON",
-  "RegExp",
-  "Map",
-  "Set",
-  "Promise",
-  "Function",
-  "Symbol",
-  "Reflect",
-  "Proxy",
-  "isNaN",
-  "isFinite",
-  "parseInt",
-  "parseFloat",
-  "encodeURI",
-  "encodeURIComponent",
-  "decodeURI",
-  "decodeURIComponent",
-  "eval"
-]);
+async function runJsInIsolate(code, mode, vars, info, timeoutMs, hostEnv, onLog) {
+  const snap = getSnapshot();
+  const isolate = new ivm.Isolate({ memoryLimit: ISOLATE_MEMORY_MB, ...snap ? { snapshot: snap } : {} });
+  let context;
+  try {
+    context = await isolate.createContext();
+    if (!snap) await (await isolate.compileScript(ISOLATE_RUNTIME_SOURCE)).run(context);
+    const { env: env2, ...rest } = info;
+    const input = JSON.stringify({ vars, env: env2 || {}, info: rest });
+    await context.global.set("__input", input);
+    await (await isolate.compileScript("__setup(__input); delete globalThis.__input;")).run(context, { timeout: timeoutMs });
+    const body = mode !== "script" && mode !== "condition" ? code : mode === "condition" ? /return\b/.test(code) ? code : `return (${code});` : code;
+    const wrapped = mode === "expression" ? `JSON.stringify((function(){ return (${code}
+); })())` : mode === "condition" ? `!!(function(){
+${body}
+})()` : `void (function(){
+${body}
+})()`;
+    let value;
+    try {
+      value = await (await isolate.compileScript(wrapped)).run(context, { timeout: timeoutMs, copy: true });
+    } catch (e) {
+      try {
+        const lines = JSON.parse(await (await isolate.compileScript("__logs()")).run(context, { timeout: 100 }));
+        for (const l of lines) onLog?.(l);
+      } catch {
+      }
+      throw e;
+    }
+    const raw = await (await isolate.compileScript("__collect()")).run(context, { timeout: timeoutMs });
+    if (typeof raw !== "string" || raw.length > MAX_RESULT_BYTES) throw new Error("script result missing or too large");
+    const out = JSON.parse(raw);
+    for (const k of Object.keys(vars)) if (!(k in out.vars)) delete vars[k];
+    Object.assign(vars, out.vars);
+    if (hostEnv) Object.assign(hostEnv, out.env);
+    return { value, logs: out.logs, actions: out.actions };
+  } finally {
+    try {
+      context?.release();
+    } catch {
+    }
+    if (!isolate.isDisposed) isolate.dispose();
+  }
+}
 async function evalCondition(expr, lang, vars, timeoutMs = 500, varTypes, ctx = {}) {
   if (!expr) return true;
   if (lang && lang !== "js" && lang !== "java") return false;
@@ -1690,29 +1356,11 @@ async function evalCondition(expr, lang, vars, timeoutMs = 500, varTypes, ctx = 
       return false;
     }
   }
-  const actions = [];
-  const kcontext = buildKcontext(vars, ctx, actions);
-  const safeVars = {};
-  for (const [k, v] of Object.entries(vars)) {
-    if (!RESERVED_SANDBOX_KEYS.has(k)) {
-      safeVars[k] = v;
-    }
-  }
-  const sandbox = {
-    ...safeVars,
-    kcontext,
-    vars,
-    instance: buildInstanceGlobal(vars, ctx, actions),
-    node: buildNodeGlobal(ctx),
-    env: { ...ctx.env || {} }
-  };
-  installJsCompat(sandbox);
-  vm2.createContext(sandbox);
-  initVmRealm(sandbox);
   try {
-    const body = /return\b/.test(expr) ? expr : `return (${expr});`;
-    const result = !!vm2.runInContext(`(function(){ ${body} })()`, sandbox, { timeout: timeoutMs });
-    if (ctx.onAction) await resolveActions(actions, ctx.onAction);
+    const { onAction, ...info } = ctx;
+    const r = await runJsInIsolate(expr, "condition", { ...vars }, info, timeoutMs, void 0);
+    const result = !!r.value;
+    if (onAction) await resolveActions(r.actions, onAction);
     return result;
   } catch {
     return false;
@@ -1878,24 +1526,24 @@ var handler5 = async (c) => {
   const n = c.node;
   const baseUrl = c.dep.env && c.dep.env["INTEGRATION_LAYER_URL"] || config.integrationBaseUrl;
   const isAbsolute = /^https?:\/\//.test(n.url || "");
-  const url = isAbsolute ? n.url : `${baseUrl}${n.url || ""}`;
+  const url2 = isAbsolute ? n.url : `${baseUrl}${n.url || ""}`;
   const method = String(n.method || "POST").toUpperCase();
   const body = {};
   for (const [k, v] of Object.entries(n.body || {})) body[k] = typeof v === "string" && v.startsWith("$") ? c.inst.variables[v.slice(1)] : v;
   if (isAbsolute) {
     try {
-      await assertOutboundAllowed(url);
+      await assertOutboundAllowed(url2);
     } catch (e) {
       return { error: e.message, errorCode: "SSRF_BLOCKED" };
     }
   }
   try {
-    const res = await fetch(url, {
+    const res = await fetch(url2, {
       method,
       headers: { "content-type": "application/json", ...n.headers || {} },
       ...method === "GET" || method === "HEAD" ? {} : { body: JSON.stringify(body) }
     });
-    if (!res.ok) return { error: `HTTP ${res.status} from ${url}`, errorCode: "SERVICE_ERROR" };
+    if (!res.ok) return { error: `HTTP ${res.status} from ${url2}`, errorCode: "SERVICE_ERROR" };
     const text = await res.text();
     let json;
     try {
@@ -2383,10 +2031,9 @@ var handler15 = async (c) => {
 };
 
 // src/engine/workitems/registry.ts
-import vm3 from "vm";
-async function callService(url, params) {
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(params) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url}`);
+async function callService(url2, params) {
+  const res = await fetch(url2, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(params) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} from ${url2}`);
   const t = await res.text();
   try {
     return t ? JSON.parse(t) : {};
@@ -2401,9 +2048,7 @@ var WORKITEM_HANDLERS = {
   Compute: async (p) => {
     const expr = String(p["expression"] ?? p["expr"] ?? "");
     if (!expr) return { result: void 0 };
-    const sandbox = { ...p };
-    vm3.createContext(sandbox);
-    return { result: vm3.runInContext(`(${expr})`, sandbox, { timeout: 1e3 }) };
+    return { result: await evalExpression(expr, p, 1e3) };
   },
   // external side-effects — call the configured service, else simulate
   Email: async (p, env2) => env2["EMAIL_SERVICE_URL"] ? { ...await callService(env2["EMAIL_SERVICE_URL"], p), sent: true } : { sent: true, simulated: true, to: p["to"] },
@@ -2413,11 +2058,11 @@ var WORKITEM_HANDLERS = {
   Rest: async (p, env2) => {
     let rawUrl = String(p["Url"] || p["url"] || "");
     if (!rawUrl) throw new Error('Rest workitem requires "Url" parameter');
-    let url = rawUrl.replace(/\$\{([^}]+)\}/g, (_, key) => String(env2[key] ?? p[key] ?? ""));
+    let url2 = rawUrl.replace(/\$\{([^}]+)\}/g, (_, key) => String(env2[key] ?? p[key] ?? ""));
     const baseUrl = env2["BASE_URL"] || "";
-    if (!/^https?:\/\//i.test(url) && baseUrl) {
+    if (!/^https?:\/\//i.test(url2) && baseUrl) {
       const base = baseUrl.replace(/\/+$/, "");
-      url = url.startsWith("/") ? `${base}${url}` : `${base}/${url}`;
+      url2 = url2.startsWith("/") ? `${base}${url2}` : `${base}/${url2}`;
     }
     const method = String(p["Method"] || p["method"] || "POST").toUpperCase();
     const contentType = String(p["ContentType"] || p["contentType"] || "application/json");
@@ -2453,7 +2098,7 @@ var WORKITEM_HANDLERS = {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), connectTimeout);
     try {
-      const res = await fetch(url, {
+      const res = await fetch(url2, {
         method,
         headers,
         body,
@@ -2473,7 +2118,7 @@ var WORKITEM_HANDLERS = {
       if (!res.ok) {
         const handleResponseErrors = String(p["HandleResponseErrors"]).toLowerCase() === "true";
         if (handleResponseErrors) {
-          throw new Error(`HTTP ${res.status} from ${url}: ${text}`);
+          throw new Error(`HTTP ${res.status} from ${url2}: ${text}`);
         }
       }
       return {
@@ -4378,6 +4023,13 @@ var ErrorService = class {
   repo() {
     return this.ctx.store.repo(Collections.errors);
   }
+  /** platform-wide scope ('all') is only ever granted to the platform admin by requireWorkspaceAccess */
+  isAll() {
+    return this.ctx.tenantId === "all" || this.ctx.tenantId === "*";
+  }
+  mine(e) {
+    return this.isAll() || e.tenantId === this.ctx.tenantId;
+  }
   /**
    * Record a failure. Identical (instanceId, nodeId, message) triples increment `occurrences` on the
    * existing row instead of appending a new one — a node retried 40 times should be one line in the
@@ -4385,7 +4037,7 @@ var ErrorService = class {
    */
   async record(e) {
     const existing = (await this.repo().query(
-      (x) => x.instanceId === e.instanceId && x.nodeId === e.nodeId && x.message === e.message && !x.acknowledged
+      (x) => x.tenantId === this.ctx.tenantId && x.instanceId === e.instanceId && x.nodeId === e.nodeId && x.message === e.message && !x.acknowledged
     ))[0];
     if (existing) {
       existing.occurrences += 1;
@@ -4413,6 +4065,7 @@ var ErrorService = class {
   }
   async list(q2 = {}) {
     const all = await this.repo().query((e) => {
+      if (!this.mine(e)) return false;
       if (q2.type?.length && !q2.type.includes(e.type)) return false;
       if (q2.instanceId && e.instanceId !== q2.instanceId) return false;
       if (q2.taskId && e.taskId !== q2.taskId) return false;
@@ -4432,7 +4085,7 @@ var ErrorService = class {
   }
   async get(id) {
     const e = await this.repo().get(id);
-    if (!e) throw notFound("ExecutionError");
+    if (!e || !this.mine(e)) throw notFound("ExecutionError");
     return e;
   }
   /** Take ownership. Idempotent — re-acknowledging keeps the original actor/timestamp. */
@@ -4460,7 +4113,7 @@ var ErrorService = class {
   }
   /** Counts for the nav badge and the Home KPI tile. */
   async summary() {
-    const all = await this.repo().query(() => true);
+    const all = await this.repo().query((e) => this.mine(e));
     const dayAgo = new Date(Date.parse(this.ctx.clock()) - 864e5).toISOString();
     return {
       total: all.length,
@@ -4731,6 +4384,15 @@ var TaskService = class {
   repo() {
     return this.ctx.store.repo(Collections.tasks);
   }
+  /** set by the HTTP layer for a workspace owner/admin or the platform admin: they may act on a task someone else holds. */
+  adminOverride = false;
+  /** Once a task is claimed, only its owner (or the task's businessAdmin, or a workspace admin) may work on it —
+   *  otherwise any member with task:manage could complete, release or hand off a colleague's task. An unclaimed task
+   *  (no assignee) stays open to whoever passes assertOwnable. */
+  assertOwnerOrAdmin(t, user) {
+    if (this.adminOverride || t.businessAdmin === user || !t.assignee || t.assignee === user) return;
+    throw forbidden(`task is assigned to ${t.assignee}`);
+  }
   async lookupUser(username) {
     return (await this.ctx.store.repo(Collections.users).query((u) => u.tenantId === this.ctx.tenantId && u.username === username))[0];
   }
@@ -4775,6 +4437,7 @@ var TaskService = class {
     await this.assertOwnable(t, user);
     await this.assertInstanceActionable(t);
     if (t.status !== "created" && t.status !== "reserved") throw conflict("task not claimable");
+    if (t.status === "reserved" && t.assignee && t.assignee !== user && !this.adminOverride && t.businessAdmin !== user) throw conflict(`task already claimed by ${t.assignee}`);
     t.assignee = user;
     t.status = "reserved";
     await this.repo().put(t);
@@ -4783,6 +4446,7 @@ var TaskService = class {
   }
   async release(id, user) {
     const t = await this.get(id);
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     t.assignee = void 0;
     t.status = "created";
@@ -4806,6 +4470,7 @@ var TaskService = class {
   async complete(id, outputs, user) {
     const t = await this.get(id);
     await this.assertOwnable(t, user);
+    this.assertOwnerOrAdmin(t, user);
     if (t.status === "completed") throw conflict("task already completed");
     await this.assertInstanceActionable(t);
     const inst = await this.instances.get(t.instanceId).catch(() => null);
@@ -4878,6 +4543,7 @@ var TaskService = class {
   async saveOutputs(id, outputs, user) {
     const t = await this.get(id);
     await this.assertOwnable(t, user);
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     if (t.status === "completed" || t.status === "skipped") throw conflict(`task already ${t.status}`);
     t.outputs = outputs;
@@ -4889,6 +4555,7 @@ var TaskService = class {
   async delegate(id, to, user) {
     const t = await this.get(id);
     if (!to?.trim()) throw validation("target user is required");
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     if (t.status === "completed" || t.status === "skipped") throw conflict(`task already ${t.status}`);
     if (t.excludedOwners?.includes(to)) throw conflict(`${to} is excluded from this task`);
@@ -4913,6 +4580,7 @@ var TaskService = class {
   async forward(id, to, user) {
     const t = await this.get(id);
     if (!to?.user?.trim() && !to?.group?.trim()) throw validation("a target user or group is required");
+    this.assertOwnerOrAdmin(t, user);
     await this.assertInstanceActionable(t);
     if (t.status === "completed" || t.status === "skipped") throw conflict(`task already ${t.status}`);
     const from = t.assignee;
@@ -5780,7 +5448,190 @@ var AssetsService = class {
 // src/infra/auth.ts
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import jwt2 from "jsonwebtoken";
+
+// src/infra/oidc.ts
+import crypto from "crypto";
 import jwt from "jsonwebtoken";
+var SCOPE = "openid email profile";
+var DISCOVERY_TTL_MS = 60 * 60 * 1e3;
+var DISCOVERY_RETRY_MS = 15e3;
+var JWKS_TTL_MS = 10 * 60 * 1e3;
+var JWKS_REFRESH_COOLDOWN_MS = 3e4;
+var FETCH_TIMEOUT_MS = 5e3;
+var ALLOWED_ALGORITHMS = ["RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512"];
+var b64url = (b) => b.toString("base64url");
+var timeout = () => AbortSignal.timeout(FETCH_TIMEOUT_MS);
+var Oidc = class {
+  meta;
+  discoveredAt = 0;
+  lastFailureAt = 0;
+  inFlight;
+  keys;
+  keysAt = 0;
+  isConfigured() {
+    return !!config.oidc.issuer && !!config.oidc.clientId;
+  }
+  async metadata() {
+    const issuer = config.oidc.issuer;
+    if (!issuer) throw new Error("OIDC is not configured (set OIDC_ISSUER)");
+    const now = Date.now();
+    if (this.meta && now - this.discoveredAt < DISCOVERY_TTL_MS) return this.meta;
+    if (!this.meta && this.lastFailureAt && now - this.lastFailureAt < DISCOVERY_RETRY_MS) throw new Error("OIDC issuer is unavailable (retrying shortly)");
+    if (this.inFlight) return this.inFlight;
+    this.inFlight = (async () => {
+      try {
+        const res = await fetch(`${issuer}/.well-known/openid-configuration`, { signal: timeout() });
+        if (!res.ok) throw new Error(`OIDC discovery failed: HTTP ${res.status}`);
+        const m = await res.json();
+        if (m.issuer?.replace(/\/+$/, "") !== issuer) throw new Error("OIDC discovery issuer mismatch");
+        if (!m.authorization_endpoint || !m.token_endpoint || !m.jwks_uri) throw new Error("OIDC discovery document is incomplete");
+        this.meta = m;
+        this.discoveredAt = Date.now();
+        this.lastFailureAt = 0;
+        return m;
+      } catch (e) {
+        this.lastFailureAt = Date.now();
+        if (this.meta) return this.meta;
+        throw e;
+      } finally {
+        this.inFlight = void 0;
+      }
+    })();
+    return this.inFlight;
+  }
+  /** Step 1: build the authorize URL and the transaction (verifier/state/nonce) the caller must keep for the callback. */
+  async authorizationRequest(returnTo) {
+    const m = await this.metadata();
+    const verifier = b64url(crypto.randomBytes(32));
+    const tx = { v: verifier, s: b64url(crypto.randomBytes(16)), n: b64url(crypto.randomBytes(16)), ...returnTo ? { r: returnTo } : {} };
+    const u = new URL(m.authorization_endpoint);
+    u.search = new URLSearchParams({
+      response_type: "code",
+      client_id: config.oidc.clientId,
+      redirect_uri: config.oidc.redirectUri,
+      scope: SCOPE,
+      state: tx.s,
+      nonce: tx.n,
+      code_challenge: b64url(crypto.createHash("sha256").update(verifier).digest()),
+      code_challenge_method: "S256"
+    }).toString();
+    return { url: u.toString(), tx };
+  }
+  /** Step 2: validate state, exchange the code (+PKCE verifier) and validate the ID token (signature, iss, aud, exp, nonce). */
+  async handleCallback(query, tx) {
+    const m = await this.metadata();
+    if (typeof query.state !== "string" || !timingEq(query.state, tx.s)) throw new Error("state mismatch");
+    if (typeof query.code !== "string" || !query.code) throw new Error("missing authorization code");
+    const body = new URLSearchParams({ grant_type: "authorization_code", code: query.code, redirect_uri: config.oidc.redirectUri, code_verifier: tx.v });
+    const headers = { "content-type": "application/x-www-form-urlencoded", accept: "application/json" };
+    const { clientId, clientSecret } = config.oidc;
+    if (clientSecret) headers.authorization = `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`).toString("base64")}`;
+    else body.set("client_id", clientId);
+    const res = await fetch(m.token_endpoint, { method: "POST", headers, body, signal: timeout() });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `token endpoint HTTP ${res.status}`);
+    if (!json.id_token) throw new Error("token response has no id_token");
+    const idClaims = await this.verify(json.id_token, [clientId]);
+    if (!idClaims || idClaims.nonce !== tx.n) throw new Error("nonce mismatch");
+    return json;
+  }
+  /** Verify a signed JWT against the issuer's JWKS. Returns null for anything unverifiable (fail closed). */
+  async verify(token, audience = config.oidc.audience) {
+    try {
+      const decoded = jwt.decode(token, { complete: true });
+      if (!decoded || typeof decoded.payload === "string") return null;
+      const alg = decoded.header.alg;
+      if (!ALLOWED_ALGORITHMS.includes(alg)) return null;
+      const key = await this.signingKey(decoded.header.kid);
+      const claims = jwt.verify(token, key, {
+        algorithms: ALLOWED_ALGORITHMS,
+        issuer: [config.oidc.issuer, `${config.oidc.issuer}/`],
+        clockTolerance: config.oidc.clockToleranceSec,
+        ...audience.length ? { audience } : {}
+      });
+      if (typeof claims === "string" || !claims.sub) return null;
+      return claims;
+    } catch {
+      return null;
+    }
+  }
+  async logoutUrl(idTokenHint) {
+    try {
+      const m = await this.metadata();
+      if (!m.end_session_endpoint) return void 0;
+      const u = new URL(m.end_session_endpoint);
+      u.searchParams.set("client_id", config.oidc.clientId);
+      u.searchParams.set("post_logout_redirect_uri", config.dashboardUrl);
+      if (idTokenHint) u.searchParams.set("id_token_hint", idTokenHint);
+      return u.toString();
+    } catch {
+      return void 0;
+    }
+  }
+  async signingKey(kid) {
+    const pick2 = (keys) => {
+      const sig = keys.filter((k) => k.use !== "enc");
+      return kid ? sig.find((k) => k.kid === kid) : sig[0];
+    };
+    let match = pick2(await this.jwks());
+    if (!match && kid) match = pick2(await this.jwks(true));
+    if (!match) throw new Error(`no JWKS key for kid "${kid}"`);
+    return crypto.createPublicKey({ key: match, format: "jwk" });
+  }
+  async jwks(force = false) {
+    const now = Date.now();
+    if (this.keys && !force && now - this.keysAt < JWKS_TTL_MS) return this.keys;
+    if (this.keys && force && now - this.keysAt < JWKS_REFRESH_COOLDOWN_MS) return this.keys;
+    const m = await this.metadata();
+    const res = await fetch(m.jwks_uri, { signal: timeout() });
+    if (!res.ok) throw new Error(`JWKS fetch failed: HTTP ${res.status}`);
+    const body = await res.json();
+    if (!body.keys) throw new Error("JWKS has no keys");
+    this.keys = body.keys;
+    this.keysAt = now;
+    return this.keys;
+  }
+  /** test hook */
+  reset() {
+    this.meta = void 0;
+    this.keys = void 0;
+    this.discoveredAt = this.keysAt = this.lastFailureAt = 0;
+  }
+};
+function timingEq(a, b) {
+  const x = Buffer.from(a), y = Buffer.from(b);
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+var oidc = new Oidc();
+var TX_COOKIE = "oidc_tx";
+var TX_COOKIE_PATH = "/api/auth/oidc";
+var sign = (payload) => crypto.createHmac("sha256", config.jwtSecret).update(payload).digest("base64url");
+function sealTx(tx) {
+  const payload = Buffer.from(JSON.stringify({ ...tx, exp: Date.now() + 10 * 60 * 1e3 })).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+function openTx(raw) {
+  if (!raw) return void 0;
+  const [payload, sig] = raw.split(".");
+  if (!payload || !sig || !timingEq(sig, sign(payload))) return void 0;
+  try {
+    const t = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (!t.v || !t.s || !t.n || t.exp < Date.now()) return void 0;
+    return t;
+  } catch {
+    return void 0;
+  }
+}
+function readCookie(header, name) {
+  for (const part of (header || "").split(";")) {
+    const i = part.indexOf("=");
+    if (i > 0 && part.slice(0, i).trim() === name) return decodeURIComponent(part.slice(i + 1).trim());
+  }
+  return void 0;
+}
+
+// src/infra/auth.ts
 var scrypt = promisify(scryptCb);
 async function hashPassword(password) {
   const salt = randomBytes(16).toString("hex");
@@ -5795,29 +5646,166 @@ async function verifyPassword(password, stored) {
   return derived.length === expected.length && timingSafeEqual(derived, expected);
 }
 function signToken(claims) {
-  return jwt.sign(claims, config.jwtSecret, { expiresIn: "12h" });
+  return jwt2.sign({ ...claims, source: "local" }, config.jwtSecret, { algorithm: "HS256", expiresIn: "12h" });
 }
 function verifyToken(token) {
-  return jwt.verify(token, config.jwtSecret);
+  return jwt2.verify(token, config.jwtSecret, { algorithms: ["HS256"] });
+}
+async function verifyBearer(token) {
+  const header = jwt2.decode(token, { complete: true })?.header;
+  if (!header) throw new Error("malformed token");
+  if (header.alg === "HS256") {
+    if (!config.localLogin) throw new Error("local login is disabled");
+    return { ...verifyToken(token), source: "local" };
+  }
+  if (!oidc.isConfigured()) throw new Error("single sign-on is not configured");
+  const c = await oidc.verify(token);
+  if (!c) throw new Error("unverifiable token");
+  const email = typeof c.email === "string" ? c.email.trim().toLowerCase() : void 0;
+  return {
+    sub: c.sub,
+    username: email || c.sub,
+    roles: [],
+    // authorization comes from workspace membership, not IdP role claims
+    groups: [],
+    source: "oidc",
+    email,
+    emailVerified: c.email_verified === true,
+    name: typeof c.name === "string" ? c.name : void 0
+  };
 }
 function permissionGrants(permissions, action) {
   return permissions.some((p) => p === "*" || p === action || p.endsWith(":*") && action.startsWith(p.slice(0, -1)));
 }
 
+// src/infra/mailer.ts
+import nodemailer from "nodemailer";
+var outbox = [];
+var transporter;
+var smtp = () => {
+  const c = config.mail.smtp;
+  if (!c) return void 0;
+  return transporter ??= nodemailer.createTransport({ host: c.host, port: c.port, secure: c.secure, ...c.user ? { auth: { user: c.user, pass: c.pass } } : {}, connectionTimeout: 8e3, socketTimeout: 15e3 });
+};
+var mailEnabled = () => !!config.mail.smtp || !!config.mail.webhookUrl;
+var oneLine = (s) => s.replace(/[\r\n]+/g, " ").trim();
+async function sendMail(m) {
+  const mail = { ...m, to: oneLine(m.to), subject: oneLine(m.subject) };
+  if (config.mail.capture) {
+    outbox.push({ ...mail, at: (/* @__PURE__ */ new Date()).toISOString() });
+    if (outbox.length > 200) outbox.shift();
+  }
+  try {
+    const t = smtp();
+    if (t) {
+      await t.sendMail({ from: config.mail.from, to: mail.to, subject: mail.subject, text: mail.text, html: mail.html });
+      return true;
+    }
+    if (config.mail.webhookUrl) {
+      const res = await fetch(config.mail.webhookUrl, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ from: config.mail.from, ...mail }), signal: AbortSignal.timeout(5e3) });
+      if (!res.ok) {
+        logger.warn("mail webhook rejected the message", { status: res.status, to: mail.to });
+        return false;
+      }
+      return true;
+    }
+  } catch (e) {
+    logger.warn("mail delivery failed", { to: mail.to, subject: mail.subject, err: e.message });
+    return false;
+  }
+  if (config.isProduction) logger.warn("mail not delivered: no SMTP_HOST / MAIL_WEBHOOK_URL configured", { to: mail.to, subject: mail.subject });
+  else logger.info("mail (no transport configured \u2014 dev log only)", { to: mail.to, subject: mail.subject, text: mail.text });
+  return false;
+}
+
+// src/infra/mail-templates.ts
+var esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+var url = (path6, params = {}) => `${config.dashboardUrl}${path6}${Object.keys(params).length ? `?${new URLSearchParams(params)}` : ""}`;
+function layout(title, bodyHtml, cta, footer = "") {
+  const app2 = esc(config.appName);
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f8;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1f2430">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="520" cellspacing="0" cellpadding="0" style="max-width:520px;background:#fff;border-radius:14px;padding:32px">
+<tr><td style="font-weight:700;font-size:15px;color:#7c3aed">${app2}</td></tr>
+<tr><td style="padding-top:16px;font-size:20px;font-weight:700">${esc(title)}</td></tr>
+<tr><td style="padding-top:12px;font-size:14px;line-height:1.6;color:#3b4252">${bodyHtml}</td></tr>
+${cta ? `<tr><td style="padding-top:22px"><a href="${esc(cta.href)}" style="background:#7c3aed;color:#fff;text-decoration:none;padding:11px 20px;border-radius:9px;font-weight:600;font-size:14px;display:inline-block">${esc(cta.label)}</a></td></tr>
+<tr><td style="padding-top:14px;font-size:12px;color:#8a90a2;word-break:break-all">Or paste this link into your browser:<br>${esc(cta.href)}</td></tr>` : ""}
+<tr><td style="padding-top:26px;font-size:12px;color:#8a90a2;border-top:1px solid #eee;margin-top:20px">${footer || `You are receiving this because of activity on your ${app2} account.`}</td></tr>
+</table></td></tr></table></body></html>`;
+}
+function build(to, subject, title, lines, cta, footer) {
+  const text = `${title}
+
+${lines.join("\n\n")}${cta ? `
+
+${cta.label}: ${cta.href}` : ""}
+
+\u2014 ${config.appName}`;
+  const html = layout(title, lines.map((l) => `<p style="margin:0 0 10px">${esc(l)}</p>`).join(""), cta, footer);
+  return { to, subject, text, html };
+}
+var ignore = "If you did not expect this, you can safely ignore this message.";
+var templates = {
+  verification: (to, token) => build(to, `Verify your email for ${config.appName}`, "Confirm your email address", [`Welcome to ${config.appName}. Confirm this address to activate your account.`, `The link expires in 24 hours. ${ignore}`], { label: "Verify email", href: url("/verify-email", { token }) }),
+  passwordReset: (to, token) => build(to, `Reset your ${config.appName} password`, "Reset your password", ["We received a request to reset your password. Choose a new one with the button below.", `The link expires in 1 hour and works once. If you did not ask for this, ignore this message \u2014 your password is unchanged.`], { label: "Choose a new password", href: url("/reset-password", { token }) }),
+  passwordChanged: (to, how) => build(to, `Your ${config.appName} password was changed`, "Your password was changed", [`Your password was ${how === "reset" ? "reset using an emailed link" : how === "admin" ? "changed by an administrator" : "changed from your account settings"}. You were signed out of other sessions.`, "If this was not you, reset your password immediately and contact your administrator."], { label: "Sign in", href: url("/login") }),
+  accountLocked: (to, minutes) => build(to, `Your ${config.appName} account is temporarily locked`, "Account temporarily locked", [`There were too many failed sign-in attempts. The account is locked for ${minutes} minutes.`, "If this was not you, reset your password."], { label: "Reset password", href: url("/forgot-password") }),
+  welcome: (to, name) => build(to, `Welcome to ${config.appName}`, `Welcome, ${name}`, [`Your ${config.appName} account is ready. Create a workspace for your team, or accept an invitation you received.`], { label: "Open dashboard", href: url("/home") }),
+  workspaceCreated: (to, workspaceName, trialDays) => build(to, `Your workspace \u201C${workspaceName}\u201D is ready`, "Your workspace is ready", [`\u201C${workspaceName}\u201D has been created and you are its owner.${trialDays ? ` Your ${trialDays}-day trial has started.` : ""}`, "Invite your team from Team \u2192 Invite someone, then model your first workflow."], { label: "Open workspace", href: url("/home") }),
+  invitation: (to, p) => build(to, `${p.inviterName} invited you to ${p.workspaceName}`, `Join ${p.workspaceName}`, [`${p.inviterName} invited you to the workspace \u201C${p.workspaceName}\u201D as ${p.role}.`, `Sign in with this email address (${to}) to accept. The invitation expires on ${p.expiresAt.slice(0, 10)}. ${ignore}`], { label: "Accept invitation", href: url("/accept-invite", { token: p.token }) }),
+  invitationAccepted: (to, p) => build(to, `${p.memberEmail} joined ${p.workspaceName}`, "A new member joined", [`${p.memberEmail} accepted the invitation to \u201C${p.workspaceName}\u201D as ${p.role}.`], { label: "View team", href: url("/team") }),
+  roleChanged: (to, p) => build(to, `Your role in ${p.workspaceName} changed`, "Your role changed", [`Your role in \u201C${p.workspaceName}\u201D is now ${p.role}. Your access updates immediately.`], { label: "Open workspace", href: url("/home") }),
+  memberSuspended: (to, p) => build(
+    to,
+    p.suspended ? `Your access to ${p.workspaceName} was suspended` : `Your access to ${p.workspaceName} was restored`,
+    p.suspended ? "Access suspended" : "Access restored",
+    [p.suspended ? `An administrator suspended your access to \u201C${p.workspaceName}\u201D. Contact them if you think this is a mistake.` : `Your access to \u201C${p.workspaceName}\u201D has been restored.`]
+  ),
+  removed: (to, p) => build(to, `You were removed from ${p.workspaceName}`, "Removed from workspace", [`You no longer have access to \u201C${p.workspaceName}\u201D. Contact the workspace owner if you think this is a mistake.`]),
+  ownershipTransferred: (to, p) => build(
+    to,
+    p.becameOwner ? `You are now the owner of ${p.workspaceName}` : `Ownership of ${p.workspaceName} was transferred`,
+    p.becameOwner ? "You are the new owner" : "Ownership transferred",
+    [p.becameOwner ? `You are now the owner of \u201C${p.workspaceName}\u201D. You can manage billing, the team and every setting.` : `${p.newOwner} is now the owner of \u201C${p.workspaceName}\u201D. Your role is admin.`],
+    { label: "Open workspace", href: url("/home") }
+  )
+};
+
+// src/infra/passwords.ts
+import { randomBytes as randomBytes2, scryptSync, timingSafeEqual as timingSafeEqual2 } from "crypto";
+var COMMON = /* @__PURE__ */ new Set(["password", "password1", "password123", "12345678", "123456789", "qwertyui", "qwerty123", "iloveyou", "admin123", "welcome1", "letmein1", "admin-change-me"]);
+function passwordProblem(plain, minLength, identity, strict = true) {
+  if (typeof plain !== "string" || !plain) return "password is required";
+  if (plain.length < minLength) return `password must be at least ${minLength} characters`;
+  if (plain.length > 128) return "password must be at most 128 characters";
+  const low = plain.toLowerCase();
+  if (!strict) return null;
+  if (COMMON.has(low)) return "password is too common";
+  const id = (identity || "").toLowerCase();
+  if (id && (low === id || low === id.split("@")[0])) return "password must not be your username or email";
+  if (!/[a-zA-Z]/.test(plain) || !/[0-9]/.test(plain)) return "password must contain at least one letter and one number";
+  return null;
+}
+
 // src/modules/iam/service.ts
+var SECRET_FIELDS = ["passwordHash", "verificationHash", "verificationExpiresAt", "passwordResetHash", "passwordResetExpiresAt", "passwordResetSentAt", "failedLogins", "lockedUntil"];
 var sanitize = (u) => {
-  const { passwordHash: _drop, ...rest } = u;
+  const rest = { ...u };
+  for (const k of SECRET_FIELDS) delete rest[k];
   return rest;
 };
 var DEFAULT_ROLES = {
   admin: ["*"],
-  developer: ["workflow:view", "workflow:edit", "workflow:run", "query:read", "task:manage"],
-  author: ["workflow:view", "workflow:edit"],
-  release: ["workflow:view", "workflow:deploy", "workflowInstance:admin"],
-  operator: ["workflow:view", "workflow:run", "query:read", "workflowInstance:manage", "analytics:query"],
-  worker: ["task:manage", "workflowInstance:manage"],
-  viewer: ["workflow:view", "query:read"]
+  developer: ["workflow:view", "workflow:edit", "workflow:run", "query:read", "task:manage", "team:read"],
+  author: ["workflow:view", "workflow:edit", "team:read"],
+  release: ["workflow:view", "workflow:deploy", "workflowInstance:admin", "team:read"],
+  operator: ["workflow:view", "workflow:run", "query:read", "workflowInstance:manage", "analytics:query", "team:read"],
+  worker: ["task:manage", "workflowInstance:manage", "team:read"],
+  viewer: ["workflow:view", "query:read", "team:read"]
 };
+var _dummy;
+var dummyHash = () => _dummy ??= hashPassword("not-a-real-password-0");
 var IamService = class {
   constructor(ctx) {
     this.ctx = ctx;
@@ -5849,10 +5837,44 @@ var IamService = class {
     }
     return { seededAdmin: false };
   }
-  async login(username, password) {
-    const u = (await this.users().query((x) => x.tenantId === this.ctx.tenantId && x.username === username))[0];
-    if (!u || !u.active || !await verifyPassword(password, u.passwordHash)) throw authRequired("invalid username or password");
-    const token = signToken({ sub: u.id, username: u.username, roles: u.roles, groups: u.groups });
+  /** Sign in by username OR email. Wrong password / unknown account answer identically (and spend the same
+   *  hashing time), repeated failures lock the account for a while, and an account whose mailbox is not yet
+   *  verified cannot sign in when verification is required. */
+  async login(identifier, password) {
+    if (typeof identifier !== "string" || typeof password !== "string") throw authRequired("invalid username or password");
+    const id = identifier.trim();
+    const low = id.toLowerCase();
+    const u = id ? (await this.users().query((x) => x.tenantId === this.ctx.tenantId && (x.username === id || x.username.toLowerCase() === low || (x.email || "").toLowerCase() === low)))[0] : void 0;
+    if (!u) {
+      await verifyPassword(password || "", await dummyHash());
+      throw authRequired("invalid username or password");
+    }
+    const now = this.ctx.clock();
+    if (u.lockedUntil && u.lockedUntil > now) {
+      const mins = Math.max(1, Math.ceil((Date.parse(u.lockedUntil) - Date.parse(now)) / 6e4));
+      throw rateLimited(`Too many failed sign-in attempts. Try again in ${mins} minute${mins === 1 ? "" : "s"}.`);
+    }
+    const ok2 = u.active && await verifyPassword(password || "", u.passwordHash);
+    if (!ok2) {
+      if (u.active) {
+        u.failedLogins = (u.failedLogins ?? 0) + 1;
+        if (u.failedLogins >= config.auth.maxFailedLogins) {
+          u.lockedUntil = new Date(Date.parse(now) + config.auth.lockoutMinutes * 6e4).toISOString();
+          u.failedLogins = 0;
+          await this.ctx.audit({ actor: u.username, kind: "user.locked", data: { userId: u.id } });
+          if (u.email) void sendMail(templates.accountLocked(u.email, config.auth.lockoutMinutes));
+        }
+        await this.users().put(u);
+      }
+      throw authRequired("invalid username or password");
+    }
+    if (config.auth.emailVerification && u.emailVerified === false) throw forbidden("Verify your email address before signing in");
+    if (u.failedLogins || u.lockedUntil) {
+      u.failedLogins = 0;
+      u.lockedUntil = null;
+      await this.users().put(u);
+    }
+    const token = signToken({ sub: u.id, username: u.username, roles: u.roles, groups: u.groups, email: u.email || (u.username.includes("@") ? u.username.toLowerCase() : void 0), emailVerified: u.emailVerified !== false, name: u.displayName });
     return { token, user: sanitize(u) };
   }
   /** Resolves a role-name list to its union of granted permission strings (missing/unknown role names
@@ -5877,7 +5899,10 @@ var IamService = class {
   async createUser(input, actor) {
     const username = (input.username || "").trim();
     if (!username) throw validation("username is required");
-    if (!input.password || input.password.length < 8) throw validation("password must be at least 8 characters");
+    {
+      const pp = passwordProblem(input.password, config.auth.passwordMinLength, username, false);
+      if (pp) throw validation(pp);
+    }
     const dupe = await this.users().query((u2) => u2.tenantId === this.ctx.tenantId && u2.username === username);
     if (dupe.length) throw conflict(`username "${username}" already exists`);
     const u = {
@@ -5907,10 +5932,15 @@ var IamService = class {
   async setPassword(id, newPassword, actor) {
     const u = await this.users().get(id);
     if (!u || u.tenantId !== this.ctx.tenantId) throw notFound("User");
-    if (!newPassword || newPassword.length < 8) throw validation("password must be at least 8 characters");
+    {
+      const pp = passwordProblem(newPassword, config.auth.passwordMinLength, u.username, false);
+      if (pp) throw validation(pp);
+    }
     u.passwordHash = await hashPassword(newPassword);
+    u.passwordChangedAt = this.ctx.clock();
     await this.users().put(u);
     await this.ctx.audit({ actor, kind: "user.password_changed", data: { userId: id } });
+    if (u.email) void sendMail(templates.passwordChanged(u.email, "admin"));
   }
   /** Self-service variant of setPassword — for a user changing their OWN password (no admin:iam
    *  needed), gated by knowing the current password rather than by permission. */
@@ -5918,10 +5948,15 @@ var IamService = class {
     const u = await this.users().get(id);
     if (!u || u.tenantId !== this.ctx.tenantId) throw notFound("User");
     if (!await verifyPassword(currentPassword || "", u.passwordHash)) throw forbidden("current password is incorrect");
-    if (!newPassword || newPassword.length < 8) throw validation("new password must be at least 8 characters");
+    {
+      const pp = passwordProblem(newPassword, config.auth.passwordMinLength, u.username);
+      if (pp) throw validation(pp);
+    }
     u.passwordHash = await hashPassword(newPassword);
+    u.passwordChangedAt = this.ctx.clock();
     await this.users().put(u);
     await this.ctx.audit({ actor: u.username, kind: "user.password_changed", data: { userId: id, self: true } });
+    if (u.email) void sendMail(templates.passwordChanged(u.email, "changed"));
   }
   // ---- groups ----
   async listGroups() {
@@ -6022,9 +6057,9 @@ var TimerService = class {
   repo() {
     return this.ctx.store.repo(Collections.timers);
   }
-  /** Fire every scheduled timer due at or before `nowIso`; returns the number fired. */
+  /** Fire every scheduled timer of THIS context's workspace due at or before `nowIso`; returns the number fired. */
   async tick(nowIso) {
-    const due = await this.repo().query((t) => t.status === "scheduled" && t.dueAt <= nowIso);
+    const due = await this.repo().query((t) => t.tenantId === this.ctx.tenantId && t.status === "scheduled" && t.dueAt <= nowIso);
     let fired = 0;
     for (const job of due) {
       if (job.kind !== "start") {
@@ -6821,6 +6856,16 @@ var paths = {
   "/query/analytics/summary": { get: { tags: ["Query & Analytics"], summary: "Dashboard summary counts", responses: ok(ref("Summary")) } },
   "/query/jobs": { get: { tags: ["Query & Analytics"], summary: "Timer jobs", parameters: [q("status", "scheduled|fired|cancelled")], responses: ok(listOf("TimerJob")) } },
   "/auth/login": { post: { tags: ["IAM"], security: [], summary: "Log in \u2014 issues a JWT (Bearer token) for every other endpoint", requestBody: jsonBody({ type: "object", properties: { username: { type: "string" }, password: { type: "string" } } }), responses: { ...ok({ type: "object", properties: { token: { type: "string" }, user: ref("User") } }), "401": { description: "Invalid credentials", content: { "application/json": { schema: ref("Error") } } } } } },
+  "/auth/config": { get: { tags: ["IAM"], security: [], summary: "Configuration-driven sign-in surface: which of SSO / local login / registration / forgot-password / email-verification are on, plus the password policy", responses: ok({ type: "object", properties: { appName: { type: "string" }, sso: { type: "boolean" }, localLogin: { type: "boolean" }, registration: { type: "boolean" }, forgotPassword: { type: "boolean" }, emailVerification: { type: "boolean" }, passwordMinLength: { type: "integer" }, ssoLoginUrl: { type: "string", nullable: true } } }) } },
+  "/auth/oidc/login": { get: { tags: ["IAM"], security: [], summary: "Start single sign-on \u2014 redirects the browser to the identity server (authorization code + PKCE)", parameters: [{ in: "query", name: "redirect", schema: { type: "string" }, description: "Same-origin path to return to after sign-in" }], responses: { "302": { description: "Redirect to the identity server; sets the signed HttpOnly oidc_tx login-transaction cookie" }, "404": { description: "Single sign-on is not configured", content: { "application/json": { schema: ref("Error") } } }, "503": { description: "Identity server unreachable", content: { "application/json": { schema: ref("Error") } } } } } },
+  "/auth/oidc/callback": { get: { tags: ["IAM"], security: [], summary: "OIDC redirect URI \u2014 exchanges the code and sends the browser to the app with the tokens in the URL fragment (never the query string)", parameters: [{ in: "query", name: "code", schema: { type: "string" } }, { in: "query", name: "state", schema: { type: "string" } }, { in: "query", name: "error", schema: { type: "string" } }], responses: { "302": { description: "Redirect to <app>/auth/callback#access_token=\u2026&id_token=\u2026&expires_in=\u2026 (or #error=\u2026)" } } } },
+  "/auth/oidc/logout": { get: { tags: ["IAM"], security: [], summary: "Sign out \u2014 ends the identity-server session and returns to the app", parameters: [{ in: "query", name: "id_token_hint", schema: { type: "string" } }], responses: { "302": { description: "Redirect to the identity server\u2019s end-session endpoint, or the app when it has none" } } } },
+  "/auth/register": { post: { tags: ["IAM"], security: [], summary: "Create a built-in account (only when AUTH_REGISTRATION is on and local login is enabled)", requestBody: jsonBody({ type: "object", properties: { email: { type: "string" }, password: { type: "string" }, name: { type: "string" } } }), responses: { "201": { description: "Created; verificationRequired tells the UI whether to ask the user to confirm their email" }, "404": { description: "Registration is disabled", content: { "application/json": { schema: ref("Error") } } }, "409": { description: "Email already registered", content: { "application/json": { schema: ref("Error") } } }, "422": { description: "Invalid email or weak password", content: { "application/json": { schema: ref("Error") } } } } } },
+  "/auth/verify-email": { post: { tags: ["IAM"], security: [], summary: "Confirm an email address with the emailed single-use token", requestBody: jsonBody({ type: "object", properties: { token: { type: "string" } } }), responses: { "204": { description: "Verified" }, "404": { description: "Unknown or expired link", content: { "application/json": { schema: ref("Error") } } } } } },
+  "/auth/resend-verification": { post: { tags: ["IAM"], security: [], summary: "Re-send the verification email (always 202 \u2014 never reveals whether the address exists)", requestBody: jsonBody({ type: "object", properties: { email: { type: "string" } } }), responses: { "202": { description: "Accepted" } } } },
+  "/auth/forgot-password": { post: { tags: ["IAM"], security: [], summary: "Request a password-reset email (always 202 \u2014 never reveals whether the address exists)", requestBody: jsonBody({ type: "object", properties: { email: { type: "string" } } }), responses: { "202": { description: "Accepted" }, "404": { description: "Disabled", content: { "application/json": { schema: ref("Error") } } } } } },
+  "/auth/reset-password/check": { post: { tags: ["IAM"], security: [], summary: "Is this reset link still valid?", requestBody: jsonBody({ type: "object", properties: { token: { type: "string" } } }), responses: ok({ type: "object", properties: { valid: { type: "boolean" } } }) } },
+  "/auth/reset-password": { post: { tags: ["IAM"], security: [], summary: "Set a new password with the emailed single-use token (1 h, one use); also unlocks the account", requestBody: jsonBody({ type: "object", properties: { token: { type: "string" }, password: { type: "string" } } }), responses: { "204": { description: "Password changed; existing sessions are revoked" }, "404": { description: "Unknown or expired link", content: { "application/json": { schema: ref("Error") } } }, "422": { description: "Weak or reused password", content: { "application/json": { schema: ref("Error") } } } } } },
   "/auth/me": { get: { tags: ["IAM"], summary: "The caller\u2019s own identity + resolved permissions (from their current roles)", responses: ok({ type: "object", properties: { user: { type: "object", properties: { id: { type: "string" }, username: { type: "string" }, roles: { type: "array", items: { type: "string" } }, groups: { type: "array", items: { type: "string" } } } }, permissions: { type: "array", items: { type: "string" } } } }) } },
   "/auth/me/password": { post: { tags: ["IAM"], summary: "Change your own password (requires the current one)", requestBody: jsonBody({ type: "object", properties: { currentPassword: { type: "string" }, newPassword: { type: "string" } } }), responses: { "204": { description: "Changed" }, "403": { description: "Current password incorrect", content: { "application/json": { schema: ref("Error") } } } } } },
   "/users": {
@@ -6851,7 +6896,7 @@ var openapiSpec = {
   info: {
     title: "jBPM-style BPM Engine API",
     version: "0.1.0",
-    description: "Node-native BPM engine REST API \u2014 authoring, versioning, deployment lifecycle, runtime process instances, human tasks, KIE-Server-style query & analytics, and IAM (users/groups/roles). `POST /auth/login` issues a JWT; send it as `Authorization: Bearer <token>` on every other request. Each route requires a permission granted by one of the caller\u2019s roles \u2014 see `DEFAULT_ROLES` in modules/iam/service.ts."
+    description: "Node-native BPM engine REST API \u2014 authoring, versioning, deployment lifecycle, runtime process instances, human tasks, KIE-Server-style query & analytics, and IAM (users/groups/roles). Sign in with single sign-on (`GET /auth/oidc/login`, Identity Server, authorization code + PKCE) or, where enabled, `POST /auth/login`; send the resulting token as `Authorization: Bearer <token>` on every other request, plus `x-tenant-id` to pick the workspace (membership is enforced). Each route requires a permission granted by one of the caller\u2019s roles \u2014 see `DEFAULT_ROLES` in modules/iam/service.ts."
   },
   servers: [{ url: "/api", description: "This server" }],
   tags: [
@@ -6904,19 +6949,99 @@ import { Router } from "express";
 var ctxOf = (req2) => req2.ctx;
 var actorOf = (req2) => req2.actor;
 
+// src/modules/tenants/identity.ts
+var lower = (s) => (s || "").trim().toLowerCase();
+function isPlaceholderUserId(m) {
+  return !m.userId || m.userId.startsWith("pending:") || !!m.email && lower(m.userId) === lower(m.email);
+}
+function memberMatches(m, id) {
+  if (m.userId === id.sub) return true;
+  if (id.source === "oidc") return false;
+  if (isPlaceholderUserId(m) && id.emailVerified !== true) return false;
+  const names = [id.username, id.sub, id.email].map(lower).filter(Boolean);
+  return names.includes(lower(m.userId)) || !!m.email && names.includes(lower(m.email));
+}
+var recentlyClaimed = /* @__PURE__ */ new Map();
+var CLAIM_INTERVAL_MS = 3e4;
+async function claimMemberships(store2, id) {
+  if (id.source !== "oidc" || !id.email || id.emailVerified !== true) return;
+  const now = Date.now();
+  if ((recentlyClaimed.get(id.sub) ?? 0) > now - CLAIM_INTERVAL_MS) return;
+  recentlyClaimed.set(id.sub, now);
+  if (recentlyClaimed.size > 5e3) recentlyClaimed.clear();
+  const repo = store2.repo(Collections.tenantMembers);
+  const email = lower(id.email);
+  const claimable = await repo.query((m) => lower(m.email) === email && m.status !== "suspended" && m.userId !== id.sub && isPlaceholderUserId(m) && !(m.invitationExpiresAt && m.invitationExpiresAt < (/* @__PURE__ */ new Date()).toISOString()));
+  for (const m of claimable) {
+    m.userId = id.sub;
+    if (m.status === "invited") {
+      m.status = "active";
+      m.invitationTokenHash = null;
+      m.invitationExpiresAt = null;
+    }
+    m.lastActiveAt = (/* @__PURE__ */ new Date()).toISOString();
+    await repo.put(m);
+    logger.info("membership bound to verified identity", { tenantId: m.tenantId, memberId: m.id, userId: id.sub });
+  }
+}
+async function membershipsOf(store2, id) {
+  await claimMemberships(store2, id);
+  return store2.repo(Collections.tenantMembers).query((m) => memberMatches(m, id));
+}
+async function isPlatformAdmin(_store, id, _memberships) {
+  return id.source === "oidc" && id.emailVerified === true && lower(id.email) === config.platformAdminEmail;
+}
+async function ensurePlatformAdmin(store2, now, newId2) {
+  const email = config.platformAdminEmail;
+  const repo = store2.repo(Collections.tenantMembers);
+  const existing = await repo.query((m) => m.tenantId === config.defaultTenant && lower(m.email) === email);
+  if (existing.length) {
+    for (const m of existing) if (m.role !== "system_admin" || m.status !== "active") {
+      m.role = "system_admin";
+      m.status = "active";
+      m.permissions = ["*"];
+      await repo.put(m);
+    }
+    return;
+  }
+  await repo.put({
+    id: newId2(),
+    tenantId: config.defaultTenant,
+    userId: `pending:${email}`,
+    email,
+    role: "system_admin",
+    status: "active",
+    displayName: "Platform Administrator",
+    permissions: ["*"],
+    joinedAt: now
+  });
+  logger.info("platform administrator bootstrapped", { email });
+}
+
 // src/http/auth-middleware.ts
-function requireAuth(req2, _res, next) {
+async function requireAuth(req2, _res, next) {
   const header = req2.header("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : void 0;
   if (!token) return next(authRequired());
   try {
-    const claims = verifyToken(token);
+    const claims = await verifyBearer(token);
+    if (claims.source === "local") {
+      const row = await req2.ctx.store.repo(Collections.users).get(claims.sub);
+      const iat = claims.iat;
+      if (row && (!row.active || row.passwordChangedAt && iat !== void 0 && iat * 1e3 < Date.parse(row.passwordChangedAt) - 1e3)) throw new Error("session revoked");
+    }
     req2.user = claims;
-    req2.actor = claims.username;
+    req2.actor = claims.email || claims.username;
     next();
   } catch {
     next(authRequired("invalid or expired token"));
   }
+}
+async function permissionsForMemberRole(ctx, tenantId, role) {
+  if (role === "owner" || role === "admin" || role === "system_admin") return ["*"];
+  const rows = await ctx.store.repo(Collections.roles).query((r) => r.tenantId === tenantId && r.name === role);
+  if (rows.length) return rows.flatMap((r) => r.permissions);
+  return DEFAULT_ROLES[role] ?? [];
 }
 function requirePermission(action) {
   return async (req2, _res, next) => {
@@ -6924,27 +7049,20 @@ function requirePermission(action) {
       const user = req2.user;
       if (!user) throw authRequired();
       const ctx = req2.ctx;
-      if (user.username === "admin" || Array.isArray(user.roles) && user.roles.includes("admin")) {
-        return next();
+      let access = req2.access;
+      if (!access) {
+        await claimMemberships(ctx.store, user);
+        const members = await ctx.store.repo(Collections.tenantMembers).query((m) => m.tenantId === ctx.tenantId && m.status === "active" && memberMatches(m, user));
+        access = { platformAdmin: await isPlatformAdmin(ctx.store, user), member: members[0] };
       }
-      const member = (await ctx.store.repo(Collections.tenantMembers).query((m) => {
-        if (m.tenantId !== ctx.tenantId) return false;
-        if (m.status !== "active") return false;
-        if (user.sub && m.userId === user.sub) return true;
-        if (user.username && m.email && m.email.toLowerCase() === user.username.toLowerCase()) return true;
-        return false;
-      }))[0];
+      if (access.platformAdmin) return next();
+      const member = access.member;
       if (member) {
-        if (member.role === "owner" || member.role === "admin" || member.role === "system_admin") {
-          return next();
-        }
-        if (member.permissions && permissionGrants(member.permissions, action)) {
-          return next();
-        }
+        const granted = member.permissions ?? await permissionsForMemberRole(ctx, ctx.tenantId, member.role);
+        if (permissionGrants(granted, action)) return next();
       }
-      const roles = await ctx.store.repo(Collections.roles).query((r) => r.tenantId === ctx.tenantId && user.roles.includes(r.name));
-      const perms = roles.flatMap((r) => r.permissions);
-      if (!permissionGrants(perms, action)) throw forbidden(`missing permission: ${action}`);
+      const roles = await ctx.store.repo(Collections.roles).query((r) => r.tenantId === ctx.tenantId && (user.roles || []).includes(r.name));
+      if (!permissionGrants(roles.flatMap((r) => r.permissions), action)) throw forbidden(`missing permission: ${action}`);
       next();
     } catch (e) {
       next(e);
@@ -6956,49 +7074,27 @@ function requireWorkspaceAccess(req2, _res, next) {
     try {
       const user = req2.user;
       if (!user) throw authRequired();
-      const requestedTenantId = req2.headers["x-tenant-id"]?.trim() || req2.ctx?.tenantId || "default";
       const ctx = req2.ctx;
-      const isSystemAdmin = user.username === "admin" || Array.isArray(user.roles) && user.roles.includes("admin");
+      const requestedTenantId = req2.headers["x-tenant-id"]?.trim() || ctx?.tenantId || "default";
+      const memberships = (await membershipsOf(ctx.store, user)).filter((m) => m.status === "active");
+      const platformAdmin = await isPlatformAdmin(ctx.store, user, memberships);
       if (requestedTenantId === "all" || requestedTenantId === "*") {
-        if (!isSystemAdmin) {
-          throw forbidden("Platform system administrator access required for platform-wide scope.");
-        }
+        if (!platformAdmin) throw forbidden("Platform system administrator access required for platform-wide scope.");
         req2.ctx = makeContext({ store: ctx.store, tenantId: "all" });
+        req2.access = { platformAdmin };
         return next();
       }
-      const tenants = await ctx.store.repo(Collections.tenants).query((t) => t.id === requestedTenantId);
-      const tenant = tenants[0];
-      if (!tenant) {
-        throw forbidden(`Workspace "${requestedTenantId}" not found or access denied`);
+      const tenant = (await ctx.store.repo(Collections.tenants).query((t) => t.id === requestedTenantId))[0];
+      if (!tenant || tenant.status === "deleted") throw forbidden(`Workspace "${requestedTenantId}" not found or access denied`);
+      if (tenant.status === "suspended") throw forbidden("This workspace has been suspended. Contact support.");
+      if (tenant.status === "pending_verification") throw forbidden("This workspace is pending activation.");
+      const member = memberships.find((m) => m.tenantId === requestedTenantId);
+      if (!platformAdmin && !member) {
+        const u = user.source !== "oidc" && user.sub ? await ctx.store.repo(Collections.users).get(user.sub) : void 0;
+        if (!(u && u.tenantId === requestedTenantId && u.active && u.roles.length > 0)) throw forbidden("You are not a member of the requested workspace.");
       }
-      if (tenant.status === "suspended") {
-        throw forbidden("This workspace has been suspended. Contact support.");
-      }
-      if (tenant.status === "pending_verification") {
-        throw forbidden("This workspace is pending activation.");
-      }
-      if (!isSystemAdmin) {
-        const members = await ctx.store.repo(Collections.tenantMembers).query((m) => {
-          if (m.tenantId !== requestedTenantId) return false;
-          if (m.status !== "active") return false;
-          if (user.sub && m.userId === user.sub) return true;
-          if (user.username && m.email && m.email.toLowerCase() === user.username.toLowerCase()) return true;
-          return false;
-        });
-        let hasAccess = members.length > 0;
-        if (!hasAccess && user.sub) {
-          const u = await ctx.store.repo(Collections.users).get(user.sub);
-          if (u && u.tenantId === requestedTenantId && u.active) {
-            hasAccess = true;
-          }
-        }
-        if (!hasAccess) {
-          throw forbidden("You are not a member of the requested workspace.");
-        }
-      }
-      if (ctx.tenantId !== requestedTenantId) {
-        req2.ctx = makeContext({ store: ctx.store, tenantId: requestedTenantId });
-      }
+      if (ctx.tenantId !== requestedTenantId) req2.ctx = makeContext({ store: ctx.store, tenantId: requestedTenantId });
+      req2.access = { platformAdmin, member };
       next();
     } catch (err) {
       next(err);
@@ -7009,14 +7105,17 @@ function requireWorkspaceAccess(req2, _res, next) {
 // src/infra/ws-hub.ts
 var WsHub = class {
   subs = /* @__PURE__ */ new Set();
-  add(ws) {
+  /** `canSubscribe` (optional) vetoes topics per socket — see ws-auth.ts's tenant scoping. */
+  add(ws, canSubscribe2) {
     const sub = { ws, topics: /* @__PURE__ */ new Set() };
     this.subs.add(sub);
     ws.on("close", () => this.subs.delete(sub));
-    ws.on("message", (raw) => {
+    ws.on("message", async (raw) => {
       try {
         const msg = JSON.parse(String(raw));
-        if (msg.op === "sub" && Array.isArray(msg.topics)) for (const t of msg.topics) sub.topics.add(t);
+        if (msg.op === "sub" && Array.isArray(msg.topics)) {
+          for (const t of msg.topics) if (typeof t === "string" && (!canSubscribe2 || await canSubscribe2(t))) sub.topics.add(t);
+        }
         if (msg.op === "unsub" && Array.isArray(msg.topics)) for (const t of msg.topics) sub.topics.delete(t);
       } catch {
       }
@@ -7645,7 +7744,10 @@ function buildWorkflowInstanceRoutes() {
     res.status(204).end();
   }));
   r.get("/workflow-instances/:id/audits", perm("workflowInstance:manage"), asyncHandler(async (req2, res) => res.json({ items: await insts(req2).listAudits(req2.params.id) })));
-  r.post("/workflow-instances/:id/audits", perm("workflowInstance:manage"), asyncHandler(async (req2, res) => res.status(201).json(await insts(req2).addAudit(req2.params.id, actorOf(req2), req2.body?.kind || "workflowInstance.note", req2.body?.data))));
+  r.post("/workflow-instances/:id/audits", perm("workflowInstance:manage"), asyncHandler(async (req2, res) => {
+    await insts(req2).get(req2.params.id);
+    res.status(201).json(await insts(req2).addAudit(req2.params.id, actorOf(req2), req2.body?.kind || "workflowInstance.note", req2.body?.data));
+  }));
   r.delete("/workflow-instances/:id/audits/:auditId", perm("workflowInstance:manage"), asyncHandler(async (req2, res) => {
     await insts(req2).deleteAudit(req2.params.id, req2.params.auditId, actorOf(req2));
     res.status(204).end();
@@ -7660,6 +7762,258 @@ function buildWorkflowInstanceRoutes() {
   r.post("/analytics/queries/:id/run", perm("analytics:query"), asyncHandler(async (req2, res) => res.json(await qe(req2).runSaved(req2.params.id, actorOf(req2)))));
   r.delete("/analytics/queries/:id", perm("analytics:query"), asyncHandler(async (req2, res) => {
     await qe(req2).delete(req2.params.id, actorOf(req2));
+    res.status(204).end();
+  }));
+  return r;
+}
+
+// src/http/team-routes.ts
+import { Router as Router2 } from "express";
+
+// src/modules/tenants/team.ts
+import crypto2 from "crypto";
+var INVITE_TTL_MS = 7 * 24 * 3600 * 1e3;
+var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+var lower2 = (s) => (typeof s === "string" ? s : "").trim().toLowerCase();
+var hash = (token) => crypto2.createHash("sha256").update(token).digest("hex");
+var pub = (m) => ({
+  id: m.id,
+  email: m.email,
+  displayName: m.displayName,
+  role: m.role,
+  status: m.status,
+  userId: isPlaceholderUserId(m) ? void 0 : m.userId,
+  joinedAt: m.joinedAt,
+  lastActiveAt: m.lastActiveAt,
+  invitedBy: m.invitedBy,
+  invitationExpiresAt: m.invitationExpiresAt
+});
+var TeamService = class {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+  ctx;
+  members() {
+    return this.ctx.store.repo(Collections.tenantMembers);
+  }
+  tenants() {
+    return this.ctx.store.repo(Collections.tenants);
+  }
+  get tid() {
+    return this.ctx.tenantId;
+  }
+  async wsName() {
+    return (await this.tenants().query((t) => t.id === this.tid))[0]?.name ?? "the workspace";
+  }
+  /** owner seat, or the platform admin acting on the workspace */
+  isOwner(a) {
+    return a.member?.role === "owner" || a.platformAdmin;
+  }
+  isAdminish(a) {
+    return this.isOwner(a) || a.member?.role === "admin";
+  }
+  /** Same rule as payment-ms's TenantMember.canManage: nobody manages themselves; nobody but the owner's transfer
+   *  touches the owner; the platform-admin seat is not a workspace matter; admins can't manage other admins. */
+  canManage(a, target) {
+    if (a.member && a.member.id === target.id) return false;
+    if (target.role === "owner") return false;
+    if (target.role === "system_admin") return a.platformAdmin;
+    if (target.role === "admin") return this.isOwner(a);
+    return this.isAdminish(a);
+  }
+  /** Roles the caller may hand out: every built-in + this workspace's custom roles, never owner/system_admin, and
+   *  an admin cannot mint another admin. */
+  async assignableRoles(a) {
+    const custom = (await this.ctx.store.repo(Collections.roles).query((r) => r.tenantId === this.tid)).map((r) => r.name);
+    const all = /* @__PURE__ */ new Set([...Object.keys(DEFAULT_ROLES), ...custom]);
+    all.delete("owner");
+    all.delete("system_admin");
+    if (!this.isOwner(a)) all.delete("admin");
+    return [...all].sort();
+  }
+  async roles(a) {
+    return { roles: ["owner", ...(await this.assignableRoles(a)).filter((r) => r !== "owner")], assignableRoles: await this.assignableRoles(a), permissions: DEFAULT_ROLES };
+  }
+  async list(status) {
+    return (await this.members().query((m) => m.tenantId === this.tid && (!status || m.status === status))).sort((x, y) => x.joinedAt.localeCompare(y.joinedAt)).map(pub);
+  }
+  async get(id) {
+    const m = await this.members().get(id);
+    if (!m || m.tenantId !== this.tid) throw notFound("Member");
+    return m;
+  }
+  async assertRole(a, role) {
+    if (typeof role !== "string" || !role) throw validation("role is required");
+    if (role === "owner") throw validation("There is exactly one owner \u2014 use ownership transfer");
+    if (role === "system_admin") throw validation("system_admin is not an assignable workspace role");
+    if (!(await this.assignableRoles(a)).includes(role)) throw forbidden(`You cannot assign the role "${role}"`);
+    return role;
+  }
+  // ---- invitations ----
+  async invite(a, input) {
+    const email = lower2(input.email);
+    if (!EMAIL.test(email)) throw validation("A valid email address is required");
+    const role = await this.assertRole(a, input.role);
+    if (email === config.platformAdminEmail) throw validation("That address is the platform administrator and needs no invitation");
+    const existing = (await this.members().query((m) => m.tenantId === this.tid && lower2(m.email) === email))[0];
+    if (existing && existing.status === "active") throw conflict(`${email} is already a member of this workspace`);
+    if (existing && existing.status === "suspended") throw conflict(`${email}'s membership is suspended \u2014 reinstate it instead of inviting again`);
+    const token = crypto2.randomBytes(32).toString("base64url");
+    const expiresAt = new Date(Date.parse(this.ctx.clock()) + INVITE_TTL_MS).toISOString();
+    const member = existing ?? {
+      id: this.ctx.newId(),
+      tenantId: this.tid,
+      userId: `pending:${email}`,
+      email,
+      role,
+      status: "invited",
+      displayName: (typeof input.displayName === "string" ? input.displayName.trim() : "") || email.split("@")[0],
+      joinedAt: this.ctx.clock()
+    };
+    if (existing && !this.canManage(a, existing)) throw forbidden("You cannot re-invite this member");
+    Object.assign(member, { role, status: "invited", invitedBy: a.member?.email || a.sub, invitationTokenHash: hash(token), invitationExpiresAt: expiresAt });
+    await this.members().put(member);
+    await this.ctx.audit({ actor: a.member?.email || a.sub, kind: "team.invited", data: { email, role } });
+    const inviterName = a.member?.displayName || a.member?.email || "A workspace admin";
+    const emailed = await sendMail(templates.invitation(email, { workspaceName: await this.wsName(), inviterName, role, token, expiresAt }));
+    return { member: pub(member), emailed, expiresAt, ...mailEnabled() ? {} : { invitationToken: token, invitationPath: `/accept-invite?token=${token}` } };
+  }
+  /** Public lookup so the accept page can say what the invitation is for. Token only; never lists the roster. */
+  static async lookup(ctx, token) {
+    const h = hash(token || "");
+    const m = (await ctx.store.repo(Collections.tenantMembers).query((x) => x.status === "invited" && x.invitationTokenHash === h))[0];
+    if (!m || !m.invitationExpiresAt || m.invitationExpiresAt < ctx.clock()) return null;
+    const t = (await ctx.store.repo(Collections.tenants).query((x) => x.id === m.tenantId))[0];
+    if (!t || t.status !== "active") return null;
+    return { workspace: { id: t.id, name: t.name }, email: m.email || "", role: m.role, expiresAt: m.invitationExpiresAt };
+  }
+  /** The invitee, signed in, presents the token. Their VERIFIED email must be the invited one; the seat is bound to their `sub`. */
+  static async accept(ctx, token, who) {
+    const repo = ctx.store.repo(Collections.tenantMembers);
+    const h = hash(token || "");
+    const m = (await repo.query((x) => x.status === "invited" && x.invitationTokenHash === h))[0];
+    if (!m || !m.invitationExpiresAt || m.invitationExpiresAt < ctx.clock()) throw notFound("Invitation");
+    const verified = who.emailVerified === true;
+    const mail = lower2(who.email || who.username);
+    if (!verified || mail !== lower2(m.email)) throw forbidden("This invitation was sent to a different email address");
+    const t = (await ctx.store.repo(Collections.tenants).query((x) => x.id === m.tenantId))[0];
+    if (!t || t.status !== "active") throw forbidden("This workspace is not active");
+    m.userId = who.sub;
+    m.status = "active";
+    m.invitationTokenHash = null;
+    m.invitationExpiresAt = null;
+    m.joinedAt = ctx.clock();
+    m.lastActiveAt = ctx.clock();
+    if (who.name && (!m.displayName || m.displayName === m.email?.split("@")[0])) m.displayName = who.name;
+    await repo.put(m);
+    if (m.invitedBy && m.invitedBy.includes("@")) void sendMail(templates.invitationAccepted(m.invitedBy, { workspaceName: t.name, memberEmail: m.email || "", role: m.role }));
+    return m;
+  }
+  async resend(a, id) {
+    const m = await this.get(id);
+    if (m.status !== "invited") throw conflict("Only a pending invitation can be resent");
+    return this.invite(a, { email: m.email, role: m.role });
+  }
+  async cancelInvitation(a, id) {
+    const m = await this.get(id);
+    if (m.status !== "invited") throw conflict("That member has no pending invitation");
+    if (!this.canManage(a, m)) throw forbidden("You cannot manage this member");
+    await this.members().delete(m.id);
+    await this.ctx.audit({ actor: a.member?.email || a.sub, kind: "team.invitation_cancelled", data: { email: m.email } });
+  }
+  // ---- members ----
+  async update(a, id, input) {
+    const m = await this.get(id);
+    if (!this.canManage(a, m)) throw forbidden("You cannot manage this member");
+    const before = { role: m.role, status: m.status };
+    if (input.role !== void 0) {
+      m.role = await this.assertRole(a, input.role);
+      m.permissions = void 0;
+    }
+    if (typeof input.displayName === "string") m.displayName = input.displayName.trim().slice(0, 100) || m.displayName;
+    if (input.status !== void 0) {
+      if (!["active", "suspended"].includes(input.status) || m.status === "invited") throw validation("status must be active or suspended (an invitation cannot be toggled)");
+      m.status = input.status;
+    }
+    await this.members().put(m);
+    await this.ctx.audit({ actor: a.member?.email || a.sub, kind: "team.member_updated", data: { memberId: id, role: m.role, status: m.status } });
+    if (m.email) {
+      const ws = await this.wsName();
+      if (input.role !== void 0 && input.role !== before.role) void sendMail(templates.roleChanged(m.email, { workspaceName: ws, role: m.role }));
+      if (input.status !== void 0 && input.status !== before.status) void sendMail(templates.memberSuspended(m.email, { workspaceName: ws, suspended: m.status === "suspended" }));
+    }
+    return pub(m);
+  }
+  async remove(a, id) {
+    const m = await this.get(id);
+    if (a.member?.id === m.id) throw forbidden('Use "leave workspace" to remove yourself');
+    if (!this.canManage(a, m)) throw forbidden("You cannot manage this member");
+    await this.members().delete(m.id);
+    await this.ctx.audit({ actor: a.member?.email || a.sub, kind: "team.member_removed", data: { email: m.email, role: m.role } });
+    if (m.email) void sendMail(templates.removed(m.email, { workspaceName: await this.wsName() }));
+  }
+  async leave(a) {
+    const m = a.member;
+    if (!m) throw forbidden("You are not a member of this workspace");
+    if (m.role === "owner") throw forbidden("The owner cannot leave \u2014 transfer ownership first");
+    if (m.role === "system_admin") throw forbidden("The platform administrator seat cannot be left");
+    await this.members().delete(m.id);
+    await this.ctx.audit({ actor: m.email || a.sub, kind: "team.member_left", data: { role: m.role } });
+  }
+  /** Owner → another ACTIVE member. The previous owner becomes admin; the workspace's ownerEmail follows. */
+  async transferOwnership(a, targetId) {
+    if (!a.member || a.member.role !== "owner") throw forbidden("Only the workspace owner can transfer ownership");
+    const target = await this.get(targetId);
+    if (target.id === a.member.id) throw validation("You already own this workspace");
+    if (target.status !== "active") throw validation("Ownership can only be transferred to an active member");
+    if (target.role === "system_admin") throw validation("The platform administrator cannot own a workspace");
+    const prev = a.member;
+    target.role = "owner";
+    target.permissions = ["*"];
+    prev.role = "admin";
+    await this.members().put(target);
+    await this.members().put(prev);
+    const t = (await this.tenants().query((x) => x.id === this.tid))[0];
+    if (t) {
+      t.ownerEmail = target.email || t.ownerEmail;
+      t.ownerName = target.displayName || t.ownerName;
+      t.updatedAt = this.ctx.clock();
+      await this.tenants().put(t);
+    }
+    await this.ctx.audit({ actor: prev.email || a.sub, kind: "team.ownership_transferred", data: { to: target.email } });
+    const ws = await this.wsName();
+    if (target.email) void sendMail(templates.ownershipTransferred(target.email, { workspaceName: ws, newOwner: target.email, becameOwner: true }));
+    if (prev.email) void sendMail(templates.ownershipTransferred(prev.email, { workspaceName: ws, newOwner: target.email || "a member", becameOwner: false }));
+    return { owner: pub(target), previousOwner: pub(prev) };
+  }
+};
+
+// src/http/team-routes.ts
+var perm2 = requirePermission;
+var actorOf2 = (req2) => {
+  const access = req2.access;
+  return { member: access?.member, platformAdmin: !!access?.platformAdmin, sub: req2.user.sub };
+};
+var svc = (req2) => new TeamService(ctxOf(req2));
+function buildTeamRoutes() {
+  const r = Router2();
+  r.get("/team/roles", perm2("team:read"), asyncHandler(async (req2, res) => res.json({ success: true, data: await svc(req2).roles(actorOf2(req2)) })));
+  r.get("/team/members", perm2("team:read"), asyncHandler(async (req2, res) => res.json({ success: true, data: await svc(req2).list() })));
+  r.get("/team/members/pending", perm2("team:manage"), asyncHandler(async (req2, res) => res.json({ success: true, data: await svc(req2).list("invited") })));
+  r.post("/team/members/invite", perm2("team:invite"), asyncHandler(async (req2, res) => res.status(201).json({ success: true, data: await svc(req2).invite(actorOf2(req2), req2.body || {}) })));
+  r.put("/team/members/:id", perm2("team:manage"), asyncHandler(async (req2, res) => res.json({ success: true, data: await svc(req2).update(actorOf2(req2), req2.params.id, req2.body || {}) })));
+  r.delete("/team/members/:id", perm2("team:manage"), asyncHandler(async (req2, res) => {
+    await svc(req2).remove(actorOf2(req2), req2.params.id);
+    res.status(204).end();
+  }));
+  r.delete("/team/members/:id/invitation", perm2("team:manage"), asyncHandler(async (req2, res) => {
+    await svc(req2).cancelInvitation(actorOf2(req2), req2.params.id);
+    res.status(204).end();
+  }));
+  r.post("/team/members/:id/resend", perm2("team:invite"), asyncHandler(async (req2, res) => res.json({ success: true, data: await svc(req2).resend(actorOf2(req2), req2.params.id) })));
+  r.post("/team/ownership/transfer", perm2("team:read"), asyncHandler(async (req2, res) => res.json({ success: true, data: await svc(req2).transferOwnership(actorOf2(req2), String(req2.body?.memberId || "")) })));
+  r.post("/team/leave", perm2("team:read"), asyncHandler(async (req2, res) => {
+    await svc(req2).leave(actorOf2(req2));
     res.status(204).end();
   }));
   return r;
@@ -7689,14 +8043,20 @@ function rateLimit(opts) {
 
 // src/http/routes.ts
 var ctxOf2 = (req2) => req2.ctx;
-var actorOf2 = (req2) => req2.actor;
+var actorOf3 = (req2) => req2.actor;
 var emit3 = hub.engineEmit;
-var perm2 = requirePermission;
+var perm3 = requirePermission;
+var taskSvc = (req2, e) => {
+  const svc2 = new TaskService(ctxOf2(req2), e);
+  const a = req2.access;
+  svc2.adminOverride = !!a && (!!a.platformAdmin || a.member?.role === "owner" || a.member?.role === "admin");
+  return svc2;
+};
 var startLimiter = rateLimit({ windowMs: 6e4, max: 120 });
 var deployLimiter = rateLimit({ windowMs: 6e4, max: 20 });
 var importLimiter = rateLimit({ windowMs: 6e4, max: 20 });
 function buildRoutes() {
-  const r = Router2();
+  const r = Router3();
   r.get("/openapi.json", (_req, res) => res.json(openapiSpec));
   r.get("/docs", (_req, res) => res.type("html").send(swaggerHtml));
   r.get("/catalog/nodes", (_req, res) => res.json({
@@ -7717,7 +8077,7 @@ function buildRoutes() {
     if (!def28) return res.status(404).json({ error: { code: "NOT_FOUND", message: "node type not found" } });
     res.json(def28);
   });
-  r.get("/catalog/processes", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/catalog/processes", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const ctx = ctxOf2(req2);
     const deployments = await new DeploymentService(ctx).list({ status: "active" });
     const wfNames = /* @__PURE__ */ new Map();
@@ -7735,135 +8095,135 @@ function buildRoutes() {
     res.json({ items });
   }));
   r.post("/validate", asyncHandler(async (req2, res) => res.json(await new ValidationService().validate(req2.body?.engine?.processes?.[0] || req2.body?.process || req2.body))));
-  r.post("/import/jbpm", perm2("workflow:edit"), importLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new ImportService(ctxOf2(req2)).importKjar(req2.body?.files, req2.body?.name, actorOf2(req2)))));
-  r.post("/import/jbpm/deploy", perm2("workflow:deploy"), importLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new ImportService(ctxOf2(req2)).importAndDeploy(
+  r.post("/import/jbpm", perm3("workflow:edit"), importLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new ImportService(ctxOf2(req2)).importKjar(req2.body?.files, req2.body?.name, actorOf3(req2)))));
+  r.post("/import/jbpm/deploy", perm3("workflow:deploy"), importLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new ImportService(ctxOf2(req2)).importAndDeploy(
     req2.body?.files,
     req2.body?.name,
-    actorOf2(req2),
+    actorOf3(req2),
     { environment: req2.body?.environment || "prod", tags: req2.body?.tags, env: req2.body?.env }
   ))));
-  r.get("/folders", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new FolderService(ctxOf2(req2)).list() })));
-  r.post("/folders", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new FolderService(ctxOf2(req2)).create(req2.body, actorOf2(req2)))));
-  r.get("/folders/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new FolderService(ctxOf2(req2)).get(req2.params.id))));
-  r.patch("/folders/:id", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new FolderService(ctxOf2(req2)).update(req2.params.id, req2.body, actorOf2(req2)))));
-  r.delete("/folders/:id", perm2("workflow:edit"), asyncHandler(async (req2, res) => {
+  r.get("/folders", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new FolderService(ctxOf2(req2)).list() })));
+  r.post("/folders", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new FolderService(ctxOf2(req2)).create(req2.body, actorOf3(req2)))));
+  r.get("/folders/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new FolderService(ctxOf2(req2)).get(req2.params.id))));
+  r.patch("/folders/:id", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new FolderService(ctxOf2(req2)).update(req2.params.id, req2.body, actorOf3(req2)))));
+  r.delete("/folders/:id", perm3("workflow:edit"), asyncHandler(async (req2, res) => {
     await new FolderService(ctxOf2(req2)).delete(req2.params.id);
     res.status(204).end();
   }));
-  r.get("/workflows", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new WorkflowService(ctxOf2(req2)).list() })));
-  r.post("/workflows", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new WorkflowService(ctxOf2(req2)).create(req2.body, actorOf2(req2)))));
-  r.get("/workflows/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).get(req2.params.id))));
-  r.patch("/workflows/:id", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).update(req2.params.id, req2.body, actorOf2(req2)))));
-  r.delete("/workflows/:id", perm2("workflow:edit"), asyncHandler(async (req2, res) => {
-    await new WorkflowService(ctxOf2(req2)).archive(req2.params.id, actorOf2(req2));
+  r.get("/workflows", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new WorkflowService(ctxOf2(req2)).list() })));
+  r.post("/workflows", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new WorkflowService(ctxOf2(req2)).create(req2.body, actorOf3(req2)))));
+  r.get("/workflows/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).get(req2.params.id))));
+  r.patch("/workflows/:id", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).update(req2.params.id, req2.body, actorOf3(req2)))));
+  r.delete("/workflows/:id", perm3("workflow:edit"), asyncHandler(async (req2, res) => {
+    await new WorkflowService(ctxOf2(req2)).archive(req2.params.id, actorOf3(req2));
     res.status(204).end();
   }));
-  r.put("/workflows/:id/permissions", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).setPermissions(req2.params.id, req2.body, actorOf2(req2)))));
-  r.put("/workflows/:id/variables", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).setVariables(req2.params.id, req2.body, actorOf2(req2)))));
-  r.get("/workflows/:id/processes", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new ProcessService(ctxOf2(req2)).list(req2.params.id) })));
-  r.post("/workflows/:id/processes", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new ProcessService(ctxOf2(req2)).add(req2.params.id, req2.body?.name, actorOf2(req2)))));
-  r.get("/workflows/:id/processes/:pid", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new ProcessService(ctxOf2(req2)).getProcess(req2.params.id, req2.params.pid))));
-  r.put("/workflows/:id/processes/:pid", perm2("workflow:edit"), asyncHandler(async (req2, res) => {
-    await new ProcessService(ctxOf2(req2)).saveProcess(req2.params.id, req2.params.pid, req2.body?.process || req2.body, actorOf2(req2));
+  r.put("/workflows/:id/permissions", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).setPermissions(req2.params.id, req2.body, actorOf3(req2)))));
+  r.put("/workflows/:id/variables", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new WorkflowService(ctxOf2(req2)).setVariables(req2.params.id, req2.body, actorOf3(req2)))));
+  r.get("/workflows/:id/processes", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new ProcessService(ctxOf2(req2)).list(req2.params.id) })));
+  r.post("/workflows/:id/processes", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new ProcessService(ctxOf2(req2)).add(req2.params.id, req2.body?.name, actorOf3(req2)))));
+  r.get("/workflows/:id/processes/:pid", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new ProcessService(ctxOf2(req2)).getProcess(req2.params.id, req2.params.pid))));
+  r.put("/workflows/:id/processes/:pid", perm3("workflow:edit"), asyncHandler(async (req2, res) => {
+    await new ProcessService(ctxOf2(req2)).saveProcess(req2.params.id, req2.params.pid, req2.body?.process || req2.body, actorOf3(req2));
     res.json({ ok: true });
   }));
-  r.patch("/workflows/:id/processes/:pid", perm2("workflow:edit"), asyncHandler(async (req2, res) => {
-    await new ProcessService(ctxOf2(req2)).rename(req2.params.id, req2.params.pid, req2.body?.name, actorOf2(req2));
+  r.patch("/workflows/:id/processes/:pid", perm3("workflow:edit"), asyncHandler(async (req2, res) => {
+    await new ProcessService(ctxOf2(req2)).rename(req2.params.id, req2.params.pid, req2.body?.name, actorOf3(req2));
     res.json({ ok: true });
   }));
-  r.delete("/workflows/:id/processes/:pid", perm2("workflow:edit"), asyncHandler(async (req2, res) => {
-    await new ProcessService(ctxOf2(req2)).remove(req2.params.id, req2.params.pid, actorOf2(req2));
+  r.delete("/workflows/:id/processes/:pid", perm3("workflow:edit"), asyncHandler(async (req2, res) => {
+    await new ProcessService(ctxOf2(req2)).remove(req2.params.id, req2.params.pid, actorOf3(req2));
     res.status(204).end();
   }));
-  r.get("/workflows/:id/engine", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new ProcessService(ctxOf2(req2)).getEngine(req2.params.id))));
-  r.get("/workflows/:id/export-engine", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new ProcessService(ctxOf2(req2)).getEngine(req2.params.id))));
-  r.get("/workflows/:id/jbpm-compatibility", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/workflows/:id/engine", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new ProcessService(ctxOf2(req2)).getEngine(req2.params.id))));
+  r.get("/workflows/:id/export-engine", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new ProcessService(ctxOf2(req2)).getEngine(req2.params.id))));
+  r.get("/workflows/:id/jbpm-compatibility", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const engine = await new ProcessService(ctxOf2(req2)).getEngine(req2.params.id);
     res.json(validateJbpmExport(engine));
   }));
-  r.get("/workflows/:id/assets", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).list(req2.params.id))));
-  r.post("/workflows/:id/assets", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new AssetsService(ctxOf2(req2)).add(req2.params.id, req2.body?.kind, req2.body?.name, actorOf2(req2), req2.body?.fields))));
-  r.get("/workflows/:id/assets/:kind/:name", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).get(req2.params.id, req2.params.kind, req2.params.name))));
-  r.patch("/workflows/:id/assets/:kind/:name", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).update(req2.params.id, req2.params.kind, req2.params.name, req2.body || {}, actorOf2(req2)))));
-  r.post("/workflows/:id/assets/:kind/:name/test", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).testAsset(req2.params.id, req2.params.kind, req2.params.name, req2.body || {}))));
-  r.delete("/workflows/:id/assets/:kind/:name", perm2("workflow:edit"), asyncHandler(async (req2, res) => {
-    await new AssetsService(ctxOf2(req2)).remove(req2.params.id, req2.params.kind, req2.params.name, actorOf2(req2));
+  r.get("/workflows/:id/assets", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).list(req2.params.id))));
+  r.post("/workflows/:id/assets", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new AssetsService(ctxOf2(req2)).add(req2.params.id, req2.body?.kind, req2.body?.name, actorOf3(req2), req2.body?.fields))));
+  r.get("/workflows/:id/assets/:kind/:name", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).get(req2.params.id, req2.params.kind, req2.params.name))));
+  r.patch("/workflows/:id/assets/:kind/:name", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).update(req2.params.id, req2.params.kind, req2.params.name, req2.body || {}, actorOf3(req2)))));
+  r.post("/workflows/:id/assets/:kind/:name/test", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new AssetsService(ctxOf2(req2)).testAsset(req2.params.id, req2.params.kind, req2.params.name, req2.body || {}))));
+  r.delete("/workflows/:id/assets/:kind/:name", perm3("workflow:edit"), asyncHandler(async (req2, res) => {
+    await new AssetsService(ctxOf2(req2)).remove(req2.params.id, req2.params.kind, req2.params.name, actorOf3(req2));
     res.status(204).end();
   }));
-  r.get("/workflows/:id/branches", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new BranchService(ctxOf2(req2)).listByWorkflow(req2.params.id) })));
-  r.post("/workflows/:id/branches", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new BranchService(ctxOf2(req2)).create(req2.params.id, req2.body, actorOf2(req2)))));
-  r.get("/branches/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new BranchService(ctxOf2(req2)).get(req2.params.id))));
-  r.get("/branches/:id/versions", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new VersionService(ctxOf2(req2)).listByBranch(req2.params.id) })));
-  r.post("/branches/:id/versions", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new VersionService(ctxOf2(req2)).saveDraft(req2.params.id, req2.body.engine, actorOf2(req2), req2.body.message))));
-  r.get("/versions/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).get(req2.params.id))));
-  r.post("/versions/:id/publish", perm2("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).publish(req2.params.id, actorOf2(req2), req2.body?.label))));
-  r.post("/versions/:id/validate", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).validate(req2.params.id))));
-  r.get("/versions/:a/diff/:b", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).diff(req2.params.a, req2.params.b))));
-  r.post("/versions/:id/deploy", perm2("workflow:deploy"), deployLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new DeploymentService(ctxOf2(req2)).deploy(req2.params.id, req2.body, actorOf2(req2)))));
-  r.get("/versions/:id/export", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/workflows/:id/branches", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new BranchService(ctxOf2(req2)).listByWorkflow(req2.params.id) })));
+  r.post("/workflows/:id/branches", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new BranchService(ctxOf2(req2)).create(req2.params.id, req2.body, actorOf3(req2)))));
+  r.get("/branches/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new BranchService(ctxOf2(req2)).get(req2.params.id))));
+  r.get("/branches/:id/versions", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new VersionService(ctxOf2(req2)).listByBranch(req2.params.id) })));
+  r.post("/branches/:id/versions", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.status(201).json(await new VersionService(ctxOf2(req2)).saveDraft(req2.params.id, req2.body.engine, actorOf3(req2), req2.body.message))));
+  r.get("/versions/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).get(req2.params.id))));
+  r.post("/versions/:id/publish", perm3("workflow:edit"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).publish(req2.params.id, actorOf3(req2), req2.body?.label))));
+  r.post("/versions/:id/validate", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).validate(req2.params.id))));
+  r.get("/versions/:a/diff/:b", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new VersionService(ctxOf2(req2)).diff(req2.params.a, req2.params.b))));
+  r.post("/versions/:id/deploy", perm3("workflow:deploy"), deployLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new DeploymentService(ctxOf2(req2)).deploy(req2.params.id, req2.body, actorOf3(req2)))));
+  r.get("/versions/:id/export", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const v = await new VersionService(ctxOf2(req2)).get(req2.params.id);
     res.json(exportKjar(v.engine));
   }));
-  r.get("/versions/:id/export-engine", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/versions/:id/export-engine", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const v = await new VersionService(ctxOf2(req2)).get(req2.params.id);
     res.json(v.engine);
   }));
-  r.get("/versions/:id/jbpm-compatibility", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/versions/:id/jbpm-compatibility", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const v = await new VersionService(ctxOf2(req2)).get(req2.params.id);
     res.json(validateJbpmExport(v.engine));
   }));
-  r.get("/deployments", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new DeploymentService(ctxOf2(req2)).list(req2.query) })));
-  r.get("/workflows/:id/deployments", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new DeploymentService(ctxOf2(req2)).listByWorkflow(req2.params.id) })));
-  r.get("/deployments/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).get(req2.params.id))));
-  r.post("/deployments/:id/tags", perm2("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).setTags(req2.params.id, req2.body, actorOf2(req2)))));
-  r.post("/deployments/:id/activate", perm2("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).activate(req2.params.id, actorOf2(req2)))));
-  r.post("/deployments/:id/rollback", perm2("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).rollback(req2.body.environment, req2.body.toDeploymentId, actorOf2(req2)))));
-  r.post("/deployments/:id/undeploy", perm2("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).undeploy(req2.params.id, actorOf2(req2)))));
-  r.post("/deployments/:id/archive", perm2("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).archive(req2.params.id, actorOf2(req2)))));
-  r.get("/deployments/:id/export", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/deployments", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new DeploymentService(ctxOf2(req2)).list(req2.query) })));
+  r.get("/workflows/:id/deployments", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new DeploymentService(ctxOf2(req2)).listByWorkflow(req2.params.id) })));
+  r.get("/deployments/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).get(req2.params.id))));
+  r.post("/deployments/:id/tags", perm3("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).setTags(req2.params.id, req2.body, actorOf3(req2)))));
+  r.post("/deployments/:id/activate", perm3("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).activate(req2.params.id, actorOf3(req2)))));
+  r.post("/deployments/:id/rollback", perm3("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).rollback(req2.body.environment, req2.body.toDeploymentId, actorOf3(req2)))));
+  r.post("/deployments/:id/undeploy", perm3("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).undeploy(req2.params.id, actorOf3(req2)))));
+  r.post("/deployments/:id/archive", perm3("workflow:deploy"), asyncHandler(async (req2, res) => res.json(await new DeploymentService(ctxOf2(req2)).archive(req2.params.id, actorOf3(req2)))));
+  r.get("/deployments/:id/export", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const d = await new DeploymentService(ctxOf2(req2)).get(req2.params.id);
     res.json(exportKjar(d.engine));
   }));
-  r.get("/deployments/:id/definitions", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/deployments/:id/definitions", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const d = await new DeploymentService(ctxOf2(req2)).get(req2.params.id);
     res.json({ items: (d.engine.processes || []).map((p) => ({ id: p.id, name: p.name || p.id, nodes: (p.nodes || []).length, startable: (p.nodes || []).some((n) => n.type === "start") })) });
   }));
-  r.post("/instances", perm2("workflow:run"), startLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new InstanceService(ctxOf2(req2), emit3).start(req2.body, actorOf2(req2)))));
-  r.get("/instances", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new InstanceService(ctxOf2(req2)).list(req2.query) })));
-  r.get("/instances/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).get(req2.params.id))));
-  r.get("/instances/:id/history", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).history(req2.params.id))));
-  r.get("/instances/:id/diagram-state", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).diagramState(req2.params.id))));
-  r.get("/instances/:id/graph", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).graph(req2.params.id))));
-  r.get("/instances/:id/related", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).related(req2.params.id))));
-  r.post("/instances/:id/signal", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2), emit3).signal(req2.params.id, req2.body?.name, req2.body?.payload, actorOf2(req2)))));
-  r.post("/instances/:id/retry", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2), emit3).retry(req2.params.id, req2.body?.nodeId, actorOf2(req2)))));
-  r.post("/instances/:id/suspend", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).suspend(req2.params.id, actorOf2(req2)))));
-  r.post("/instances/:id/resume", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).resumeInstance(req2.params.id, actorOf2(req2)))));
-  r.post("/instances/:id/abort", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).abort(req2.params.id, actorOf2(req2)))));
-  r.put("/instances/:id/variables", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).updateVariables(req2.params.id, req2.body || {}, actorOf2(req2)))));
-  r.get("/instances/:id/variable-history", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new InstanceService(ctxOf2(req2)).variableHistory(req2.params.id, req2.query.name) })));
-  r.get("/tasks", perm2("task:manage"), asyncHandler(async (req2, res) => res.json({ items: await new TaskService(ctxOf2(req2)).list({ ...req2.query, overdue: req2.query.overdue === "true" }) })));
-  r.get("/tasks/:id", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).get(req2.params.id))));
-  r.post("/tasks/:id/claim", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).claim(req2.params.id, actorOf2(req2)))));
-  r.post("/tasks/:id/release", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).release(req2.params.id, actorOf2(req2)))));
-  r.post("/tasks/:id/complete", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2), emit3).complete(req2.params.id, req2.body?.outputs || {}, actorOf2(req2)))));
-  r.post("/tasks/:id/skip", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2), emit3).skip(req2.params.id, actorOf2(req2)))));
-  r.post("/tasks/:id/start", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).start(req2.params.id, actorOf2(req2)))));
-  r.post("/tasks/:id/stop", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).stop(req2.params.id, actorOf2(req2)))));
-  r.post("/tasks/:id/save", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).saveOutputs(req2.params.id, req2.body?.outputs || {}, actorOf2(req2)))));
-  r.post("/tasks/:id/delegate", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).delegate(req2.params.id, req2.body?.to, actorOf2(req2)))));
-  r.post("/tasks/:id/forward", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).forward(req2.params.id, { user: req2.body?.user, group: req2.body?.group }, actorOf2(req2)))));
-  r.post("/tasks/:id/remind", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).remind(req2.params.id, actorOf2(req2)))));
-  r.patch("/tasks/:id", perm2("task:manage"), asyncHandler(async (req2, res) => res.json(await new TaskService(ctxOf2(req2)).update(req2.params.id, { priority: req2.body?.priority, dueAt: req2.body?.dueAt }, actorOf2(req2)))));
-  r.get("/tasks/:id/comments", perm2("task:manage"), asyncHandler(async (req2, res) => res.json({ items: await new TaskService(ctxOf2(req2)).listComments(req2.params.id) })));
-  r.post("/tasks/:id/comments", perm2("task:manage"), asyncHandler(async (req2, res) => res.status(201).json(await new TaskService(ctxOf2(req2)).addComment(req2.params.id, req2.body?.body, actorOf2(req2)))));
-  r.delete("/tasks/:id/comments/:cid", perm2("task:manage"), asyncHandler(async (req2, res) => {
-    await new TaskService(ctxOf2(req2)).deleteComment(req2.params.id, req2.params.cid, actorOf2(req2));
+  r.post("/instances", perm3("workflow:run"), startLimiter, asyncHandler(async (req2, res) => res.status(201).json(await new InstanceService(ctxOf2(req2), emit3).start(req2.body, actorOf3(req2)))));
+  r.get("/instances", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new InstanceService(ctxOf2(req2)).list(req2.query) })));
+  r.get("/instances/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).get(req2.params.id))));
+  r.get("/instances/:id/history", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).history(req2.params.id))));
+  r.get("/instances/:id/diagram-state", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).diagramState(req2.params.id))));
+  r.get("/instances/:id/graph", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).graph(req2.params.id))));
+  r.get("/instances/:id/related", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).related(req2.params.id))));
+  r.post("/instances/:id/signal", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2), emit3).signal(req2.params.id, req2.body?.name, req2.body?.payload, actorOf3(req2)))));
+  r.post("/instances/:id/retry", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2), emit3).retry(req2.params.id, req2.body?.nodeId, actorOf3(req2)))));
+  r.post("/instances/:id/suspend", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).suspend(req2.params.id, actorOf3(req2)))));
+  r.post("/instances/:id/resume", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).resumeInstance(req2.params.id, actorOf3(req2)))));
+  r.post("/instances/:id/abort", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).abort(req2.params.id, actorOf3(req2)))));
+  r.put("/instances/:id/variables", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await new InstanceService(ctxOf2(req2)).updateVariables(req2.params.id, req2.body || {}, actorOf3(req2)))));
+  r.get("/instances/:id/variable-history", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await new InstanceService(ctxOf2(req2)).variableHistory(req2.params.id, req2.query.name) })));
+  r.get("/tasks", perm3("task:manage"), asyncHandler(async (req2, res) => res.json({ items: await taskSvc(req2).list({ ...req2.query, overdue: req2.query.overdue === "true" }) })));
+  r.get("/tasks/:id", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).get(req2.params.id))));
+  r.post("/tasks/:id/claim", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).claim(req2.params.id, actorOf3(req2)))));
+  r.post("/tasks/:id/release", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).release(req2.params.id, actorOf3(req2)))));
+  r.post("/tasks/:id/complete", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2, emit3).complete(req2.params.id, req2.body?.outputs || {}, actorOf3(req2)))));
+  r.post("/tasks/:id/skip", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2, emit3).skip(req2.params.id, actorOf3(req2)))));
+  r.post("/tasks/:id/start", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).start(req2.params.id, actorOf3(req2)))));
+  r.post("/tasks/:id/stop", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).stop(req2.params.id, actorOf3(req2)))));
+  r.post("/tasks/:id/save", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).saveOutputs(req2.params.id, req2.body?.outputs || {}, actorOf3(req2)))));
+  r.post("/tasks/:id/delegate", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).delegate(req2.params.id, req2.body?.to, actorOf3(req2)))));
+  r.post("/tasks/:id/forward", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).forward(req2.params.id, { user: req2.body?.user, group: req2.body?.group }, actorOf3(req2)))));
+  r.post("/tasks/:id/remind", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).remind(req2.params.id, actorOf3(req2)))));
+  r.patch("/tasks/:id", perm3("task:manage"), asyncHandler(async (req2, res) => res.json(await taskSvc(req2).update(req2.params.id, { priority: req2.body?.priority, dueAt: req2.body?.dueAt }, actorOf3(req2)))));
+  r.get("/tasks/:id/comments", perm3("task:manage"), asyncHandler(async (req2, res) => res.json({ items: await taskSvc(req2).listComments(req2.params.id) })));
+  r.post("/tasks/:id/comments", perm3("task:manage"), asyncHandler(async (req2, res) => res.status(201).json(await taskSvc(req2).addComment(req2.params.id, req2.body?.body, actorOf3(req2)))));
+  r.delete("/tasks/:id/comments/:cid", perm3("task:manage"), asyncHandler(async (req2, res) => {
+    await taskSvc(req2).deleteComment(req2.params.id, req2.params.cid, actorOf3(req2));
     res.status(204).end();
   }));
-  r.get("/tasks/:id/events", perm2("task:manage"), asyncHandler(async (req2, res) => res.json({ items: await new TaskService(ctxOf2(req2)).events(req2.params.id) })));
+  r.get("/tasks/:id/events", perm3("task:manage"), asyncHandler(async (req2, res) => res.json({ items: await taskSvc(req2).events(req2.params.id) })));
   const errs = (req2) => new ErrorService(ctxOf2(req2));
-  r.get("/errors", perm2("workflow:view"), asyncHandler(async (req2, res) => {
+  r.get("/errors", perm3("workflow:view"), asyncHandler(async (req2, res) => {
     const { type, acknowledged, limit, offset, ...rest } = req2.query;
     res.json(await errs(req2).list({
       ...rest,
@@ -7873,83 +8233,289 @@ function buildRoutes() {
       offset: offset ? Number(offset) : void 0
     }));
   }));
-  r.get("/errors/summary", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await errs(req2).summary())));
-  r.get("/errors/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await errs(req2).get(req2.params.id))));
-  r.post("/errors/:id/ack", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await errs(req2).acknowledge(req2.params.id, actorOf2(req2)))));
-  r.post("/errors/ack", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json({ results: await errs(req2).acknowledgeMany(req2.body?.ids || [], actorOf2(req2)) })));
-  const timers2 = (req2) => new TimerService(ctxOf2(req2), emit3);
-  r.get("/jobs", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await timers2(req2).list(req2.query) })));
-  r.get("/jobs/:id", perm2("workflow:view"), asyncHandler(async (req2, res) => res.json(await timers2(req2).getJob(req2.params.id))));
-  r.post("/jobs/:id/cancel", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await timers2(req2).cancel(req2.params.id, actorOf2(req2)))));
-  r.post("/jobs/:id/trigger", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await timers2(req2).trigger(req2.params.id, actorOf2(req2)))));
-  r.post("/jobs/:id/reschedule", perm2("workflow:run"), asyncHandler(async (req2, res) => res.json(await timers2(req2).rescheduleJob(req2.params.id, req2.body?.dueAt, actorOf2(req2)))));
-  r.get("/audit", perm2("admin:iam"), asyncHandler(async (req2, res) => {
+  r.get("/errors/summary", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await errs(req2).summary())));
+  r.get("/errors/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await errs(req2).get(req2.params.id))));
+  r.post("/errors/:id/ack", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await errs(req2).acknowledge(req2.params.id, actorOf3(req2)))));
+  r.post("/errors/ack", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json({ results: await errs(req2).acknowledgeMany(req2.body?.ids || [], actorOf3(req2)) })));
+  const timers = (req2) => new TimerService(ctxOf2(req2), emit3);
+  r.get("/jobs", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json({ items: await timers(req2).list(req2.query) })));
+  r.get("/jobs/:id", perm3("workflow:view"), asyncHandler(async (req2, res) => res.json(await timers(req2).getJob(req2.params.id))));
+  r.post("/jobs/:id/cancel", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await timers(req2).cancel(req2.params.id, actorOf3(req2)))));
+  r.post("/jobs/:id/trigger", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await timers(req2).trigger(req2.params.id, actorOf3(req2)))));
+  r.post("/jobs/:id/reschedule", perm3("workflow:run"), asyncHandler(async (req2, res) => res.json(await timers(req2).rescheduleJob(req2.params.id, req2.body?.dueAt, actorOf3(req2)))));
+  r.get("/audit", perm3("admin:iam"), asyncHandler(async (req2, res) => {
     const { limit, offset, ...rest } = req2.query;
     res.json(await new AuditService(ctxOf2(req2)).list({ ...rest, limit: limit ? Number(limit) : void 0, offset: offset ? Number(offset) : void 0 }));
   }));
-  r.get("/audit/facets", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json(await new AuditService(ctxOf2(req2)).facets())));
-  r.get("/notifications", asyncHandler(async (req2, res) => res.json(await new NotificationService(ctxOf2(req2)).listFor(actorOf2(req2), { unread: req2.query.unread === "true", limit: req2.query.limit ? Number(req2.query.limit) : void 0 }))));
-  r.post("/notifications/read-all", asyncHandler(async (req2, res) => res.json(await new NotificationService(ctxOf2(req2)).markAllRead(actorOf2(req2)))));
-  r.post("/notifications/:id/read", asyncHandler(async (req2, res) => res.json(await new NotificationService(ctxOf2(req2)).markRead(req2.params.id, actorOf2(req2)))));
+  r.get("/audit/facets", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json(await new AuditService(ctxOf2(req2)).facets())));
+  r.get("/notifications", asyncHandler(async (req2, res) => res.json(await new NotificationService(ctxOf2(req2)).listFor(actorOf3(req2), { unread: req2.query.unread === "true", limit: req2.query.limit ? Number(req2.query.limit) : void 0 }))));
+  r.post("/notifications/read-all", asyncHandler(async (req2, res) => res.json(await new NotificationService(ctxOf2(req2)).markAllRead(actorOf3(req2)))));
+  r.post("/notifications/:id/read", asyncHandler(async (req2, res) => res.json(await new NotificationService(ctxOf2(req2)).markRead(req2.params.id, actorOf3(req2)))));
   r.get("/settings/system", asyncHandler(async (req2, res) => res.json(await new SettingsService(ctxOf2(req2)).get())));
-  r.put("/settings/system", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json(await new SettingsService(ctxOf2(req2)).update(req2.body || {}, actorOf2(req2)))));
+  r.put("/settings/system", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json(await new SettingsService(ctxOf2(req2)).update(req2.body || {}, actorOf3(req2)))));
   const q2 = (req2) => new QueryService(ctxOf2(req2));
   const s = (req2) => req2.query.status;
-  r.get("/query/process-definitions", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).processDefinitions() })));
-  r.get("/query/process-definitions/:processId/instances", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).processInstances(req2.params.processId, s(req2)) })));
-  r.get("/query/process-definitions/:processId/signals", perm2("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).processSignals(req2.params.processId))));
-  r.get("/query/users", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).users() })));
-  r.get("/query/users/:user/tasks", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).tasksForUser(req2.params.user, s(req2)) })));
-  r.get("/query/users/:user/tasks/completed", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).tasksCompletedByUser(req2.params.user) })));
-  r.get("/query/groups/:group/tasks", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).tasksForGroup(req2.params.group, s(req2)) })));
-  r.get("/query/instances/:id/tasks", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).instanceTasks(req2.params.id) })));
-  r.get("/query/analytics/tasks", perm2("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).taskAnalytics())));
-  r.get("/query/analytics/processes", perm2("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).processAnalytics())));
-  r.get("/query/analytics/summary", perm2("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).summary())));
-  r.get("/query/jobs", perm2("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).jobs(s(req2)) })));
+  r.get("/query/process-definitions", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).processDefinitions() })));
+  r.get("/query/process-definitions/:processId/instances", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).processInstances(req2.params.processId, s(req2)) })));
+  r.get("/query/process-definitions/:processId/signals", perm3("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).processSignals(req2.params.processId))));
+  r.get("/query/users", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).users() })));
+  r.get("/query/users/:user/tasks", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).tasksForUser(req2.params.user, s(req2)) })));
+  r.get("/query/users/:user/tasks/completed", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).tasksCompletedByUser(req2.params.user) })));
+  r.get("/query/groups/:group/tasks", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).tasksForGroup(req2.params.group, s(req2)) })));
+  r.get("/query/instances/:id/tasks", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).instanceTasks(req2.params.id) })));
+  r.get("/query/analytics/tasks", perm3("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).taskAnalytics())));
+  r.get("/query/analytics/processes", perm3("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).processAnalytics())));
+  r.get("/query/analytics/summary", perm3("query:read"), asyncHandler(async (req2, res) => res.json(await q2(req2).summary())));
+  r.get("/query/jobs", perm3("query:read"), asyncHandler(async (req2, res) => res.json({ items: await q2(req2).jobs(s(req2)) })));
   const iam = (req2) => new IamService(ctxOf2(req2));
-  r.get("/users", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json({ items: await iam(req2).listUsers() })));
-  r.post("/users", perm2("admin:iam"), asyncHandler(async (req2, res) => res.status(201).json(await iam(req2).createUser(req2.body, actorOf2(req2)))));
-  r.get("/users/:id", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json(await iam(req2).getUser(req2.params.id))));
-  r.patch("/users/:id", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json(await iam(req2).updateUser(req2.params.id, req2.body, actorOf2(req2)))));
-  r.post("/users/:id/password", perm2("admin:iam"), asyncHandler(async (req2, res) => {
-    await iam(req2).setPassword(req2.params.id, req2.body?.password, actorOf2(req2));
+  r.get("/users", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json({ items: await iam(req2).listUsers() })));
+  r.post("/users", perm3("admin:iam"), asyncHandler(async (req2, res) => res.status(201).json(await iam(req2).createUser(req2.body, actorOf3(req2)))));
+  r.get("/users/:id", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json(await iam(req2).getUser(req2.params.id))));
+  r.patch("/users/:id", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json(await iam(req2).updateUser(req2.params.id, req2.body, actorOf3(req2)))));
+  r.post("/users/:id/password", perm3("admin:iam"), asyncHandler(async (req2, res) => {
+    await iam(req2).setPassword(req2.params.id, req2.body?.password, actorOf3(req2));
     res.status(204).end();
   }));
-  r.get("/groups", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json({ items: await iam(req2).listGroups() })));
-  r.post("/groups", perm2("admin:iam"), asyncHandler(async (req2, res) => res.status(201).json(await iam(req2).createGroup(req2.body, actorOf2(req2)))));
-  r.delete("/groups/:id", perm2("admin:iam"), asyncHandler(async (req2, res) => {
-    await iam(req2).deleteGroup(req2.params.id, actorOf2(req2));
+  r.get("/groups", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json({ items: await iam(req2).listGroups() })));
+  r.post("/groups", perm3("admin:iam"), asyncHandler(async (req2, res) => res.status(201).json(await iam(req2).createGroup(req2.body, actorOf3(req2)))));
+  r.delete("/groups/:id", perm3("admin:iam"), asyncHandler(async (req2, res) => {
+    await iam(req2).deleteGroup(req2.params.id, actorOf3(req2));
     res.status(204).end();
   }));
-  r.get("/roles", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json({ items: await iam(req2).listRoles() })));
-  r.post("/roles", perm2("admin:iam"), asyncHandler(async (req2, res) => res.status(201).json(await iam(req2).createRole(req2.body, actorOf2(req2)))));
-  r.patch("/roles/:id", perm2("admin:iam"), asyncHandler(async (req2, res) => res.json(await iam(req2).updateRole(req2.params.id, req2.body?.permissions || [], actorOf2(req2)))));
-  r.delete("/roles/:id", perm2("admin:iam"), asyncHandler(async (req2, res) => {
-    await iam(req2).deleteRole(req2.params.id, actorOf2(req2));
+  r.get("/roles", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json({ items: await iam(req2).listRoles() })));
+  r.post("/roles", perm3("admin:iam"), asyncHandler(async (req2, res) => res.status(201).json(await iam(req2).createRole(req2.body, actorOf3(req2)))));
+  r.patch("/roles/:id", perm3("admin:iam"), asyncHandler(async (req2, res) => res.json(await iam(req2).updateRole(req2.params.id, req2.body?.permissions || [], actorOf3(req2)))));
+  r.delete("/roles/:id", perm3("admin:iam"), asyncHandler(async (req2, res) => {
+    await iam(req2).deleteRole(req2.params.id, actorOf3(req2));
     res.status(204).end();
   }));
   r.use(buildWorkflowInstanceRoutes());
+  r.use(buildTeamRoutes());
   return r;
 }
 
 // src/http/auth-routes.ts
-import { Router as Router3 } from "express";
+import { Router as Router4 } from "express";
+
+// src/modules/iam/accounts.ts
+import crypto3 from "crypto";
+var EMAIL2 = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+var VERIFY_TTL_MS = 24 * 3600 * 1e3;
+var RESET_TTL_MS = 60 * 60 * 1e3;
+var RESEND_MIN_GAP_MS = 60 * 1e3;
+var sha = (t) => crypto3.createHash("sha256").update(t).digest("hex");
+var newToken = () => crypto3.randomBytes(32).toString("base64url");
+var lower3 = (s) => (typeof s === "string" ? s : "").trim().toLowerCase();
+var AccountService = class {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+  ctx;
+  users() {
+    return this.ctx.store.repo(Collections.users);
+  }
+  byEmail = async (email) => (await this.users().query((u) => u.tenantId === this.ctx.tenantId && (lower3(u.email) === email || lower3(u.username) === email)))[0];
+  async register(input) {
+    const email = lower3(input.email);
+    if (!EMAIL2.test(email) || email.length > 254) throw validation("A valid email address is required");
+    const name = (typeof input.name === "string" ? input.name : "").trim().slice(0, 100) || email.split("@")[0];
+    const pp = passwordProblem(input.password, config.auth.passwordMinLength, email);
+    if (pp) throw validation(pp);
+    if (await this.byEmail(email)) throw conflict("An account with this email already exists");
+    if (email === config.platformAdminEmail) throw validation("This address is reserved for single sign-on");
+    const now = this.ctx.clock();
+    const u = {
+      id: this.ctx.newId(),
+      tenantId: this.ctx.tenantId,
+      username: email,
+      email,
+      displayName: name,
+      passwordHash: await hashPassword(input.password),
+      roles: [],
+      groups: [],
+      active: true,
+      createdAt: now,
+      emailVerified: false
+    };
+    const verificationRequired = config.auth.emailVerification;
+    if (verificationRequired) await this.issueVerification(u);
+    await this.users().put(u);
+    if (!verificationRequired) void sendMail(templates.welcome(email, name));
+    await this.ctx.audit({ actor: email, kind: "user.registered", data: { userId: u.id } });
+    return { id: u.id, email, verificationRequired };
+  }
+  async issueVerification(u) {
+    const token = newToken();
+    u.verificationHash = sha(token);
+    u.verificationExpiresAt = new Date(Date.parse(this.ctx.clock()) + VERIFY_TTL_MS).toISOString();
+    await sendMail(templates.verification(u.email, token));
+  }
+  async verifyEmail(token) {
+    const h = sha(String(token || ""));
+    const u = (await this.users().query((x) => x.verificationHash === h))[0];
+    if (!u || !u.verificationExpiresAt || u.verificationExpiresAt < this.ctx.clock()) throw notFound("Verification link");
+    u.emailVerified = true;
+    u.verificationHash = null;
+    u.verificationExpiresAt = null;
+    await this.users().put(u);
+    await this.ctx.audit({ actor: u.username, kind: "user.email_verified", data: { userId: u.id } });
+    if (u.email) void sendMail(templates.welcome(u.email, u.displayName || u.email.split("@")[0]));
+  }
+  async resendVerification(emailIn) {
+    const u = await this.byEmail(lower3(emailIn));
+    if (!u || u.emailVerified !== false || !u.email || !config.auth.emailVerification) return;
+    await this.issueVerification(u);
+    await this.users().put(u);
+  }
+  async forgotPassword(emailIn) {
+    const u = await this.byEmail(lower3(emailIn));
+    if (!u || !u.active || !u.email) return;
+    if (u.passwordResetSentAt && Date.parse(this.ctx.clock()) - Date.parse(u.passwordResetSentAt) < RESEND_MIN_GAP_MS) return;
+    const token = newToken();
+    u.passwordResetHash = sha(token);
+    u.passwordResetExpiresAt = new Date(Date.parse(this.ctx.clock()) + RESET_TTL_MS).toISOString();
+    u.passwordResetSentAt = this.ctx.clock();
+    await this.users().put(u);
+    await sendMail(templates.passwordReset(u.email, token));
+    await this.ctx.audit({ actor: u.username, kind: "user.password_reset_requested", data: { userId: u.id } });
+  }
+  /** Describes a reset link without using it (lets the page show "expired" before the user types a password). */
+  async checkResetToken(token) {
+    const h = sha(String(token || ""));
+    const u = (await this.users().query((x) => x.passwordResetHash === h))[0];
+    return !!u && !!u.passwordResetExpiresAt && u.passwordResetExpiresAt >= this.ctx.clock();
+  }
+  async resetPassword(token, newPassword) {
+    const h = sha(String(token || ""));
+    const u = (await this.users().query((x) => x.passwordResetHash === h))[0];
+    if (!u || !u.passwordResetExpiresAt || u.passwordResetExpiresAt < this.ctx.clock()) throw notFound("Reset link");
+    const pp = passwordProblem(newPassword, config.auth.passwordMinLength, u.username);
+    if (pp) throw validation(pp);
+    if (await verifyPassword(newPassword, u.passwordHash)) throw validation("choose a password you have not used before");
+    const now = this.ctx.clock();
+    u.passwordHash = await hashPassword(newPassword);
+    u.passwordResetHash = null;
+    u.passwordResetExpiresAt = null;
+    u.passwordChangedAt = now;
+    u.failedLogins = 0;
+    u.lockedUntil = null;
+    u.emailVerified = true;
+    await this.users().put(u);
+    await this.ctx.audit({ actor: u.username, kind: "user.password_reset", data: { userId: u.id } });
+    if (u.email) void sendMail(templates.passwordChanged(u.email, "reset"));
+  }
+};
+
+// src/http/auth-routes.ts
 var ctxOf3 = (req2) => req2.ctx;
+var accountCtx = (req2) => makeContext({ store: ctxOf3(req2).store, tenantId: config.defaultTenant });
 var loginLimiter = rateLimit({ windowMs: 6e4, max: 10, keyOf: (req2) => req2.ip || "anon" });
+var safeReturnTo = (v) => typeof v === "string" && v.startsWith("/") && !v.startsWith("//") && !v.includes("\\") && v.length < 512 ? v : void 0;
+var txCookie = (value, maxAgeSec) => `${TX_COOKIE}=${encodeURIComponent(value)}; Path=${TX_COOKIE_PATH}; Max-Age=${maxAgeSec}; HttpOnly; SameSite=Lax${config.oidc.redirectUri.startsWith("https:") ? "; Secure" : ""}`;
 function buildAuthRoutes() {
-  const r = Router3();
+  const r = Router4();
+  r.get("/config", (_req, res) => {
+    const local = config.localLogin;
+    res.json({
+      appName: config.appName,
+      sso: oidc.isConfigured(),
+      localLogin: local,
+      // the built-in account flows only exist alongside local login
+      registration: local && config.auth.registration,
+      forgotPassword: local && config.auth.forgotPassword,
+      emailVerification: local && config.auth.emailVerification,
+      passwordMinLength: config.auth.passwordMinLength,
+      ssoLoginUrl: oidc.isConfigured() ? "/api/auth/oidc/login" : null
+    });
+  });
+  const sensitiveLimiter = rateLimit({ windowMs: 15 * 6e4, max: 10, keyOf: (req2) => req2.ip || "anon" });
+  const accounts = (req2) => new AccountService(accountCtx(req2));
+  const needLocal = (on) => {
+    if (!config.localLogin || !on) throw notFound("This feature");
+  };
+  r.post("/register", sensitiveLimiter, asyncHandler(async (req2, res) => {
+    needLocal(config.auth.registration);
+    res.status(201).json(await accounts(req2).register(req2.body || {}));
+  }));
+  r.post("/verify-email", sensitiveLimiter, asyncHandler(async (req2, res) => {
+    needLocal(config.auth.emailVerification);
+    await accounts(req2).verifyEmail(req2.body?.token);
+    res.status(204).end();
+  }));
+  r.post("/resend-verification", sensitiveLimiter, asyncHandler(async (req2, res) => {
+    needLocal(config.auth.emailVerification);
+    await accounts(req2).resendVerification(String(req2.body?.email || ""));
+    res.status(202).json({ ok: true });
+  }));
+  r.post("/forgot-password", sensitiveLimiter, asyncHandler(async (req2, res) => {
+    needLocal(config.auth.forgotPassword);
+    await accounts(req2).forgotPassword(String(req2.body?.email || ""));
+    res.status(202).json({ ok: true });
+  }));
+  r.post("/reset-password/check", sensitiveLimiter, asyncHandler(async (req2, res) => {
+    needLocal(config.auth.forgotPassword);
+    res.json({ valid: await accounts(req2).checkResetToken(String(req2.body?.token || "")) });
+  }));
+  r.post("/reset-password", sensitiveLimiter, asyncHandler(async (req2, res) => {
+    needLocal(config.auth.forgotPassword);
+    await accounts(req2).resetPassword(String(req2.body?.token || ""), String(req2.body?.password || ""));
+    res.status(204).end();
+  }));
+  r.get("/oidc/login", loginLimiter, asyncHandler(async (req2, res) => {
+    if (!oidc.isConfigured()) throw notFound("Single sign-on");
+    try {
+      const { url: url2, tx } = await oidc.authorizationRequest(safeReturnTo(req2.query.redirect));
+      res.append("Set-Cookie", txCookie(sealTx(tx), 600));
+      res.redirect(url2);
+    } catch (e) {
+      logger.error("OIDC login could not start", { err: e.message });
+      res.status(503).json({ error: { code: "SSO_UNAVAILABLE", message: "The identity provider could not be reached. Please try again shortly." } });
+    }
+  }));
+  r.get("/oidc/callback", loginLimiter, asyncHandler(async (req2, res) => {
+    if (!oidc.isConfigured()) throw notFound("Single sign-on");
+    const back = (params) => res.redirect(`${config.dashboardUrl}/auth/callback#${new URLSearchParams(params).toString()}`);
+    const tx = openTx(readCookie(req2.header("cookie"), TX_COOKIE));
+    res.append("Set-Cookie", txCookie("", 0));
+    if (!tx) {
+      logger.warn("OIDC callback without a valid login transaction");
+      return back({ error: "Session expired. Please try logging in again." });
+    }
+    if (typeof req2.query.error === "string") {
+      logger.warn("OIDC callback reported an error", { error: req2.query.error.slice(0, 80) });
+      return back({ error: "Sign-in was cancelled or denied." });
+    }
+    try {
+      const t = await oidc.handleCallback(req2.query, tx);
+      const frag = {};
+      if (t.access_token) frag.access_token = t.access_token;
+      if (t.id_token) frag.id_token = t.id_token;
+      if (t.expires_in) frag.expires_in = String(t.expires_in);
+      if (tx.r) frag.return_to = tx.r;
+      back(frag);
+    } catch (e) {
+      const msg = e.message || "";
+      logger.warn("OIDC callback failed", { reason: msg.slice(0, 200) });
+      back({ error: msg.includes("invalid_grant") ? "Authorization code expired or already used. Please try again." : msg.includes("invalid_client") ? "Client configuration error. Please contact support." : msg.includes("state") || msg.includes("nonce") ? "Session expired. Please try logging in again." : "Authentication failed" });
+    }
+  }));
+  r.get("/oidc/logout", asyncHandler(async (req2, res) => {
+    const hint = typeof req2.query.id_token_hint === "string" ? req2.query.id_token_hint : void 0;
+    res.redirect((oidc.isConfigured() ? await oidc.logoutUrl(hint) : void 0) ?? config.dashboardUrl);
+  }));
   r.post("/login", loginLimiter, asyncHandler(async (req2, res) => {
+    if (!config.localLogin) throw notFound("Local login");
     const { username, password } = req2.body || {};
-    res.json(await new IamService(ctxOf3(req2)).login(String(username || ""), String(password || "")));
+    res.json(await new IamService(accountCtx(req2)).login(String(username || ""), String(password || "")));
   }));
   r.get("/me", requireAuth, asyncHandler(async (req2, res) => {
     const claims = req2.user;
     const permissions = await new IamService(ctxOf3(req2)).permissionsFor(claims.roles);
-    res.json({ user: { id: claims.sub, username: claims.username, roles: claims.roles, groups: claims.groups }, permissions });
+    res.json({ user: { id: claims.sub, username: claims.username, roles: claims.roles, groups: claims.groups, email: claims.email, name: claims.name, source: claims.source ?? "local" }, permissions });
   }));
   r.post("/me/password", requireAuth, asyncHandler(async (req2, res) => {
     const claims = req2.user;
+    if (claims.source === "oidc") throw forbidden("Your password is managed by the identity provider");
     await new IamService(ctxOf3(req2)).changeOwnPassword(claims.sub, req2.body?.currentPassword, req2.body?.newPassword);
     res.status(204).end();
   }));
@@ -7957,7 +8523,7 @@ function buildAuthRoutes() {
 }
 
 // src/http/tenant-routes.ts
-import { Router as Router4 } from "express";
+import { Router as Router5 } from "express";
 
 // src/modules/tenants/service.ts
 var SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -8013,11 +8579,19 @@ var TenantService = class {
     const existing = all.find((t) => t.slug.toLowerCase() === s);
     return { available: !existing };
   }
-  async signup(data) {
-    const name = data.name.trim();
-    const slug5 = data.slug.trim().toLowerCase();
-    const ownerEmail = data.ownerEmail.trim().toLowerCase();
-    const ownerName = data.ownerName?.trim() || ownerEmail.split("@")[0];
+  /** `caller` is the verified SSO identity when sign-in is via the Identity Server: the owner is then the caller
+   *  themselves (bound to their `sub`, email from the VERIFIED token) — never a free-text email, which anyone could
+   *  type to squat a workspace for somebody else. Without SSO (local dev) the body's ownerEmail is used. */
+  async signup(data, caller) {
+    if (caller?.source === "oidc") {
+      if (!caller.email || caller.emailVerified !== true) throw forbidden("A verified email address is required to create a workspace");
+      data = { ...data, ownerEmail: caller.email, ownerName: data.ownerName || caller.name };
+    }
+    const str = (v) => typeof v === "string" ? v : "";
+    const name = str(data.name).trim();
+    const slug5 = str(data.slug).trim().toLowerCase();
+    const ownerEmail = str(data.ownerEmail).trim().toLowerCase();
+    const ownerName = str(data.ownerName).trim() || ownerEmail.split("@")[0];
     if (!name || name.length < 2 || name.length > 100) {
       throw validation("Workspace name must be between 2 and 100 characters");
     }
@@ -8057,7 +8631,7 @@ var TenantService = class {
     await this.tenantRepo().put(tenant);
     const allUsers = await this.userRepo().query(() => true);
     const matchedUser = allUsers.find((u) => u.username.toLowerCase() === ownerEmail.toLowerCase() || u.id === ownerEmail);
-    const userId = matchedUser ? matchedUser.id : ownerEmail;
+    const userId = caller?.source === "oidc" ? caller.sub : matchedUser ? matchedUser.id : ownerEmail;
     const membership = {
       id: this.ctx.newId(),
       tenantId,
@@ -8071,17 +8645,13 @@ var TenantService = class {
       lastActiveAt: now
     };
     await this.memberRepo().put(membership);
+    void sendMail(templates.workspaceCreated(ownerEmail, name, 14));
     return tenant;
   }
-  async listMyTenants(userId, search, limit = 10, requestedTenantId) {
-    const allMembers = await this.memberRepo().query(() => true);
+  async listMyTenants(id, search, limit = 10, requestedTenantId) {
     const allTenants = await this.tenantRepo().query(() => true);
-    const user = await this.userRepo().get(userId);
-    const username = user?.username || userId;
-    const userMemberships = allMembers.filter(
-      (m) => (m.userId === userId || m.userId === username || m.email?.toLowerCase() === userId.toLowerCase() || m.email?.toLowerCase() === username.toLowerCase()) && m.status === "active"
-    );
-    const isSystemAdmin = userId === "admin" || username === "admin" || user?.roles?.includes("admin") || userMemberships.some((m) => m.role === "system_admin");
+    const userMemberships = (await membershipsOf(this.ctx.store, id)).filter((m) => m.status === "active");
+    const isSystemAdmin = await isPlatformAdmin(this.ctx.store, id, userMemberships);
     const activeMap = /* @__PURE__ */ new Map();
     for (const t of allTenants) {
       if (t.status === "active") activeMap.set(t.id, t);
@@ -8153,18 +8723,15 @@ var TenantService = class {
     });
     return { tenants: rows, currentTenantId };
   }
-  async getMyProfile(userId, tenantId) {
-    const allMembers = await this.memberRepo().query(() => true);
-    const allTenants = await this.tenantRepo().query(() => true);
-    const user = await this.userRepo().get(userId);
-    const username = user?.username || userId;
-    const isSystemAdmin = userId === "admin" || username === "admin" || user?.roles?.includes("admin") || allMembers.some(
-      (m) => (m.userId === userId || m.userId === username || m.email?.toLowerCase() === userId.toLowerCase() || m.email?.toLowerCase() === username.toLowerCase()) && m.role === "system_admin"
-    );
+  async getMyProfile(id, tenantId) {
+    const userId = id.sub;
+    const memberships = await membershipsOf(this.ctx.store, id);
+    const isSystemAdmin = await isPlatformAdmin(this.ctx.store, id, memberships);
+    const email = id.email || (id.username?.includes("@") ? id.username : void 0);
     if (tenantId === "all" && isSystemAdmin) {
       return {
         userId,
-        email: userId.includes("@") ? userId : `${userId}@platform.local`,
+        email: email || `${id.username || userId}@platform.local`,
         member: {
           id: `mem_${userId}_platform`,
           tenantId: "all",
@@ -8177,28 +8744,38 @@ var TenantService = class {
         tenant: { id: "all", name: "All Workspaces (Platform View)", slug: "platform-wide" }
       };
     }
-    const membership = allMembers.find(
-      (m) => (m.userId === userId || m.userId === username || m.email?.toLowerCase() === userId.toLowerCase() || m.email?.toLowerCase() === username.toLowerCase()) && m.tenantId === tenantId
-    );
-    const tenant = allTenants.find((t) => t.id === tenantId);
-    const effectiveRole = membership?.role ?? (isSystemAdmin ? "system_admin" : "viewer");
-    const effectivePermissions = membership?.permissions || (effectiveRole === "system_admin" || effectiveRole === "owner" || effectiveRole === "admin" ? ["*"] : ["workflow:view", "instance:view", "task:view"]);
+    const membership = memberships.find((m) => m.tenantId === tenantId && m.status === "active");
+    const tenant = (await this.tenantRepo().query((t) => t.id === tenantId))[0];
+    if (!membership && !isSystemAdmin) throw forbidden("You are not a member of the requested workspace.");
+    if (!tenant) throw notFound(`Workspace "${tenantId}" not found`);
+    const role = membership?.role ?? "system_admin";
+    const permissions = membership?.permissions ?? await this.permissionsForRole(tenantId, role);
     return {
       userId,
-      email: membership?.email || (userId.includes("@") ? userId : `${userId}@local`),
+      email: membership?.email || email || `${id.username || userId}@local`,
       member: {
         id: membership?.id || `mem_${userId}_${tenantId}`,
         tenantId,
-        role: effectiveRole,
+        role,
         status: membership?.status || "active",
-        displayName: membership?.displayName || userId,
-        permissions: effectivePermissions,
+        displayName: membership?.displayName || id.username || userId,
+        permissions,
         joinedAt: membership?.joinedAt || this.ctx.clock()
       },
-      tenant: tenant ? { id: tenant.id, name: tenant.name, slug: tenant.slug } : null
+      tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug }
     };
   }
-  async getCurrentTenant(tenantId) {
+  /** What a workspace role grants: the workspace's own Role row, else the built-in default (same rule as requirePermission). */
+  async permissionsForRole(tenantId, role) {
+    if (role === "owner" || role === "admin" || role === "system_admin") return ["*"];
+    const rows = await this.roleRepo().query((r) => r.tenantId === tenantId && r.name === role);
+    return rows.length ? rows.flatMap((r) => r.permissions) : DEFAULT_ROLES[role] ?? [];
+  }
+  async getCurrentTenant(tenantId, id) {
+    const memberships = await membershipsOf(this.ctx.store, id);
+    if (tenantId === "all" ? !await isPlatformAdmin(this.ctx.store, id, memberships) : !(memberships.some((m) => m.tenantId === tenantId && m.status === "active") || await isPlatformAdmin(this.ctx.store, id, memberships))) {
+      throw forbidden("You are not a member of the requested workspace.");
+    }
     if (tenantId === "all") {
       const now = this.ctx.clock();
       return {
@@ -8217,11 +8794,10 @@ var TenantService = class {
     if (!tenant) throw notFound(`Workspace "${tenantId}" not found`);
     return tenant;
   }
-  async listMemberships(userId) {
-    const allMembers = await this.memberRepo().query(() => true);
+  async listMemberships(id) {
     const allTenants = await this.tenantRepo().query(() => true);
     const tenantMap = new Map(allTenants.map((t) => [t.id, t]));
-    const userMembers = allMembers.filter((m) => m.userId === userId || m.email?.toLowerCase() === userId.toLowerCase());
+    const userMembers = await membershipsOf(this.ctx.store, id);
     return userMembers.map((m) => {
       const t = tenantMap.get(m.tenantId);
       return {
@@ -8296,7 +8872,7 @@ var TenantService = class {
         tenantId: defaultTenantId,
         userId: "admin",
         email: "admin@local",
-        role: "system_admin",
+        role: "owner",
         status: "active",
         displayName: "System Admin",
         permissions: ["*"],
@@ -8304,6 +8880,7 @@ var TenantService = class {
         lastActiveAt: this.ctx.clock()
       });
     }
+    await ensurePlatformAdmin(this.ctx.store, this.ctx.clock(), () => this.ctx.newId());
     const plans = await this.planRepo().query(() => true);
     if (plans.length === 0) {
       const defaultPlans = await this.listPublicPlans();
@@ -8317,15 +8894,26 @@ var TenantService = class {
 // src/http/tenant-routes.ts
 var ctxOf4 = (req2) => req2.ctx;
 function buildPublicTenantRoutes() {
-  const r = Router4();
+  const r = Router5();
   r.get("/tenants/check/:slug", asyncHandler(async (req2, res) => {
     const service = new TenantService(ctxOf4(req2));
     const result = await service.checkSlug(req2.params.slug);
     res.json({ success: true, data: result });
   }));
-  r.post("/tenants/signup", asyncHandler(async (req2, res) => {
+  const signupLimiter = rateLimit({ windowMs: 6e4, max: 30, keyOf: (req2) => req2.ip || "anon" });
+  r.post("/tenants/signup", signupLimiter, asyncHandler(async (req2, res) => {
     const service = new TenantService(ctxOf4(req2));
-    const tenant = await service.signup(req2.body || {});
+    let caller;
+    if (oidc.isConfigured()) {
+      const header = req2.header("authorization") || "";
+      if (!header.startsWith("Bearer ")) throw authRequired("sign in to create a workspace");
+      try {
+        caller = await verifyBearer(header.slice(7));
+      } catch {
+        throw authRequired("invalid or expired token");
+      }
+    }
+    const tenant = await service.signup(req2.body || {}, caller);
     res.status(201).json({ success: true, data: tenant });
   }));
   r.get("/public/plans", asyncHandler(async (req2, res) => {
@@ -8333,45 +8921,53 @@ function buildPublicTenantRoutes() {
     const plans = await service.listPublicPlans();
     res.json({ success: true, data: plans });
   }));
+  r.get("/team/invitations/:token", asyncHandler(async (req2, res) => {
+    const info = await TeamService.lookup(ctxOf4(req2), req2.params.token);
+    if (!info) throw notFound("Invitation");
+    res.json({ success: true, data: info });
+  }));
   return r;
 }
 function buildTenantRoutes() {
-  const r = Router4();
+  const r = Router5();
+  r.post("/team/invitations/accept", requireAuth, asyncHandler(async (req2, res) => {
+    const claims = req2.user;
+    const m = await TeamService.accept(ctxOf4(req2), String(req2.body?.token || ""), claims);
+    res.json({ success: true, data: { tenantId: m.tenantId, role: m.role } });
+  }));
   r.get("/me/tenants", requireAuth, asyncHandler(async (req2, res) => {
     const claims = req2.user;
     const requested = req2.headers["x-tenant-id"]?.trim();
     const search = typeof req2.query.search === "string" ? req2.query.search : void 0;
     const limit = typeof req2.query.limit === "string" ? parseInt(req2.query.limit, 10) : 10;
     const service = new TenantService(ctxOf4(req2));
-    const { tenants, currentTenantId } = await service.listMyTenants(claims.sub, search, limit, requested);
+    const { tenants, currentTenantId } = await service.listMyTenants(claims, search, limit, requested);
     res.json({ success: true, data: tenants, currentTenantId });
   }));
   r.get("/me/profile", requireAuth, asyncHandler(async (req2, res) => {
     const claims = req2.user;
     const requested = req2.headers["x-tenant-id"]?.trim() || ctxOf4(req2).tenantId;
     const service = new TenantService(ctxOf4(req2));
-    const profile = await service.getMyProfile(claims.sub, requested);
+    const profile = await service.getMyProfile(claims, requested);
     res.json({ success: true, data: profile });
   }));
   r.get("/tenants/current", requireAuth, asyncHandler(async (req2, res) => {
+    const claims = req2.user;
     const requested = req2.headers["x-tenant-id"]?.trim() || ctxOf4(req2).tenantId;
     const service = new TenantService(ctxOf4(req2));
-    const tenant = await service.getCurrentTenant(requested);
+    const tenant = await service.getCurrentTenant(requested, claims);
     res.json({ success: true, data: tenant });
   }));
   r.get("/tenants", requireAuth, asyncHandler(async (req2, res) => {
     const claims = req2.user;
     const service = new TenantService(ctxOf4(req2));
-    const memberships = await service.listMemberships(claims.sub);
+    const memberships = await service.listMemberships(claims);
     res.json({ success: true, data: memberships });
   }));
   r.get("/system/stats", requireAuth, asyncHandler(async (req2, res) => {
     const claims = req2.user;
-    const isSystemAdmin = claims.username === "admin" || Array.isArray(claims.roles) && claims.roles.includes("admin");
-    if (!isSystemAdmin) {
-      return res.status(403).json({ error: { code: "FORBIDDEN", message: "Platform system administrator access required" } });
-    }
     const ctx = ctxOf4(req2);
+    if (!await isPlatformAdmin(ctx.store, claims)) throw forbidden("Platform system administrator access required");
     const [allTenants, allMembers, allInstances, allTasks, allDeployments] = await Promise.all([
       ctx.store.repo(Collections.tenants).query(() => true),
       ctx.store.repo(Collections.tenantMembers).query(() => true),
@@ -8451,37 +9047,85 @@ function createApp(store2) {
 }
 
 // src/infra/ws-auth.ts
-function authenticateWsUpgrade(req2) {
-  const token = new URL(req2.url || "", "http://internal").searchParams.get("token");
+var queryOf = (req2) => new URL(req2.url || "", "http://internal").searchParams;
+async function authenticateWsUpgrade(req2) {
+  const token = queryOf(req2).get("token");
+  if (!token) return null;
   try {
-    verifyToken(token || "");
-    return true;
+    return await verifyBearer(token);
   } catch {
-    return false;
+    return null;
   }
+}
+async function authorizeWsTenant(store2, claims, req2) {
+  const tenantId = queryOf(req2).get("tenant")?.trim() || config.defaultTenant;
+  const memberships = await membershipsOf(store2, claims);
+  const platformAdmin = await isPlatformAdmin(store2, claims, memberships);
+  if (tenantId === "all") return platformAdmin ? { claims, tenantId, platformAdmin } : null;
+  const tenant = (await store2.repo(Collections.tenants).query((t) => t.id === tenantId))[0];
+  if (!tenant || tenant.status !== "active") return null;
+  const member = memberships.some((m) => m.tenantId === tenantId && m.status === "active");
+  return member || platformAdmin ? { claims, tenantId, platformAdmin } : null;
+}
+async function canSubscribe(store2, s, topic) {
+  const m = /^instance:(.+)$/.exec(topic);
+  if (!m) return false;
+  const inst = await store2.repo(Collections.instances).get(m[1]);
+  if (!inst) return false;
+  return s.tenantId === "all" ? s.platformAdmin : inst.tenantId === s.tenantId;
 }
 
 // src/index.ts
+assertProductionConfig();
 var { app, store } = createApp();
 var server = http.createServer(app);
 var wss = new WebSocketServer({ server, path: config.wsPath });
-wss.on("connection", (ws, req2) => {
-  if (!authenticateWsUpgrade(req2)) {
-    ws.close(4001, "unauthorized");
-    return;
+wss.on("connection", async (ws, req2) => {
+  const queued = [];
+  const early = (...args) => {
+    queued.push(args);
+  };
+  ws.on("message", early);
+  try {
+    const claims = await authenticateWsUpgrade(req2);
+    if (!claims) {
+      ws.close(4001, "unauthorized");
+      return;
+    }
+    const session = await authorizeWsTenant(store, claims, req2);
+    if (!session) {
+      ws.close(4003, "forbidden");
+      return;
+    }
+    ws.off("message", early);
+    hub.add(ws, (topic) => canSubscribe(store, session, topic));
+    for (const args of queued) ws.emit("message", ...args);
+  } catch {
+    ws.close(1011, "error");
   }
-  hub.add(ws);
 });
-var timerCtx = makeContext({ store, tenantId: config.defaultTenant });
-var timers = new TimerService(timerCtx, hub.engineEmit);
-setInterval(() => {
-  timers.tick((/* @__PURE__ */ new Date()).toISOString()).catch((e) => logger.error("timer tick failed", { err: e.message }));
+var ticking = false;
+setInterval(async () => {
+  if (ticking) return;
+  ticking = true;
+  try {
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const tenants = await store.repo(Collections.tenants).query((t) => t.status === "active");
+    const ids = /* @__PURE__ */ new Set([config.defaultTenant, ...tenants.map((t) => t.id)]);
+    for (const tenantId of ids) {
+      await new TimerService(makeContext({ store, tenantId }), hub.engineEmit).tick(now).catch((e) => logger.error("timer tick failed", { tenantId, err: e.message }));
+    }
+  } finally {
+    ticking = false;
+  }
 }, 5e3);
 var iamCtx = makeContext({ store, tenantId: config.defaultTenant });
-new IamService(iamCtx).ensureSeeded(config.adminInitialPassword).then(({ seededAdmin }) => {
+new IamService(iamCtx).ensureSeeded(config.adminInitialPassword).then(async ({ seededAdmin }) => {
+  await new TenantService(iamCtx).seedDefaultsIfEmpty();
+  await ensurePlatformAdmin(store, (/* @__PURE__ */ new Date()).toISOString(), () => iamCtx.newId());
   if (seededAdmin) logger.info("seeded initial admin user", { username: "admin", note: "set ADMIN_INITIAL_PASSWORD before first boot in anything but local dev" });
   server.listen(config.port, () => {
-    logger.info("jbpm-engine server up", { port: config.port, ws: config.wsPath, store: config.store, dataDir: config.dataDir });
+    logger.info("jbpm-engine server up", { port: config.port, ws: config.wsPath, store: config.store, dataDir: config.dataDir, sso: !!config.oidc.issuer, localLogin: config.localLogin });
   });
 }).catch((e) => {
   logger.error("IAM seeding failed \u2014 refusing to start", { err: e.message });

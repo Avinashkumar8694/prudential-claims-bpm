@@ -24,6 +24,7 @@
     "@fabrixly/bpmn-sdk": "file:../../bpmn-sdk",
     "ajv": "^8.20.0",
     "express": "^4.19.2",
+    "isolated-vm": "^6.2.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^6.9.16",
     "pg": "^8.13.0",

@@ -53,16 +53,11 @@ service), add it to `OUTBOUND_ALLOWLIST` (comma-separated hostnames or `.suffix`
 
 ## Script sandboxing
 
-`js` script tasks/conditions run in a `node:vm` context with a frozen shim exposing only `kcontext`
-(and this engine's own `vars`/`instance`/`node` sugar) — no `require`, `process`, `fs`, network, or
-prototype escape, and a wall-clock timeout (`SCRIPT_TIMEOUT_MS`, default 2s).
-
-**Known limitation, called out explicitly rather than glossed over**: `node:vm` is not a hard security
-boundary — it's suitable for trusted authors, not for isolating mutually-untrusted tenants from each
-other or from the host process. `docs/07-security.md` names `isolated-vm` as the production-grade
-replacement; that swap has not been made. If every author of a script task is already someone you'd
-trust with shell access to the box, this is a non-issue. If you need to run scripts from authors you
-don't fully trust, treat this as an open item before relying on it as an isolation boundary.
+`js` script tasks/conditions (and the `Compute` work item) run in a fresh `isolated-vm` V8 isolate per execution — a real
+isolation boundary: no `require`, `process`, `fs`, network or host objects exist inside it, prototype-chain escapes
+reach nothing, the server environment is unreadable, heap is capped (64 MB) and a wall-clock timeout applies
+(`SCRIPT_TIMEOUT_MS`, default 2s). Only JSON crosses the boundary, so scripts must keep process variables
+JSON-serialisable. Safe for mutually-untrusted tenant authors.
 
 `java`-dialect scripts (from real jBPM imports) never run as transpiled JavaScript — they're compiled
 and executed as real Java in a separate sidecar process, one compile per distinct script (cached).

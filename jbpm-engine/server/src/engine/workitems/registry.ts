@@ -1,7 +1,7 @@
 // Work-item handler framework — pluggable executors for operation tasks (Email/SMS/DB/Compute/Log/Rest),
 // the Node equivalent of jBPM WorkItemHandlers. Each returns result data mapped back to variables.
 // External handlers (Email/SMS/DB/Rest) call service URLs or simulate when not configured.
-import vm from 'node:vm';
+import { evalExpression } from '../sandbox.ts';
 
 export type WorkItemHandler = (params: Record<string, unknown>, env: Record<string, string>) => Promise<Record<string, unknown>>;
 
@@ -19,9 +19,7 @@ export const WORKITEM_HANDLERS: Record<string, WorkItemHandler> = {
   Compute: async (p) => {
     const expr = String(p['expression'] ?? p['expr'] ?? '');
     if (!expr) return { result: undefined };
-    const sandbox: Record<string, unknown> = { ...p };
-    vm.createContext(sandbox);
-    return { result: vm.runInContext(`(${expr})`, sandbox, { timeout: 1000 }) };
+    return { result: await evalExpression(expr, p, 1000) };
   },
   // external side-effects — call the configured service, else simulate
   Email: async (p, env) => (env['EMAIL_SERVICE_URL'] ? { ...(await callService(env['EMAIL_SERVICE_URL'], p)), sent: true } : { sent: true, simulated: true, to: p['to'] }),

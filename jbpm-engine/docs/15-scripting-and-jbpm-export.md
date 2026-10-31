@@ -478,8 +478,7 @@ instances), not because typical script execution was ever slow.
 
 They are no longer symmetric in mechanism, only in outcome:
 
-- **JavaScript** runs natively in this process's own V8 (`node:vm`) — no external process, no startup
-  cost, no extra dependency to have installed.
+- **JavaScript** runs in a per-execution `isolated-vm` V8 isolate inside this process (~1 ms boot, real isolation, 64 MB cap) — no external process, no extra dependency to have installed.
 - **Java** runs in the JVM sidecar — requires a JDK (not just a JRE — `javax.tools.ToolProvider.
   getSystemJavaCompiler()` needs a real compiler) reachable on `PATH`, and a small first-call latency
   per distinct script while it compiles (cached after that).

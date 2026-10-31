@@ -27,7 +27,7 @@ Tracked, per [roadmap](./11-roadmap.md). `[ ]` todo · `[~]` in progress · `[x]
 - [x] `instances` module + REST (start, get, history, diagram-state)
 - [~] WS hub built + engine events emitted; UI consumption pending
 - [~] instance detail view (variables + history timeline) done; live canvas highlight pending
-- [x] sandbox for js scripts + flow conditions (node:vm; isolated-vm hardening in Phase 6)
+- [x] sandbox for js scripts + flow conditions (isolated-vm isolate per execution)
 
 ## Phase 3 — Human & async work
 - [x] handlers: userTask (+ Task service); catch/receive waits

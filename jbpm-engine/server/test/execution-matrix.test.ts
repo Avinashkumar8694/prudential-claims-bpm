@@ -406,16 +406,33 @@ test('EXE-91 sandbox: infinite loop is cut off; direct host globals (process, re
   }
 });
 
-// KNOWN CRITICAL GAP (reported, not hidden): the js sandbox is node:vm with live host objects, which is not a security
-// boundary. Prototype-chain escapes reach the host `process` (this.constructor.constructor, kcontext.fn.constructor, …).
-// In a multi-tenant deployment that is host code execution for anyone who can author a script. Fix = run scripts in an
-// isolated runtime (isolated-vm / a locked-down worker) — until then this stays a TODO so the suite shows it every run.
-test('EXE-91b sandbox escape via constructor chains must not reach the host process', { todo: 'CRITICAL: node:vm is not an isolation boundary — move script execution to isolated-vm / a locked-down worker' }, async () => {
-  for (const body of ['this.constructor.constructor("return typeof process")()', 'kcontext.getVariable.constructor("return typeof process")()', 'Object.getPrototypeOf(kcontext.getVariable).constructor("return typeof process")()', 'env.constructor.constructor("return typeof process")()']) {
+// Scripts run in a real V8 isolate (isolated-vm): no Node APIs and no host objects exist inside it, so every
+// prototype-chain route to the host `process` resolves to undefined.
+test('EXE-91b sandbox escape via constructor chains must not reach the host process', async () => {
+  const bodies = [
+    'this.constructor.constructor("return typeof process")()', 'kcontext.getVariable.constructor("return typeof process")()',
+    'Object.getPrototypeOf(kcontext.getVariable).constructor("return typeof process")()', 'env.constructor.constructor("return typeof process")()',
+    'console.log.constructor("return typeof process")()', 'vars.constructor.constructor("return typeof require")()',
+    '(function(){ return arguments.callee.caller; }).constructor("return typeof process")()',
+    'Function("return typeof process.mainModule")()', 'eval("typeof process")',
+  ];
+  for (const body of bodies) {
     const wf = await deploy(A, [S, { id: 'sc', type: 'script', lang: 'js', code: `kcontext.setVariable("x", String(${body}))` }, E], flowsOf(['s', 'sc'], ['sc', 'e']), [{ name: 'x', type: 'string' }]);
     const r = (await start(OP(), wf)).body;
+    assert.ok(r.variables?.x === undefined || /undefined/.test(String(r.variables.x)) || r.status === 'failed', `host process reachable via: ${body} -> ${r.variables?.x}`);
     assert.notStrictEqual(r.variables?.x, 'object', `host process reachable via: ${body}`);
   }
+});
+
+test('EXE-91c sandbox: server environment (secrets) is not readable, memory bombs and runaway loops are contained', async () => {
+  process.env.EXE91_SECRET = 'top-secret';
+  const read = await deploy(A, [S, { id: 'sc', type: 'script', lang: 'js', code: 'kcontext.setVariable("x", System.getenv("EXE91_SECRET") + "|" + kcontext.getKieRuntime().getEnvironment().get("EXE91_SECRET"))' }, E], flowsOf(['s', 'sc'], ['sc', 'e']), [{ name: 'x', type: 'string' }]);
+  assert.ok(!String((await start(OP(), read)).body.variables?.x).includes('top-secret'), 'host env must not leak into scripts');
+  delete process.env.EXE91_SECRET;
+  const bomb = await deploy(A, [S, { id: 'sc', type: 'script', lang: 'js', code: 'var a = []; while (true) a.push(new Array(1e6).fill(1));' }, E], flowsOf(['s', 'sc'], ['sc', 'e']));
+  assert.strictEqual((await start(OP(), bomb)).body.status, 'failed', 'memory bomb is killed, server survives');
+  const ok = await deploy(A, [S, { id: 'sc', type: 'script', lang: 'js', code: 'kcontext.setVariable("x", "alive")' }, E], flowsOf(['s', 'sc'], ['sc', 'e']), [{ name: 'x', type: 'string' }]);
+  assert.strictEqual((await start(OP(), ok)).body.variables.x, 'alive');
 });
 
 test('EXE-92 concurrency: 25 parallel starts all complete with unique ids and exact per-instance state', async () => {
@@ -477,4 +494,10 @@ test('EXE-97 case management: definition → case → status/data/comment/audit/
   assert.strictEqual((await h.call('POST', '/workflow-instances/nope/audits', { token: mgr, tenant: A.id, body: { kind: 'note' } })).status, 404, 'no audit on a non-existent case');
   assert.strictEqual((await h.call('GET', '/workflow-analytics/summary', { token: mgr, tenant: A.id })).status, 403, 'analytics need query:read');
   assert.strictEqual((await h.call('GET', '/workflow-analytics/summary', { token: A.tokens.operator, tenant: A.id })).status, 200);
+});
+
+test('EXE-91d the Compute work item shares the isolate: constructor-chain escapes reach nothing, results still work', async () => {
+  const { evalExpression } = await import('../src/engine/sandbox.ts');
+  assert.strictEqual(await evalExpression('a * b + 1', { a: 3, b: 4 }), 13);
+  assert.strictEqual(await evalExpression('this.constructor.constructor("return typeof process")()', {}), 'undefined');
 });
