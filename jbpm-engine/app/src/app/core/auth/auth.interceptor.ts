@@ -17,7 +17,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const toast = inject(ToastService);
 
-  const isPublicAuthRoute = req.url.includes('/api/auth/login') || req.url.includes('/api/auth/config') || req.url.includes('/api/public/') || req.url.includes('/api/tenants/check');
+  const isPublicAuthRoute = /\/api\/auth\/(?!me)/.test(req.url) || req.url.includes('/api/public/') || req.url.includes('/api/tenants/check');
   // signup is public without SSO but needs the caller's token with it (the workspace is created for the signed-in identity)
   const isSignup = req.url.includes('/api/tenants/signup');
   const token = auth.token();

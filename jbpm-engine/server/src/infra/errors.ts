@@ -38,6 +38,13 @@ export function errorMiddleware(err: unknown, _req: Request, res: Response, _nex
     if (err.status >= 500) logger.error(err.message, { code: err.code });
     return res.status(err.status).json({ error: { code: err.code, message: err.message, details: err.details } });
   }
+  // body-parser / http-errors client faults (payload too large, malformed JSON, bad charset…) are the CALLER's mistake:
+  // answer with their own 4xx instead of a misleading 500
+  const status = (err as { status?: number; statusCode?: number })?.status ?? (err as { statusCode?: number })?.statusCode;
+  if (typeof status === 'number' && status >= 400 && status < 500 && (err as { expose?: boolean }).expose !== false) {
+    const code = status === 413 ? 'PAYLOAD_TOO_LARGE' : status === 400 ? 'BAD_REQUEST' : 'REQUEST_REJECTED';
+    return res.status(status).json({ error: { code, message: status === 413 ? 'request body too large' : status === 400 ? 'malformed request body' : 'request rejected' } });
+  }
   logger.error('unhandled error', { err: (err as Error)?.message, stack: (err as Error)?.stack });
   return res.status(500).json({ error: { code: 'INTERNAL', message: 'Internal server error' } });
 }

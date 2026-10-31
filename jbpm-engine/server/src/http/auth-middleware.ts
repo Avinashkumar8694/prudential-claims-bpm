@@ -19,6 +19,13 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   if (!token) return next(authRequired());
   try {
     const claims = await verifyBearer(token);
+    // A local token outlives the account state it was minted from: honour deactivation and password changes
+    // immediately instead of at token expiry. (Fabricated test principals without a row are not affected.)
+    if (claims.source === 'local') {
+      const row = await ((req as any).ctx as AppContext).store.repo<User>(Collections.users).get(claims.sub);
+      const iat = (claims as any).iat as number | undefined;
+      if (row && (!row.active || (row.passwordChangedAt && iat !== undefined && iat * 1000 < Date.parse(row.passwordChangedAt) - 1000))) throw new Error('session revoked');
+    }
     (req as any).user = claims;
     (req as any).actor = claims.email || claims.username;   // routes.ts's actorOf(req) keeps working unchanged
     next();
@@ -105,8 +112,9 @@ export function requireWorkspaceAccess(req: Request, _res: Response, next: NextF
       const member = memberships.find((m) => m.tenantId === requestedTenantId);
       if (!platformAdmin && !member) {
         // local IAM users whose user row lives in this workspace
+        // (only admin-provisioned users that hold roles; a self-registered account has none and must belong via a seat)
         const u = user.source !== 'oidc' && user.sub ? await ctx.store.repo<User>(Collections.users).get(user.sub) : undefined;
-        if (!(u && u.tenantId === requestedTenantId && u.active)) throw forbidden('You are not a member of the requested workspace.');
+        if (!(u && u.tenantId === requestedTenantId && u.active && u.roles.length > 0)) throw forbidden('You are not a member of the requested workspace.');
       }
 
       if (ctx.tenantId !== requestedTenantId) (req as any).ctx = makeContext({ store: ctx.store, tenantId: requestedTenantId });

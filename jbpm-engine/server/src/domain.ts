@@ -210,6 +210,22 @@ export interface User extends Entity {
   groups: string[];         // Group names
   active: boolean;
   createdAt: string;
+  /** contact address; for a self-registered account it equals `username` */
+  email?: string;
+  /** false until the mailbox is proven (verification link or password-reset link). Absent = legacy/admin-provisioned = trusted. */
+  emailVerified?: boolean;
+  /** brute-force protection */
+  failedLogins?: number;
+  lockedUntil?: string | null;
+  /** single-use, hashed, expiring tokens (SHA-256 hex) */
+  verificationHash?: string | null;
+  verificationExpiresAt?: string | null;
+  passwordResetHash?: string | null;
+  passwordResetExpiresAt?: string | null;
+  passwordResetSentAt?: string | null;
+  /** tokens issued before this instant are rejected (password changed/reset) */
+  passwordChangedAt?: string | null;
+  displayName?: string;
 }
 
 // ---- Multi-tenancy & Workspaces ----

@@ -25,6 +25,14 @@ Configuration lives in two layers: **environment variables** (deployment-time, r
 | `OIDC_AUDIENCE` | the client id | Comma-separated accepted `aud` values for bearer tokens |
 | `OIDC_CLOCK_TOLERANCE_SEC` | `30` | Clock skew allowed when checking `exp`/`nbf` |
 | `DASHBOARD_URL` | `APP_ORIGIN`, else `http://localhost:4200` | Where the SSO callback and logout send the browser (post-logout URI must be registered: `https://orkestr.fabrixly.com`, `http://localhost:4200`, `http://localhost:4000`) |
+| `AUTH_REGISTRATION` | `true` | Self-service account creation (needs local login); the landing page's "Get started" goes to `/register` when on, else to sign-in |
+| `AUTH_FORGOT_PASSWORD` | `true` | Forgot / reset password flow (needs local login) |
+| `AUTH_REQUIRE_EMAIL_VERIFICATION` | `false` | A registered account cannot sign in until it confirms its email |
+| `AUTH_PASSWORD_MIN_LENGTH` | `8` | Minimum password length (never below 8); self-service passwords also need a letter and a digit and may not be common |
+| `AUTH_MAX_FAILED_LOGINS` / `AUTH_LOCKOUT_MINUTES` | `5` / `15` | Account lockout after consecutive wrong passwords |
+| `SMTP_HOST` `SMTP_PORT` `SMTP_SECURE` `SMTP_USER` `SMTP_PASSWORD` | *(unset)* | Real SMTP delivery (aliases `EMAIL_HOST/PORT/SECURE/USER/PASS` as in rules-manager) |
+| `MAIL_FROM` | `no-reply@$DOMAIN` | From address |
+| `MAIL_WEBHOOK_URL` | *(unset)* | Alternative to SMTP: JSON relay `{from,to,subject,text,html}`. With neither, mails are only logged in dev (never in production) and invitation links are returned to the inviter |
 | `AUTH_LOCAL_LOGIN` | `true` | Set `false` to disable `POST /auth/login` and HS256 tokens once SSO is the only way in |
 | `NODE_ENV` | — | `production` makes start-up refuse a default `JWT_SECRET`/`ADMIN_INITIAL_PASSWORD` and a non-https issuer |
 | `JAVA_SIDECAR_CLASSPATH` | `<repo>/java-runtime/out` | Compiled classes for the Java script sidecar |

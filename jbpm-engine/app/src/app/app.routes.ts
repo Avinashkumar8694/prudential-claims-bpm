@@ -1,10 +1,14 @@
 import { Routes } from '@angular/router';
-import { authGuard, permissionGuard } from './core/auth/auth.guard';
+import { authGuard, guestGuard, permissionGuard } from './core/auth/auth.guard';
 import { tenantGuard } from './core/tenant/tenant.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', loadComponent: () => import('./features/landing/root-gate.component').then((m) => m.RootGateComponent) },
-  { path: 'login', loadComponent: () => import('./features/auth/login-page.component').then((m) => m.LoginPageComponent) },
+  { path: 'login', canActivate: [guestGuard], loadComponent: () => import('./features/auth/login-page.component').then((m) => m.LoginPageComponent) },
+  { path: 'register', canActivate: [guestGuard], loadComponent: () => import('./features/auth/register-page.component').then((m) => m.RegisterPageComponent) },
+  { path: 'forgot-password', canActivate: [guestGuard], loadComponent: () => import('./features/auth/forgot-password.component').then((m) => m.ForgotPasswordComponent) },
+  { path: 'reset-password', canActivate: [guestGuard], loadComponent: () => import('./features/auth/reset-password.component').then((m) => m.ResetPasswordComponent) },
+  { path: 'verify-email', loadComponent: () => import('./features/auth/verify-email.component').then((m) => m.VerifyEmailComponent) },
   { path: 'auth/callback', loadComponent: () => import('./features/auth/sso-callback.component').then((m) => m.SsoCallbackComponent) },
   { path: 'accept-invite', loadComponent: () => import('./features/team/accept-invite.component').then((m) => m.AcceptInviteComponent) },
   { path: 'no-workspace', loadComponent: () => import('./features/tenant/no-workspace.component').then((m) => m.NoWorkspaceComponent) },

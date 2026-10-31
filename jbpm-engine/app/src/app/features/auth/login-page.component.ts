@@ -1,96 +1,106 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
-import { AuthApiService } from '../../core/auth/auth-api.service';
-import type { AuthConfig } from '../../core/auth/auth.models';
-import { API_BASE } from '../../core/config';
+import { AuthConfigService } from '../../core/auth/auth-config.service';
 import { IconComponent } from '../../shared/icon.component';
+import { API_BASE } from '../../core/config';
 
+/** Sign-in. Everything on it is driven by GET /api/auth/config: the SSO button, the password form, the
+ *  "forgot password" and "create account" links each appear only when the server has that feature on. */
 @Component({
   selector: 'app-login-page',
   standalone: true,
-  imports: [IconComponent, FormsModule],
+  imports: [IconComponent, FormsModule, RouterLink],
   template: `
-    <div class="wrap">
-      <form class="card login" (ngSubmit)="submit()">
-        <div class="brand"><span class="logo"><app-icon name="zap" [size]="18" /></span><span class="brand-name">jBPM Engine</span></div>
-        <h1>Sign in</h1>
-        @if (error()) { <div class="error">{{ error() }}</div> }
+    <div class="auth-wrap">
+      <div class="card auth-card">
+        <div class="auth-logo"><app-icon name="zap" [size]="22" /></div>
+        <h1 class="auth-title">{{ cfg().appName }}</h1>
+        <p class="auth-sub">Sign in to your workspace</p>
+
+        @if (notice(); as n) {
+          <div class="auth-alert" [class.error]="n.kind === 'error'" [class.success]="n.kind === 'success'" [class.info]="n.kind === 'info'" role="alert">
+            <span>{{ n.text }}</span><button type="button" (click)="notice.set(null)">Dismiss</button>
+          </div>
+        }
+        @if (invited()) { <div class="auth-alert info">You have a pending team invitation. Sign in to review and accept it.</div> }
+
+        @if (config.noSignIn()) {
+          <div class="auth-alert error">Sign-in is not configured for this deployment. Please contact your administrator.</div>
+        }
+
         @if (cfg().sso) {
-          <button class="btn primary" type="button" (click)="ssoLogin()">Continue with single sign-on</button>
+          <button class="btn primary" type="button" (click)="ssoLogin()">Sign in with SSO</button>
         }
-        @if (cfg().sso && cfg().localLogin) { <div class="or"><span>or sign in with a local account</span></div> }
+        @if (cfg().sso && cfg().localLogin) { <div class="auth-divider"><span>or use your email and password</span></div> }
+
         @if (cfg().localLogin) {
-        <label>
-          Username
-          <input name="username" [(ngModel)]="username" autocomplete="username" required autofocus />
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" [(ngModel)]="password" autocomplete="current-password" required />
-        </label>
-        <button class="btn primary" type="submit" [disabled]="loading()">{{ loading() ? 'Signing in…' : 'Sign in' }}</button>
+          <form (ngSubmit)="submit()" class="form" novalidate>
+            <label class="auth-field">Email or username
+              <input name="username" [(ngModel)]="username" autocomplete="username" required [autofocus]="!cfg().sso" />
+            </label>
+            <label class="auth-field">Password
+              <span class="auth-pw">
+                <input name="password" [type]="show() ? 'text' : 'password'" [(ngModel)]="password" autocomplete="current-password" required />
+                <button type="button" (click)="show.set(!show())" [attr.aria-label]="show() ? 'Hide password' : 'Show password'">{{ show() ? 'Hide' : 'Show' }}</button>
+              </span>
+            </label>
+            @if (cfg().forgotPassword) { <div class="auth-links"><span></span><a routerLink="/forgot-password">Forgot password?</a></div> }
+            <button class="btn primary" type="submit" [disabled]="loading() || !username || !password">{{ loading() ? 'Signing in…' : 'Sign in' }}</button>
+          </form>
         }
-      </form>
+
+        <div class="auth-foot">
+          @if (cfg().registration) { <span>New to {{ cfg().appName }}? <a routerLink="/register">Create an account</a></span> }
+          <a routerLink="/">← Back to home</a>
+        </div>
+      </div>
     </div>
   `,
-  styles: [`
-    /* Transparent so the page's mesh gradient (set on body) shows through — the sign-in screen is
-       the first impression and is where the brand backdrop does the most work. */
-    .wrap { min-height: 100vh; display: grid; place-items: center; background: transparent; }
-    .login { width: 360px; padding: 34px; display: flex; flex-direction: column; gap: 14px; border-radius: var(--radius-shell); box-shadow: var(--shadow-pop); }
-    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-    .logo { width: 34px; height: 34px; display: grid; place-items: center; background: var(--grad-brand); color: #fff; border-radius: 11px; box-shadow: 0 6px 16px -6px rgba(139, 92, 246, .9); }
-    .brand-name { font-weight: 700; color: var(--text-secondary); font-size: 13px; }
-    h1 { margin: 0 0 8px; font-size: var(--text-xl); letter-spacing: -.02em; }
-    label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
-    input { padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; font-family: inherit; }
-    input:focus { outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary); }
-    .error { color: var(--red); font-size: 13px; background: var(--red-bg); border-radius: var(--radius-sm); padding: 8px 10px; }
-    .or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
-    .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-    .btn.primary { justify-content: center; padding: 10px; font-size: 14px; margin-top: 6px; }
-  `],
+  styles: [`.form { display: flex; flex-direction: column; gap: 14px; }`],
 })
 export class LoginPageComponent implements OnInit {
   private auth = inject(AuthService);
   private router = inject(Router);
   private route = inject(ActivatedRoute);
-  private authApi = inject(AuthApiService);
-
-  /** which sign-in methods the server offers; local login is the safe default until /auth/config answers */
-  cfg = signal<AuthConfig>({ sso: false, localLogin: true, ssoLoginUrl: null });
-
-  ngOnInit() {
-    const err = this.route.snapshot.queryParamMap.get('error');
-    if (err) this.error.set(err);
-    this.authApi.config().subscribe({ next: (c) => this.cfg.set(c), error: () => { /* keep the local-login default */ } });
-  }
-
-  /** Full-page navigation: the server redirects to the identity server and back to /auth/callback. */
-  ssoLogin() {
-    const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/home';
-    window.location.href = `${API_BASE}/auth/oidc/login?redirect=${encodeURIComponent(redirect)}`;
-  }
+  config = inject(AuthConfigService);
+  cfg = this.config.cfg;
 
   username = '';
   password = '';
+  show = signal(false);
   loading = signal(false);
-  error = signal<string | null>(null);
+  notice = signal<{ kind: 'error' | 'success' | 'info'; text: string } | null>(null);
+  private redirect = this.route.snapshot.queryParamMap.get('redirect') || '';
+  invited = computed(() => this.redirect.startsWith('/accept-invite'));
+
+  ngOnInit() {
+    const q = this.route.snapshot.queryParamMap;
+    if (q.get('error')) this.notice.set({ kind: 'error', text: q.get('error')! });
+    else if (q.get('reason') === 'expired') this.notice.set({ kind: 'info', text: 'Your session has expired. Please sign in again.' });
+    else if (q.get('reset')) this.notice.set({ kind: 'success', text: 'Your password was changed. Sign in with the new password.' });
+    else if (q.get('verified')) this.notice.set({ kind: 'success', text: 'Email verified. You can sign in now.' });
+    else if (q.get('registered')) this.notice.set({ kind: 'success', text: 'Account created. Sign in to continue.' });
+  }
+
+  private target() { return this.redirect.startsWith('/') && !this.redirect.startsWith('//') ? this.redirect : '/home'; }
+
+  /** Full-page navigation: the server redirects to the identity server and back to /auth/callback. */
+  ssoLogin() { window.location.href = `${API_BASE}/auth/oidc/login?redirect=${encodeURIComponent(this.target())}`; }
 
   submit() {
     if (!this.username || !this.password) return;
     this.loading.set(true);
-    this.error.set(null);
-    this.auth.login(this.username, this.password).subscribe({
-      next: () => {
-        const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/projects';
-        this.router.navigateByUrl(redirect);
-      },
+    this.notice.set(null);
+    this.auth.login(this.username.trim(), this.password).subscribe({
+      next: () => this.router.navigateByUrl(this.target()),
       error: (err) => {
         this.loading.set(false);
-        this.error.set(err.status === 401 ? 'Invalid username or password' : 'Something went wrong — try again');
+        const msg = err.error?.error?.message as string | undefined;
+        this.notice.set({ kind: 'error', text: err.status === 401 ? 'Invalid email/username or password'
+          : err.status === 429 ? (msg || 'Too many attempts. Please wait and try again.')
+          : err.status === 403 ? (msg || 'You cannot sign in yet.') : 'Something went wrong — try again' });
       },
     });
   }

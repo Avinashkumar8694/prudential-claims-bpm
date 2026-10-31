@@ -11,6 +11,8 @@ import {
 import { conflict, forbidden, notFound, validation } from '../../infra/errors.ts';
 import { config } from '../../infra/config.ts';
 import { DEFAULT_ROLES } from '../iam/service.ts';
+import { sendMail } from '../../infra/mailer.ts';
+import { templates } from '../../infra/mail-templates.ts';
 import { ensurePlatformAdmin, isPlatformAdmin, membershipsOf, type Identity } from './identity.ts';
 
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -95,10 +97,11 @@ export class TenantService {
       if (!caller.email || caller.emailVerified !== true) throw forbidden('A verified email address is required to create a workspace');
       data = { ...data, ownerEmail: caller.email, ownerName: data.ownerName || caller.name };
     }
-    const name = (data.name || '').trim();
-    const slug = (data.slug || '').trim().toLowerCase();
-    const ownerEmail = (data.ownerEmail || '').trim().toLowerCase();
-    const ownerName = data.ownerName?.trim() || ownerEmail.split('@')[0];
+    const str = (v: unknown) => (typeof v === 'string' ? v : '');   // untrusted body: non-strings count as missing
+    const name = str(data.name).trim();
+    const slug = str(data.slug).trim().toLowerCase();
+    const ownerEmail = str(data.ownerEmail).trim().toLowerCase();
+    const ownerName = str(data.ownerName).trim() || ownerEmail.split('@')[0];
 
     if (!name || name.length < 2 || name.length > 100) {
       throw validation('Workspace name must be between 2 and 100 characters');
@@ -161,6 +164,7 @@ export class TenantService {
     };
 
     await this.memberRepo().put(membership);
+    void sendMail(templates.workspaceCreated(ownerEmail, name, 14));
 
     return tenant;
   }

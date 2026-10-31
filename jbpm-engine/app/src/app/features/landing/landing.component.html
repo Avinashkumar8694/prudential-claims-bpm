@@ -33,7 +33,7 @@
           </svg>
         </button>
         <a class="lp-btn lp-btn-ghost lp-nav-login" routerLink="/login">Log in</a>
-        <a class="lp-btn lp-btn-primary" routerLink="/login">{{ trialDays() ? 'Start free trial' : 'Get started' }}</a>
+        <a class="lp-btn lp-btn-primary" [routerLink]="authCfg.signupLink()">{{ trialDays() ? 'Start free trial' : 'Get started' }}</a>
       </div>
     </div>
   </header>
@@ -327,7 +327,7 @@
               class="lp-btn lp-btn-block"
               [class.lp-btn-primary]="!p.isCustom"
               [class.lp-btn-secondary]="p.isCustom"
-              routerLink="/login"
+              [routerLink]="authCfg.signupLink()"
             >
               {{ p.trialDays ? 'Start free trial' : 'Get started' }}
             </a>
@@ -360,6 +360,7 @@
         <p>Log in, create your workspace, and model your first visual workflow in seconds.</p>
         <div class="lp-cta-row lp-center-row">
           <a class="lp-btn lp-btn-primary lp-btn-lg" routerLink="/login">Log in to {{ appName }}</a>
+          @if (authCfg.cfg().registration) { <a class="lp-btn lp-btn-secondary lp-btn-lg" routerLink="/register">Create an account</a> }
           <a class="lp-btn lp-btn-secondary lp-btn-lg" href="#features" (click)="scrollTo('#features', $event)">Explore features</a>
         </div>
       </div>

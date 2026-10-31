@@ -13,7 +13,7 @@ import { signToken } from '../src/infra/auth.ts';
 import { Collections, type TenantMember } from '../src/domain.ts';
 
 let server: http.Server, base: string, store: MemoryStore, ws = '';
-const tok = (name: string) => signToken({ sub: name, username: name, roles: [], groups: [] });
+const tok = (name: string) => signToken({ sub: name, username: name, roles: [], groups: [], email: name, emailVerified: true });
 const T = { owner: tok('owner@x.com'), admin: tok('admin@x.com'), dev: tok('dev@x.com'), viewer: tok('viewer@x.com'), invitee: tok('new@x.com'), other: tok('other@x.com') };
 
 test.before(async () => {

@@ -11,6 +11,14 @@ export class AuthApiService extends ApiBase {
   config(): Observable<AuthConfig> {
     return this.http.get<AuthConfig>(`${this.base}/auth/config`);
   }
+  register(email: string, password: string, name?: string): Observable<{ id: string; email: string; verificationRequired: boolean }> {
+    return this.http.post<{ id: string; email: string; verificationRequired: boolean }>(`${this.base}/auth/register`, { email, password, name });
+  }
+  verifyEmail(token: string): Observable<void> { return this.http.post<void>(`${this.base}/auth/verify-email`, { token }); }
+  resendVerification(email: string): Observable<unknown> { return this.http.post(`${this.base}/auth/resend-verification`, { email }); }
+  forgotPassword(email: string): Observable<unknown> { return this.http.post(`${this.base}/auth/forgot-password`, { email }); }
+  checkResetToken(token: string): Observable<{ valid: boolean }> { return this.http.post<{ valid: boolean }>(`${this.base}/auth/reset-password/check`, { token }); }
+  resetPassword(token: string, password: string): Observable<void> { return this.http.post<void>(`${this.base}/auth/reset-password`, { token, password }); }
   me(): Observable<MeResponse> {
     return this.http.get<MeResponse>(`${this.base}/auth/me`);
   }

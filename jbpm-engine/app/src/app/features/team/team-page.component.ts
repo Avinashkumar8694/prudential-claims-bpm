@@ -32,12 +32,17 @@ import { ToastService } from '../../shared/toast.service';
             </select>
             <button class="btn primary" type="submit" [disabled]="busy() || !email">Send invitation</button>
           </div>
-          <p class="muted small">Invitations expire after 7 days. The invitee signs in with this email address and opens the link below.</p>
+          <p class="muted small">Invitations expire after 7 days. The invitee signs in with this email address and opens the link in the email.</p>
           @if (lastInvite(); as inv) {
-            <div class="link">
-              <code>{{ link(inv) }}</code>
-              <button class="btn sm" type="button" (click)="copy(inv)">Copy link</button>
-            </div>
+            @if (inv.invitationPath) {
+              <div class="link">
+                <code>{{ link(inv) }}</code>
+                <button class="btn sm" type="button" (click)="copy(inv)">Copy link</button>
+              </div>
+              @if (!inv.emailed) { <p class="muted small">Email is not configured on this server — send the link yourself.</p> }
+            } @else {
+              <p class="muted small">Invitation emailed to {{ inv.member.email }}.</p>
+            }
           }
         </form>
       }
@@ -138,7 +143,7 @@ export class TeamPageComponent implements OnInit {
     return true;
   }
 
-  link(i: InviteResult) { return `${location.origin}${i.invitationPath}`; }
+  link(i: InviteResult) { return `${location.origin}${i.invitationPath ?? ''}`; }
   async copy(i: InviteResult) { try { await navigator.clipboard.writeText(this.link(i)); this.toast.success('Invitation link copied'); } catch { this.toast.info('Copy the link manually'); } }
 
   private async run(fn: () => Promise<unknown>, ok?: string) {

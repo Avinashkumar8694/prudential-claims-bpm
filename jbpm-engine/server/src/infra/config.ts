@@ -35,10 +35,28 @@ export interface Config {
   oidc: OidcConfig;
   /** where the SPA lives: the SSO callback redirects here (tokens in the URL fragment). */
   dashboardUrl: string;
+  /** feature flags and policy for the built-in (non-SSO) account system — all env-driven, surfaced to the UI by GET /auth/config */
+  auth: AuthFeatures;
+  /** outbound mail: SMTP (SMTP_*, aliases EMAIL_* as in rules-manager) or a JSON webhook relay; with neither, mails are only logged (never in production) */
+  mail: { smtp?: { host: string; port: number; secure: boolean; user?: string; pass?: string }; webhookUrl?: string; from: string; capture: boolean };
   /** POST /auth/login (local username+password, HS256). Always on in dev; set AUTH_LOCAL_LOGIN=false to disable. */
   localLogin: boolean;
   /** the ONE platform administrator (system_admin everywhere). Fixed in code, deliberately not configurable. */
   platformAdminEmail: string;
+}
+
+export interface AuthFeatures {
+  /** self-service account creation (needs localLogin) */
+  registration: boolean;
+  /** forgot / reset password (needs localLogin) */
+  forgotPassword: boolean;
+  /** a registered account cannot sign in until its email is verified */
+  emailVerification: boolean;
+  passwordMinLength: number;
+  /** consecutive wrong passwords before the account is locked ... */
+  maxFailedLogins: number;
+  /** ... for this many minutes */
+  lockoutMinutes: number;
 }
 
 export interface OidcConfig {
@@ -90,6 +108,26 @@ export const config: Config = {
   },
   dashboardUrl: (env.DASHBOARD_URL || env.APP_ORIGIN || 'http://localhost:4200').replace(/\/+$/, ''),
   localLogin: env.AUTH_LOCAL_LOGIN !== 'false',
+  auth: {
+    registration: env.AUTH_REGISTRATION !== 'false',
+    forgotPassword: env.AUTH_FORGOT_PASSWORD !== 'false',
+    emailVerification: env.AUTH_REQUIRE_EMAIL_VERIFICATION === 'true',
+    passwordMinLength: Math.max(8, Number(env.AUTH_PASSWORD_MIN_LENGTH || 8)),
+    maxFailedLogins: Math.max(1, Number(env.AUTH_MAX_FAILED_LOGINS || 5)),
+    lockoutMinutes: Math.max(1, Number(env.AUTH_LOCKOUT_MINUTES || 15)),
+  },
+  mail: {
+    smtp: pick('SMTP_HOST', 'EMAIL_HOST') ? {
+      host: pick('SMTP_HOST', 'EMAIL_HOST')!,
+      port: Number(pick('SMTP_PORT', 'EMAIL_PORT') || 587),
+      secure: (pick('SMTP_SECURE', 'EMAIL_SECURE') || 'false') === 'true',
+      user: pick('SMTP_USER', 'EMAIL_USER'),
+      pass: pick('SMTP_PASSWORD', 'SMTP_PASS', 'EMAIL_PASS'),
+    } : undefined,
+    webhookUrl: env.MAIL_WEBHOOK_URL?.trim() || undefined,
+    from: pick('MAIL_FROM', 'EMAIL_FROM') || `no-reply@${env.DOMAIN || 'orkestr.io'}`,
+    capture: env.MAIL_CAPTURE === 'true',
+  },
   platformAdminEmail: PLATFORM_ADMIN_EMAIL,
 };
 

@@ -9,6 +9,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
+import { AuthConfigService } from '../../core/auth/auth-config.service';
 import {
   CHIPS,
   DEMOS,
@@ -44,6 +45,7 @@ const THEME_KEY = 'fabpay-theme';
 })
 export class LandingComponent implements OnInit {
   private http = inject(HttpClient);
+  authCfg = inject(AuthConfigService);
 
   appName = APP_NAME;
   appInitials = APP_INITIALS;

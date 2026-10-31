@@ -35,6 +35,12 @@
   workspace's own `Role` rows, falling back to `DEFAULT_ROLES`. WebSockets are bound to one workspace
   and can only subscribe to that workspace's instances; the timer scheduler fires per workspace.
   Production start-up refuses weak defaults (`assertProductionConfig`).
+- **Known critical gap — script sandbox**: `js` script tasks run in `node:vm` with live host objects; that is not an
+  isolation boundary (prototype-chain escapes reach the host `process`; reproduced by test EXE-91b). In a multi-tenant
+  deployment this means anyone who can author a script task can execute code on the server. Replace with `isolated-vm`
+  or a locked-down worker before exposing authoring to untrusted tenants. See `docs/test-catalogue.md` §7.
+- **Task ownership**: once claimed, a task can be completed/saved/released/delegated/forwarded only by its owner, its
+  business admin, or a workspace owner/admin; a task held by someone else cannot be claimed.
 - **Team management** (same model as `zero-payment-ms`'s TeamService; `modules/tenants/team.ts`,
   `http/team-routes.ts`, UI at `/team`): exactly one **owner** per workspace, **admins**, and role-based
   members (built-in roles + the workspace's own `Role` rows). `POST /team/members/invite` (`team:invite`)

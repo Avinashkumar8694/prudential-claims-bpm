@@ -18,7 +18,7 @@ import { signToken } from '../src/infra/auth.ts';
 import { Collections } from '../src/domain.ts';
 
 let server: http.Server, base: string, store: MemoryStore, wsA = '', wsB = '';
-const tok = (sub: string) => signToken({ sub, username: sub, roles: [], groups: [] });
+const tok = (sub: string) => signToken({ sub, username: sub, roles: [], groups: [], email: sub, emailVerified: true });
 const tokA = tok('owner-a@example.com'), tokB = tok('owner-b@example.com');
 
 test.before(async () => {

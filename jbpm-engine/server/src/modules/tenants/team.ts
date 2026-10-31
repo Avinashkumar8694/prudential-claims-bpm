@@ -13,10 +13,13 @@ import { conflict, forbidden, notFound, validation } from '../../infra/errors.ts
 import { config } from '../../infra/config.ts';
 import { DEFAULT_ROLES } from '../iam/service.ts';
 import { isPlaceholderUserId, type Identity } from './identity.ts';
+import { mailEnabled, sendMail } from '../../infra/mailer.ts';
+import { templates } from '../../infra/mail-templates.ts';
 
 const INVITE_TTL_MS = 7 * 24 * 3600 * 1000;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const lower = (s?: string | null) => (s || '').trim().toLowerCase();
+/** request bodies are untrusted: anything that is not a string is treated as missing, never as something to call methods on */
+const lower = (s?: unknown) => (typeof s === 'string' ? s : '').trim().toLowerCase();
 const hash = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
 
 export interface Actor {
@@ -41,6 +44,7 @@ export class TeamService {
   private members() { return this.ctx.store.repo<TenantMember>(Collections.tenantMembers); }
   private tenants() { return this.ctx.store.repo<Tenant>(Collections.tenants); }
   private get tid() { return this.ctx.tenantId; }
+  private async wsName(): Promise<string> { return (await this.tenants().query((t) => t.id === this.tid))[0]?.name ?? 'the workspace'; }
 
   /** owner seat, or the platform admin acting on the workspace */
   private isOwner(a: Actor) { return a.member?.role === 'owner' || a.platformAdmin; }
@@ -91,7 +95,7 @@ export class TeamService {
 
   // ---- invitations ----
 
-  async invite(a: Actor, input: { email?: string; role?: string; displayName?: string }): Promise<{ member: PublicMember; invitationToken: string; invitationPath: string; expiresAt: string }> {
+  async invite(a: Actor, input: { email?: string; role?: string; displayName?: string }): Promise<{ member: PublicMember; emailed: boolean; invitationToken?: string; invitationPath?: string; expiresAt: string }> {
     const email = lower(input.email);
     if (!EMAIL.test(email)) throw validation('A valid email address is required');
     const role = await this.assertRole(a, input.role);
@@ -105,14 +109,17 @@ export class TeamService {
     const expiresAt = new Date(Date.parse(this.ctx.clock()) + INVITE_TTL_MS).toISOString();
     const member: TenantMember = existing ?? {
       id: this.ctx.newId(), tenantId: this.tid, userId: `pending:${email}`, email, role, status: 'invited',
-      displayName: input.displayName?.trim() || email.split('@')[0], joinedAt: this.ctx.clock(),
+      displayName: (typeof input.displayName === 'string' ? input.displayName.trim() : '') || email.split('@')[0], joinedAt: this.ctx.clock(),
     };
     // a pending invite is re-issued (resend semantics), possibly with a new role the caller is allowed to give
     if (existing && !this.canManage(a, existing)) throw forbidden('You cannot re-invite this member');
     Object.assign(member, { role, status: 'invited', invitedBy: a.member?.email || a.sub, invitationTokenHash: hash(token), invitationExpiresAt: expiresAt });
     await this.members().put(member);
     await this.ctx.audit({ actor: a.member?.email || a.sub, kind: 'team.invited', data: { email, role } });
-    return { member: pub(member), invitationToken: token, invitationPath: `/accept-invite?token=${token}&workspace=${this.tid}`, expiresAt };
+    const inviterName = a.member?.displayName || a.member?.email || 'A workspace admin';
+    const emailed = await sendMail(templates.invitation(email, { workspaceName: await this.wsName(), inviterName, role, token, expiresAt }));
+    // With a working mail transport the token travels only by email; without one the inviter gets the link to pass on.
+    return { member: pub(member), emailed, expiresAt, ...(mailEnabled() ? {} : { invitationToken: token, invitationPath: `/accept-invite?token=${token}` }) };
   }
 
   /** Public lookup so the accept page can say what the invitation is for. Token only; never lists the roster. */
@@ -131,7 +138,7 @@ export class TeamService {
     const h = hash(token || '');
     const m = (await repo.query((x) => x.status === 'invited' && x.invitationTokenHash === h))[0];
     if (!m || !m.invitationExpiresAt || m.invitationExpiresAt < ctx.clock()) throw notFound('Invitation');
-    const verified = who.source === 'oidc' ? who.emailVerified === true : true;   // local users have no email claim; username must match
+    const verified = who.emailVerified === true;   // SSO: the IdP's email_verified; local: the account's mailbox was verified
     const mail = lower(who.email || who.username);
     if (!verified || mail !== lower(m.email)) throw forbidden('This invitation was sent to a different email address');
     const t = (await ctx.store.repo<Tenant>(Collections.tenants).query((x) => x.id === m.tenantId))[0];
@@ -140,6 +147,7 @@ export class TeamService {
     m.joinedAt = ctx.clock(); m.lastActiveAt = ctx.clock();
     if (who.name && (!m.displayName || m.displayName === m.email?.split('@')[0])) m.displayName = who.name;
     await repo.put(m);
+    if (m.invitedBy && m.invitedBy.includes('@')) void sendMail(templates.invitationAccepted(m.invitedBy, { workspaceName: t.name, memberEmail: m.email || '', role: m.role }));
     return m;
   }
 
@@ -162,14 +170,20 @@ export class TeamService {
   async update(a: Actor, id: string, input: { role?: string; displayName?: string; status?: string }): Promise<PublicMember> {
     const m = await this.get(id);
     if (!this.canManage(a, m)) throw forbidden('You cannot manage this member');
+    const before = { role: m.role, status: m.status };
     if (input.role !== undefined) { m.role = await this.assertRole(a, input.role); m.permissions = undefined; }
-    if (input.displayName !== undefined) m.displayName = String(input.displayName).trim() || m.displayName;
+    if (typeof input.displayName === 'string') m.displayName = input.displayName.trim().slice(0, 100) || m.displayName;
     if (input.status !== undefined) {
       if (!['active', 'suspended'].includes(input.status) || m.status === 'invited') throw validation('status must be active or suspended (an invitation cannot be toggled)');
       m.status = input.status as TenantMember['status'];
     }
     await this.members().put(m);
     await this.ctx.audit({ actor: a.member?.email || a.sub, kind: 'team.member_updated', data: { memberId: id, role: m.role, status: m.status } });
+    if (m.email) {
+      const ws = await this.wsName();
+      if (input.role !== undefined && input.role !== before.role) void sendMail(templates.roleChanged(m.email, { workspaceName: ws, role: m.role }));
+      if (input.status !== undefined && input.status !== before.status) void sendMail(templates.memberSuspended(m.email, { workspaceName: ws, suspended: m.status === 'suspended' }));
+    }
     return pub(m);
   }
 
@@ -179,6 +193,7 @@ export class TeamService {
     if (!this.canManage(a, m)) throw forbidden('You cannot manage this member');
     await this.members().delete(m.id);
     await this.ctx.audit({ actor: a.member?.email || a.sub, kind: 'team.member_removed', data: { email: m.email, role: m.role } });
+    if (m.email) void sendMail(templates.removed(m.email, { workspaceName: await this.wsName() }));
   }
 
   async leave(a: Actor): Promise<void> {
@@ -205,6 +220,9 @@ export class TeamService {
     const t = (await this.tenants().query((x) => x.id === this.tid))[0];
     if (t) { t.ownerEmail = target.email || t.ownerEmail; t.ownerName = target.displayName || t.ownerName; t.updatedAt = this.ctx.clock(); await this.tenants().put(t); }
     await this.ctx.audit({ actor: prev.email || a.sub, kind: 'team.ownership_transferred', data: { to: target.email } });
+    const ws = await this.wsName();
+    if (target.email) void sendMail(templates.ownershipTransferred(target.email, { workspaceName: ws, newOwner: target.email, becameOwner: true }));
+    if (prev.email) void sendMail(templates.ownershipTransferred(prev.email, { workspaceName: ws, newOwner: target.email || 'a member', becameOwner: false }));
     return { owner: pub(target), previousOwner: pub(prev) };
   }
 }

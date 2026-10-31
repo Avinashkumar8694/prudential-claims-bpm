@@ -26,7 +26,10 @@ export function isPlaceholderUserId(m: Pick<TenantMember, 'userId' | 'email'>): 
 export function memberMatches(m: TenantMember, id: Identity): boolean {
   if (m.userId === id.sub) return true;
   if (id.source === 'oidc') return false;
-  const names = [id.username, id.sub].map(lower).filter(Boolean);
+  // Local account: by user id above; by username/email only when that is safe — a seat whose userId is just an
+  // email placeholder (signup / invitation) is NOT given to whoever registers that email: the mailbox must be verified.
+  if (isPlaceholderUserId(m) && id.emailVerified !== true) return false;
+  const names = [id.username, id.sub, id.email].map(lower).filter(Boolean);
   return names.includes(lower(m.userId)) || (!!m.email && names.includes(lower(m.email)));
 }
 

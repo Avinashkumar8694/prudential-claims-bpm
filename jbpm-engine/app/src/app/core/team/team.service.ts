@@ -10,7 +10,8 @@ export interface TeamMember {
   status: 'active' | 'invited' | 'suspended'; userId?: string; joinedAt: string; lastActiveAt?: string;
   invitedBy?: string; invitationExpiresAt?: string | null;
 }
-export interface InviteResult { member: TeamMember; invitationToken: string; invitationPath: string; expiresAt: string }
+/** `invitationPath` is present only when the server has no mail transport (so the inviter must pass the link on) */
+export interface InviteResult { member: TeamMember; emailed: boolean; invitationToken?: string; invitationPath?: string; expiresAt: string }
 export interface InvitationInfo { workspace: { id: string; name: string }; email: string; role: string; expiresAt: string }
 
 @Injectable({ providedIn: 'root' })

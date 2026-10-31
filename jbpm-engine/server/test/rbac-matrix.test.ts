@@ -46,7 +46,7 @@ const ROLES = ['viewer', 'worker', 'operator', 'developer', 'author', 'release',
 let server: http.Server, base: string, store: MemoryStore;
 let wsA = '', wsB = '';
 const tokens: Record<string, string> = {};
-const tok = (sub: string) => signToken({ sub, username: sub, roles: [], groups: [] });
+const tok = (sub: string) => signToken({ sub, username: sub, roles: [], groups: [], email: sub, emailVerified: true });
 
 test.before(async () => {
   store = new MemoryStore();

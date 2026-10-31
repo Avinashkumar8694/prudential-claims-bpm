@@ -8,6 +8,10 @@ import { ToastComponent } from './shared/toast.component';
 import { ModalComponent } from './shared/modal.component';
 import { ThemeService } from './core/theme.service';
 
+/** pages that render on their own (no sidebar/header): landing, every auth screen, invitation + SSO landing, workspace setup */
+const STANDALONE = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/auth/callback', '/accept-invite', '/no-workspace'];
+const isStandalone = (url: string) => { const u = url.split('?')[0].split('#')[0]; return u === '/' || u === '' || STANDALONE.some((p) => u === p || u.startsWith(p + '/')); };
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -51,14 +55,12 @@ export class AppComponent {
     this.router.events.pipe(
       filter((e): e is NavigationEnd => e instanceof NavigationEnd),
       map((e) => {
-        const url = e.urlAfterRedirects.split('?')[0];
-        return url === '/' || url === '' || url.startsWith('/login') || url.startsWith('/no-workspace');
+        return isStandalone(e.urlAfterRedirects);
       }),
     ),
     {
       initialValue: (() => {
-        const url = window.location.pathname;
-        return url === '/' || url === '' || url.startsWith('/login') || url.startsWith('/no-workspace');
+        return isStandalone(window.location.pathname);
       })(),
     },
   );

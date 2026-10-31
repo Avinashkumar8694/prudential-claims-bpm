@@ -6,15 +6,20 @@ import type { Request } from 'express';
 import { asyncHandler } from '../infra/errors.ts';
 import type { AppContext } from '../context.ts';
 import { IamService } from '../modules/iam/service.ts';
+import { AccountService } from '../modules/iam/accounts.ts';
 import { requireAuth } from './auth-middleware.ts';
 import type { JwtClaims } from '../infra/auth.ts';
 import { rateLimit } from './rate-limit.ts';
 import { config } from '../infra/config.ts';
+import { makeContext } from '../context.ts';
 import { logger } from '../infra/logger.ts';
 import { oidc, openTx, readCookie, sealTx, TX_COOKIE, TX_COOKIE_PATH } from '../infra/oidc.ts';
 import { forbidden, notFound } from '../infra/errors.ts';
 
 const ctxOf = (req: Request): AppContext => (req as any).ctx;
+// Accounts live in the default workspace's IAM; a caller-supplied x-tenant-id must never pick where an account is
+// created or looked up (register / login / reset), so those flows pin the context.
+const accountCtx = (req: Request): AppContext => makeContext({ store: ctxOf(req).store, tenantId: config.defaultTenant });
 
 // per-IP (no authenticated user yet at this route) — slows credential-stuffing/brute-force without
 // blocking a legitimate user who mistypes their password a few times in a row.
@@ -32,8 +37,50 @@ export function buildAuthRoutes(): Router {
 
   // What sign-in methods are available — the SPA renders its login screen from this.
   r.get('/config', (_req, res) => {
-    res.json({ sso: oidc.isConfigured(), localLogin: config.localLogin, ssoLoginUrl: oidc.isConfigured() ? '/api/auth/oidc/login' : null });
+    const local = config.localLogin;
+    res.json({
+      appName: config.appName,
+      sso: oidc.isConfigured(),
+      localLogin: local,
+      // the built-in account flows only exist alongside local login
+      registration: local && config.auth.registration,
+      forgotPassword: local && config.auth.forgotPassword,
+      emailVerification: local && config.auth.emailVerification,
+      passwordMinLength: config.auth.passwordMinLength,
+      ssoLoginUrl: oidc.isConfigured() ? '/api/auth/oidc/login' : null,
+    });
   });
+
+  // --- built-in account lifecycle (flag-driven; see modules/iam/accounts.ts). Anti-enumeration: forgot-password and
+  // resend-verification answer 202 whether or not the address exists. ---
+  const sensitiveLimiter = rateLimit({ windowMs: 15 * 60_000, max: 10, keyOf: (req) => req.ip || 'anon' });
+  const accounts = (req: Request) => new AccountService(accountCtx(req));
+  const needLocal = (on: boolean) => { if (!config.localLogin || !on) throw notFound('This feature'); };
+
+  r.post('/register', sensitiveLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.registration);
+    res.status(201).json(await accounts(req).register(req.body || {}));
+  }));
+  r.post('/verify-email', sensitiveLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.emailVerification);
+    await accounts(req).verifyEmail(req.body?.token); res.status(204).end();
+  }));
+  r.post('/resend-verification', sensitiveLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.emailVerification);
+    await accounts(req).resendVerification(String(req.body?.email || '')); res.status(202).json({ ok: true });
+  }));
+  r.post('/forgot-password', sensitiveLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.forgotPassword);
+    await accounts(req).forgotPassword(String(req.body?.email || '')); res.status(202).json({ ok: true });
+  }));
+  r.post('/reset-password/check', sensitiveLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.forgotPassword);
+    res.json({ valid: await accounts(req).checkResetToken(String(req.body?.token || '')) });
+  }));
+  r.post('/reset-password', sensitiveLimiter, asyncHandler(async (req, res) => {
+    needLocal(config.auth.forgotPassword);
+    await accounts(req).resetPassword(String(req.body?.token || ''), String(req.body?.password || '')); res.status(204).end();
+  }));
 
   // --- Single sign-on (Identity Server): authorization code + PKCE; the SPA never sees the client secret ---
   // GET /api/auth/oidc/login     → redirect to the IdP (state/nonce/PKCE verifier kept in a signed HttpOnly cookie)
@@ -85,7 +132,7 @@ export function buildAuthRoutes(): Router {
   r.post('/login', loginLimiter, asyncHandler(async (req, res) => {
     if (!config.localLogin) throw notFound('Local login');
     const { username, password } = req.body || {};
-    res.json(await new IamService(ctxOf(req)).login(String(username || ''), String(password || '')));
+    res.json(await new IamService(accountCtx(req)).login(String(username || ''), String(password || '')));
   }));
   // "what can I actually do" — lets the frontend resolve real permissions (including custom roles
   // created later via the admin UI) instead of hardcoding a mirror of DEFAULT_ROLES.
