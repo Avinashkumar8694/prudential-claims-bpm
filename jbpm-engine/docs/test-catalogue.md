@@ -35,7 +35,9 @@ Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 | MAIL-03 | full team lifecycle sends the right mails to the right people | ✅ |
 | MAIL-04 | transport failure never breaks the triggering request | ✅ |
 | MAIL-05 | with a transport, the invite token travels only by email (not in the API response); webhook payload verified | ✅ |
-| — | real SMTP server delivery (nodemailer path is exercised only through the webhook/capture transports) | ⛔ |
+| MAIL-06 | real SMTP transport (nodemailer → an in-test SMTP server): multipart text+HTML, From/To/Subject, one-time link intact, token not returned | ✅ |
+| MAIL-07 | admin-set password notifies the user and revokes their sessions | ✅ |
+| — | delivery to real inboxes (spam filters, SPF/DKIM, HTML rendering in mail clients) | ⛔ |
 
 ## 3. Workspaces, switcher, membership — `enterprise-edge.test.ts`, `rbac-matrix.test.ts`, `tenant-isolation.test.ts`, `team.test.ts`
 | ID | Scenario | |

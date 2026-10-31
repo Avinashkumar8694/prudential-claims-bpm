@@ -355,3 +355,62 @@ test('MAIL-05 with a mail transport the invite token travels only by email (neve
     assert.ok(m && /accept-invite\?token=/.test(m.text) && m.html && m.from);
   } finally { config.mail.webhookUrl = prev; await new Promise((r) => relay.close(r)); }
 });
+
+test('MAIL-06 real SMTP transport (nodemailer): multipart text+HTML delivered to an SMTP server, token link intact, From/To/Subject correct', async () => {
+  const net = await import('node:net');
+  const received: string[] = [];
+  const server = net.createServer((sock) => {
+    let inData = false, buf = '', msg = '';
+    sock.write('220 test-smtp ESMTP\r\n');
+    sock.on('data', (d) => {
+      buf += d.toString('utf8');
+      for (;;) {
+        if (inData) {
+          const end = buf.indexOf('\r\n.\r\n');
+          if (end < 0) { return; }
+          msg += buf.slice(0, end); buf = buf.slice(end + 5); inData = false; received.push(msg); msg = ''; sock.write('250 queued\r\n'); continue;
+        }
+        const nl = buf.indexOf('\r\n'); if (nl < 0) return;
+        const line = buf.slice(0, nl); buf = buf.slice(nl + 2); const cmd = line.slice(0, 4).toUpperCase();
+        if (cmd === 'EHLO' || cmd === 'HELO') sock.write('250-test-smtp\r\n250 8BITMIME\r\n');
+        else if (cmd === 'DATA') { inData = true; sock.write('354 go\r\n'); }
+        else if (cmd === 'QUIT') { sock.write('221 bye\r\n'); sock.end(); }
+        else sock.write('250 ok\r\n');
+      }
+    });
+  });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+  const prev = { smtp: config.mail.smtp, from: config.mail.from };
+  config.mail.smtp = { host: '127.0.0.1', port: (server.address() as any).port, secure: false };
+  config.mail.from = 'Orkestr <no-reply@orkestr.test>';
+  try {
+    const ws = await h.workspace('smtp', []);
+    const r = await h.call('POST', '/team/members/invite', { token: ws.tokens.owner, tenant: ws.id, body: { email: 'smtp-rcpt@example.com', role: 'viewer' } });
+    assert.strictEqual(r.status, 201);
+    assert.strictEqual(r.body.data.emailed, true, 'delivered over SMTP');
+    assert.strictEqual(r.body.data.invitationToken, undefined, 'with a working transport the token is not returned');
+    const raw = received.find((m) => /smtp-rcpt@example\.com/.test(m))!;
+    assert.ok(raw, 'the SMTP server received the message');
+    const decoded = raw.replace(/=\r\n/g, '').replace(/=3D/g, '=');
+    assert.match(raw, /From: .*no-reply@orkestr\.test/i);
+    assert.match(raw, /To: .*smtp-rcpt@example\.com/i);
+    assert.match(raw, /Subject: .*invited you to smtp/i);
+    assert.match(raw, /multipart\/alternative/i);
+    assert.match(raw, /Content-Type: text\/plain/i);
+    assert.match(raw, /Content-Type: text\/html/i);
+    assert.match(decoded, /accept-invite\?token=[A-Za-z0-9_-]{40,}/, 'the one-time link survived encoding');
+  } finally { config.mail.smtp = prev.smtp; config.mail.from = prev.from; await new Promise((r) => server.close(r)); }
+});
+
+test('MAIL-07 an administrator setting a user\'s password notifies that user (and revokes their old sessions)', async () => {
+  await register('adminset@example.com', 'Sup3rSecret!');
+  const u = await userOf('adminset@example.com');
+  const oldSession = (await h.call('POST', '/auth/login', { body: { username: 'adminset@example.com', password: 'Sup3rSecret!' } })).body.token;
+  const adminTok = (await h.call('POST', '/auth/login', { body: { username: 'admin', password: 'bootstrap-pw-123' } })).body.token;
+  await new Promise((r) => setTimeout(r, 1100));
+  const r = await h.call('POST', `/users/${u.id}/password`, { token: adminTok, body: { password: 'Admin-Chosen-9x' } });
+  assert.ok([200, 204].includes(r.status), `set password → ${r.status}`);
+  assert.ok(mailsTo('adminset@example.com').some((m) => /password was changed/i.test(m.subject) && /administrator/i.test(m.text)), 'user is told an administrator changed it');
+  assert.strictEqual((await h.call('GET', '/auth/me', { token: oldSession })).status, 401, 'their old session is revoked');
+  assert.strictEqual((await h.call('POST', '/auth/login', { body: { username: 'adminset@example.com', password: 'Admin-Chosen-9x' } })).status, 200);
+});
