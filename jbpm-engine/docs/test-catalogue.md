@@ -2,7 +2,7 @@
 
 Every scenario an enterprise multi-tenant workflow platform should prove, where it is tested, and what is **not**
 covered. Run everything with `npm test --workspace server` (≈ 300 tests, no external services; the 25 Java-sidecar
-tests need a JDK and fail without one). IDs below are in the test titles, so `--test-name-pattern="EXE-3"` etc. work.
+tests need a JDK and fail without one; inside the production image's Linux + JDK environment the whole suite passes). IDs below are in the test titles, so `--test-name-pattern="EXE-3"` etc. work.
 
 Legend: ✅ automated · 🟡 partly · ⛔ known gap (listed again at the end)
 
@@ -92,6 +92,6 @@ SEC-05 security headers & CORS preflight · SEC-07 no secrets in responses · AU
 ## 7. Gaps — stated plainly
 1. ⛔ No browser-driven end-to-end tests of the Angular screens (verified manually: login, team page, invite). The permission *logic* behind the UI is covered by the parity test in `rbac-matrix`.
 2. ⛔ No load / soak / failover tests; rate limiting and WebSocket hub are single-process in-memory.
-3. ⛔ Postgres store (`test:pg`) is not exercised by this suite.
+3. 🟡 Postgres store: the unit suite uses the in-memory store. The production image is smoke-tested against a real Postgres by `scripts/docker-smoke.sh` (sign-in, Java + JS scripts, UTF-8, case management, 40 parallel starts); `npm run test:pg` is not part of it.
 4. ⛔ Real SMTP and real Identity Server round-trips are not automated (fakes/capture are).
 5. 🟡 Task *group* membership is enforced only for IAM-provisioned users; workspace members (SSO) are authorised by role, not by task group.
